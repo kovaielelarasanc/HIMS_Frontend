@@ -1,107 +1,305 @@
+// FILE: src/api/pharmacy.js
 import API from './client'
+import { listInventoryItems } from './inventory'
 
-/* ============ MASTERS ============ */
-// Medicines
-export const listMedicines = (params = {}) =>
-    API.get('/pharmacy/medicines', { params })
-export const getMedicine = (id) =>
-    API.get(`/pharmacy/medicines/${id}`)
-export const createMedicine = (payload) =>
-    API.post('/pharmacy/medicines', payload)
-export const updateMedicine = (id, payload) =>
-    API.patch(`/pharmacy/medicines/${id}`, payload)
-export const deleteMedicine = (id) =>
-    API.delete(`/pharmacy/medicines/${id}`)
+/**
+ * ============================================
+ *  Inventory-integrated Pharmacy Rx + Sales
+ *  Backend: app/api/routes_pharmacy.py
+ * ============================================
+ */
 
-// Sample download (prefer extension route to avoid 422 anywhere)
-// src/api/pharmacy.js
-// src/api/pharmacy.js
-export const downloadMedicineSample = async (format = 'xlsx') => {
-    const path = format === 'csv'
-        ? '/pharmacy/medicines/samples/template.csv'
-        : '/pharmacy/medicines/samples/template.xlsx'
-    const res = await API.get(path, { responseType: 'blob' })
-    return res?.data
+/**
+ * --------- Doctor-side prescriptions ----------
+ * type: "OPD" | "IPD" | "GENERAL"
+ * payload shape matches PrescriptionCreate Pydantic model.
+ */
+export function createPharmacyPrescription(payload) {
+    // {
+    //   type: "OPD" | "IPD" | "GENERAL",
+    //   patient_id,
+    //   visit_id?,
+    //   ipd_admission_id?,
+    //   location_id,
+    //   doctor_user_id?,
+    //   notes?,
+    //   lines: [
+    //     {
+    //       item_id,
+    //       requested_qty,
+    //       dose_text?,
+    //       frequency_code?,
+    //       timing?,
+    //       duration_days?,
+    //       instructions?
+    //     }
+    //   ]
+    // }
+    return API.post('/pharmacy/prescriptions', payload)
 }
 
+export function listPharmacyPrescriptions(params = {}) {
+    // Supported filters server-side:
+    // { type, patient_id, visit_id, ipd_admission_id, doctor_user_id, status, from_date, to_date }
+    return API.get('/pharmacy/prescriptions', { params })
+}
 
-// Import (.xlsx or .csv). Backend auto-detects by file extension.
-// Pass only upsert flag here (NOT the format).
-export const importMedicines = (file, { upsert = true, format } = {}) => {
-    const fd = new FormData()
-    fd.append('file', file)
-    const params = { upsert }
-    if (format) params.format = format
-    return API.post('/pharmacy/medicines/import', fd, {
-        params,
-        headers: { 'Content-Type': 'multipart/form-data' },
+export function getPharmacyPrescription(id) {
+    return API.get(`/pharmacy/prescriptions/${id}`)
+}
+
+export function updatePharmacyPrescription(id, payload) {
+    // payload: { notes?, status? }
+    return API.put(`/pharmacy/prescriptions/${id}`, payload)
+}
+
+// Dispense from prescription (FEFO / batch-wise)
+export function dispensePharmacyPrescription(id, payload) {
+    // payload: { lines: [{ line_id, quantity, batch_id? }], remark? }
+    return API.post(`/pharmacy/prescriptions/${id}/dispense`, payload)
+}
+
+// Create Pharmacy bill from dispensed prescription lines
+export function billPharmacyPrescription(id) {
+    return API.post(`/pharmacy/prescriptions/${id}/bill`)
+}
+
+/**
+ * --------- Inventory-linked Pharmacy Sales ----------
+ * These are the invoices generated after dispensing.
+ */
+
+export function listInventoryPharmacySales(params = {}) {
+    // Filters: { patient_id, rx_id, from_date, to_date, status }
+    return API.get('/pharmacy/sales', { params })
+}
+
+export function getInventoryPharmacySale(id) {
+    return API.get(`/pharmacy/sales/${id}`)
+}
+
+export function downloadInventoryPharmacySalePdf(id) {
+    return API.get(`/pharmacy/sales/${id}/pdf`, {
+        responseType: 'blob',
     })
 }
 
-// Suppliers
-export const listSuppliers = (params = {}) =>
-    API.get('/pharmacy/suppliers', { params })
-export const createSupplier = (payload) =>
-    API.post('/pharmacy/suppliers', payload)
-export const updateSupplier = (id, payload) =>
-    API.patch(`/pharmacy/suppliers/${id}`, payload)
-export const deleteSupplier = (id) =>
-    API.delete(`/pharmacy/suppliers/${id}`)
+export function emailInventoryPharmacySale(id, emailTo) {
+    return API.post(`/pharmacy/sales/${id}/email`, null, {
+        params: { email_to: emailTo },
+    })
+}
 
-// Locations
-export const listLocations = (params = {}) =>
-    API.get('/pharmacy/locations', { params })
-export const createLocation = (payload) =>
-    API.post('/pharmacy/locations', payload)
-export const updateLocation = (id, payload) =>
-    API.patch(`/pharmacy/locations/${id}`, payload)
-export const deleteLocation = (id) =>
-    API.delete(`/pharmacy/locations/${id}`)
+/**
+ * ============================================
+ *  Doctor medicine search (uses Inventory)
+ * ============================================
+ */
 
-/* ============ INVENTORY ============ */
-export const listLots = (params = {}) => API.get('/pharmacy/inventory/lots', { params })
-export const listTxns = (params = {}) => API.get('/pharmacy/inventory/txns', { params })
-export const adjustStock = (payload) => API.post('/pharmacy/inventory/adjust', payload)
-export const transferStock = (payload) => API.post('/pharmacy/inventory/transfer', payload)
-export const listLowStock = (params = {}) => API.get('/pharmacy/alerts/low-stock', { params })
-export const listExpiryAlerts = (params = {}) => API.get('/pharmacy/alerts/expiry', { params })
-export const listAlerts = ({ type = 'low', ...params } = {}) =>
-    type === 'expiry'
-        ? API.get('/pharmacy/alerts/expiry', { params })
-        : API.get('/pharmacy/alerts/low-stock', { params })
+/**
+ * Unified search for medicines/consumables.
+ *
+ * type:
+ *  - "all"        → no is_consumable filter
+ *  - "drug"       → is_consumable = false
+ *  - "consumable" → is_consumable = true
+ *
+ * Returns simplified shape for doctor UI:
+ * [
+ *   {
+ *     id,
+ *     code,
+ *     name,
+ *     generic_name,
+ *     strength,
+ *     form,
+ *     unit,
+ *     pack_size,
+ *     is_consumable,
+ *     type: "drug" | "consumable"
+ *   }
+ * ]
+ */
+export async function searchPharmacyItems({ q = '', type = 'all', limit = 50 } = {}) {
+    const params = { is_active: true }
+    if (q) params.q = q
+    if (type === 'drug') params.type = 'drug'
+    if (type === 'consumable') params.type = 'consumable'
+    if (limit) params.limit = limit
 
-/* ============ PROCUREMENT ============ */
-export const listPO = (params = {}) => API.get('/pharmacy/po', { params })
-export const createPO = (payload) => API.post('/pharmacy/po', payload)
-export const approvePO = (id) => API.post(`/pharmacy/po/${id}/approve`)
-export const cancelPO = (id) => API.post(`/pharmacy/po/${id}/cancel`)
-export const listGRN = (params = {}) => API.get('/pharmacy/grn', { params })
-export const createGRN = (payload) => API.post('/pharmacy/grn', payload)
+    const res = await listInventoryItems(params)
+    const raw = Array.isArray(res?.data) ? res.data : []
 
-/* ============ DISPENSE / RETURNS ============ */
-export const dispense = (payload) => API.post('/pharmacy/dispense', payload)
-export const saleReturn = (payload) => API.post('/pharmacy/dispense/return', null, { params: payload })
+    const mapped = raw.slice(0, limit).map((it) => ({
+        id: it.id,
+        code: it.code,
+        name: it.name,
+        generic_name: it.generic_name,
+        strength: it.strength,
+        form: it.form,
+        unit: it.unit,
+        pack_size: it.pack_size,
+        is_consumable: !!it.is_consumable,
+        type: it.is_consumable ? 'consumable' : 'drug',
+        // You can later enrich from a separate stock endpoint:
+        // available_qty, near_expiry, earliest_expiry_date, etc.
+    }))
 
-/* ============ PRESCRIPTIONS ============ */
-export const listPrescriptions = (params = {}) =>
-    API.get('/pharmacy/prescriptions', { params })
-export const updatePrescriptionItemStatus = (item_id, payload) =>
-    API.post(`/pharmacy/prescriptions/items/${item_id}/status`, payload)
-export const updatePrescriptionStatus = (prescription_id, payload) =>
-    API.post(`/pharmacy/prescriptions/${prescription_id}/status`, payload)
-export const createPrescription = (payload) =>
-    API.post('/pharmacy/prescriptions', payload)
+    return { data: mapped }
+}
 
-export const getPharmacyActiveContext = (patient_id) =>
-    API.get('/pharmacy/active-context', { params: { patient_id } })
-export const dispensePrescription = (rxId, { location_id }) =>
-    API.post(`/pharmacy/prescriptions/${rxId}/dispense`, null, { params: { location_id } })
+/**
+ * ============================================
+ *  LEGACY helpers used by OPD/IPD Visit screens
+ *  (stop calling non-existent /pharmacy/opd/... endpoints)
+ * ============================================
+ *
+ * For now, we just return empty structures so the
+ * Visit/IPD tabs won’t throw 405 errors. Your new
+ * doctor prescribing screen should use
+ * createPharmacyPrescription(...) directly.
+ */
 
-export const getActiveContext = async (patient_id) => {
-    try {
-        const { data } = await API.get('/pharmacy/active-context', { params: { patient_id } })
-        return (data && Object.keys(data).length ? data : null)
-    } catch {
-        return null
-    }
+/** OPD visit prescriptions */
+export function getVisitRx(visitId) {
+    // No backend route /pharmacy/opd/visits/{id}/rx → avoid 405
+    return Promise.resolve({
+        data: {
+            visit_id: visitId,
+            lines: [],
+        },
+    })
+}
+
+export function saveVisitRx(visitId, payload) {
+    // Keep as a no-op wrapper for now to avoid 405.
+    // Use createPharmacyPrescription in new flows.
+    console.warn('saveVisitRx is deprecated. Use createPharmacyPrescription instead.')
+    return Promise.resolve({ data: { ok: true } })
+}
+
+export function signVisitRx(visitId, payload = {}) {
+    console.warn('signVisitRx is deprecated. Use createPharmacyPrescription + status=ISSUED instead.')
+    return Promise.resolve({ data: { ok: true } })
+}
+
+/** IPD admission prescriptions */
+export function getAdmissionRx(admissionId) {
+    return Promise.resolve({
+        data: {
+            admission_id: admissionId,
+            lines: [],
+        },
+    })
+}
+
+export function saveAdmissionRx(admissionId, payload) {
+    console.warn('saveAdmissionRx is deprecated. Use createPharmacyPrescription(type="IPD") instead.')
+    return Promise.resolve({ data: { ok: true } })
+}
+
+export function signAdmissionRx(admissionId, payload = {}) {
+    console.warn('signAdmissionRx is deprecated. Use createPharmacyPrescription + status=ISSUED instead.')
+    return Promise.resolve({ data: { ok: true } })
+}
+
+/**
+ * -----------------------------
+ * Pharmacy Rx Queue (Pharmacy side)
+ * -----------------------------
+ */
+
+export function listRxQueue(params = {}) {
+    // Backend: app/api/routes_pharmacy_rx.py → /pharmacy/rx/queue
+    return API.get('/pharmacy/rx/queue', { params })
+}
+
+export function getRxDetail(rxId) {
+    return API.get(`/pharmacy/rx/${rxId}`)
+}
+
+export function saveRxDraft(rxId, payload) {
+    // payload: { lines: [{ id, dispense_qty, status }] }
+    return API.put(`/pharmacy/rx/${rxId}`, payload)
+}
+
+// Manual dispense with per-line qty/status -> generate bill
+export function dispenseRx(rxId, payload) {
+    // payload: { lines: [{ id, dispense_qty, status }], context_type?: "opd" | "ipd" | "counter" }
+    return API.post(`/pharmacy/rx/${rxId}/dispense-manual`, payload)
+}
+
+// Auto-dispense (full quantity) kept for one-click usage
+export function autoDispenseRx(rxId) {
+    return API.post(`/pharmacy/rx/${rxId}/dispense`)
+}
+
+export function cancelRx(rxId) {
+    return API.post(`/pharmacy/rx/${rxId}/cancel`)
+}
+
+/**
+ * -----------------------------
+ * Pharmacy Billing Console
+ * -----------------------------
+ */
+
+export function listPharmacyBills(params = {}) {
+    // Suggested params: { q, date_from, date_to, status, patient_id }
+    // Status uses PharmacySale.status: "UNPAID" | "PARTIAL" | "PAID" | "CANCELLED"
+    return API.get('/pharmacy/billing', { params })
+}
+
+export function getPharmacyBill(id) {
+    return API.get(`/pharmacy/billing/${id}`)
+}
+
+// Update billing status: "paid" | "unpaid" | "partial"
+export function updateBillStatus(id, payload) {
+    // payload: { payment_status, paid_amount?, note? }
+    return API.post(`/pharmacy/billing/${id}/status`, payload)
+}
+
+export function downloadBillPdf(id) {
+    return API.get(`/pharmacy/billing/${id}/pdf`, { responseType: 'blob' })
+}
+
+export function emailBillPdf(id, email) {
+    return API.post(`/pharmacy/billing/${id}/email`, null, {
+        params: { email },
+    })
+}
+
+// Consolidated IPD invoice (all UNPAID/PARTIAL IPD bills for patient/admission)
+export function createConsolidatedIpdInvoice(payload) {
+    // payload: { patient_id, admission_id? }
+    return API.post('/pharmacy/billing/ipd/consolidated', payload)
+}
+
+/**
+ * -----------------------------
+ * Pharmacy Returns
+ * -----------------------------
+ */
+
+export function listPharmacyReturns(params = {}) {
+    // Backend still uses: net_amount < 0 to identify returns
+    return API.get('/pharmacy/billing/returns/list', { params })
+}
+
+// Start a return against an earlier invoice
+export function createReturnInvoice(payload) {
+    // payload: { source_invoice_id, lines: [{ bill_line_id, qty_to_return }], reason }
+    return API.post('/pharmacy/billing/returns', payload)
+}
+
+export function getReturnInvoice(id) {
+    return API.get(`/pharmacy/billing/returns/${id}`)
+}
+
+
+export function downloadPharmacyBillPdf(saleId) {
+    return API.get(`/pharmacy/billing/${saleId}/pdf`, {
+        responseType: 'blob', // important for binary PDF
+    })
 }

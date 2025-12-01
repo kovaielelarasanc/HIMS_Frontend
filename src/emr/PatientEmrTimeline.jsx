@@ -1,15 +1,52 @@
-// frontend/src/emr/PatientEmrTimeline.jsx
+// FILE: frontend/src/emr/PatientEmrTimeline.jsx
+
 import { useEffect, useMemo, useState } from 'react'
+import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 import { fetchEmrTimeline, exportEmrPdfJson, fetchFhirBundle } from '../api/emr'
 import PatientQuickPicker from './PatientQuickPicker'
+
 import {
-    Stethoscope, Activity, FileText, FlaskConical, Scan, ShoppingCart,
-    BedDouble, ArrowLeftRight, LogOut, Scissors, Receipt, Paperclip, ShieldCheck,
-    Download, Filter, CalendarRange, User2, Dot, RotateCcw
+    Stethoscope,
+    Activity,
+    FileText,
+    FlaskConical,
+    Scan,
+    ShoppingCart,
+    BedDouble,
+    ArrowLeftRight,
+    LogOut,
+    Scissors,
+    Receipt,
+    Paperclip,
+    ShieldCheck,
+    Download,
+    Filter,
+    CalendarRange,
+    User2,
+    Dot,
+    RotateCcw,
+    Eye,
+    X,
+    Printer,
+    LaptopMinimal,
 } from 'lucide-react'
 
+// shadcn/ui
+import {
+    Card,
+    CardHeader,
+    CardTitle,
+    CardDescription,
+    CardContent,
+} from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
+
 // ------------- helpers -------------
+
 const ALL_TYPES = [
     { code: 'opd_visit', label: 'OPD Visit', icon: Stethoscope },
     { code: 'opd_vitals', label: 'Vitals', icon: Activity },
@@ -26,17 +63,22 @@ const ALL_TYPES = [
     { code: 'consent', label: 'Consent', icon: ShieldCheck },
 ]
 
-function pad(n) { return n < 10 ? '0' + n : '' + n }
+function pad(n) {
+    return n < 10 ? '0' + n : '' + n
+}
+
 function fmtDateTime(ts) {
     const d = new Date(ts)
     if (isNaN(d)) return String(ts || '')
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`
 }
+
 function ymd(ts) {
     const d = new Date(ts)
     if (isNaN(d)) return '—'
     return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
 }
+
 function groupByDate(items) {
     const map = new Map()
     items.forEach(it => {
@@ -46,6 +88,8 @@ function groupByDate(items) {
     })
     return Array.from(map.entries()).sort((a, b) => (a[0] < b[0] ? 1 : -1))
 }
+
+// generic file download from Blob
 function downloadBlob(blob, filename) {
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
@@ -55,29 +99,68 @@ function downloadBlob(blob, filename) {
     URL.revokeObjectURL(url)
 }
 
-const chipBase = 'inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs transition'
+// generic file download from URL
+function downloadFromUrl(url, filename) {
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename || 'download'
+    a.target = '_blank'
+    a.rel = 'noopener'
+    a.click()
+}
+
+// status chips (small – allowed to have subtle semantic bg)
+const chipBase = 'inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-medium transition'
 const statusStyles = {
-    new: 'border-blue-200 bg-blue-50 text-blue-700',
-    in_progress: 'border-amber-200 bg-amber-50 text-amber-800',
-    dispensed: 'border-emerald-200 bg-emerald-50 text-emerald-800',
-    completed: 'border-emerald-200 bg-emerald-50 text-emerald-800',
-    cancelled: 'border-rose-200 bg-rose-50 text-rose-800',
+    new: 'border-slate-200 bg-slate-50 text-slate-700',
+    in_progress: 'border-slate-200 bg-slate-50 text-slate-700',
+    dispensed: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    completed: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+    cancelled: 'border-rose-200 bg-rose-50 text-rose-700',
+}
+
+// helper to guess file type
+function inferFileKind(att) {
+    const ct = (att.content_type || '').toLowerCase()
+    const url = String(att.url || '').toLowerCase()
+
+    if (ct.startsWith('image/')) return 'image'
+    if (ct === 'application/pdf') return 'pdf'
+    if (url.endsWith('.png') || url.endsWith('.jpg') || url.endsWith('.jpeg') || url.endsWith('.webp') || url.endsWith('.gif')) return 'image'
+    if (url.endsWith('.pdf')) return 'pdf'
+    return 'other'
 }
 
 // ------------- Component -------------
+
 export default function PatientEmrTimeline() {
     const [patient, setPatient] = useState(null) // {id, uhid, name, gender, dob, phone}
     const [filters, setFilters] = useState({
         date_from: '',
         date_to: '',
         types: ALL_TYPES.map(t => t.code),
-        consent_required: false, // toggle ON in prod if you want hard-consent gate
+        consent_required: false,
     })
     const [loading, setLoading] = useState(false)
     const [items, setItems] = useState([])
     const [fetchStamp, setFetchStamp] = useState(0)
 
     const selectedSet = useMemo(() => new Set(filters.types || []), [filters.types])
+
+    // EMR PDF preview
+    const [pdfPreviewUrl, setPdfPreviewUrl] = useState(null)
+    const [showPdfPreview, setShowPdfPreview] = useState(false)
+
+    // Attachment/file preview
+    const [filePreview, setFilePreview] = useState(null) // { url, label, kind }
+
+    useEffect(() => {
+        return () => {
+            if (pdfPreviewUrl) {
+                URL.revokeObjectURL(pdfPreviewUrl)
+            }
+        }
+    }, [pdfPreviewUrl])
 
     const toggleType = (code) => {
         setFilters(f => {
@@ -94,18 +177,20 @@ export default function PatientEmrTimeline() {
     useEffect(() => {
         let alive = true
         const run = async () => {
-            if (!patient?.uhid) return
+            if (!patient?.uhid && !patient?.id) return
             try {
                 setLoading(true)
-                const { data } = await fetchEmrTimeline({
+                const params = {
                     uhid: patient.uhid,
+                    patient_id: patient.id,
                     date_from: filters.date_from || undefined,
                     date_to: filters.date_to || undefined,
-                    types:
-                        filters.types && filters.types.length === ALL_TYPES.length
-                            ? undefined
-                            : filters.types,
-                })
+                }
+                if (filters.types && filters.types.length && filters.types.length !== ALL_TYPES.length) {
+                    params.types = filters.types.join(',')
+                }
+
+                const { data } = await fetchEmrTimeline(params)
                 if (!alive) return
                 setItems(data || [])
             } catch (e) {
@@ -118,11 +203,16 @@ export default function PatientEmrTimeline() {
         }
         run()
         return () => { alive = false }
-    }, [patient?.uhid, filters.date_from, filters.date_to, JSON.stringify(filters.types), fetchStamp])
+    }, [patient?.uhid, patient?.id, filters.date_from, filters.date_to, JSON.stringify(filters.types), fetchStamp])
 
     const grouped = useMemo(() => groupByDate(items), [items])
 
-    // Export PDF (JSON body)
+    const totalEvents = items?.length || 0
+    const dateRangeText = filters.date_from || filters.date_to
+        ? `${filters.date_from || '—'} → ${filters.date_to || 'Today'}`
+        : 'All available records'
+
+    // Export PDF (JSON body) -> preview dialog
     const exportPdf = async () => {
         if (!patient) { toast.info('Select a patient first.'); return }
         try {
@@ -146,9 +236,20 @@ export default function PatientEmrTimeline() {
                 },
                 consent_required: !!filters.consent_required,
             }
-            const res = await exportEmrPdfJson(payload)
-            downloadBlob(res.data, `EMR_${patient.uhid || 'patient'}.pdf`)
-            toast.success('PDF exported')
+
+            const res = await exportEmrPdfJson(payload) // must return Blob
+            const blob = res.data
+            if (!(blob instanceof Blob)) {
+                toast.error('PDF export failed: invalid response')
+                return
+            }
+
+            setPdfPreviewUrl(prev => {
+                if (prev) URL.revokeObjectURL(prev)
+                return URL.createObjectURL(blob)
+            })
+            setShowPdfPreview(true)
+            toast.success('EMR PDF ready for preview')
         } catch (e) {
             const status = e?.response?.status
             if (status === 412) {
@@ -179,7 +280,12 @@ export default function PatientEmrTimeline() {
     // ---- details renderer per module (reads item.data) ----
     function RowKV({ k, v }) {
         if (v === null || v === undefined || v === '') return null
-        return <div className="text-xs text-gray-700"><span className="font-medium">{k}:</span> {String(v)}</div>
+        return (
+            <div className="text-xs text-slate-700">
+                <span className="font-medium">{k}:</span>{' '}
+                {String(v)}
+            </div>
+        )
     }
 
     function renderDetails(it) {
@@ -187,7 +293,7 @@ export default function PatientEmrTimeline() {
         switch (it.type) {
             case 'opd_visit':
                 return (
-                    <div className="mt-2 space-y-1 text-sm text-gray-800">
+                    <div className="mt-2 space-y-1 text-sm text-slate-800">
                         <RowKV k="Chief Complaint" v={d.chief_complaint} />
                         <RowKV k="Symptoms" v={d.symptoms} />
                         <RowKV k="Subjective" v={d.subjective} />
@@ -196,7 +302,7 @@ export default function PatientEmrTimeline() {
                         <RowKV k="Plan" v={d.plan} />
                         <RowKV k="Episode" v={d.episode_id} />
                         {d.appointment && (
-                            <div className="text-xs text-gray-700">
+                            <div className="text-xs text-slate-700">
                                 <span className="font-medium">Appointment:</span>{' '}
                                 {d.appointment.date} · {d.appointment.slot_start}–{d.appointment.slot_end} · {d.appointment.purpose}
                             </div>
@@ -205,35 +311,51 @@ export default function PatientEmrTimeline() {
                 )
             case 'opd_vitals':
                 return (
-                    <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-gray-800 md:grid-cols-3">
+                    <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-slate-800 md:grid-cols-3">
                         <RowKV k="Recorded at" v={d.recorded_at} />
                         <RowKV k="Height (cm)" v={d.height_cm} />
                         <RowKV k="Weight (kg)" v={d.weight_kg} />
                         <RowKV k="BMI" v={d.bmi} />
-                        <RowKV k="BP" v={d.bp_systolic != null && d.bp_diastolic != null ? `${d.bp_systolic}/${d.bp_diastolic} mmHg` : ''} />
+                        <RowKV
+                            k="BP"
+                            v={
+                                d.bp_systolic != null && d.bp_diastolic != null
+                                    ? `${d.bp_systolic}/${d.bp_diastolic} mmHg`
+                                    : ''
+                            }
+                        />
                         <RowKV k="Pulse" v={d.pulse} />
                         <RowKV k="RR" v={d.rr} />
                         <RowKV k="Temp (°C)" v={d.temp_c} />
                         <RowKV k="SpO₂ (%)" v={d.spo2} />
-                        <div className="col-span-2 md:col-span-3"><RowKV k="Notes" v={d.notes} /></div>
+                        <div className="col-span-2 md:col-span-3">
+                            <RowKV k="Notes" v={d.notes} />
+                        </div>
                     </div>
                 )
             case 'rx':
                 return (
-                    <div className="mt-2 space-y-1 text-sm text-gray-800">
+                    <div className="mt-2 space-y-1 text-sm text-slate-800">
                         <RowKV k="Notes" v={d.notes} />
                         <RowKV k="Signed at" v={d.signed_at} />
                         <RowKV k="Signed by" v={d.signed_by} />
                         {Array.isArray(d.items) && d.items.length > 0 && (
                             <div className="mt-2">
-                                <div className="text-xs font-medium text-gray-700">Items</div>
-                                <div className="mt-1 divide-y rounded-lg border">
+                                <div className="text-[11px] font-medium text-slate-600 uppercase tracking-wide">
+                                    Items
+                                </div>
+                                <div className="mt-1 divide-y rounded-2xl border border-slate-200 bg-slate-50">
                                     {d.items.map((x, i) => (
-                                        <div key={i} className="grid gap-2 p-2 md:grid-cols-5">
-                                            <div className="md:col-span-2"><span className="font-medium">{x.drug_name}</span> {x.strength ? `• ${x.strength}` : ''}</div>
-                                            <div>Freq: {x.frequency || '—'}</div>
-                                            <div>Dur: {x.duration_days}d</div>
-                                            <div>Qty: {x.quantity}</div>
+                                        <div key={i} className="grid gap-2 p-2.5 md:grid-cols-5">
+                                            <div className="md:col-span-2 text-xs">
+                                                <span className="font-medium text-slate-900">{x.drug_name}</span>{' '}
+                                                {x.strength ? (
+                                                    <span className="text-slate-500">• {x.strength}</span>
+                                                ) : null}
+                                            </div>
+                                            <div className="text-xs text-slate-600">Freq: {x.frequency || '—'}</div>
+                                            <div className="text-xs text-slate-600">Dur: {x.duration_days}d</div>
+                                            <div className="text-xs text-slate-600">Qty: {x.quantity}</div>
                                         </div>
                                     ))}
                                 </div>
@@ -244,7 +366,7 @@ export default function PatientEmrTimeline() {
             case 'lab': {
                 const item = d.item || {}
                 return (
-                    <div className="mt-2 space-y-1 text-sm text-gray-800">
+                    <div className="mt-2 space-y-1 text-sm text-slate-800">
                         <RowKV k="Order ID" v={d.order_id} />
                         <RowKV k="Priority" v={d.priority} />
                         <RowKV k="Collected at" v={d.collected_at} />
@@ -255,14 +377,20 @@ export default function PatientEmrTimeline() {
                         <RowKV k="Specimen" v={item.specimen_type} />
                         <RowKV k="Status" v={item.status} />
                         <RowKV k="Result" v={item.result_value} />
-                        <RowKV k="Critical" v={item.is_critical ? 'Yes' : (item.is_critical === false ? 'No' : '')} />
+                        <RowKV
+                            k="Critical"
+                            v={
+                                item.is_critical ? 'Yes' :
+                                    (item.is_critical === false ? 'No' : '')
+                            }
+                        />
                         <RowKV k="Result at" v={item.result_at} />
                     </div>
                 )
             }
             case 'radiology':
                 return (
-                    <div className="mt-2 space-y-1 text-sm text-gray-800">
+                    <div className="mt-2 space-y-1 text-sm text-slate-800">
                         <RowKV k="Test" v={`${d.test_name} (${d.test_code})`} />
                         <RowKV k="Modality" v={d.modality} />
                         <RowKV k="Status" v={d.status} />
@@ -275,20 +403,24 @@ export default function PatientEmrTimeline() {
                 )
             case 'pharmacy':
                 return (
-                    <div className="mt-2 space-y-1 text-sm text-gray-800">
+                    <div className="mt-2 space-y-1 text-sm text-slate-800">
                         <RowKV k="Sale ID" v={d.sale_id} />
                         <RowKV k="Context" v={d.context_type} />
                         <RowKV k="Payment" v={d.payment_mode} />
                         <RowKV k="Total" v={d.total_amount} />
                         {Array.isArray(d.items) && d.items.length > 0 && (
                             <div className="mt-2">
-                                <div className="text-xs font-medium text-gray-700">Items</div>
-                                <div className="mt-1 divide-y rounded-lg border">
+                                <div className="text-[11px] font-medium text-slate-600 uppercase tracking-wide">
+                                    Items
+                                </div>
+                                <div className="mt-1 divide-y rounded-2xl border border-slate-200 bg-slate-50">
                                     {d.items.map((x, i) => (
-                                        <div key={i} className="grid gap-2 p-2 md:grid-cols-4">
-                                            <div className="md:col-span-2">{x.medicine_name || `#${x.medicine_id}`}</div>
-                                            <div>Qty: {x.qty}</div>
-                                            <div>₹{x.amount}</div>
+                                        <div key={i} className="grid gap-2 p-2.5 md:grid-cols-4">
+                                            <div className="md:col-span-2 text-xs text-slate-800">
+                                                {x.medicine_name || `#${x.medicine_id}`}
+                                            </div>
+                                            <div className="text-xs text-slate-600">Qty: {x.qty}</div>
+                                            <div className="text-xs text-slate-600">₹{x.amount}</div>
                                         </div>
                                     ))}
                                 </div>
@@ -298,20 +430,26 @@ export default function PatientEmrTimeline() {
                 )
             case 'ipd_admission':
                 return (
-                    <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-gray-800 md:grid-cols-3">
+                    <div className="mt-2 grid grid-cols-2 gap-x-4 gap-y-1 text-sm text-slate-800 md:grid-cols-3">
                         <RowKV k="Admission Code" v={d.admission_code} />
                         <RowKV k="Type" v={d.admission_type} />
                         <RowKV k="Admitted at" v={d.admitted_at} />
                         <RowKV k="Expected Discharge" v={d.expected_discharge_at} />
                         <RowKV k="Bed" v={d.current_bed_code} />
-                        <div className="col-span-2 md:col-span-3"><RowKV k="Preliminary Diagnosis" v={d.preliminary_diagnosis} /></div>
-                        <div className="col-span-2 md:col-span-3"><RowKV k="History" v={d.history} /></div>
-                        <div className="col-span-2 md:col-span-3"><RowKV k="Care Plan" v={d.care_plan} /></div>
+                        <div className="col-span-2 md:col-span-3">
+                            <RowKV k="Preliminary Diagnosis" v={d.preliminary_diagnosis} />
+                        </div>
+                        <div className="col-span-2 md:col-span-3">
+                            <RowKV k="History" v={d.history} />
+                        </div>
+                        <div className="col-span-2 md:col-span-3">
+                            <RowKV k="Care Plan" v={d.care_plan} />
+                        </div>
                     </div>
                 )
             case 'ipd_transfer':
                 return (
-                    <div className="mt-2 space-y-1 text-sm text-gray-800">
+                    <div className="mt-2 space-y-1 text-sm text-slate-800">
                         <RowKV k="Admission" v={d.admission_id} />
                         <RowKV k="From Bed" v={d.from_bed_id} />
                         <RowKV k="To Bed" v={d.to_bed_id} />
@@ -321,7 +459,7 @@ export default function PatientEmrTimeline() {
                 )
             case 'ipd_discharge':
                 return (
-                    <div className="mt-2 space-y-1 text-sm text-gray-800">
+                    <div className="mt-2 space-y-1 text-sm text-slate-800">
                         <RowKV k="Finalized" v={d.finalized ? 'Yes' : 'No'} />
                         <RowKV k="Finalized at" v={d.finalized_at} />
                         <RowKV k="Demographics" v={d.demographics} />
@@ -334,12 +472,18 @@ export default function PatientEmrTimeline() {
                 )
             case 'ot':
                 return (
-                    <div className="mt-2 space-y-1 text-sm text-gray-800">
+                    <div className="mt-2 space-y-1 text-sm text-slate-800">
                         <RowKV k="Surgery" v={d.surgery_name} />
                         <RowKV k="Code" v={d.surgery_code} />
                         <RowKV k="Estimated Cost" v={d.estimated_cost} />
-                        <RowKV k="Scheduled" v={`${d.scheduled_start || ''} → ${d.scheduled_end || ''}`} />
-                        <RowKV k="Actual" v={`${d.actual_start || ''} → ${d.actual_end || ''}`} />
+                        <RowKV
+                            k="Scheduled"
+                            v={`${d.scheduled_start || ''} → ${d.scheduled_end || ''}`}
+                        />
+                        <RowKV
+                            k="Actual"
+                            v={`${d.actual_start || ''} → ${d.actual_end || ''}`}
+                        />
                         <RowKV k="Status" v={d.status} />
                         <RowKV k="Pre-op Notes" v={d.preop_notes} />
                         <RowKV k="Post-op Notes" v={d.postop_notes} />
@@ -347,7 +491,7 @@ export default function PatientEmrTimeline() {
                 )
             case 'billing':
                 return (
-                    <div className="mt-2 space-y-2 text-sm text-gray-800">
+                    <div className="mt-2 space-y-2 text-sm text-slate-800">
                         <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
                             <RowKV k="Invoice ID" v={d.invoice_id} />
                             <RowKV k="Status" v={d.status} />
@@ -356,15 +500,19 @@ export default function PatientEmrTimeline() {
                         </div>
                         {Array.isArray(d.items) && d.items.length > 0 && (
                             <div>
-                                <div className="text-xs font-medium text-gray-700">Items</div>
-                                <div className="mt-1 divide-y rounded-lg border">
+                                <div className="text-[11px] font-medium text-slate-600 uppercase tracking-wide">
+                                    Items
+                                </div>
+                                <div className="mt-1 divide-y rounded-2xl border border-slate-200 bg-slate-50">
                                     {d.items.map((x, i) => (
-                                        <div key={i} className="grid gap-2 p-2 md:grid-cols-6">
-                                            <div className="md:col-span-2">{x.description}</div>
-                                            <div>{x.service_type}</div>
-                                            <div>Qty: {x.quantity}</div>
-                                            <div>Unit: ₹{x.unit_price}</div>
-                                            <div>Total: ₹{x.line_total}</div>
+                                        <div key={i} className="grid gap-2 p-2.5 md:grid-cols-6">
+                                            <div className="md:col-span-2 text-xs text-slate-800">
+                                                {x.description}
+                                            </div>
+                                            <div className="text-xs text-slate-600">{x.service_type}</div>
+                                            <div className="text-xs text-slate-600">Qty: {x.quantity}</div>
+                                            <div className="text-xs text-slate-600">Unit: ₹{x.unit_price}</div>
+                                            <div className="text-xs text-slate-600">Total: ₹{x.line_total}</div>
                                         </div>
                                     ))}
                                 </div>
@@ -372,14 +520,18 @@ export default function PatientEmrTimeline() {
                         )}
                         {Array.isArray(d.payments) && d.payments.length > 0 && (
                             <div>
-                                <div className="text-xs font-medium text-gray-700">Payments</div>
-                                <div className="mt-1 divide-y rounded-lg border">
+                                <div className="text-[11px] font-medium text-slate-600 uppercase tracking-wide">
+                                    Payments
+                                </div>
+                                <div className="mt-1 divide-y rounded-2xl border border-slate-200 bg-slate-50">
                                     {d.payments.map((p, i) => (
-                                        <div key={i} className="grid gap-2 p-2 md:grid-cols-4">
-                                            <div>Mode: {p.mode}</div>
-                                            <div>Ref: {p.reference_no || '—'}</div>
-                                            <div>₹{p.amount}</div>
-                                            <div>{p.paid_at}</div>
+                                        <div key={i} className="grid gap-2 p-2.5 md:grid-cols-4">
+                                            <div className="text-xs text-slate-600">Mode: {p.mode}</div>
+                                            <div className="text-xs text-slate-600">
+                                                Ref: {p.reference_no || '—'}
+                                            </div>
+                                            <div className="text-xs text-slate-600">₹{p.amount}</div>
+                                            <div className="text-xs text-slate-600">{p.paid_at}</div>
                                         </div>
                                     ))}
                                 </div>
@@ -391,7 +543,7 @@ export default function PatientEmrTimeline() {
                 return null
             case 'consent':
                 return (
-                    <div className="mt-2 space-y-1 text-sm text-gray-800">
+                    <div className="mt-2 space-y-1 text-sm text-slate-800">
                         <RowKV k="Type" v={d.type} />
                         <RowKV k="Captured at" v={d.captured_at} />
                         <RowKV k="Text" v={d.text} />
@@ -402,222 +554,679 @@ export default function PatientEmrTimeline() {
         }
     }
 
+    // handle attachment preview
+    const openAttachmentPreview = (att) => {
+        const kind = inferFileKind(att)
+        if (kind === 'other') {
+            window.open(att.url, '_blank', 'noopener,noreferrer')
+            return
+        }
+        setFilePreview({
+            url: att.url,
+            label: att.label || 'Attachment',
+            kind,
+        })
+    }
+
+    const closeAttachmentPreview = () => {
+        setFilePreview(null)
+    }
+
+    const printPdf = () => {
+        if (!pdfPreviewUrl) return
+        const win = window.open(pdfPreviewUrl)
+        if (!win) return
+        win.addEventListener('load', () => {
+            win.focus()
+            win.print()
+        })
+    }
+
+    const downloadPdfFromPreview = () => {
+        if (!pdfPreviewUrl || !patient) return
+        downloadFromUrl(pdfPreviewUrl, `EMR_${patient.uhid || 'patient'}.pdf`)
+    }
+
     return (
-        <div className="mx-auto max-w-7xl p-4">
-            {/* Header */}
-            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <h1 className="text-2xl font-bold tracking-tight">EMR Viewer</h1>
-                <div className="flex items-center gap-2">
-                    <button
-                        onClick={() => setFetchStamp(s => s + 1)}
-                        className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm hover:bg-gray-50"
-                    >
-                        <RotateCcw className="h-4 w-4" />
-                        Refresh
-                    </button>
-                    <button
-                        onClick={exportPdf}
-                        className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700"
-                    >
-                        <Download className="h-4 w-4" />
-                        Export PDF
-                    </button>
-                    <button
-                        onClick={exportFhir}
-                        className="inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm hover:bg-gray-50"
-                    >
-                        <FileText className="h-4 w-4" />
-                        Export FHIR (JSON)
-                    </button>
+        <div className="min-h-screen bg-slate-50">
+            <div className="mx-auto max-w-6xl px-3 py-4 md:px-6 md:py-6 lg:px-8">
+                {/* Top row: module badge + device mode */}
+                <div className="mb-3 flex items-center justify-between gap-2">
+                    <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        EMR · Patient record & timeline
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1 text-[10px] font-medium text-slate-500">
+                        <LaptopMinimal className="h-3 w-3" />
+                        Desktop workspace
+                    </span>
                 </div>
-            </div>
 
-            {/* Patient selector + Filters */}
-            <div className="grid gap-4 lg:grid-cols-3">
-                <div className="rounded-2xl border bg-white p-4 lg:col-span-2">
-                    <PatientQuickPicker
-                        onPick={(p) => {
-                            setPatient(p)
-                            toast.success(`Selected ${p.uhid} — ${p.name}`)
-                        }}
-                    />
-                    {patient && (
-                        <div className="mt-3 rounded-xl border bg-emerald-50 px-3 py-2 text-sm text-emerald-900">
-                            <div className="flex items-center gap-2">
-                                <User2 className="h-4 w-4" />
-                                <span className="font-medium">{patient.uhid}</span>
-                                <Dot className="h-4 w-4" />
-                                <span>{patient.name}</span>
-                                {patient.gender ? <><Dot className="h-4 w-4" /><span className="uppercase">{patient.gender}</span></> : null}
-                                {patient.dob ? <><Dot className="h-4 w-4" /><span>DOB {patient.dob}</span></> : null}
-                                {patient.phone ? <><Dot className="h-4 w-4" /><span>{patient.phone}</span></> : null}
+                {/* Header card */}
+                <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.2 }}
+                >
+                    <Card className="mb-5 rounded-3xl border-slate-200 bg-white shadow-sm">
+                        <CardHeader className="flex flex-col gap-4 border-b border-slate-100 pb-4 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="flex items-center gap-3">
+                                <div className="flex h-10 w-10 items-center justify-center rounded-3xl bg-slate-900 text-slate-50">
+                                    <Stethoscope className="h-5 w-5" />
+                                </div>
+                                <div>
+                                    <CardTitle className="text-xl font-semibold text-slate-900">
+                                        Patient EMR Timeline
+                                    </CardTitle>
+                                    <CardDescription className="text-sm text-slate-600">
+                                        Unified view of OPD, IPD, lab, radiology, pharmacy, billing, attachments and consents – ready to export as a clean EMR PDF.
+                                    </CardDescription>
+                                </div>
                             </div>
-                        </div>
-                    )}
-                </div>
 
-                <div className="rounded-2xl border bg-white p-4">
-                    <div className="mb-2 flex items-center gap-2 text-sm font-medium">
-                        <CalendarRange className="h-4 w-4" /> Date Range
-                    </div>
-                    <div className="grid grid-cols-2 gap-2">
-                        <input
-                            type="date"
-                            className="rounded-xl border px-3 py-2 text-sm"
-                            value={filters.date_from}
-                            onChange={e => setFilters(f => ({ ...f, date_from: e.target.value }))}
-                        />
-                        <input
-                            type="date"
-                            className="rounded-xl border px-3 py-2 text-sm"
-                            value={filters.date_to}
-                            onChange={e => setFilters(f => ({ ...f, date_to: e.target.value }))}
-                        />
-                    </div>
-
-                    <div className="mt-4 flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-sm">
-                            <Filter className="h-4 w-4" />
-                            <span className="font-medium">Types</span>
-                        </div>
-                        <div className="flex gap-2">
-                            <button onClick={selectAll} className="text-xs text-blue-700 hover:underline">All</button>
-                            <button onClick={clearAll} className="text-xs text-gray-600 hover:underline">Clear</button>
-                        </div>
-                    </div>
-
-                    <div className="mt-2 flex flex-wrap gap-2">
-                        {ALL_TYPES.map(t => {
-                            const Icon = t.icon
-                            const active = selectedSet.has(t.code)
-                            return (
-                                <button
-                                    key={t.code}
-                                    onClick={() => toggleType(t.code)}
-                                    className={[
-                                        'inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs transition',
-                                        active ? 'border-blue-200 bg-blue-50 text-blue-700' : 'border-gray-200 text-gray-600 hover:bg-gray-50',
-                                    ].join(' ')}
-                                >
-                                    <Icon className="h-3.5 w-3.5" />
-                                    {t.label}
-                                </button>
-                            )
-                        })}
-                    </div>
-
-                    <div className="mt-4 flex items-center gap-2 text-sm">
-                        <input
-                            id="consentReq"
-                            type="checkbox"
-                            checked={!!filters.consent_required}
-                            onChange={e => setFilters(f => ({ ...f, consent_required: e.target.checked }))}
-                            className="h-4 w-4 rounded border-gray-300"
-                        />
-                        <label htmlFor="consentReq" className="select-none text-gray-700">
-                            Require active consent for export
-                        </label>
-                    </div>
-                </div>
-            </div>
-
-            {/* Timeline */}
-            <div className="mt-6 rounded-2xl border bg-white p-4">
-                <div className="mb-3 flex items-center gap-2 text-sm font-medium">
-                    <Stethoscope className="h-4 w-4" />
-                    Timeline
-                </div>
-
-                {loading && (
-                    <div className="space-y-3">
-                        {Array.from({ length: 5 }).map((_, i) => (
-                            <div key={i} className="h-16 animate-pulse rounded-xl bg-gray-100" />
-                        ))}
-                    </div>
-                )}
-
-                {!loading && (!items || items.length === 0) && (
-                    <div className="rounded-xl border border-dashed p-6 text-center text-sm text-gray-500">
-                        Pick a patient and filters to load EMR timeline.
-                    </div>
-                )}
-
-                {!loading && items && items.length > 0 && (
-                    <div className="relative">
-                        <div className="absolute left-4 top-0 bottom-0 w-0.5 bg-gradient-to-b from-blue-200 via-gray-200 to-transparent" />
-                        <div className="space-y-6">
-                            {grouped.map(([day, rows]) => (
-                                <div key={day} className="relative pl-10">
-                                    {/* date badge */}
-                                    <div className="mb-2 inline-flex items-center gap-2 rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700">
-                                        <CalendarRange className="h-3.5 w-3.5" /> {day}
+                            <div className="grid gap-2 text-xs text-slate-600 sm:grid-cols-3 sm:text-right">
+                                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+                                    <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                                        Selected patient
                                     </div>
-
-                                    <div className="space-y-3">
-                                        {rows.map((it, idx) => {
-                                            const meta = [
-                                                it.doctor_name ? `Dr. ${it.doctor_name}` : null,
-                                                it.department_name || null,
-                                                it.location_name || null,
-                                            ].filter(Boolean).join('  •  ')
-
-                                            const TypeIcon = (ALL_TYPES.find(t => t.code === it.type)?.icon) || FileText
-                                            const s = it.status && (statusStyles[it.status] || "border-gray-200 bg-gray-50 text-gray-600")
-
-                                            return (
-                                                <div key={`${it.type}-${String(it.ts)}-${idx}`} className="relative">
-                                                    {/* dot on the line */}
-                                                    <div className="absolute -left-[9px] top-4 h-2.5 w-2.5 rounded-full border border-blue-200 bg-white" />
-                                                    <div className="rounded-xl border p-3 hover:bg-gray-50">
-                                                        <div className="flex items-start justify-between gap-3">
-                                                            <div className="flex min-w-0 items-start gap-3">
-                                                                <div className="mt-1 grid h-8 w-8 place-items-center rounded-lg bg-blue-600/10 text-blue-700">
-                                                                    <TypeIcon className="h-4 w-4" />
-                                                                </div>
-                                                                <div className="min-w-0">
-                                                                    <div className="flex flex-wrap items-center gap-2">
-                                                                        <div className="truncate text-sm font-semibold">{it.title || 'Event'}</div>
-                                                                        <div className="text-xs text-gray-500">{fmtDateTime(it.ts)}</div>
-                                                                        {it.status && (
-                                                                            <span className={`${chipBase} ${s}`}>{it.status}</span>
-                                                                        )}
-                                                                    </div>
-                                                                    {meta && <div className="text-xs text-gray-600">{meta}</div>}
-
-                                                                    {/* details */}
-                                                                    {renderDetails(it)}
-
-                                                                    {/* attachments */}
-                                                                    {it.attachments?.length > 0 && (
-                                                                        <div className="mt-2 flex flex-wrap gap-2">
-                                                                            {it.attachments.map((a, i) => (
-                                                                                <a
-                                                                                    key={i}
-                                                                                    href={a.url}
-                                                                                    target="_blank"
-                                                                                    rel="noopener"
-                                                                                    className="inline-flex items-center gap-1 rounded-lg border px-2 py-1 text-xs text-blue-700 hover:bg-blue-50"
-                                                                                >
-                                                                                    <Paperclip className="h-3.5 w-3.5" />
-                                                                                    {a.label || 'attachment'}
-                                                                                </a>
-                                                                            ))}
-                                                                        </div>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                </div>
-                                            )
-                                        })}
+                                    <div className="mt-1 text-[13px] font-semibold text-slate-900">
+                                        {patient ? patient.uhid : 'None'}
+                                    </div>
+                                    <div className="truncate text-[11px] text-slate-500">
+                                        {patient ? patient.name : 'Use search to pick a patient'}
                                     </div>
                                 </div>
-                            ))}
+                                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+                                    <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                                        Total events
+                                    </div>
+                                    <div className="mt-1 text-[13px] font-semibold text-slate-900">
+                                        {totalEvents}
+                                    </div>
+                                    <div className="text-[11px] text-slate-500">
+                                        Across visits, orders & billing
+                                    </div>
+                                </div>
+                                <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+                                    <div className="text-[10px] font-medium uppercase tracking-wide text-slate-500">
+                                        Date range
+                                    </div>
+                                    <div className="mt-1 text-[13px] font-semibold text-slate-900">
+                                        {dateRangeText}
+                                    </div>
+                                    <div className="text-[11px] text-slate-500">
+                                        Filter scope for EMR export
+                                    </div>
+                                </div>
+                            </div>
+                        </CardHeader>
+
+                        <CardContent className="pt-4">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                                <div className="flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                                    <Badge
+                                        variant="outline"
+                                        className="rounded-full border-slate-200 bg-white px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide text-slate-500"
+                                    >
+                                        EMR Viewer
+                                    </Badge>
+                                    <span className="hidden text-[11px] text-slate-500 sm:inline">
+                                        Apply filters, review visits and export a print-aligned EMR PDF.
+                                    </span>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="inline-flex items-center gap-1 rounded-full border-slate-200 bg-white text-xs text-slate-700 hover:bg-slate-100"
+                                        onClick={() => setFetchStamp(s => s + 1)}
+                                    >
+                                        <RotateCcw className="h-3.5 w-3.5" />
+                                        Refresh
+                                    </Button>
+                                    <Button
+                                        size="sm"
+                                        className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-3 py-2 text-xs font-medium text-white hover:bg-slate-800"
+                                        onClick={exportPdf}
+                                    >
+                                        <Printer className="h-3.5 w-3.5" />
+                                        Preview / Print EMR PDF
+                                    </Button>
+                                    <Button
+                                        variant="outline"
+                                        size="sm"
+                                        className="inline-flex items-center gap-1 rounded-full border-slate-200 bg-white text-xs text-slate-700 hover:bg-slate-100"
+                                        onClick={exportFhir}
+                                    >
+                                        <FileText className="h-3.5 w-3.5" />
+                                        Export FHIR (JSON)
+                                    </Button>
+                                </div>
+                            </div>
+                        </CardContent>
+                    </Card>
+                </motion.div>
+
+                {/* Main layout: left filters (sticky) + right timeline */}
+                <div className="mt-4 lg:grid lg:grid-cols-[280px,minmax(0,1fr)] lg:gap-6">
+                    {/* Left: patient picker + filters */}
+                    <div className="mb-4 space-y-4 lg:mb-0 lg:sticky lg:top-24">
+                        <motion.div
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.2, delay: 0.05 }}
+                        >
+                            <Card className="rounded-3xl border-slate-200 bg-white shadow-sm">
+                                <CardHeader className="pb-3">
+                                    <CardTitle className="text-sm font-semibold text-slate-900">
+                                        Patient
+                                    </CardTitle>
+                                    <CardDescription className="text-xs text-slate-500">
+                                        Search and select a patient to view their EMR timeline.
+                                    </CardDescription>
+                                </CardHeader>
+                                <CardContent className="space-y-3">
+                                    <PatientQuickPicker
+                                        onPick={(p) => {
+                                            setPatient(p)
+                                            toast.success(`Selected ${p.uhid} — ${p.name}`)
+                                        }}
+                                    />
+                                    {patient && (
+                                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                                            <div className="flex flex-wrap items-center gap-1.5">
+                                                <User2 className="h-3.5 w-3.5 text-slate-500" />
+                                                <span className="font-medium text-slate-900">{patient.uhid}</span>
+                                                <Dot className="h-3.5 w-3.5 text-slate-400" />
+                                                <span className="truncate">{patient.name}</span>
+                                                {patient.gender && (
+                                                    <>
+                                                        <Dot className="h-3.5 w-3.5 text-slate-400" />
+                                                        <span className="uppercase text-slate-500">{patient.gender}</span>
+                                                    </>
+                                                )}
+                                                {patient.dob && (
+                                                    <>
+                                                        <Dot className="h-3.5 w-3.5 text-slate-400" />
+                                                        <span className="text-slate-500">DOB {patient.dob}</span>
+                                                    </>
+                                                )}
+                                                {patient.phone && (
+                                                    <>
+                                                        <Dot className="h-3.5 w-3.5 text-slate-400" />
+                                                        <span className="text-slate-500">{patient.phone}</span>
+                                                    </>
+                                                )}
+                                            </div>
+                                        </div>
+                                    )}
+                                </CardContent>
+                            </Card>
+                        </motion.div>
+
+                        <motion.div
+                            initial={{ opacity: 0, y: 8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            transition={{ duration: 0.2, delay: 0.1 }}
+                        >
+                            <Card className="rounded-3xl border-slate-200 bg-white shadow-sm">
+                                <CardHeader className="pb-3">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <CardTitle className="text-sm font-semibold text-slate-900">
+                                                Filters
+                                            </CardTitle>
+                                            <CardDescription className="text-xs text-slate-500">
+                                                Date range, data types and consent requirement.
+                                            </CardDescription>
+                                        </div>
+                                    </div>
+                                </CardHeader>
+                                <CardContent className="space-y-4">
+                                    {/* Date range */}
+                                    <div>
+                                        <div className="mb-1.5 flex items-center gap-2 text-xs font-semibold text-slate-900">
+                                            <CalendarRange className="h-3.5 w-3.5 text-slate-500" />
+                                            Date range
+                                        </div>
+                                        <div className="grid grid-cols-2 gap-2">
+                                            <div className="relative">
+                                                <CalendarRange className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                                                <Input
+                                                    type="date"
+                                                    className="h-8 rounded-2xl border-slate-200 bg-slate-50 pl-8 pr-2 text-xs text-slate-700"
+                                                    value={filters.date_from}
+                                                    onChange={e =>
+                                                        setFilters(f => ({ ...f, date_from: e.target.value }))
+                                                    }
+                                                />
+                                            </div>
+                                            <div className="relative">
+                                                <CalendarRange className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-400" />
+                                                <Input
+                                                    type="date"
+                                                    className="h-8 rounded-2xl border-slate-200 bg-slate-50 pl-8 pr-2 text-xs text-slate-700"
+                                                    value={filters.date_to}
+                                                    onChange={e =>
+                                                        setFilters(f => ({ ...f, date_to: e.target.value }))
+                                                    }
+                                                />
+                                            </div>
+                                        </div>
+                                        <p className="mt-1 text-[11px] text-slate-500">
+                                            Leave blank for full EMR history.
+                                        </p>
+                                    </div>
+
+                                    {/* Types */}
+                                    <div>
+                                        <div className="mb-1.5 flex items-center justify-between">
+                                            <div className="flex items-center gap-2 text-xs font-semibold text-slate-900">
+                                                <Filter className="h-3.5 w-3.5 text-slate-500" />
+                                                Types
+                                            </div>
+                                            <div className="flex gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={selectAll}
+                                                    className="text-[10px] font-medium text-slate-600 hover:text-slate-900"
+                                                >
+                                                    All
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={clearAll}
+                                                    className="text-[10px] font-medium text-slate-500 hover:text-slate-900"
+                                                >
+                                                    Clear
+                                                </button>
+                                            </div>
+                                        </div>
+
+                                        <div className="flex flex-wrap gap-1.5">
+                                            {ALL_TYPES.map(t => {
+                                                const Icon = t.icon
+                                                const active = selectedSet.has(t.code)
+                                                return (
+                                                    <button
+                                                        key={t.code}
+                                                        type="button"
+                                                        onClick={() => toggleType(t.code)}
+                                                        className={[
+                                                            'inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[10px] font-medium transition',
+                                                            active
+                                                                ? 'border-slate-900 bg-slate-900 text-white shadow-sm'
+                                                                : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50',
+                                                        ].join(' ')}
+                                                    >
+                                                        <Icon className="h-3 w-3" />
+                                                        {t.label}
+                                                    </button>
+                                                )
+                                            })}
+                                        </div>
+                                    </div>
+
+                                    {/* Consent filter */}
+                                    <div className="flex items-start gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+                                        <input
+                                            id="consentReq"
+                                            type="checkbox"
+                                            checked={!!filters.consent_required}
+                                            onChange={e =>
+                                                setFilters(f => ({ ...f, consent_required: e.target.checked }))
+                                            }
+                                            className="mt-0.5 h-3.5 w-3.5 rounded border-slate-300 text-slate-900"
+                                        />
+                                        <div className="space-y-0.5">
+                                            <label
+                                                htmlFor="consentReq"
+                                                className="block text-xs font-medium text-slate-900"
+                                            >
+                                                Require active consent for export
+                                            </label>
+                                            <p className="text-[11px] text-slate-500">
+                                                When enabled, EMR PDF export is blocked unless a valid patient
+                                                consent record exists.
+                                            </p>
+                                        </div>
+                                    </div>
+                                </CardContent>
+                            </Card>
+                        </motion.div>
+                    </div>
+
+                    {/* Right: timeline */}
+                    <motion.div
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.2, delay: 0.08 }}
+                        className="space-y-4"
+                    >
+                        <Card className="rounded-3xl border-slate-200 bg-white shadow-sm">
+                            <CardHeader className="pb-3">
+                                <div className="flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <Stethoscope className="h-4 w-4 text-slate-500" />
+                                        <CardTitle className="text-sm font-semibold text-slate-900">
+                                            Timeline
+                                        </CardTitle>
+                                    </div>
+                                    <span className="text-[11px] text-slate-500">
+                                        Sorted newest to oldest
+                                    </span>
+                                </div>
+                            </CardHeader>
+                            <CardContent>
+                                {loading && (
+                                    <div className="space-y-3">
+                                        {Array.from({ length: 5 }).map((_, i) => (
+                                            <Skeleton
+                                                key={i}
+                                                className="h-16 w-full rounded-2xl bg-slate-100"
+                                            />
+                                        ))}
+                                    </div>
+                                )}
+
+                                {!loading && (!items || items.length === 0) && (
+                                    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-6 py-8 text-center">
+                                        <div className="mx-auto mb-2 flex h-8 w-8 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500">
+                                            <Stethoscope className="h-4 w-4" />
+                                        </div>
+                                        <div className="text-sm font-semibold text-slate-900">
+                                            No EMR events to display
+                                        </div>
+                                        <p className="mt-1 text-xs text-slate-500">
+                                            Pick a patient and adjust the date range or type filters to load their EMR
+                                            timeline.
+                                        </p>
+                                    </div>
+                                )}
+
+                                {!loading && items && items.length > 0 && (
+                                    <div className="relative">
+                                        {/* vertical line */}
+                                        <div className="absolute left-4 top-0 bottom-0 w-px bg-gradient-to-b from-slate-200 via-slate-200/70 to-transparent" />
+                                        <div className="space-y-6">
+                                            {grouped.map(([day, rows]) => (
+                                                <div key={day} className="relative pl-10">
+                                                    {/* date badge */}
+                                                    <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] font-medium text-slate-700">
+                                                        <CalendarRange className="h-3.5 w-3.5 text-slate-500" />
+                                                        {day}
+                                                    </div>
+
+                                                    <div className="space-y-3">
+                                                        {rows.map((it, idx) => {
+                                                            const meta = [
+                                                                it.doctor_name ? `Dr. ${it.doctor_name}` : null,
+                                                                it.department_name || null,
+                                                                it.location_name || null,
+                                                            ]
+                                                                .filter(Boolean)
+                                                                .join(' • ')
+
+                                                            const TypeIcon =
+                                                                (ALL_TYPES.find(t => t.code === it.type)?.icon) ||
+                                                                FileText
+                                                            const s =
+                                                                it.status &&
+                                                                (statusStyles[it.status] ||
+                                                                    'border-slate-200 bg-slate-50 text-slate-600')
+
+                                                            return (
+                                                                <motion.div
+                                                                    key={`${it.type}-${String(it.ts)}-${idx}`}
+                                                                    initial={{ opacity: 0, y: 4 }}
+                                                                    animate={{ opacity: 1, y: 0 }}
+                                                                    transition={{ duration: 0.15 }}
+                                                                    className="relative"
+                                                                >
+                                                                    {/* dot on the line */}
+                                                                    <div className="absolute -left-[9px] top-4 h-2.5 w-2.5 rounded-full border border-slate-200 bg-white" />
+                                                                    <div className="rounded-2xl border border-slate-200 bg-white p-3.5 hover:shadow-[0_4px_12px_rgba(15,23,42,0.06)]">
+                                                                        <div className="flex items-start justify-between gap-3">
+                                                                            <div className="flex min-w-0 items-start gap-3">
+                                                                                <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-2xl bg-slate-900 text-slate-50">
+                                                                                    <TypeIcon className="h-4 w-4" />
+                                                                                </div>
+                                                                                <div className="min-w-0">
+                                                                                    <div className="flex flex-wrap items-center gap-2">
+                                                                                        <div className="truncate text-sm font-semibold text-slate-900">
+                                                                                            {it.title || 'Event'}
+                                                                                        </div>
+                                                                                        <div className="text-[11px] text-slate-500">
+                                                                                            {fmtDateTime(it.ts)}
+                                                                                        </div>
+                                                                                        {it.status && (
+                                                                                            <span
+                                                                                                className={`${chipBase} ${s}`}
+                                                                                            >
+                                                                                                {it.status}
+                                                                                            </span>
+                                                                                        )}
+                                                                                    </div>
+                                                                                    {meta && (
+                                                                                        <div className="mt-0.5 text-[11px] text-slate-500">
+                                                                                            {meta}
+                                                                                        </div>
+                                                                                    )}
+
+                                                                                    {/* details */}
+                                                                                    {renderDetails(it)}
+
+                                                                                    {/* attachments with preview & download */}
+                                                                                    {it.attachments?.length > 0 && (
+                                                                                        <div className="mt-2 flex flex-wrap gap-2">
+                                                                                            {it.attachments.map((a, i) => {
+                                                                                                const kind =
+                                                                                                    inferFileKind(a)
+                                                                                                return (
+                                                                                                    <div
+                                                                                                        key={i}
+                                                                                                        className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[10px]"
+                                                                                                    >
+                                                                                                        <button
+                                                                                                            type="button"
+                                                                                                            onClick={() =>
+                                                                                                                openAttachmentPreview(
+                                                                                                                    a
+                                                                                                                )
+                                                                                                            }
+                                                                                                            className="inline-flex items-center gap-1 text-slate-700 hover:text-slate-900"
+                                                                                                        >
+                                                                                                            <Eye className="h-3 w-3" />
+                                                                                                            {a.label ||
+                                                                                                                'attachment'}
+                                                                                                        </button>
+                                                                                                        <button
+                                                                                                            type="button"
+                                                                                                            onClick={() =>
+                                                                                                                downloadFromUrl(
+                                                                                                                    a.url,
+                                                                                                                    a.label ||
+                                                                                                                    'attachment'
+                                                                                                                )
+                                                                                                            }
+                                                                                                            className="inline-flex items-center gap-1 text-slate-400 hover:text-slate-700"
+                                                                                                        >
+                                                                                                            <Download className="h-3 w-3" />
+                                                                                                            <span className="hidden sm:inline">
+                                                                                                                Download
+                                                                                                            </span>
+                                                                                                        </button>
+                                                                                                        <span className="text-[9px] uppercase text-slate-400">
+                                                                                                            {kind}
+                                                                                                        </span>
+                                                                                                    </div>
+                                                                                                )
+                                                                                            })}
+                                                                                        </div>
+                                                                                    )}
+                                                                                </div>
+                                                                            </div>
+                                                                        </div>
+                                                                    </div>
+                                                                </motion.div>
+                                                            )
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </motion.div>
+                </div>
+            </div>
+
+            {/* PDF Preview Modal */}
+            {showPdfPreview && pdfPreviewUrl && (
+                <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60">
+                    <div className="relative flex h-[90vh] w-[95vw] max-w-6xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+                        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-2.5">
+                            <div>
+                                <div className="text-sm font-semibold text-slate-900">
+                                    EMR PDF Preview
+                                </div>
+                                {patient && (
+                                    <div className="text-[11px] text-slate-500">
+                                        {patient.uhid} — {patient.name}
+                                    </div>
+                                )}
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="inline-flex items-center gap-1 rounded-full border-slate-200 bg-white text-[11px] text-slate-700 hover:bg-slate-100"
+                                    onClick={downloadPdfFromPreview}
+                                >
+                                    <Download className="h-3 w-3" />
+                                    Download
+                                </Button>
+                                <Button
+                                    size="sm"
+                                    className="inline-flex items-center gap-1 rounded-full bg-slate-900 px-3 py-1.5 text-[11px] text-white hover:bg-slate-800"
+                                    onClick={printPdf}
+                                >
+                                    <Printer className="h-3 w-3" />
+                                    Print
+                                </Button>
+                                <button
+                                    type="button"
+                                    onClick={() => setShowPdfPreview(false)}
+                                    className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200"
+                                >
+                                    <X className="h-4 w-4" />
+                                </button>
+                            </div>
+                        </div>
+                        <div className="flex-1 bg-slate-100">
+                            <iframe
+                                src={pdfPreviewUrl}
+                                title="EMR PDF"
+                                className="h-full w-full"
+                            />
                         </div>
                     </div>
-                )}
-            </div>
+                </div>
+            )}
+
+            {/* Attachment Preview Modal */}
+            {filePreview && (
+                <div className="fixed inset-0 z-40 flex items-center justify-center bg-black/60">
+                    <div className="relative flex h-[90vh] w-[95vw] max-w-4xl flex-col overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-2xl">
+                        <div className="flex items-center justify-between border-b border-slate-200 px-4 py-2.5">
+                            <div>
+                                <div className="text-sm font-semibold text-slate-900">
+                                    {filePreview.label}
+                                </div>
+                                <div className="text-[11px] uppercase text-slate-400">
+                                    {filePreview.kind} preview
+                                </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    variant="outline"
+                                    size="sm"
+                                    className="inline-flex items-center gap-1 rounded-full border-slate-200 bg-white text-[11px] text-slate-700 hover:bg-slate-100"
+                                    onClick={() =>
+                                        downloadFromUrl(filePreview.url, filePreview.label)
+                                    }
+                                >
+                                    <Download className="h-3 w-3" />
+                                    Download
+                                </Button>
+                                <button
+                                    type="button"
+                                    onClick={closeAttachmentPreview}
+                                    className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-slate-600 hover:bg-slate-200"
+                                >
+                                    <X className="h-4 w-4" />
+                                </button>
+                            </div>
+                        </div>
+                        <div className="flex-1 bg-slate-100">
+                            {filePreview.kind === 'image' && (
+                                <div className="flex h-full w-full items-center justify-center overflow-auto bg-black">
+                                    <img
+                                        src={filePreview.url}
+                                        alt={filePreview.label}
+                                        className="max-h-full max-w-full object-contain"
+                                    />
+                                </div>
+                            )}
+                            {filePreview.kind === 'pdf' && (
+                                <iframe
+                                    src={filePreview.url}
+                                    title={filePreview.label}
+                                    className="h-full w-full"
+                                />
+                            )}
+                            {filePreview.kind === 'other' && (
+                                <div className="flex h-full flex-col items-center justify-center gap-3 p-6 text-center text-sm text-slate-600">
+                                    <p>
+                                        This file type can’t be previewed here. You can open it in a new tab
+                                        or download it.
+                                    </p>
+                                    <div className="flex gap-2">
+                                        <Button
+                                            size="sm"
+                                            className="rounded-full bg-slate-900 px-4 py-1 text-[11px] text-white hover:bg-slate-800"
+                                            onClick={() =>
+                                                window.open(
+                                                    filePreview.url,
+                                                    '_blank',
+                                                    'noopener,noreferrer'
+                                                )
+                                            }
+                                        >
+                                            Open in new tab
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            size="sm"
+                                            className="rounded-full border-slate-200 bg-white px-4 py-1 text-[11px] text-slate-700 hover:bg-slate-100"
+                                            onClick={() =>
+                                                downloadFromUrl(
+                                                    filePreview.url,
+                                                    filePreview.label
+                                                )
+                                            }
+                                        >
+                                            Download
+                                        </Button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     )
 }

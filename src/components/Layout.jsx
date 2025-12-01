@@ -1,11 +1,25 @@
-// frontend/src/components/Layout.jsx
 import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
+import { useBranding } from '../branding/BrandingProvider'
 
 export default function Layout() {
+    const { branding } = useBranding() || {}
+    const hasCustomBg = !!branding?.content_bg_color
+
+    const rootClass = hasCustomBg
+        ? 'min-h-dvh'
+        : 'min-h-dvh bg-gradient-to-b from-gray-50 to-white'
+
+    const rootStyle = hasCustomBg
+        ? {
+            backgroundColor: branding.content_bg_color,
+            color: branding.text_color || undefined,
+        }
+        : undefined
+
     return (
-        <div className="min-h-dvh bg-gradient-to-b from-gray-50 to-white">
+        <div className={rootClass} style={rootStyle}>
             <div className="flex min-h-dvh">
                 {/* Sidebar: handles mobile drawer + collapse internally */}
                 <Sidebar />

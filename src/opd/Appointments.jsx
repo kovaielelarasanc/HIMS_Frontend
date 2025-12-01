@@ -1,473 +1,508 @@
-// src/pages/opd/Appointments.jsx
+// frontend/src/opd/AppointmentBooking.jsx
 import { useEffect, useMemo, useState } from 'react'
+import { toast } from 'sonner'
 import {
-    fetchDepartments,
-    fetchRolesByDepartment,
-    fetchDepartmentUsers,
-    searchPatients,
-    getFreeSlots,
     createAppointment,
-    fetchAppointments,
+    listAppointments,
+    getDoctorSlots,
 } from '../api/opd'
-import { useToast } from '../components/Toast'
-import { CalendarDays, Clock3, Stethoscope, User2, Search, CheckCircle2, XCircle } from 'lucide-react'
+import DoctorPicker from './components/DoctorPicker'
+import PatientPicker from './components/PatientPicker'
 
-function formatDateISO(d) {
-    const dt = d instanceof Date ? d : new Date(d)
-    const y = dt.getFullYear()
-    const m = String(dt.getMonth() + 1).padStart(2, '0')
-    const day = String(dt.getDate()).padStart(2, '0')
-    return `${y}-${m}-${day}`
-}
-function toDateTime(dateStr, hhmm) {
-    const [H, M] = (hhmm || '00:00').split(':').map(n => parseInt(n || '0', 10))
-    const dt = new Date(dateStr + 'T00:00:00')
-    dt.setHours(H, M, 0, 0)
-    return dt
-}
-const BLOCKING_STATUSES = new Set(['booked', 'checked_in', 'in_progress'])
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { Separator } from '@/components/ui/separator'
+import { Skeleton } from '@/components/ui/skeleton'
 
-function StatusPill({ status }) {
-    const map = {
-        booked: 'bg-blue-50 text-blue-700 ring-blue-100',
-        checked_in: 'bg-amber-50 text-amber-700 ring-amber-100',
-        in_progress: 'bg-purple-50 text-purple-700 ring-purple-100',
-        completed: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
-        no_show: 'bg-gray-50 text-gray-600 ring-gray-100',
-        cancelled: 'bg-rose-50 text-rose-700 ring-rose-100',
-    }
-    const cls = map[status] ?? map.booked
-    return <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs ring-1 ${cls}`}>{String(status || '').replace('_', ' ')}</span>
-}
+import {
+    CalendarDays,
+    Clock,
+    Stethoscope,
+    User2,
+    Activity,
+    Loader2,
+} from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 
-function VitalsTag({ has }) {
-    return has ? (
-        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] font-medium text-emerald-700 ring-1 ring-emerald-100">
-            <CheckCircle2 className="h-3.5 w-3.5" /> vitals done
-        </span>
-    ) : (
-        <span className="inline-flex items-center gap-1 rounded-full bg-rose-50 px-2 py-0.5 text-[11px] font-medium text-rose-700 ring-1 ring-rose-100">
-            <XCircle className="h-3.5 w-3.5" /> vitals pending
-        </span>
-    )
-}
+const todayStr = () => new Date().toISOString().slice(0, 10)
 
-/** Department → Role → User (doctor) picker
- * onSelect({ doctorId, departmentId })
- */
-function DeptRoleUserPicker({ value, onSelect }) {
-    const [depts, setDepts] = useState([])
-    const [deptId, setDeptId] = useState('')
-    const [roles, setRoles] = useState([])
-    const [roleId, setRoleId] = useState('')
-    const [users, setUsers] = useState([])
-    const [busy, setBusy] = useState(false)
-
-    useEffect(() => { fetchDepartments().then(r => setDepts(r.data || [])) }, [])
-
-    useEffect(() => {
-        if (!deptId) { setRoles([]); setRoleId(''); setUsers([]); onSelect?.({ doctorId: null, departmentId: null }); return }
-        setBusy(true)
-        fetchRolesByDepartment(deptId)
-            .then(r => setRoles(r.data || []))
-            .finally(() => setBusy(false))
-    }, [deptId])
-
-    useEffect(() => {
-        if (!deptId) { setUsers([]); return }
-        setBusy(true)
-        fetchDepartmentUsers(deptId, roleId || undefined)
-            .then(r => setUsers(r.data || []))
-            .finally(() => setBusy(false))
-    }, [deptId, roleId])
-
-    const onDept = (id) => {
-        setDeptId(id)
-        onSelect?.({ doctorId: null, departmentId: id ? Number(id) : null })
-    }
-
-    return (
-        <div className="space-y-2">
-            <label className="text-sm font-medium">Doctor selection</label>
-            <div className="grid gap-2 md:grid-cols-3">
-                <select className="input" value={deptId} onChange={e => onDept(e.target.value)}>
-                    <option value="">Select department</option>
-                    {depts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
-                </select>
-                <select className="input" value={roleId} onChange={e => setRoleId(e.target.value)} disabled={!deptId || busy}>
-                    <option value="">All roles</option>
-                    {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
-                </select>
-                <select
-                    className="input"
-                    value={value || ''}
-                    onChange={e => onSelect?.({ doctorId: Number(e.target.value), departmentId: deptId ? Number(deptId) : null })}
-                    disabled={!deptId || busy}
-                >
-                    <option value="">Select user</option>
-                    {users.map(u => (
-                        <option key={u.id} value={u.id}>{u.name}</option>
-                    ))}
-                </select>
-            </div>
-        </div>
-    )
-}
-
-export default function Appointments() {
-    const toast = useToast()
-
-    // Filters
-    const [dateStr, setDateStr] = useState(() => formatDateISO(new Date()))
+export default function AppointmentBooking() {
+    const [date, setDate] = useState(todayStr())
     const [doctorId, setDoctorId] = useState(null)
     const [departmentId, setDepartmentId] = useState(null)
-
-    // Booking form
-    const [patientQ, setPatientQ] = useState('')
-    const [patientList, setPatientList] = useState([])
     const [patientId, setPatientId] = useState(null)
     const [purpose, setPurpose] = useState('Consultation')
-    const [slots, setSlots] = useState([])   // [{start,end,status?}]
-    const [slot, setSlot] = useState('')     // "HH:MM"
 
-    // Data
-    const [items, setItems] = useState([])   // appointment rows (for page list)
-    const [loading, setLoading] = useState(false)
-    const [saving, setSaving] = useState(false)
-    const [msg, setMsg] = useState('')
-    const [dupAppt, setDupAppt] = useState(null) // active appointment for same patient/date (if any)
+    const [slots, setSlots] = useState([])
+    const [selectedSlot, setSelectedSlot] = useState('')
+    const [loadingSlots, setLoadingSlots] = useState(false)
 
-    const todayISO = formatDateISO(new Date())
+    const [appointments, setAppointments] = useState([])
+    const [loadingAppts, setLoadingAppts] = useState(false)
 
-    // Patient search
-    useEffect(() => {
-        const t = setTimeout(() => {
-            if (!patientQ) { setPatientList([]); return }
-            searchPatients(patientQ).then(r => setPatientList(r.data || []))
-        }, 250)
-        return () => clearTimeout(t)
-    }, [patientQ])
-
-    // Load slots for selected doctor/date
-    useEffect(() => {
-        setSlots([]); setSlot('')
-        if (!doctorId || !dateStr) return
-        const run = async () => {
-            const { data } = await getFreeSlots(doctorId, dateStr)
-            // Accept any of: {slots:[{start,end,status}]}, [{start,end}], ["HH:MM", ...]
-            let raw = []
-            if (data && Array.isArray(data.slots)) raw = data.slots
-            else if (Array.isArray(data)) raw = data
-            const norm = raw.map(s => {
-                if (typeof s === 'string') return { start: s, end: '', status: 'free' }
-                return { start: s.start, end: s.end || '', status: s.status || 'free' }
-            })
-            setSlots(norm)
-        }
-        run()
-    }, [doctorId, dateStr])
-
-    // Day’s list (filtered by doctor when chosen)
-    const loadList = async () => {
-        setLoading(true)
-        try {
-            const { data } = await fetchAppointments({ date_str: dateStr, doctor_id: doctorId || undefined })
-            setItems(data || [])
-        } finally { setLoading(false) }
+    const handleDoctorChange = (id, meta) => {
+        setDoctorId(id)
+        setDepartmentId(meta?.department_id || null)
+        setSelectedSlot('')
     }
-    useEffect(() => { loadList() }, [dateStr, doctorId])
 
-    // 🔒 Duplicate booking check for same patient & date (across ALL doctors)
+    const handlePatientChange = (id) => {
+        setPatientId(id)
+    }
+
     useEffect(() => {
-        const checkDup = async () => {
-            setDupAppt(null)
-            if (!patientId || !dateStr) return
+        const loadSlotsAndAppts = async () => {
+            if (!doctorId || !date) {
+                setSlots([])
+                setAppointments([])
+                return
+            }
+
             try {
-                // Fetch all appointments for the date (no doctor filter), then match by patient
-                const { data } = await fetchAppointments({ date_str: dateStr })
-                const list = Array.isArray(data) ? data : []
-                const match = list.find(a => {
-                    const pid = a.patient_id ?? a.patientId ?? a.patient?.id
-                    return pid === patientId && BLOCKING_STATUSES.has(a.status)
+                setLoadingSlots(true)
+                const { data: slotData } = await getDoctorSlots({
+                    doctorUserId: Number(doctorId),
+                    date,
+                    detailed: true,
                 })
-                if (match) {
-                    setDupAppt(match)
-                    // Optional: toast once when found
-                    toast.warn(`This patient already has an active appointment at ${match.slot_start}. Cancel or complete it before booking another.`)
-                }
+                const arr = Array.isArray(slotData)
+                    ? slotData
+                    : slotData?.slots || []
+                setSlots(arr)
             } catch {
-                /* ignore dup check errors */
+                setSlots([])
+            } finally {
+                setLoadingSlots(false)
+            }
+
+            try {
+                setLoadingAppts(true)
+                const { data: appts } = await listAppointments({
+                    date,
+                    doctor_id: Number(doctorId),
+                })
+                setAppointments(appts || [])
+            } catch {
+                setAppointments([])
+            } finally {
+                setLoadingAppts(false)
             }
         }
-        checkDup()
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [patientId, dateStr])
 
-    // Build fast lookup of booked slot starts for this doctor/date
-    const bookedSet = useMemo(() => {
-        const s = new Set()
-        for (const row of items || []) {
-            if ((doctorId ? row.doctor_user_id === doctorId : true) && row.status !== 'cancelled') {
-                if (row.slot_start) s.add(row.slot_start)
-            }
-        }
-        return s
-    }, [items, doctorId])
+        loadSlotsAndAppts()
+    }, [doctorId, date])
 
-    // Combine: backend status + booked + past-time for today
-    const computedSlots = useMemo(() => {
-        const now = new Date()
-        return (slots || []).map(s => {
-            let status = s.status || 'free'
-            if (bookedSet.has(s.start)) status = 'booked'
-            if (dateStr < todayISO) status = 'past'
-            if (dateStr === todayISO) {
-                const dt = toDateTime(dateStr, s.start)
-                if (dt < now && status === 'free') status = 'past'
-            }
-            return { ...s, status }
-        })
-    }, [slots, bookedSet, dateStr, todayISO])
+    const freeSlots = useMemo(
+        () => slots.filter((s) => s.status === 'free' || !s.status),
+        [slots],
+    )
 
-    // Guard changing to a past date
-    const onDateChange = (v) => {
-        if (v && v < todayISO) {
-            toast.warn('Past dates are not allowed')
-            setDateStr(todayISO)
-            return
-        }
-        setDateStr(v || todayISO)
-    }
+    const stats = useMemo(() => {
+        const total = appointments.length
+        const free = freeSlots.length
+        const selected =
+            selectedSlot ||
+            (freeSlots[0]?.start ? `Earliest ${freeSlots[0].start}` : 'Not selected')
+        return { total, free, selected }
+    }, [appointments, freeSlots, selectedSlot])
 
-    // Booking
     const book = async (e) => {
         e.preventDefault()
-        setMsg('')
-
-        if (!patientId || !doctorId || !departmentId || !slot) {
-            setMsg('Please complete all fields')
-            toast.warn('Please fill all the fields')
+        if (!patientId) {
+            toast.error('Please select a patient')
             return
         }
-        // block past date/time
-        if (dateStr < todayISO) {
-            toast.warn('Cannot book on a past date')
+        if (!doctorId || !departmentId) {
+            toast.error('Please select department & doctor')
             return
         }
-        if (dateStr === todayISO && toDateTime(dateStr, slot) < new Date()) {
-            toast.warn('Selected time is already past')
+        if (!selectedSlot) {
+            toast.error('Please choose a time slot')
             return
         }
-        // block if UI somehow let a non-free slot through
-        const selected = computedSlots.find(s => s.start === slot)
-        if (!selected || selected.status !== 'free') {
-            toast.warn('Selected slot is not available')
-            return
-        }
-        // 🔒 duplicate block
-        if (dupAppt && BLOCKING_STATUSES.has(dupAppt.status)) {
-            toast.error(`Duplicate booking blocked. Patient already has an active appointment at ${dupAppt.slot_start}.`)
-            return
-        }
-
-        setSaving(true)
         try {
             await createAppointment({
                 patient_id: patientId,
                 department_id: departmentId,
                 doctor_user_id: doctorId,
-                date: dateStr,
-                slot_start: slot,
+                date,
+                slot_start: selectedSlot,
                 purpose: purpose || 'Consultation',
             })
-            setMsg('Appointment booked.')
-            toast.success('Appointment booked successfully')
-            // reset form minimal
-            setPatientQ(''); setPatientList([]); setPatientId(null)
-            setPurpose('Consultation'); setSlot('')
-            await loadList()
-            // refresh slots
-            const { data } = await getFreeSlots(doctorId, dateStr)
-            const raw = data?.slots ?? data ?? []
-            const norm = raw.map(s => (typeof s === 'string'
-                ? { start: s, end: '', status: 'free' }
-                : { start: s.start, end: s.end || '', status: s.status || 'free' }))
-            setSlots(norm)
-            setDupAppt(null) // safe to reset
-        } catch (err) {
-            const detail = err?.response?.data?.detail || err?.response?.data?.message || 'Booking failed'
-            setMsg(detail)
-            toast.error(detail)
-        } finally { setSaving(false) }
+            toast.success('Appointment booked')
+            setSelectedSlot('')
+
+            const { data: appts } = await listAppointments({
+                date,
+                doctor_id: Number(doctorId),
+            })
+            setAppointments(appts || [])
+
+            const { data: slotData } = await getDoctorSlots({
+                doctorUserId: Number(doctorId),
+                date,
+                detailed: true,
+            })
+            const arr = Array.isArray(slotData)
+                ? slotData
+                : slotData?.slots || []
+            setSlots(arr)
+        } catch {
+            // axios interceptor already shows error
+        }
     }
 
     return (
-        <div className="space-y-6">
-            <div className="flex items-start justify-between gap-3">
-                <h1 className="text-xl font-semibold">OPD Appointments</h1>
-                <div className="flex items-center gap-2">
-                    <CalendarDays className="h-4 w-4 text-gray-500" />
-                    <input
-                        type="date"
-                        className="input"
-                        value={dateStr}
-                        min={todayISO}
-                        onChange={e => onDateChange(e.target.value)}
-                    />
-                </div>
-            </div>
-
-            {/* Booking Card */}
-            <form onSubmit={book} className="rounded-2xl border bg-white p-4 shadow-sm">
-                <div className="mb-3 text-sm font-semibold flex items-center gap-2">
-                    <Stethoscope className="h-4 w-4" /> Book appointment
-                </div>
-
-                <div className="grid gap-4 md:grid-cols-2">
-                    <DeptRoleUserPicker
-                        value={doctorId}
-                        onSelect={({ doctorId: did, departmentId: depId }) => {
-                            setDoctorId(did || null)
-                            setDepartmentId(depId || null)
-                        }}
-                    />
-
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium">Patient</label>
-                        <div className="relative">
-                            <div className="flex items-center gap-2">
-                                <Search className="h-4 w-4 text-gray-400" />
-                                <input
-                                    className="input w-full"
-                                    placeholder="Search by UHID, name, phone…"
-                                    value={patientQ}
-                                    onChange={e => setPatientQ(e.target.value)}
-                                />
-                            </div>
-                            {patientQ && patientList.length > 0 && (
-                                <div className="absolute z-10 mt-1 w-full overflow-hidden rounded-xl border bg-white shadow-lg">
-                                    {patientList.map(p => (
-                                        <button
-                                            key={p.id}
-                                            type="button"
-                                            onClick={() => { setPatientId(p.id); setPatientQ(`${p.uhid} — ${p.first_name} ${p.last_name || ''}`.trim()) }}
-                                            className="w-full px-3 py-2 text-left text-sm hover:bg-gray-50"
-                                        >
-                                            <div className="font-medium">{p.uhid} — {p.first_name} {p.last_name || ''}</div>
-                                            <div className="text-xs text-gray-500">{p.phone || p.email || ''}</div>
-                                        </button>
-                                    ))}
-                                </div>
-                            )}
+        <div className="h-full w-full bg-[#eee] rounded">
+            <div className="mx-auto flex max-w-6xl flex-col gap-4 px-3 py-4 sm:px-4 lg:px-6 lg:py-6">
+                {/* Page header */}
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="space-y-1">
+                        <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-500 shadow-sm">
+                            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
+                            <span>Live OPD · Booking & Queue</span>
                         </div>
+                        <h1 className="text-xl font-semibold text-slate-900 sm:text-2xl">
+                            OPD Appointment Booking
+                        </h1>
+                        <p className="text-xs text-slate-500 sm:text-sm">
+                            Quickly book patient appointments, view doctor schedule, and monitor today&apos;s queue.
+                        </p>
+                    </div>
 
-                        {/* Duplicate warning chip */}
-                        {dupAppt && BLOCKING_STATUSES.has(dupAppt.status) && (
-                            <div className="mt-2 inline-flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-1.5 text-xs text-amber-800 ring-1 ring-amber-100">
-                                <Clock3 className="h-3.5 w-3.5" />
-                                Patient already has an active appointment at <span className="font-semibold">{dupAppt.slot_start}</span> on this date.
-                            </div>
+                    {/* Quick stats */}
+                    <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                        <Badge
+                            variant="outline"
+                            className="flex items-center gap-1 rounded-full border-slate-200 bg-white px-3 py-1 text-[11px] font-normal text-slate-700 shadow-sm"
+                        >
+                            <CalendarDays className="h-3 w-3" />
+                            {date}
+                        </Badge>
+                        {doctorId && (
+                            <Badge
+                                variant="outline"
+                                className="flex items-center gap-1 rounded-full border-slate-200 bg-white px-3 py-1 text-[11px] font-normal text-slate-700 shadow-sm"
+                            >
+                                <Stethoscope className="h-3 w-3" />
+                                Doctor ID {doctorId}
+                            </Badge>
                         )}
                     </div>
-
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium">Purpose</label>
-                        <input className="input" value={purpose} onChange={e => setPurpose(e.target.value)} placeholder="Consultation" />
-                    </div>
-
-                    <div className="space-y-2">
-                        <label className="text-sm font-medium">Available slot</label>
-                        <div className="grid grid-cols-3 gap-2 sm:grid-cols-6">
-                            {computedSlots.map(s => {
-                                const disabled = s.status !== 'free'
-                                const label = s.start
-                                const cls = [
-                                    'rounded-xl border px-2.5 py-1.5 text-sm',
-                                    disabled ? 'opacity-40 cursor-not-allowed' : '',
-                                    !disabled && (slot === s.start ? 'bg-blue-600 text-white border-blue-600' : 'hover:bg-gray-50')
-                                ].join(' ')
-                                const onClick = () => {
-                                    if (disabled) {
-                                        if (s.status === 'booked') toast.warn(`Slot ${s.start} is already booked`)
-                                        else if (s.status === 'past') toast.warn(`Slot ${s.start} has already passed`)
-                                        else toast.warn(`Slot ${s.start} is not available`)
-                                        return
-                                    }
-                                    setSlot(s.start)
-                                }
-                                return (
-                                    <button
-                                        key={s.start}
-                                        type="button"
-                                        onClick={onClick}
-                                        disabled={disabled}
-                                        className={cls}
-                                        title={s.status === 'booked' ? 'Booked' : s.status === 'past' ? 'Past time' : 'Free'}
-                                    >
-                                        <div className="flex items-center gap-1 justify-center">
-                                            <Clock3 className="h-4 w-4" />
-                                            <span>{label}</span>
-                                        </div>
-                                    </button>
-                                )
-                            })}
-                            {(!computedSlots || computedSlots.length === 0) && (
-                                <div className="col-span-3 sm:col-span-6 text-sm text-gray-500">No slots for the selected day.</div>
-                            )}
-                        </div>
-                    </div>
                 </div>
 
-                <div className="mt-4 flex items-center justify-between">
-                    <div className="text-sm text-gray-500">{msg}</div>
-                    <button
-                        className="btn"
-                        disabled={saving || !patientId || !doctorId || !departmentId || !slot || (dupAppt && BLOCKING_STATUSES.has(dupAppt.status))}
-                        title={dupAppt && BLOCKING_STATUSES.has(dupAppt.status) ? 'Duplicate booking blocked for this patient on this date' : ''}
-                    >
-                        {saving ? 'Booking…' : 'Book Appointment'}
-                    </button>
-                </div>
-            </form>
-
-            {/* Day’s Appointments — Card layout */}
-            <div className="rounded-2xl border bg-white p-4 shadow-sm">
-                <div className="mb-3 text-sm font-semibold">Today’s schedule</div>
-
-                {loading ? (
-                    <div className="text-sm text-gray-500">Loading…</div>
-                ) : items.length === 0 ? (
-                    <div className="text-sm text-gray-500">No appointments.</div>
-                ) : (
-                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                        {items.map(row => (
-                            <div key={row.id} className="rounded-2xl border p-4">
-                                <div className="mb-2 flex items-center justify-between">
-                                    <div className="flex items-center gap-2">
-                                        <Clock3 className="h-4 w-4 text-gray-500" />
-                                        <span className="text-sm font-semibold">{row.slot_start} – {row.slot_end}</span>
-                                    </div>
-                                    <StatusPill status={row.status} />
-                                </div>
-
-                                <div className="space-y-1 text-sm">
-                                    <div className="flex items-center gap-2">
-                                        <User2 className="h-4 w-4 text-gray-500" />
-                                        <span className="font-medium">{row.patient_name}</span>
-                                    </div>
-                                    <div className="text-xs text-gray-500">UHID: <span className="font-medium">{row.uhid}</span></div>
-                                    <div className="text-xs text-gray-500">Doctor: <span className="font-medium">{row.doctor_name}</span></div>
-                                    <div className="text-xs text-gray-500">Department: <span className="font-medium">{row.department_name}</span></div>
-                                </div>
-
-                                <div className="mt-3 flex items-center justify-between">
-                                    <VitalsTag has={row.vitals_registered} />
-                                    <span className="text-[11px] text-gray-500">{row.purpose || 'Consultation'}</span>
-                                </div>
+                {/* Summary tiles */}
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                    <Card className="rounded-2xl border-slate-200 shadow-sm">
+                        <CardContent className="flex items-center justify-between gap-3 py-3">
+                            <div className="space-y-1">
+                                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                                    Today&apos;s appointments
+                                </p>
+                                <p className="text-xl font-semibold text-slate-900">
+                                    {stats.total}
+                                </p>
                             </div>
-                        ))}
-                    </div>
-                )}
+                            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2">
+                                <User2 className="h-5 w-5 text-slate-700" />
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="rounded-2xl border-slate-200 shadow-sm">
+                        <CardContent className="flex items-center justify-between gap-3 py-3">
+                            <div className="space-y-1">
+                                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                                    Free slots
+                                </p>
+                                <p className="text-xl font-semibold text-slate-900">
+                                    {stats.free}
+                                </p>
+                            </div>
+                            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2">
+                                <Clock className="h-5 w-5 text-slate-700" />
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    <Card className="rounded-2xl border-slate-200 shadow-sm">
+                        <CardContent className="flex items-center justify-between gap-3 py-3">
+                            <div className="space-y-1">
+                                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
+                                    Selected time
+                                </p>
+                                <p className="text-sm font-semibold text-slate-900">
+                                    {stats.selected}
+                                </p>
+                            </div>
+                            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2">
+                                <Activity className="h-5 w-5 text-slate-700" />
+                            </div>
+                        </CardContent>
+                    </Card>
+                </div>
+
+                {/* Main layout */}
+                <div className="grid gap-4 lg:grid-cols-[minmax(0,1.6fr),minmax(0,1.4fr)] lg:gap-6">
+                    {/* Booking form */}
+                    <motion.div
+                        layout
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.18 }}
+                    >
+                        <Card className="rounded-3xl border-slate-200 bg-white shadow-sm">
+                            <CardHeader className="pb-3">
+                                <CardTitle className="flex items-center gap-2 text-base font-semibold text-slate-900 sm:text-lg">
+                                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-2xl bg-slate-900 text-xs text-white">
+                                        1
+                                    </span>
+                                    Book a new appointment
+                                </CardTitle>
+                                <CardDescription className="text-xs text-slate-500 sm:text-sm">
+                                    Choose patient, doctor, date and slot. All fields are optimized for quick keyboard + mouse workflow.
+                                </CardDescription>
+                            </CardHeader>
+
+                            <CardContent className="space-y-4">
+                                <form onSubmit={book} className="space-y-4">
+                                    {/* Patient & doctor pickers */}
+                                    <div className="space-y-3">
+                                        <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-3 sm:p-4">
+                                            <div className="flex items-center gap-2 pb-2">
+                                                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-[11px] font-semibold text-slate-900 shadow-sm">
+                                                    <User2 className="h-3 w-3" />
+                                                </span>
+                                                <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                                                    Patient details
+                                                </span>
+                                            </div>
+                                            <div className="space-y-2 sm:space-y-3">
+                                                <PatientPicker value={patientId} onChange={handlePatientChange} />
+                                            </div>
+                                        </div>
+
+                                        <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-3 sm:p-4">
+                                            <div className="flex items-center gap-2 pb-2">
+                                                <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-[11px] font-semibold text-slate-900 shadow-sm">
+                                                    <Stethoscope className="h-3 w-3" />
+                                                </span>
+                                                <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
+                                                    Department & doctor
+                                                </span>
+                                            </div>
+                                            <DoctorPicker value={doctorId} onChange={handleDoctorChange} />
+                                        </div>
+                                    </div>
+
+                                    {/* Date & purpose */}
+                                    <div className="grid gap-3 sm:grid-cols-2">
+                                        <div className="space-y-1.5">
+                                            <label className="text-xs font-medium text-slate-600">
+                                                Date
+                                            </label>
+                                            <Input
+                                                type="date"
+                                                value={date}
+                                                onChange={(e) => setDate(e.target.value)}
+                                                className="h-9 rounded-2xl border-slate-200 text-sm"
+                                            />
+                                        </div>
+                                        <div className="space-y-1.5">
+                                            <label className="text-xs font-medium text-slate-600">
+                                                Purpose
+                                            </label>
+                                            <Input
+                                                value={purpose}
+                                                onChange={(e) => setPurpose(e.target.value)}
+                                                placeholder="Consultation / Review / Procedure…"
+                                                className="h-9 rounded-2xl border-slate-200 text-sm"
+                                            />
+                                        </div>
+                                    </div>
+
+                                    {/* Slots */}
+                                    <div className="space-y-1.5">
+                                        <div className="flex items-center justify-between gap-2">
+                                            <label className="text-xs font-medium text-slate-600">
+                                                Time slot
+                                            </label>
+                                            <span className="text-[11px] text-slate-400">
+                                                {freeSlots.length} free slot(s) available
+                                            </span>
+                                        </div>
+
+                                        {loadingSlots ? (
+                                            <div className="flex flex-wrap gap-2">
+                                                {Array.from({ length: 5 }).map((_, i) => (
+                                                    <Skeleton
+                                                        key={i}
+                                                        className="h-7 w-16 rounded-full bg-slate-100"
+                                                    />
+                                                ))}
+                                            </div>
+                                        ) : freeSlots.length === 0 ? (
+                                            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                                                No free slots for this date / doctor. Choose another date or doctor.
+                                            </div>
+                                        ) : (
+                                            <ScrollArea className="max-h-40 rounded-2xl border border-slate-100 bg-slate-50/80 px-2 py-2">
+                                                <div className="flex flex-wrap gap-2">
+                                                    {freeSlots.map((s) => (
+                                                        <button
+                                                            key={s.start}
+                                                            type="button"
+                                                            onClick={() => setSelectedSlot(s.start)}
+                                                            className={[
+                                                                'inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-medium transition',
+                                                                selectedSlot === s.start
+                                                                    ? 'border-slate-900 bg-slate-900 text-white'
+                                                                    : 'border-slate-200 bg-white text-slate-700 hover:bg-slate-100',
+                                                            ].join(' ')}
+                                                        >
+                                                            <Clock className="h-3 w-3" />
+                                                            {s.start}–{s.end}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </ScrollArea>
+                                        )}
+                                    </div>
+
+                                    <Separator className="my-1" />
+
+                                    {/* Action */}
+                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                        <p className="text-[11px] text-slate-400">
+                                            Booking will immediately reflect in OPD queue & doctor view.
+                                        </p>
+                                        <Button
+                                            type="submit"
+                                            className="h-9 rounded-2xl bg-slate-900 px-4 text-xs font-semibold uppercase tracking-wide text-white hover:bg-slate-800 disabled:opacity-50"
+                                            disabled={!patientId || !doctorId || !selectedSlot}
+                                        >
+                                            Book appointment
+                                        </Button>
+                                    </div>
+                                </form>
+                            </CardContent>
+                        </Card>
+                    </motion.div>
+
+                    {/* Day list / mini queue */}
+                    <motion.div
+                        layout
+                        initial={{ opacity: 0, y: 8 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        transition={{ duration: 0.2, delay: 0.05 }}
+                        className="lg:sticky lg:top-24"
+                    >
+                        <Card className="rounded-3xl border-slate-200 bg-white shadow-sm">
+                            <CardHeader className="pb-3">
+                                <div className="flex items-start justify-between gap-2">
+                                    <div>
+                                        <CardTitle className="flex items-center gap-2 text-base font-semibold text-slate-900 sm:text-lg">
+                                            <CalendarDays className="h-4 w-4 text-slate-600" />
+                                            Appointments for the day
+                                        </CardTitle>
+                                        <CardDescription className="text-xs text-slate-500 sm:text-sm">
+                                            See all appointments for the selected doctor and date.
+                                        </CardDescription>
+                                    </div>
+                                    {(loadingAppts || loadingSlots) && (
+                                        <Badge
+                                            variant="outline"
+                                            className="inline-flex items-center gap-1 rounded-full border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-500"
+                                        >
+                                            <Loader2 className="h-3 w-3 animate-spin" />
+                                            Syncing
+                                        </Badge>
+                                    )}
+                                </div>
+                            </CardHeader>
+
+                            <CardContent className="pb-3">
+                                <div className="mb-2 flex items-center justify-between text-[11px] text-slate-400">
+                                    <span>
+                                        {date} {doctorId ? `· Doctor ID ${doctorId}` : ''}
+                                    </span>
+                                    <span>{appointments.length} appointment(s)</span>
+                                </div>
+
+                                {loadingAppts ? (
+                                    <div className="space-y-2">
+                                        {Array.from({ length: 4 }).map((_, i) => (
+                                            <Skeleton
+                                                key={i}
+                                                className="h-14 w-full rounded-2xl bg-slate-100"
+                                            />
+                                        ))}
+                                    </div>
+                                ) : appointments.length === 0 ? (
+                                    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-center text-xs text-slate-500">
+                                        No appointments for this filter yet.
+                                        <div className="mt-1 text-[11px] text-slate-400">
+                                            Start by booking a new appointment on the left.
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <ScrollArea className="max-h-[380px] pr-1">
+                                        <div className="space-y-2 text-sm">
+                                            <AnimatePresence initial={false}>
+                                                {appointments.map((a) => (
+                                                    <motion.div
+                                                        key={a.id}
+                                                        initial={{ opacity: 0, y: 4 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                        exit={{ opacity: 0, y: -4 }}
+                                                        transition={{ duration: 0.15 }}
+                                                        className="flex flex-col gap-1 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800 sm:flex-row sm:items-center sm:justify-between"
+                                                    >
+                                                        <div className="space-y-0.5">
+                                                            <div className="flex flex-wrap items-center gap-1">
+                                                                <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-slate-800 border border-slate-200">
+                                                                    {a.slot_start}–{a.slot_end}
+                                                                </span>
+                                                                <span className="font-medium">
+                                                                    {a.patient_name}
+                                                                </span>
+                                                                <span className="text-[11px] text-slate-500">
+                                                                    (UHID {a.uhid})
+                                                                </span>
+                                                            </div>
+                                                            <div className="text-[11px] text-slate-500">
+                                                                {a.department_name} · {a.doctor_name}{' '}
+                                                                <span className="ml-1 inline-flex items-center rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-white">
+                                                                    {a.status}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                        <div className="text-[11px] text-slate-500 sm:text-right">
+                                                            {a.vitals_registered ? (
+                                                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 border border-emerald-100">
+                                                                    <Activity className="h-3 w-3" />
+                                                                    Vitals done
+                                                                </span>
+                                                            ) : (
+                                                                <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600 border border-slate-200">
+                                                                    <Activity className="h-3 w-3" />
+                                                                    No vitals yet
+                                                                </span>
+                                                            )}
+                                                        </div>
+                                                    </motion.div>
+                                                ))}
+                                            </AnimatePresence>
+                                        </div>
+                                    </ScrollArea>
+                                )}
+                            </CardContent>
+                        </Card>
+                    </motion.div>
+                </div>
             </div>
         </div>
     )

@@ -1,7 +1,17 @@
+// frontend/src/opd/components/DeptRoleUserPicker.jsx
 import { useEffect, useState } from 'react'
-import { fetchDepartments, fetchRolesByDepartment, fetchDepartmentUsers } from '../../api/opd'
+import {
+    fetchDepartments,
+    fetchDepartmentRoles,
+    fetchDepartmentUsers,
+} from '../../api/opd'
 
-export default function DeptRoleUserPicker({ value, onChange, label = 'Department · Role · User' }) {
+export default function DeptRoleUserPicker({
+    value,
+    onChange,
+    label = 'Department · Role · User',
+    onlyDoctors = false,
+}) {
     const [depts, setDepts] = useState([])
     const [deptId, setDeptId] = useState('')
     const [roles, setRoles] = useState([])
@@ -10,43 +20,102 @@ export default function DeptRoleUserPicker({ value, onChange, label = 'Departmen
     const [userId, setUserId] = useState('')
 
     useEffect(() => {
-        fetchDepartments().then(r => setDepts(r.data || []))
+        let alive = true
+        fetchDepartments()
+            .then((r) => alive && setDepts(r.data || []))
+            .catch(() => alive && setDepts([]))
+        return () => {
+            alive = false
+        }
     }, [])
 
     useEffect(() => {
+        let alive = true
         setRoleId('')
         setUsers([])
         setUserId('')
-        if (!deptId) { setRoles([]); return }
-        fetchRolesByDepartment(deptId).then(r => setRoles(r.data || []))
+        if (!deptId) {
+            setRoles([])
+            return
+        }
+        fetchDepartmentRoles({ departmentId: Number(deptId) })
+            .then((r) => alive && setRoles(r.data || []))
+            .catch(() => alive && setRoles([]))
+        return () => {
+            alive = false
+        }
     }, [deptId])
 
     useEffect(() => {
+        let alive = true
         setUsers([])
         setUserId('')
         if (!deptId || !roleId) return
-        fetchDepartmentUsers(deptId, roleId).then(r => setUsers(r.data || []))
-    }, [deptId, roleId])
+        fetchDepartmentUsers({
+            departmentId: Number(deptId),
+            roleId: Number(roleId),
+            isDoctor: onlyDoctors,
+        })
+            .then((r) => alive && setUsers(r.data || []))
+            .catch(() => alive && setUsers([]))
+        return () => {
+            alive = false
+        }
+    }, [deptId, roleId, onlyDoctors])
 
     useEffect(() => {
-        onChange?.(userId ? Number(userId) : null, { department_id: deptId ? Number(deptId) : null })
-    }, [userId])
+        onChange?.(
+            userId ? Number(userId) : null,
+            {
+                department_id: deptId ? Number(deptId) : null,
+                role_id: roleId ? Number(roleId) : null,
+            },
+        )
+    }, [userId, deptId, roleId, onChange])
 
     return (
         <div className="space-y-2">
             <label className="text-sm font-medium">{label}</label>
             <div className="grid gap-3 sm:grid-cols-3">
-                <select className="input" value={deptId} onChange={e => setDeptId(e.target.value)}>
+                <select
+                    className="input"
+                    value={deptId}
+                    onChange={(e) => setDeptId(e.target.value)}
+                >
                     <option value="">Select department</option>
-                    {depts.map(d => <option key={d.id} value={d.id}>{d.name}</option>)}
+                    {depts.map((d) => (
+                        <option key={d.id} value={d.id}>
+                            {d.name}
+                        </option>
+                    ))}
                 </select>
-                <select className="input" value={roleId} onChange={e => setRoleId(e.target.value)} disabled={!deptId}>
+
+                <select
+                    className="input"
+                    value={roleId}
+                    onChange={(e) => setRoleId(e.target.value)}
+                    disabled={!deptId}
+                >
                     <option value="">Select role</option>
-                    {roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
+                    {roles.map((r) => (
+                        <option key={r.id} value={r.id}>
+                            {r.name}
+                        </option>
+                    ))}
                 </select>
-                <select className="input" value={userId} onChange={e => setUserId(e.target.value)} disabled={!roleId}>
+
+                <select
+                    className="input"
+                    value={userId}
+                    onChange={(e) => setUserId(e.target.value)}
+                    disabled={!roleId}
+                >
                     <option value="">Select user</option>
-                    {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+                    {users.map((u) => (
+                        <option key={u.id} value={u.id}>
+                            {u.name}
+                        </option>
+                    ))}
                 </select>
             </div>
         </div>

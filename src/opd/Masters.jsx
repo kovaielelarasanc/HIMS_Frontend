@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { createMedicine, fetchMedicines, fetchLabTests, createLabTest, fetchRadiologyTests, createRadiologyTest } from '../api/opd'
+// import { createMedicine, fetchMedicines, fetchLabTests, createLabTest, fetchRadiologyTests, createRadiologyTest } from '../api/opd'
 
 export default function Masters() {
     const [tab, setTab] = useState('meds')

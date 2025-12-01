@@ -1,82 +1,240 @@
+// frontend/src/api/opd.js
 import API from './client'
 
-// Lookups
-export const fetchDepartments = () => API.get('/opd/departments')
-export const fetchRolesByDepartment = (department_id) =>
-    API.get('/opd/roles', { params: { department_id } })
-export const fetchDepartmentUsers = (department_id, role_id) =>
-    API.get('/opd/users', { params: { department_id, role_id } })
+// ---------- helpers ----------
+const toParams = (obj = {}) => {
+    const out = {}
+    Object.entries(obj).forEach(([k, v]) => {
+        if (v !== undefined && v !== null && v !== '') out[k] = v
+    })
+    return out
+}
 
-// Patients
-export const searchPatients = (q) =>
-    API.get('/patients', { params: { q } })
+// ---------- OPD lookups (dept, doctor, slots) ----------
 
-// Schedules
-export const fetchDoctorSchedules = (doctor_user_id) =>
-    API.get('/opd/schedules', { params: { doctor_user_id } })
-export const fetchDoctorWeekdays = (doctor_user_id) =>
-    API.get('/opd/doctor-weekdays', { params: { doctor_user_id } })
-export const saveDoctorSchedule = (payload) =>
-    API.post('/opd/schedules', payload)
+export function listOpdDepartments() {
+    return API.get('/opd/departments')
+}
 
-// Slots (unified) -> returns [{start,end}]
-export const getFreeSlots = async (doctor_user_id, dateISO) => {
-    try {
-        // Ask for detailed status (free/booked/past)
-        return await API.get('/opd/slots', { params: { doctor_user_id, date_str: dateISO, detailed: 1 } })
-    } catch (e) {
-        // Fallback to the "free only" legacy endpoints
-        try {
-            return await API.get('/opd/slots', { params: { doctor_user_id, date: dateISO } })
-        } catch {
-            return await API.get('/opd/slots/free', { params: { doctor_user_id, date: dateISO } })
-        }
-    }
+export function listOpdUsers({ departmentId, roleId, roleName, isDoctor } = {}) {
+    const params = toParams({
+        department_id: departmentId,
+        role_id: roleId,
+        role: roleName,
+        is_doctor: typeof isDoctor === 'boolean' ? isDoctor : undefined,
+    })
+    return API.get('/opd/users', { params })
+}
+
+export function getDoctorWeekdays(doctorUserId) {
+    return API.get('/opd/doctor-weekdays', {
+        params: { doctor_user_id: doctorUserId },
+    })
+}
+
+/**
+ * Detailed slot list:
+ * GET /opd/slots?doctor_user_id=&date=YYYY-MM-DD&detailed=true
+ * Response:
+ *  - { slots: [{ start, end, status }...] } OR
+ *  - [{ start, end, status }...]
+ */
+export function getDoctorSlots({ doctorUserId, date, detailed = true }) {
+    return API.get('/opd/slots', {
+        params: {
+            doctor_user_id: doctorUserId,
+            date,
+            detailed,
+        },
+    })
+}
+
+// For simple free-slot string list
+export function getFreeSlots({ doctorUserId, date }) {
+    return API.get('/opd/slots/free', {
+        params: { doctor_user_id: doctorUserId, date },
+    })
+}
+
+// ---------- Schedules ----------
+
+export function fetchDoctorSchedules(doctorUserId) {
+    return API.get('/opd/schedules', {
+        params: { doctor_user_id: doctorUserId },
+    })
+}
+
+export function saveDoctorSchedule(payload) {
+    // payload: { doctor_user_id, weekday, start_time, end_time, slot_minutes?, location?, is_active? }
+    return API.post('/opd/schedules', payload)
+}
+
+// ---------- Patient search (for PatientPicker) ----------
+
+export function searchPatients(q = '') {
+    const params = q ? { q } : {}
+    return API.get('/patients', { params })
+}
+
+// ---------- Appointments, reschedule, no-show ----------
+
+export function createAppointment(payload) {
+    // { patient_id, department_id, doctor_user_id, date, slot_start, slot_end?, purpose? }
+    return API.post('/opd/appointments', payload)
+}
+
+export function listAppointments(params = {}) {
+    // params: { date, date_str, doctor_id }
+    return API.get('/opd/appointments', { params: toParams(params) })
+}
+
+export function updateAppointmentStatus(appointmentId, status) {
+    return API.patch(`/opd/appointments/${appointmentId}/status`, { status })
+}
+
+export function rescheduleAppointment(appointmentId, payload) {
+    // { date, slot_start, create_new? }
+    return API.post(`/opd/appointments/${appointmentId}/reschedule`, payload)
+}
+
+export function listNoShowAppointments(params = {}) {
+    // { for_date, doctor_id }
+    return API.get('/opd/appointments/noshow', { params: toParams(params) })
+}
+
+// ---------- Queue & visits ----------
+
+export function fetchQueue(params = {}) {
+    // { doctor_user_id, for_date }
+    return API.get('/opd/queue', { params: toParams(params) })
+}
+
+export function createVisit(payload) {
+    // { appointment_id }
+    return API.post('/opd/visits', payload)
+}
+
+export function fetchVisit(id) {
+    return API.get(`/opd/visits/${id}`)
+}
+
+export function updateVisit(id, payload) {
+    return API.put(`/opd/visits/${id}`, payload)
+}
+
+export function listVisits(params = {}) {
+    return API.get('/opd/visits', { params: toParams(params) })
+}
+
+// ---------- Vitals (triage) ----------
+
+export function recordVitalsForPatient(patientId, payload) {
+    return API.post(`/opd/vitals/${patientId}`, payload)
+}
+
+export function recordVitals(payload) {
+    // flexible: { appointment_id?, patient_id?, ...vitals }
+    return API.post('/opd/vitals', payload)
+}
+
+// ---------- Prescription & Orders ----------
+
+export function savePrescription(visitId, payload) {
+    return API.post(`/opd/visits/${visitId}/prescription`, payload)
+}
+
+export function esignPrescription(visitId) {
+    return API.post(`/opd/visits/${visitId}/prescription/esign`)
+}
+
+export function createLabOrder(visitId, payload) {
+    return API.post(`/opd/visits/${visitId}/orders/lab`, payload)
+}
+
+export function createRadOrder(visitId, payload) {
+    return API.post(`/opd/visits/${visitId}/orders/ris`, payload)
+}
+
+// Lookups for LIS/RIS/Pharmacy
+export function fetchMedicines(q = '') {
+    const params = q ? { q } : {}
+    return API.get('/pharmacy/medicines/lookup', { params })
+}
+
+export function fetchLabTests(q = '') {
+    const params = q ? { q } : {}
+    return API.get('/lab/tests/lookup', { params })
+}
+
+export function fetchRadiologyTests(q = '') {
+    const params = q ? { q } : {}
+    return API.get('/radiology/tests/lookup', { params })
+}
+
+// ---------- Follow-up ----------
+
+export function createFollowup(visitId, payload) {
+    // { due_date, note? }
+    return API.post(`/opd/visits/${visitId}/followup`, payload)
+}
+
+export function listFollowups(params = {}) {
+    // { status, doctor_id, date_from, date_to }
+    return API.get('/opd/followups', { params: toParams(params) })
+}
+
+export function updateFollowup(followupId, payload) {
+    // { due_date, note? }
+    return API.put(`/opd/followups/${followupId}`, payload)
+}
+
+export function scheduleFollowup(followupId, payload) {
+    // { date?, slot_start }
+    return API.post(`/opd/followups/${followupId}/schedule`, payload)
+}
+
+// ---------- Old names kept for compatibility ----------
+
+export function fetchDepartments() {
+    return listOpdDepartments()
+}
+
+export function fetchDepartmentRoles({ departmentId } = {}) {
+    const params = toParams({ department_id: departmentId })
+    return API.get('/opd/roles', { params })
+}
+
+export function fetchDepartmentUsers({ departmentId, roleId, isDoctor } = {}) {
+    return listOpdUsers({
+        departmentId,
+        roleId,
+        isDoctor,
+    })
 }
 
 
-// Appointments
-export const createAppointment = (payload) =>
-    API.post('/opd/appointments', payload)
-export const fetchAppointments = (params = {}) =>
-    API.get('/opd/appointments', { params })
-export const updateAppointmentStatus = (id, status) =>
-    API.patch(`/opd/appointments/${id}/status`, { status })
+// ---------- OPD Dashboard ----------
 
-// Vitals & Queue
-export const recordVitals = (patient_id, payload) =>
-    API.post(`/opd/vitals/${patient_id}`, payload)
-export const fetchQueue = ({ doctor_user_id, for_date }) =>
-    API.get('/opd/queue', { params: { doctor_user_id, ...(for_date ? { for_date } : {}) } })
+export function fetchOpdDashboard({ dateFrom, dateTo, doctorId } = {}) {
+    return API.get('/opd/dashboard', {
+        params: toParams({
+            date_from: dateFrom,
+            date_to: dateTo,
+            doctor_id: doctorId,
+        }),
+    })
+}
 
-// Visits
-export const createVisit = (payload) => API.post('/opd/visits', payload)
-export const fetchVisit = (visit_id) => API.get(`/opd/visits/${visit_id}`)
-export const updateVisit = (visit_id, payload) => API.put(`/opd/visits/${visit_id}`, payload)
+// // src/api/opd.js
+// export const scheduleFollowup = (id, payload) =>
+//     API.post(`/opd/followups/${id}/schedule`, payload)
 
-// Rx & Orders
-export const savePrescription = (visit_id, payload) =>
-    API.post(`/opd/visits/${visit_id}/prescription`, payload)
-export const esignPrescription = (visit_id) =>
-    API.post(`/opd/visits/${visit_id}/prescription/esign`, {})
-
-export const createLabOrder = (visit_id, payload) =>
-    API.post(`/opd/visits/${visit_id}/orders/lab`, payload)
-export const createRadOrder = (visit_id, payload) =>
-    API.post(`/opd/visits/${visit_id}/orders/radiology`, payload)
-
-// Masters
-export const fetchMedicines = (q) =>
-    API.get('/masters/medicines', { params: { q } })
-export const createMedicine = (payload) =>
-    API.post('/masters/medicines', payload)
-
-export const fetchLabTests = (q) =>
-    API.get('/masters/lab-tests', { params: { q } })
-export const createLabTest = (payload) =>
-    API.post('/masters/lab-tests', payload)
-
-export const fetchRadiologyTests = (q) =>
-    API.get('/masters/radiology-tests', { params: { q } })
-export const createRadiologyTest = (payload) =>
-    API.post('/masters/radiology-tests', payload)
+// // Followups.jsx (ensure clean payload)
+// const saveSchedule = async () => {
+//     const payload = {
+//         date: selectedDate?.toISOString().slice(0, 10), // 'YYYY-MM-DD'
+//         slot_id: selectedSlotId ?? null,
+//         confirmed: true,
+//     }
+//     await scheduleFollowup(followupId, payload)
+// }

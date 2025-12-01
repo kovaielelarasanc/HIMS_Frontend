@@ -1,3 +1,4 @@
+// FILE: frontend/src/store/patientStore.js
 import { create } from 'zustand'
 import API from '../api/client'
 
@@ -12,8 +13,15 @@ export const usePatients = create((set, get) => ({
             const { data } = await API.get('/patients/', { params: { q } })
             set({ items: data })
         } catch (e) {
-            set({ error: e?.response?.data?.detail || 'Failed to load patients' })
-        } finally { set({ loading: false }) }
+            set({
+                error:
+                    e?.response?.data?.detail ||
+                    e?.message ||
+                    'Failed to load patients',
+            })
+        } finally {
+            set({ loading: false })
+        }
     },
 
     create: async (payload) => {
@@ -31,7 +39,7 @@ export const usePatients = create((set, get) => ({
         fd.append('file', file)
         fd.append('type', type)
         const { data } = await API.post(`/patients/${id}/documents`, fd, {
-            headers: { 'Content-Type': 'multipart/form-data' }
+            headers: { 'Content-Type': 'multipart/form-data' },
         })
         return data
     },
@@ -41,13 +49,24 @@ export const usePatients = create((set, get) => ({
         return data
     },
 
+    // 🔹 New: Patient Info (for "Patient Info" tab)
+    getInfo: async (id) => {
+        const { data } = await API.get(`/patients/${id}/info`)
+        return data
+    },
+
+    // ABHA flows
     abhaGenerate: async ({ name, dob, mobile }) => {
-        const { data } = await API.post('/abha/generate', null, { params: { name, dob, mobile } })
+        const { data } = await API.post('/abha/generate', null, {
+            params: { name, dob, mobile },
+        })
         return data // { txnId, debug_otp }
     },
 
     abhaVerify: async ({ txnId, otp, patient_id }) => {
-        const { data } = await API.post('/abha/verify-otp', null, { params: { txnId, otp, patient_id } })
+        const { data } = await API.post('/abha/verify-otp', null, {
+            params: { txnId, otp, patient_id },
+        })
         return data // { abha_number }
     },
 }))

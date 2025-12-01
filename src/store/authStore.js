@@ -4,7 +4,7 @@ import API from '../api/client'
 
 export const useAuth = create((set) => ({
     user: null,
-    modules: {},
+    modules: {},     // { patients: [{ code, label }], ... }
     loading: false,
 
     registerAdmin: async (data) => API.post('/auth/register-admin', data),
@@ -27,7 +27,10 @@ export const useAuth = create((set) => ({
             set({ loading: true })
             const me = await API.get('/auth/me')
             const perms = await API.get('/auth/me/permissions')
-            set({ user: me.data, modules: perms.data.modules })
+            set({
+                user: me.data,           // must include is_admin, roles[]
+                modules: perms.data.modules || {},
+            })
         } finally {
             set({ loading: false })
         }

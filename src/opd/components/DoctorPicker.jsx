@@ -1,115 +1,160 @@
 // frontend/src/opd/components/DoctorPicker.jsx
 import { useEffect, useMemo, useState } from 'react'
-import { fetchDepartments, fetchRolesByDepartment, fetchDepartmentUsers } from '../../api/opd'
+import { toast } from 'sonner'
+import {
+    fetchDepartments,
+    fetchDepartmentUsers,
+} from '../../api/opd'
 
-export default function DoctorPicker({ value, onChange }) {
+/**
+ * Props:
+ *   value: doctor_user_id (number | null)
+ *   onChange: (doctorId: number | null, meta: { department_id: number | null }) => void
+ */
+export default function DoctorPicker({
+    value,
+    onChange,
+    label = 'Department ➜ Doctor',
+}) {
     const [depts, setDepts] = useState([])
-    const [deptId, setDeptId] = useState('')
-    const [roles, setRoles] = useState([])
-    const [roleId, setRoleId] = useState('')
+    const [deptId, setDeptId] = useState('')        // string for <select>
     const [users, setUsers] = useState([])
     const [loadingUsers, setLoadingUsers] = useState(false)
-    const [loadingRoles, setLoadingRoles] = useState(false)
+    const [loadingDepts, setLoadingDepts] = useState(false)
     const [err, setErr] = useState('')
 
-    // load departments once
+    // Load departments once
     useEffect(() => {
         let alive = true
+        setLoadingDepts(true)
         fetchDepartments()
-            .then(r => alive && setDepts(r.data || []))
-            .catch(() => alive && setDepts([]))
-        return () => { alive = false }
+            .then((r) => {
+                if (!alive) return
+                setDepts(r.data || [])
+            })
+            .catch((e) => {
+                if (!alive) return
+                console.error('fetchDepartments error', e)
+                toast.error('Failed to load departments')
+                setDepts([])
+            })
+            .finally(() => {
+                if (!alive) return
+                setLoadingDepts(false)
+            })
+        return () => {
+            alive = false
+        }
     }, [])
 
-    // load roles when department changes
-    useEffect(() => {
-        let alive = true
-        setErr('')
-        setRoles([])
-        setRoleId('')
-        setUsers([])
-        onChange?.(null)
-
-        if (!deptId) return
-        setLoadingRoles(true)
-        fetchRolesByDepartment(deptId)
-            .then(r => { if (alive) setRoles(r.data || []) })
-            .catch(e => { if (alive) setErr(e?.response?.data?.detail || 'Failed to load roles') })
-            .finally(() => { if (alive) setLoadingRoles(false) })
-
-        return () => { alive = false }
-    }, [deptId])
-
-    // load users when department or role changes
+    // Whenever department changes: clear doctor, notify parent, load doctors for that dept
     useEffect(() => {
         let alive = true
         setErr('')
         setUsers([])
-        onChange?.(null)
+
+        // Tell parent: doctor cleared, dept changed
+        const deptNum = deptId ? Number(deptId) : null
+        onChange?.(null, { department_id: deptNum })
+
         if (!deptId) return
 
         setLoadingUsers(true)
-        fetchDepartmentUsers(deptId, roleId || undefined)
-            .then(r => { if (alive) setUsers(r.data || []) })
-            .catch(e => { if (alive) setErr(e?.response?.data?.detail || 'Failed to load users') })
-            .finally(() => { if (alive) setLoadingUsers(false) })
+        fetchDepartmentUsers({
+            departmentId: deptNum,
+            isDoctor: true, // 🔥 ONLY doctors
+        })
+            .then((r) => {
+                if (!alive) return
+                setUsers(r.data || [])
+            })
+            .catch((e) => {
+                if (!alive) return
+                console.error('fetchDepartmentUsers error', e)
+                setErr(e?.response?.data?.detail || 'Failed to load doctors')
+                toast.error(e?.response?.data?.detail || 'Failed to load doctors')
+                setUsers([])
+            })
+            .finally(() => {
+                if (!alive) return
+                setLoadingUsers(false)
+            })
 
-        return () => { alive = false }
-    }, [deptId, roleId])
+        return () => {
+            alive = false
+        }
+        // IMPORTANT: do NOT add `onChange` here, we only care when deptId changes
+    }, [deptId])
 
-    const selected = useMemo(() => users.find(u => u.id === value) || null, [users, value])
+    const selectedDoctor = useMemo(
+        () => users.find((u) => u.id === value) || null,
+        [users, value],
+    )
+
+    const handleDeptChange = (e) => {
+        const newDeptId = e.target.value
+        setDeptId(newDeptId)
+        // doctor will be cleared + parent notified inside useEffect above
+    }
+
+    const handleDoctorChange = (e) => {
+        const id = e.target.value
+        const numId = id ? Number(id) : null
+        const deptNum = deptId ? Number(deptId) : null
+        onChange?.(numId, { department_id: deptNum })
+    }
 
     return (
         <div className="space-y-2">
-            <label className="text-sm font-medium">Department ➜ Role ➜ User</label>
+            <label className="text-sm font-medium">{label}</label>
 
-            <div className="grid gap-3 md:grid-cols-3">
+            <div className="grid gap-3 md:grid-cols-2">
                 {/* Department */}
                 <select
                     className="input"
                     value={deptId}
-                    onChange={e => setDeptId(e.target.value)}
+                    onChange={handleDeptChange}
+                    disabled={loadingDepts}
                 >
-                    <option value="">Select department</option>
-                    {depts.map(d => (
-                        <option key={d.id} value={d.id}>{d.name}</option>
-                    ))}
-                </select>
-
-                {/* Role (from backend; optional) */}
-                <select
-                    className="input"
-                    value={roleId}
-                    onChange={e => setRoleId(e.target.value)}
-                    disabled={!deptId || loadingRoles}
-                >
-                    <option value="">All roles</option>
-                    {roles.map(r => (
-                        <option key={r.id} value={r.id}>
-                            {r.name}{typeof r.members === 'number' ? ` (${r.members})` : ''}
+                    <option value="">
+                        {loadingDepts ? 'Loading departments…' : 'Select department'}
+                    </option>
+                    {depts.map((d) => (
+                        <option key={d.id} value={d.id}>
+                            {d.name}
                         </option>
                     ))}
                 </select>
 
-                {/* User list (dept + optional role_id) */}
+                {/* Doctor list (filtered by dept + is_doctor=true) */}
                 <select
                     className="input"
                     value={value || ''}
-                    onChange={e => onChange(Number(e.target.value))}
+                    onChange={handleDoctorChange}
                     disabled={!deptId || loadingUsers || users.length === 0}
                 >
-                    <option value="">{loadingUsers ? 'Loading users…' : 'Select user'}</option>
-                    {users.map(u => (
+                    <option value="">
+                        {loadingUsers
+                            ? 'Loading doctors…'
+                            : !deptId
+                                ? 'Select department first'
+                                : users.length === 0
+                                    ? 'No doctors in this department'
+                                    : 'Select doctor'}
+                    </option>
+                    {users.map((u) => (
                         <option key={u.id} value={u.id}>
-                            {u.name}{u.roles?.length ? ` • ${u.roles.join(', ')}` : ''}
+                            {u.name}
+                            {u.email ? ` (${u.email})` : ''}
                         </option>
                     ))}
                 </select>
             </div>
 
-            {selected && (
+            {selectedDoctor && (
                 <div className="rounded-xl border bg-emerald-50 px-3 py-2 text-sm">
-                    Selected: <span className="font-medium">{selected.name}</span>
+                    Selected:{' '}
+                    <span className="font-medium">{selectedDoctor.name}</span>
                 </div>
             )}
 

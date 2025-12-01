@@ -5,7 +5,7 @@ import {
 } from '../api/ipd'
 import PatientPagedPicker from './components/PatientPagedPicker'
 import WardRoomBedPicker from './components/WardRoomBedPicker'
-import DeptRoleUserPicker from '../opd/components/DeptRoleUserPicker'
+import DeptRoleUserPicker from '../opd/components/DoctorPicker'
 import { CheckCircle2, AlertTriangle, XCircle, X } from 'lucide-react'
 
 export { } // quiet ts/eslint

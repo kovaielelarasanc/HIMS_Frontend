@@ -1,277 +1,457 @@
-// src/opd/Queue.jsx
-import { useEffect, useMemo, useState, useRef } from 'react'
-import { useAuth } from '../store/authStore'
-import { fetchQueue, createVisit } from '../api/opd'
-import { useNavigate } from 'react-router-dom'
-import {
-    Calendar, User2, Activity, ClipboardList, Stethoscope, Search,
-    TimerReset, Download
-} from 'lucide-react'
+// frontend/src/opd/Queue.jsx
+import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
-function parseError(err) {
-    const d = err?.response?.data
-    if (!d) return 'Failed'
-    if (typeof d === 'string') return d
-    if (d.detail) {
-        if (typeof d.detail === 'string') return d.detail
-        if (Array.isArray(d.detail)) {
-            return d.detail.map(e => (e?.loc ? `${e.loc.join('.')}: ${e.msg}` : e.msg)).join(', ')
-        }
+import { fetchQueue, updateAppointmentStatus } from "../api/opd";
+import DoctorPicker from "./components/DoctorPicker";
+
+import {
+    Card,
+    CardHeader,
+    CardTitle,
+    CardContent,
+} from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+
+import {
+    Activity,
+    CalendarDays,
+    Clock,
+    HeartPulse,
+    RefreshCcw,
+    Stethoscope,
+    User,
+} from "lucide-react";
+
+const todayStr = () => new Date().toISOString().slice(0, 10);
+
+const statusLabel = {
+    booked: "Booked",
+    checked_in: "Checked-in",
+    in_progress: "In progress",
+    completed: "Completed",
+    no_show: "No-show",
+    cancelled: "Cancelled",
+};
+
+const statusBadgeClass = {
+    booked: "bg-slate-100 text-slate-700",
+    checked_in: "bg-blue-100 text-blue-700",
+    in_progress: "bg-amber-100 text-amber-700",
+    completed: "bg-emerald-100 text-emerald-700",
+    no_show: "bg-rose-100 text-rose-700",
+    cancelled: "bg-slate-200 text-slate-600",
+};
+
+function prettyDate(d) {
+    if (!d) return "";
+    try {
+        return new Date(d).toLocaleDateString("en-IN", {
+            weekday: "short",
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+        });
+    } catch {
+        return d;
     }
-    return 'Error'
 }
 
-const STATUSES = ['booked', 'checked_in', 'in_progress', 'completed', 'no_show', 'cancelled']
-
 export default function Queue() {
-    const me = useAuth(s => s.user)
-    const navigate = useNavigate()
-
-    const [doctorId, setDoctorId] = useState(null)
-    const [forDate, setForDate] = useState(() => new Date().toISOString().slice(0, 10))
-    const [rows, setRows] = useState([])
-    const [loading, setLoading] = useState(false)
-    const [msg, setMsg] = useState('')
-
-    // advanced filters
-    const [q, setQ] = useState('')
-    const [status, setStatus] = useState('')           // one-of STATUSES or ''
-    const [showMineOnly, setShowMineOnly] = useState(false)
-    const [autoRefresh, setAutoRefresh] = useState(false)
-    const timerRef = useRef(null)
-
-    // default to current user as doctor (non-admin), but still allow viewing others
-    useEffect(() => {
-        if (me && !me.is_admin && me.id && doctorId == null) {
-            setDoctorId(me.id)
-        }
-    }, [me])
+    const [doctorId, setDoctorId] = useState(null);
+    const [date, setDate] = useState(todayStr());
+    const [rows, setRows] = useState([]);
+    const [loading, setLoading] = useState(false);
+    const [statusFilter, setStatusFilter] = useState("active"); // active | all | each status
+    const navigate = useNavigate();
 
     const load = async () => {
-        setMsg('')
-        if (!doctorId) { setRows([]); return }
-        setLoading(true)
+        if (!doctorId || !date) {
+            setRows([]);
+            return;
+        }
         try {
-            const { data } = await fetchQueue({ doctor_user_id: doctorId, for_date: forDate })
-            setRows(Array.isArray(data) ? data : [])
-        } catch (err) {
-            setMsg(parseError(err))
-            setRows([])
+            setLoading(true);
+            const { data } = await fetchQueue({
+                doctor_user_id: Number(doctorId),
+                for_date: date,
+            });
+            setRows(data || []);
+        } catch {
+            setRows([]);
         } finally {
-            setLoading(false)
+            setLoading(false);
         }
-    }
+    };
 
-    useEffect(() => { load() }, [doctorId, forDate])
-
-    // auto refresh every 15s
     useEffect(() => {
-        if (!autoRefresh) { if (timerRef.current) clearInterval(timerRef.current); return }
-        timerRef.current = setInterval(load, 15000)
-        return () => { if (timerRef.current) clearInterval(timerRef.current) }
+        load();
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [autoRefresh, doctorId, forDate])
+    }, [doctorId, date]);
 
-    // permissions/ownership logic for buttons (FE guard – BE still enforces)
-    const isOwner = (a) => {
-        if (!me) return false
-        if (me.is_admin) return true
-        // allow assigned doctor
-        if (a?.doctor_user_id && a.doctor_user_id === me.id) return true
-        // if backend provides who booked it, allow that user too
-        if (a?.booked_by && a.booked_by === me.id) return true
-        return false
-    }
-
-    // derived: waiting minutes (if in the past & not done/cancelled)
-    const waitingMins = (a) => {
+    const changeStatus = async (row, status, options = {}) => {
         try {
-            if (!a?.time || !forDate) return null
-            if (['completed', 'cancelled', 'no_show'].includes(a.status)) return null
-            const start = new Date(`${forDate}T${a.time}:00`)
-            const diff = Math.floor((Date.now() - start.getTime()) / 60000)
-            return diff > 0 ? diff : null
-        } catch { return null }
-    }
-
-    const filtered = useMemo(() => {
-        let out = rows
-        // search by uhid, name, phone
-        if (q) {
-            const s = q.toLowerCase()
-            out = out.filter(a => {
-                const p = a.patient || {}
-                return (
-                    String(p.uhid || '').toLowerCase().includes(s) ||
-                    String(p.name || '').toLowerCase().includes(s) ||
-                    String(p.phone || '').toLowerCase().includes(s)
-                )
-            })
+            const { data } = await updateAppointmentStatus(
+                row.appointment_id,
+                status
+            );
+            toast.success(`Status updated to ${data.status.toUpperCase()}`);
+            if (options.goToVisit && data.visit_id) {
+                navigate(`/opd/visit/${data.visit_id}`);
+            } else {
+                load();
+            }
+        } catch {
+            // error toast already handled by interceptor
         }
-        if (status) out = out.filter(a => a.status === status)
-        if (showMineOnly && me?.id) {
-            out = out.filter(a => a.doctor_user_id === me.id || a.booked_by === me.id)
+    };
+
+    const handleDoctorChange = (id) => {
+        setDoctorId(id);
+    };
+
+    // ---- derived data ----
+    const stats = useMemo(() => {
+        const base = {
+            total: rows.length,
+            booked: 0,
+            checked_in: 0,
+            in_progress: 0,
+            completed: 0,
+            no_show: 0,
+            cancelled: 0,
+        };
+        for (const r of rows) {
+            if (base[r.status] !== undefined) base[r.status] += 1;
         }
-        return out
-    }, [rows, q, status, showMineOnly, me])
+        return base;
+    }, [rows]);
 
-    // summary counters (on filtered set)
-    const counters = useMemo(() => {
-        const c = Object.fromEntries(STATUSES.map(s => [s, 0]))
-        for (const a of filtered) { if (c[a.status] != null) c[a.status]++ }
-        return c
-    }, [filtered])
-
-    // actions
-    const startVisit = async (a) => {
-        try {
-            if (!a?.appointment_id) return
-            const { data } = await createVisit({ appointment_id: a.appointment_id })
-            if (data?.id) navigate(`/opd/visit/${data.id}`)
-            else { setMsg('Could not start visit'); await load() }
-        } catch (err) {
-            setMsg(parseError(err))
+    const filteredRows = useMemo(() => {
+        if (statusFilter === "all") return rows;
+        if (statusFilter === "active") {
+            return rows.filter((r) =>
+                ["booked", "checked_in", "in_progress"].includes(r.status)
+            );
         }
-    }
-    const openVisit = (a) => {
-        if (!a?.visit_id) { setMsg('No visit created yet for this appointment'); return }
-        navigate(`/opd/visit/${a.visit_id}`)
-    }
+        return rows.filter((r) => r.status === statusFilter);
+    }, [rows, statusFilter]);
 
-    // export CSV (filtered)
-    const exportCsv = () => {
-        const cols = ['time', 'status', 'uhid', 'patient', 'phone', 'purpose']
-        const lines = [cols.join(',')]
-        filtered.forEach(a => {
-            const p = a.patient || {}
-            const row = [
-                a.time || '',
-                a.status || '',
-                p.uhid || '',
-                (p.name || '').replace(/,/g, ' '),
-                p.phone || '',
-                a.visit_purpose || '',
-            ]
-            lines.push(row.map(x => `"${String(x).replace(/"/g, '""')}"`).join(','))
-        })
-        const blob = new Blob([lines.join('\n')], { type: 'text/csv;charset=utf-8' })
-        const url = URL.createObjectURL(blob)
-        const a = document.createElement('a')
-        a.href = url
-        a.download = `queue_${doctorId}_${forDate}.csv`
-        a.click()
-        URL.revokeObjectURL(url)
-    }
+    const hasSelection = Boolean(doctorId && date);
 
     return (
-        <div className="space-y-5">
-            <div className="flex items-center justify-between gap-3">
-                <h1 className="text-xl font-semibold">OPD Queue</h1>
-                <div className="text-sm text-gray-600">{msg}</div>
-            </div>
-
-            {/* Filters */}
-            <div className="rounded-2xl border bg-white p-3">
-                <div className="grid gap-3 md:grid-cols-4">
-                    <div className="space-y-1">
-                        <label className="text-xs text-gray-600 flex items-center gap-1"><User2 className="h-3.5 w-3.5" /> Doctor (User ID)</label>
-                        <input className="input" placeholder="Enter doctor user id" value={doctorId || ''} onChange={e => setDoctorId(e.target.value ? Number(e.target.value) : null)} />
-                    </div>
-                    <div className="space-y-1">
-                        <label className="text-xs text-gray-600 flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> Date</label>
-                        <input type="date" className="input" value={forDate} onChange={e => setForDate(e.target.value)} />
-                    </div>
-                    <div className="space-y-1">
-                        <label className="text-xs text-gray-600 flex items-center gap-1"><Search className="h-3.5 w-3.5" /> Search</label>
-                        <input className="input" placeholder="UHID / name / phone" value={q} onChange={e => setQ(e.target.value)} />
-                    </div>
-                    <div className="grid grid-cols-2 gap-2 items-end">
-                        <select className="input" value={status} onChange={e => setStatus(e.target.value)}>
-                            <option value="">All statuses</option>
-                            {STATUSES.map(s => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
-                        </select>
-                        <button className="btn" onClick={load} disabled={!doctorId || loading}>{loading ? 'Loading…' : 'Refresh'}</button>
-                    </div>
-                </div>
-
-                <div className="mt-2 flex items-center justify-between">
-                    <div className="flex items-center gap-3 text-sm">
-                        <label className="inline-flex items-center gap-2">
-                            <input type="checkbox" checked={showMineOnly} onChange={e => setShowMineOnly(e.target.checked)} />
-                            Show mine only
-                        </label>
-                        <label className="inline-flex items-center gap-2">
-                            <input type="checkbox" checked={autoRefresh} onChange={e => setAutoRefresh(e.target.checked)} />
-                            Auto-refresh
-                        </label>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <button type="button" className="btn-outline flex items-center gap-2" onClick={exportCsv} title="Export current view to CSV">
-                            <Download className="h-4 w-4" /> Export
-                        </button>
-                        <button type="button" className="px-3 py-2 rounded-xl border flex items-center gap-2" onClick={load} title="Force refresh">
-                            <TimerReset className="h-4 w-4" /> Reload
-                        </button>
-                    </div>
-                </div>
-
-                {/* counters */}
-                <div className="mt-3 grid grid-cols-3 sm:grid-cols-6 gap-2 text-[11px]">
-                    {STATUSES.map(s => (
-                        <div key={s} className="rounded-xl border px-2 py-1 text-center">
-                            <span className="font-medium">{s.replace('_', ' ')}</span>: {counters[s] || 0}
+        <div className="min-h-[calc(100vh-5rem)] bg-slate-50 px-4 py-6 md:px-6">
+            <div className="mx-auto max-w-5xl space-y-6">
+                {/* Header */}
+                <div className="flex items-start justify-between gap-3">
+                    <div>
+                        <div className="flex items-center gap-2">
+                            <span className="relative flex h-2 w-2">
+                                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75" />
+                                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                            </span>
+                            <p className="text-xs font-medium uppercase tracking-[0.2em] text-emerald-700">
+                                Live OPD Queue
+                            </p>
                         </div>
-                    ))}
+                        <h1 className="mt-1 text-2xl font-semibold text-slate-900">
+                            OPD Queue Management
+                        </h1>
+                        <p className="mt-1 text-sm text-slate-500">
+                            Track today&apos;s appointments, check-in patients, and start / complete
+                            visits in real-time.
+                        </p>
+                    </div>
+
+                    <div className="hidden text-right text-xs text-slate-500 md:block">
+                        <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1">
+                            <Activity className="h-3 w-3" />
+                            <span>Doctor OPD</span>
+                        </div>
+                        <div className="mt-1 flex items-center justify-end gap-1">
+                            <CalendarDays className="h-3 w-3" />
+                            <span>{prettyDate(date)}</span>
+                        </div>
+                    </div>
                 </div>
-            </div>
 
-            {/* Cards */}
-            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {filtered.map(a => {
-                    const canAct = isOwner(a)
-                    const wait = waitingMins(a)
-                    return (
-                        <div key={a.appointment_id} className="rounded-2xl border bg-white p-4 shadow-sm">
-                            <div className="mb-2 flex items-center justify-between">
-                                <div className="text-sm font-semibold">{a.patient?.uhid || a.patient?.id} — {a.patient?.name}</div>
-                                <span className="rounded-full bg-blue-50 px-2 py-0.5 text-xs text-blue-700">{a.time}</span>
-                            </div>
-
-                            <div className="text-xs text-gray-600 space-y-1">
-                                <div className="flex items-center gap-2"><ClipboardList className="h-3.5 w-3.5" /> Purpose: {a.visit_purpose || 'Consultation'}</div>
-                                <div className="flex items-center gap-2"><Activity className="h-3.5 w-3.5" /> Status: <span className="font-medium">{a.status}</span></div>
-                                {/* <div className="flex items-center gap-2"><Stethoscope className="h-3.5 w-3.5" /> Vitals: {a.has_vitals ? <span className="text-emerald-700">Registered</span> : <span className="text-rose-700">Not registered</span>}</div> */}
-                                {/* {wait != null && <div className="text-[11px] text-amber-700">Waiting ~ {wait} min</div>} */}
-                            </div>
-
-                            {canAct && (
-                                <div className="mt-3 flex items-center gap-2">
-                                    <button
-                                        className="btn"
-                                        onClick={() => startVisit(a)}
-                                        disabled={!a.appointment_id || a.status === 'completed' || a.status === 'cancelled'}
-                                        title={(!a.appointment_id ? 'Missing appointment' : (['completed', 'cancelled'].includes(a.status) ? 'Visit is finished' : 'Start or continue visit'))}
-                                    >
-                                        Start / Continue
-                                    </button>
-                                    <button
-                                        className="btn-outline"
-                                        onClick={() => openVisit(a)}
-                                        disabled={!a.visit_id}
-                                        title={a.visit_id ? 'Open existing visit' : 'No visit yet'}
-                                    >
-                                        Open Visit
-                                    </button>
+                {/* Filters + doctor/date */}
+                <Card className="border-slate-200 shadow-sm rounded-3xl">
+                    <CardHeader className="border-b border-slate-100 pb-4">
+                        <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
+                            <div className="grid w-full gap-3 md:grid-cols-[2fr,1.2fr] md:items-end">
+                                <div>
+                                    <DoctorPicker value={doctorId} onChange={handleDoctorChange} />
                                 </div>
-                            )}
-                        </div>
-                    )
-                })}
+                                <div className="space-y-1">
+                                    <label className="flex items-center gap-1 text-xs font-medium uppercase tracking-[0.16em] text-slate-500">
+                                        <CalendarDays className="h-3 w-3" />
+                                        Date
+                                    </label>
+                                    <Input
+                                        type="date"
+                                        value={date}
+                                        onChange={(e) => setDate(e.target.value)}
+                                        className="h-9"
+                                    />
+                                </div>
+                            </div>
 
-                {!loading && filtered.length === 0 && (
-                    <div className="text-sm text-gray-500">No appointments.</div>
-                )}
+                            <div className="flex items-center gap-2 md:w-auto">
+                                <Button
+                                    type="button"
+                                    size="sm"
+                                    variant="outline"
+                                    className="gap-1"
+                                    onClick={load}
+                                    disabled={loading || !hasSelection}
+                                >
+                                    <RefreshCcw className="h-3 w-3" />
+                                    Refresh
+                                </Button>
+                            </div>
+                        </div>
+
+                        {/* Quick stats */}
+                        <div className="mt-4 flex flex-wrap gap-2 text-xs">
+                            <Badge
+                                variant="outline"
+                                className="flex items-center gap-1 rounded-full border-slate-200 bg-slate-50"
+                            >
+                                <Clock className="h-3 w-3" />
+                                <span>Total</span>
+                                <span className="font-semibold">{stats.total}</span>
+                            </Badge>
+                            <Badge
+                                variant="outline"
+                                className="rounded-full border-slate-200 bg-slate-50"
+                            >
+                                Booked: {stats.booked}
+                            </Badge>
+                            <Badge
+                                variant="outline"
+                                className="rounded-full border-slate-200 bg-blue-50 text-blue-700"
+                            >
+                                Checked-in: {stats.checked_in}
+                            </Badge>
+                            <Badge
+                                variant="outline"
+                                className="rounded-full border-slate-200 bg-amber-50 text-amber-700"
+                            >
+                                In progress: {stats.in_progress}
+                            </Badge>
+                            <Badge
+                                variant="outline"
+                                className="rounded-full border-slate-200 bg-emerald-50 text-emerald-700"
+                            >
+                                Completed: {stats.completed}
+                            </Badge>
+                            <Badge
+                                variant="outline"
+                                className="rounded-full border-slate-200 bg-rose-50 text-rose-700"
+                            >
+                                No-show: {stats.no_show}
+                            </Badge>
+                        </div>
+                    </CardHeader>
+
+                    <CardContent className="pt-4">
+                        {/* Status filter pills */}
+                        <div className="mb-3 flex flex-wrap gap-1.5 text-xs">
+                            {[
+                                { key: "active", label: "Active (Booked / Checked-in / In progress)" },
+                                { key: "all", label: "All" },
+                                { key: "booked", label: "Booked" },
+                                { key: "checked_in", label: "Checked-in" },
+                                { key: "in_progress", label: "In progress" },
+                                { key: "completed", label: "Completed" },
+                                { key: "no_show", label: "No-show" },
+                            ].map((opt) => (
+                                <button
+                                    key={opt.key}
+                                    type="button"
+                                    onClick={() => setStatusFilter(opt.key)}
+                                    className={[
+                                        "rounded-full border px-3 py-1 transition text-[11px]",
+                                        statusFilter === opt.key
+                                            ? "border-slate-900 bg-slate-900 text-white"
+                                            : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-white",
+                                    ].join(" ")}
+                                >
+                                    {opt.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Content */}
+                        {!hasSelection && (
+                            <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-slate-500">
+                                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100">
+                                    <Stethoscope className="h-5 w-5 text-slate-500" />
+                                </div>
+                                <div className="font-medium text-slate-700">
+                                    Select doctor & date to view queue
+                                </div>
+                                <p className="max-w-md text-xs text-slate-500">
+                                    Choose a consultant and date above to see the live OPD queue, update
+                                    statuses, and open visits.
+                                </p>
+                            </div>
+                        )}
+
+                        {hasSelection && loading && (
+                            <div className="space-y-3 py-4">
+                                {[1, 2, 3].map((i) => (
+                                    <div
+                                        key={i}
+                                        className="flex items-center justify-between gap-3 rounded-2xl border border-slate-100 bg-slate-50/80 px-3 py-3"
+                                    >
+                                        <div className="flex-1 space-y-2">
+                                            <Skeleton className="h-4 w-40" />
+                                            <Skeleton className="h-3 w-64" />
+                                        </div>
+                                        <div className="flex gap-2">
+                                            <Skeleton className="h-7 w-16" />
+                                            <Skeleton className="h-7 w-20" />
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
+                        {hasSelection && !loading && filteredRows.length === 0 && (
+                            <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-slate-500">
+                                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100">
+                                    <Clock className="h-5 w-5 text-slate-500" />
+                                </div>
+                                <div className="font-medium text-slate-700">
+                                    No appointments for this doctor / date
+                                </div>
+                                <p className="max-w-md text-xs text-slate-500">
+                                    Try changing the status filter above or pick a different date to see
+                                    previous or upcoming OPD queues.
+                                </p>
+                            </div>
+                        )}
+
+                        {hasSelection && !loading && filteredRows.length > 0 && (
+                            <div className="space-y-2 pt-1 text-sm">
+                                {filteredRows.map((row) => {
+                                    const badgeCls =
+                                        statusBadgeClass[row.status] || "bg-slate-100 text-slate-700";
+                                    return (
+                                        <div
+                                            key={row.appointment_id}
+                                            className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm md:flex-row md:items-center md:justify-between"
+                                        >
+                                            {/* left */}
+                                            <div className="space-y-1">
+                                                <div className="flex flex-wrap items-center gap-1.5">
+                                                    <span className="text-xs font-semibold text-slate-900">
+                                                        {row.time}
+                                                    </span>
+                                                    <span className="mx-0.5 text-slate-400">•</span>
+                                                    <span className="flex items-center gap-1 text-sm font-medium text-slate-900">
+                                                        <User className="h-3.5 w-3.5 text-slate-500" />
+                                                        {row.patient?.name}
+                                                    </span>
+                                                    <span className="mx-0.5 text-slate-400">•</span>
+                                                    <span className="text-[11px] text-slate-500">
+                                                        UHID {row.patient?.uhid} · {row.patient?.phone}
+                                                    </span>
+                                                </div>
+
+                                                <div className="flex flex-wrap items-center gap-1 text-[11px] text-slate-500">
+                                                    <span>Status:</span>
+                                                    <Badge
+                                                        className={`border-none px-2 py-0.5 text-[11px] font-semibold uppercase ${badgeCls}`}
+                                                    >
+                                                        {statusLabel[row.status] || row.status}
+                                                    </Badge>
+                                                    <span className="mx-1 text-slate-300">•</span>
+                                                    <span>
+                                                        Purpose:{" "}
+                                                        <span className="font-medium text-slate-700">
+                                                            {row.visit_purpose || "Consultation"}
+                                                        </span>
+                                                    </span>
+                                                    <span className="mx-1 text-slate-300">•</span>
+                                                    <span className="inline-flex items-center gap-1">
+                                                        <HeartPulse className="h-3 w-3" />
+                                                        Vitals:{" "}
+                                                        <span className="font-medium">
+                                                            {row.has_vitals ? "Yes" : "No"}
+                                                        </span>
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* right actions */}
+                                            <div className="flex flex-wrap items-center justify-end gap-2 text-xs">
+                                                {row.status === "booked" && (
+                                                    <>
+                                                        <Button
+                                                            size="sm"
+                                                            onClick={() => changeStatus(row, "checked_in")}
+                                                        >
+                                                            Check-in
+                                                        </Button>
+                                                        <Button
+                                                            size="sm"
+                                                            variant="outline"
+                                                            onClick={() => changeStatus(row, "no_show")}
+                                                        >
+                                                            Mark No-show
+                                                        </Button>
+                                                    </>
+                                                )}
+
+                                                {row.status === "checked_in" && (
+                                                    <Button
+                                                        size="sm"
+                                                        onClick={() =>
+                                                            changeStatus(row, "in_progress", {
+                                                                goToVisit: true,
+                                                            })
+                                                        }
+                                                    >
+                                                        Start Visit
+                                                    </Button>
+                                                )}
+
+                                                {row.status === "in_progress" && (
+                                                    <Button
+                                                        size="sm"
+                                                        onClick={() => changeStatus(row, "completed")}
+                                                    >
+                                                        Complete Visit
+                                                    </Button>
+                                                )}
+
+                                                {row.visit_id && (
+                                                    <Button
+                                                        size="sm"
+                                                        variant="outline"
+                                                        onClick={() =>
+                                                            navigate(`/opd/visit/${row.visit_id}`)
+                                                        }
+                                                    >
+                                                        Open Visit
+                                                    </Button>
+                                                )}
+                                            </div>
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
             </div>
         </div>
-    )
+    );
 }
