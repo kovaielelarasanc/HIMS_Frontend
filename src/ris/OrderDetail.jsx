@@ -118,7 +118,7 @@ export default function RisOrderDetail() {
     if (!order) return <div className="text-sm text-gray-500">Order not found</div>
 
     return (
-        <div className="space-y-6">
+        <div className="space-y-6 text-black">
             <header className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h1 className="text-xl font-semibold">

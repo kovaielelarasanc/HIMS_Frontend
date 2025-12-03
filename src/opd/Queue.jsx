@@ -1,21 +1,22 @@
 // frontend/src/opd/Queue.jsx
-import { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
+import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
 
-import { fetchQueue, updateAppointmentStatus } from "../api/opd";
-import DoctorPicker from "./components/DoctorPicker";
+import { fetchQueue, updateAppointmentStatus } from '../api/opd'
+import DoctorPicker from './components/DoctorPicker'
+import { useAuth } from '../store/authStore' // adjust path if needed
 
 import {
     Card,
     CardHeader,
     CardTitle,
     CardContent,
-} from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
+} from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { Skeleton } from '@/components/ui/skeleton'
 
 import {
     Activity,
@@ -25,94 +26,134 @@ import {
     RefreshCcw,
     Stethoscope,
     User,
-} from "lucide-react";
+} from 'lucide-react'
 
-const todayStr = () => new Date().toISOString().slice(0, 10);
+const todayStr = () => new Date().toISOString().slice(0, 10)
 
 const statusLabel = {
-    booked: "Booked",
-    checked_in: "Checked-in",
-    in_progress: "In progress",
-    completed: "Completed",
-    no_show: "No-show",
-    cancelled: "Cancelled",
-};
+    booked: 'Booked',
+    checked_in: 'Checked-in',
+    in_progress: 'In progress',
+    completed: 'Completed',
+    no_show: 'No-show',
+    cancelled: 'Cancelled',
+}
 
 const statusBadgeClass = {
-    booked: "bg-slate-100 text-slate-700",
-    checked_in: "bg-blue-100 text-blue-700",
-    in_progress: "bg-amber-100 text-amber-700",
-    completed: "bg-emerald-100 text-emerald-700",
-    no_show: "bg-rose-100 text-rose-700",
-    cancelled: "bg-slate-200 text-slate-600",
-};
+    booked: 'bg-slate-100 text-slate-700',
+    checked_in: 'bg-blue-100 text-blue-700',
+    in_progress: 'bg-amber-100 text-amber-700',
+    completed: 'bg-emerald-100 text-emerald-700',
+    no_show: 'bg-rose-100 text-rose-700',
+    cancelled: 'bg-slate-200 text-slate-600',
+}
 
 function prettyDate(d) {
-    if (!d) return "";
+    if (!d) return ''
     try {
-        return new Date(d).toLocaleDateString("en-IN", {
-            weekday: "short",
-            day: "2-digit",
-            month: "short",
-            year: "numeric",
-        });
+        return new Date(d).toLocaleDateString('en-IN', {
+            weekday: 'short',
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+        })
     } catch {
-        return d;
+        return d
+    }
+}
+
+function computeWaitingLabel(row, forDate) {
+    // Only show for active statuses & today
+    if (!row?.time) return null
+    if (!['booked', 'checked_in', 'in_progress'].includes(row.status)) return null
+
+    try {
+        const now = new Date()
+        const isSameDate = forDate === now.toISOString().slice(0, 10)
+        if (!isSameDate) return null
+
+        const slotDt = new Date(`${forDate}T${row.time}:00`)
+        const diffMs = now.getTime() - slotDt.getTime()
+        const diffMin = Math.floor(diffMs / (1000 * 60))
+
+        if (diffMin <= 0) return '0 min'
+
+        if (diffMin < 60) return `${diffMin} min`
+        const hrs = Math.floor(diffMin / 60)
+        const mins = diffMin % 60
+        if (hrs >= 5) return `${hrs} hrs+`
+        if (mins === 0) return `${hrs} hr${hrs > 1 ? 's' : ''}`
+        return `${hrs}h ${mins}m`
+    } catch {
+        return null
     }
 }
 
 export default function Queue() {
-    const [doctorId, setDoctorId] = useState(null);
-    const [date, setDate] = useState(todayStr());
-    const [rows, setRows] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [statusFilter, setStatusFilter] = useState("active"); // active | all | each status
-    const navigate = useNavigate();
+    const { user } = useAuth() || {}
 
-    const load = async () => {
+    const [doctorId, setDoctorId] = useState(null)
+    const [date, setDate] = useState(todayStr())
+    const [rows, setRows] = useState([])
+    const [loading, setLoading] = useState(false)
+    const [statusFilter, setStatusFilter] = useState('active') // active | all | each status
+
+    const navigate = useNavigate()
+
+    // Default doctor = logged-in doctor
+    useEffect(() => {
+        if (user?.is_doctor && !doctorId) {
+            setDoctorId(user.id)
+        }
+    }, [user, doctorId])
+
+    const hasSelection = Boolean(doctorId && date)
+
+    const load = useCallback(async () => {
         if (!doctorId || !date) {
-            setRows([]);
-            return;
+            setRows([])
+            return
         }
         try {
-            setLoading(true);
-            const { data } = await fetchQueue({
+            setLoading(true)
+            const params = {
                 doctor_user_id: Number(doctorId),
                 for_date: date,
-            });
-            setRows(data || []);
-        } catch {
-            setRows([]);
+            }
+            if (user?.department_id) {
+                params.department_id = user.department_id
+            }
+            const { data } = await fetchQueue(params)
+            setRows(data || [])
+        } catch (e) {
+            console.error(e)
+            setRows([])
         } finally {
-            setLoading(false);
+            setLoading(false)
         }
-    };
+    }, [doctorId, date, user])
 
     useEffect(() => {
-        load();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [doctorId, date]);
+        load()
+    }, [load])
 
     const changeStatus = async (row, status, options = {}) => {
         try {
-            const { data } = await updateAppointmentStatus(
-                row.appointment_id,
-                status
-            );
-            toast.success(`Status updated to ${data.status.toUpperCase()}`);
+            const { data } = await updateAppointmentStatus(row.appointment_id, status)
+            toast.success(`Status updated to ${data.status.toUpperCase()}`)
             if (options.goToVisit && data.visit_id) {
-                navigate(`/opd/visit/${data.visit_id}`);
+                navigate(`/opd/visit/${data.visit_id}`)
             } else {
-                load();
+                load()
             }
         } catch {
             // error toast already handled by interceptor
         }
-    };
+    }
 
-    const handleDoctorChange = (id) => {
-        setDoctorId(id);
-    };
+    const handleDoctorChange = (id /*, meta */) => {
+        setDoctorId(id)
+    }
 
     // ---- derived data ----
     const stats = useMemo(() => {
@@ -124,24 +165,22 @@ export default function Queue() {
             completed: 0,
             no_show: 0,
             cancelled: 0,
-        };
-        for (const r of rows) {
-            if (base[r.status] !== undefined) base[r.status] += 1;
         }
-        return base;
-    }, [rows]);
+        for (const r of rows) {
+            if (base[r.status] !== undefined) base[r.status] += 1
+        }
+        return base
+    }, [rows])
 
     const filteredRows = useMemo(() => {
-        if (statusFilter === "all") return rows;
-        if (statusFilter === "active") {
+        if (statusFilter === 'all') return rows
+        if (statusFilter === 'active') {
             return rows.filter((r) =>
-                ["booked", "checked_in", "in_progress"].includes(r.status)
-            );
+                ['booked', 'checked_in', 'in_progress'].includes(r.status),
+            )
         }
-        return rows.filter((r) => r.status === statusFilter);
-    }, [rows, statusFilter]);
-
-    const hasSelection = Boolean(doctorId && date);
+        return rows.filter((r) => r.status === statusFilter)
+    }, [rows, statusFilter])
 
     return (
         <div className="min-h-[calc(100vh-5rem)] bg-slate-50 px-4 py-6 md:px-6">
@@ -185,7 +224,16 @@ export default function Queue() {
                         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                             <div className="grid w-full gap-3 md:grid-cols-[2fr,1.2fr] md:items-end">
                                 <div>
-                                    <DoctorPicker value={doctorId} onChange={handleDoctorChange} />
+                                    <DoctorPicker
+                                        value={doctorId}
+                                        onChange={handleDoctorChange}
+                                        autoSelectCurrentDoctor
+                                    />
+                                    {user?.is_doctor && (
+                                        <p className="mt-1 text-[11px] text-slate-500">
+                                            Defaulted to your OPD queue.
+                                        </p>
+                                    )}
                                 </div>
                                 <div className="space-y-1">
                                     <label className="flex items-center gap-1 text-xs font-medium uppercase tracking-[0.16em] text-slate-500">
@@ -263,24 +311,24 @@ export default function Queue() {
                         {/* Status filter pills */}
                         <div className="mb-3 flex flex-wrap gap-1.5 text-xs">
                             {[
-                                { key: "active", label: "Active (Booked / Checked-in / In progress)" },
-                                { key: "all", label: "All" },
-                                { key: "booked", label: "Booked" },
-                                { key: "checked_in", label: "Checked-in" },
-                                { key: "in_progress", label: "In progress" },
-                                { key: "completed", label: "Completed" },
-                                { key: "no_show", label: "No-show" },
+                                { key: 'active', label: 'Active (Booked / Checked-in / In progress)' },
+                                { key: 'all', label: 'All' },
+                                { key: 'booked', label: 'Booked' },
+                                { key: 'checked_in', label: 'Checked-in' },
+                                { key: 'in_progress', label: 'In progress' },
+                                { key: 'completed', label: 'Completed' },
+                                { key: 'no_show', label: 'No-show' },
                             ].map((opt) => (
                                 <button
                                     key={opt.key}
                                     type="button"
                                     onClick={() => setStatusFilter(opt.key)}
                                     className={[
-                                        "rounded-full border px-3 py-1 transition text-[11px]",
+                                        'rounded-full border px-3 py-1 transition text-[11px]',
                                         statusFilter === opt.key
-                                            ? "border-slate-900 bg-slate-900 text-white"
-                                            : "border-slate-200 bg-slate-50 text-slate-600 hover:bg-white",
-                                    ].join(" ")}
+                                            ? 'border-slate-900 bg-slate-900 text-white'
+                                            : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-white',
+                                    ].join(' ')}
                                 >
                                     {opt.label}
                                 </button>
@@ -342,7 +390,9 @@ export default function Queue() {
                             <div className="space-y-2 pt-1 text-sm">
                                 {filteredRows.map((row) => {
                                     const badgeCls =
-                                        statusBadgeClass[row.status] || "bg-slate-100 text-slate-700";
+                                        statusBadgeClass[row.status] || 'bg-slate-100 text-slate-700'
+                                    const waitingLabel = computeWaitingLabel(row, date)
+
                                     return (
                                         <div
                                             key={row.appointment_id}
@@ -374,47 +424,59 @@ export default function Queue() {
                                                     </Badge>
                                                     <span className="mx-1 text-slate-300">•</span>
                                                     <span>
-                                                        Purpose:{" "}
+                                                        Purpose:{' '}
                                                         <span className="font-medium text-slate-700">
-                                                            {row.visit_purpose || "Consultation"}
+                                                            {row.visit_purpose || 'Consultation'}
                                                         </span>
                                                     </span>
                                                     <span className="mx-1 text-slate-300">•</span>
                                                     <span className="inline-flex items-center gap-1">
                                                         <HeartPulse className="h-3 w-3" />
-                                                        Vitals:{" "}
+                                                        Vitals:{' '}
                                                         <span className="font-medium">
-                                                            {row.has_vitals ? "Yes" : "No"}
+                                                            {row.has_vitals ? 'Yes' : 'No'}
                                                         </span>
                                                     </span>
+                                                    {waitingLabel && (
+                                                        <>
+                                                            <span className="mx-1 text-slate-300">•</span>
+                                                            <span className="inline-flex items-center gap-1">
+                                                                <Clock className="h-3 w-3" />
+                                                                Waiting:{' '}
+                                                                <span className="font-medium">
+                                                                    {waitingLabel}
+                                                                </span>
+                                                            </span>
+                                                        </>
+                                                    )}
                                                 </div>
                                             </div>
 
                                             {/* right actions */}
                                             <div className="flex flex-wrap items-center justify-end gap-2 text-xs">
-                                                {row.status === "booked" && (
+                                                {row.status === 'booked' && (
                                                     <>
                                                         <Button
                                                             size="sm"
-                                                            onClick={() => changeStatus(row, "checked_in")}
+                                                            onClick={() => changeStatus(row, 'checked_in')}
                                                         >
                                                             Check-in
                                                         </Button>
                                                         <Button
                                                             size="sm"
                                                             variant="outline"
-                                                            onClick={() => changeStatus(row, "no_show")}
+                                                            onClick={() => changeStatus(row, 'no_show')}
                                                         >
                                                             Mark No-show
                                                         </Button>
                                                     </>
                                                 )}
 
-                                                {row.status === "checked_in" && (
+                                                {row.status === 'checked_in' && (
                                                     <Button
                                                         size="sm"
                                                         onClick={() =>
-                                                            changeStatus(row, "in_progress", {
+                                                            changeStatus(row, 'in_progress', {
                                                                 goToVisit: true,
                                                             })
                                                         }
@@ -423,10 +485,10 @@ export default function Queue() {
                                                     </Button>
                                                 )}
 
-                                                {row.status === "in_progress" && (
+                                                {row.status === 'in_progress' && (
                                                     <Button
                                                         size="sm"
-                                                        onClick={() => changeStatus(row, "completed")}
+                                                        onClick={() => changeStatus(row, 'completed')}
                                                     >
                                                         Complete Visit
                                                     </Button>
@@ -445,7 +507,7 @@ export default function Queue() {
                                                 )}
                                             </div>
                                         </div>
-                                    );
+                                    )
                                 })}
                             </div>
                         )}
@@ -453,5 +515,5 @@ export default function Queue() {
                 </Card>
             </div>
         </div>
-    );
+    )
 }

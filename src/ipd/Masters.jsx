@@ -12,7 +12,7 @@ export default function Masters() {
     return (
         <PermGate anyOf={['ipd.masters.manage', 'ipd.packages.manage']}>
             <div className="p-4 space-y-6">
-                <h1 className="text-lg font-semibold">IPD Masters</h1>
+                <h1 className="text-lg font-semibold text-black">IPD Masters</h1>
                 <WardRoomBed />
                 <Packages />
                 <BedRates />
@@ -36,7 +36,7 @@ function WardRoomBed() {
     useEffect(() => { load() }, [])
 
     return (
-        <div className="rounded-xl border bg-white p-3 space-y-4">
+        <div className="rounded-xl border bg-white p-3 space-y-4 text-black">
             <div className="font-medium">Ward · Room · Bed</div>
             {err && <div className="text-rose-700 text-sm">{err}</div>}
 
@@ -84,7 +84,7 @@ function Packages() {
     const load = async () => { const { data } = await listPackages(); setRows(data || []) }
     useEffect(() => { load() }, [])
     return (
-        <div className="rounded-xl border bg-white p-3 space-y-3">
+        <div className="rounded-xl border bg-white p-3 space-y-3 text-black">
             <div className="font-medium">Packages</div>
             <CreateRow title="New Package" onSubmit={async (f) => { await createPackage(f); await load() }} fields={[
                 { name: 'name', placeholder: 'Name', required: true },
@@ -102,7 +102,7 @@ function BedRates() {
     const load = async () => { const { data } = await listBedRates(); setRows(data || []) }
     useEffect(() => { load() }, [])
     return (
-        <div className="rounded-xl border bg-white p-3 space-y-3">
+        <div className="rounded-xl border bg-white p-3 space-y-3 text-black">
             <div className="font-medium">Bed Rates</div>
             <CreateRow title="New Bed Rate" onSubmit={async (f) => { await createBedRate(f); await load() }} fields={[
                 { name: 'room_type', placeholder: 'General/Private/ICU', required: true },

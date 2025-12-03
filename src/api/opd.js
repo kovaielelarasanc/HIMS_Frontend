@@ -69,6 +69,14 @@ export function saveDoctorSchedule(payload) {
     return API.post('/opd/schedules', payload)
 }
 
+export function updateDoctorSchedule(id, payload) {
+    return API.put(`/opd/schedules/${id}`, payload)
+}
+
+export function deleteDoctorSchedule(id) {
+    return API.delete(`/opd/schedules/${id}`)
+}
+
 // ---------- Patient search (for PatientPicker) ----------
 
 export function searchPatients(q = '') {
@@ -105,7 +113,7 @@ export function listNoShowAppointments(params = {}) {
 // ---------- Queue & visits ----------
 
 export function fetchQueue(params = {}) {
-    // { doctor_user_id, for_date }
+    // suggested params: { doctor_user_id, for_date, department_id? }
     return API.get('/opd/queue', { params: toParams(params) })
 }
 
@@ -189,8 +197,35 @@ export function updateFollowup(followupId, payload) {
 }
 
 export function scheduleFollowup(followupId, payload) {
-    // { date?, slot_start }
+    // e.g. { date: 'YYYY-MM-DD', slot_id: null, confirmed: true }
     return API.post(`/opd/followups/${followupId}/schedule`, payload)
+}
+
+// ---------- Doctor Consultation Fees (Master) ----------
+
+export function listDoctorFees(params = {}) {
+    // { doctor_user_id?, department_id? }
+    return API.get('/opd/doctor-fees', { params: toParams(params) })
+}
+export function createDoctorFee(payload) {
+    // payload: { doctor_user_id, base_fee, followup_fee?, currency?, is_active? }
+    return API.post('/opd/doctor-fees', payload)
+}
+
+export function updateDoctorFee(id, payload) {
+    // payload: { base_fee?, followup_fee?, currency?, is_active?, notes? }
+    return API.put(`/opd/doctor-fees/${id}`, payload)
+}
+export function upsertDoctorFee(payload) {
+    if (payload.id) {
+        const { id, ...rest } = payload
+        return updateDoctorFee(id, rest)
+    }
+    return createDoctorFee(payload)
+}
+
+export function deleteDoctorFee(id) {
+    return API.delete(`/opd/doctor-fees/${id}`)
 }
 
 // ---------- Old names kept for compatibility ----------
@@ -212,7 +247,6 @@ export function fetchDepartmentUsers({ departmentId, roleId, isDoctor } = {}) {
     })
 }
 
-
 // ---------- OPD Dashboard ----------
 
 export function fetchOpdDashboard({ dateFrom, dateTo, doctorId } = {}) {
@@ -224,17 +258,3 @@ export function fetchOpdDashboard({ dateFrom, dateTo, doctorId } = {}) {
         }),
     })
 }
-
-// // src/api/opd.js
-// export const scheduleFollowup = (id, payload) =>
-//     API.post(`/opd/followups/${id}/schedule`, payload)
-
-// // Followups.jsx (ensure clean payload)
-// const saveSchedule = async () => {
-//     const payload = {
-//         date: selectedDate?.toISOString().slice(0, 10), // 'YYYY-MM-DD'
-//         slot_id: selectedSlotId ?? null,
-//         confirmed: true,
-//     }
-//     await scheduleFollowup(followupId, payload)
-// }

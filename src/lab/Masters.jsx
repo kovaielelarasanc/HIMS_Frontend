@@ -60,7 +60,7 @@ export default function Masters() {
     const total = useMemo(() => rows.length, [rows])
 
     return (
-        <div className="p-4 md:p-6">
+        <div className="p-4 md:p-6 text-black">
             <header className="mb-4 flex items-center justify-between">
                 <div>
                     <h1 className="text-xl font-semibold">Lab Masters</h1>

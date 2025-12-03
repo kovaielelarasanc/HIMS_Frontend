@@ -39,7 +39,7 @@ export default function MyAdmissions() {
     if (loading) return <div className="p-4">Loading…</div>
 
     return (
-        <div className="p-4 space-y-3">
+        <div className="p-4 space-y-3 text-black">
             <h1 className="text-lg font-semibold">My Admissions</h1>
             <div className="rounded-xl border bg-white overflow-hidden">
                 <table className="w-full text-sm">

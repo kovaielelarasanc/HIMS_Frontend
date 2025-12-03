@@ -204,7 +204,7 @@ export default function Admissions() {
     }
 
     return (
-        <div className="p-4 space-y-4">
+        <div className="p-4 space-y-4 text-black">
             {toast && (
                 <Toast
                     kind={toast.kind}

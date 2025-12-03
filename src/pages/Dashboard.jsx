@@ -468,7 +468,7 @@ export default function Dashboard() {
 
     return (
         <motion.div
-            className="relative min-h-[calc(100vh-4rem)] bg-slate-50 px-3 py-3 md:px-6 md:py-6 rounded"
+            className="relative min-h-[calc(100vh-4rem)]  px-3 py-3 md:px-6 md:py-6 rounded"
             variants={pageVariants}
             initial="hidden"
             animate="visible"

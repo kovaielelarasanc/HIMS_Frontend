@@ -1,22 +1,24 @@
 // FILE: src/patients/PatientPage.jsx
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react'
 import {
     listPatients,
     deactivatePatient,
     getPatientMastersAll,
-} from '../api/patients';
-import PatientFormModal from './PatientForm'; // or './PatientFormModal' based on your filename
-import PatientDetailDrawer from './PatientDetailDrawer';
+    exportPatientsExcel,
+} from '../api/patients'
+import { toast } from 'sonner'
+import PatientFormModal from './PatientForm'
+import PatientDetailDrawer from './PatientDetailDrawer'
 
 export default function PatientPage() {
-    const [patients, setPatients] = useState([]);
-    const [loading, setLoading] = useState(false);
-    const [q, setQ] = useState('');
+    const [patients, setPatients] = useState([])
+    const [loading, setLoading] = useState(false)
+    const [q, setQ] = useState('')
 
-    const [formOpen, setFormOpen] = useState(false);
-    const [detailOpen, setDetailOpen] = useState(false);
-    const [selectedPatient, setSelectedPatient] = useState(null);
-    const [editingPatient, setEditingPatient] = useState(null);
+    const [formOpen, setFormOpen] = useState(false)
+    const [detailOpen, setDetailOpen] = useState(false)
+    const [selectedPatient, setSelectedPatient] = useState(null)
+    const [editingPatient, setEditingPatient] = useState(null)
 
     const [lookups, setLookups] = useState({
         refSources: [],
@@ -24,95 +26,173 @@ export default function PatientPage() {
         payers: [],
         tpas: [],
         creditPlans: [],
-    });
+        patientTypes: [],
+    })
 
-    const [error, setError] = useState('');
+    const [error, setError] = useState('')
+
+    // Filters
+    const [patientTypeFilter, setPatientTypeFilter] = useState('')
+    const [fromDate, setFromDate] = useState('')
+    const [toDate, setToDate] = useState('')
+    const [exporting, setExporting] = useState(false)
 
     useEffect(() => {
-        loadPatients();
-        loadLookups();
+        loadPatients()
+        loadLookups()
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    }, [])
 
     const loadPatients = async (search = q) => {
-        setLoading(true);
-        setError('');
+        setLoading(true)
+        setError('')
         try {
-            const res = await listPatients(search);
-            setPatients(res.data || []);
+            const params = {}
+            if (search) params.q = search
+            if (patientTypeFilter) params.patient_type = patientTypeFilter
+
+            const res = await listPatients(params)
+            setPatients(res.data || [])
         } catch (err) {
             const msg =
                 err?.response?.data?.detail ||
                 err?.message ||
-                'Failed to load patients';
-            setError(msg);
+                'Failed to load patients'
+            setError(msg)
+            toast.error('Failed to load patients', { description: msg })
         } finally {
-            setLoading(false);
+            setLoading(false)
         }
-    };
+    }
 
     const loadLookups = async () => {
         try {
-            const res = await getPatientMastersAll();
-            const data = res.data || {};
+            const res = await getPatientMastersAll()
+            const data = res.data || {}
             setLookups({
                 refSources: data.reference_sources || [],
                 doctors: data.doctors || [],
                 payers: data.payers || [],
                 tpas: data.tpas || [],
                 creditPlans: data.credit_plans || [],
-            });
+                patientTypes: data.patient_types || [],
+            })
         } catch {
-            // not critical; ignore for now
+            // not critical; ignore
         }
-    };
+    }
 
     const handleSearchSubmit = (e) => {
-        e.preventDefault();
-        loadPatients(q);
-    };
+        e.preventDefault()
+        loadPatients(q)
+    }
+
+    const handleFilterApply = () => {
+        loadPatients(q)
+    }
+
+    const handleFilterReset = () => {
+        setPatientTypeFilter('')
+        setQ('')
+        loadPatients('')
+    }
 
     const handleNew = () => {
-        setEditingPatient(null);
-        setFormOpen(true);
-    };
+        setEditingPatient(null)
+        setFormOpen(true)
+    }
 
     const handleEdit = (p) => {
-        setEditingPatient(p);
-        setFormOpen(true);
-    };
+        setEditingPatient(p)
+        setFormOpen(true)
+    }
 
     const handleView = (p) => {
-        setSelectedPatient(p);
-        setDetailOpen(true);
-    };
+        setSelectedPatient(p)
+        setDetailOpen(true)
+    }
 
     const handleDeactivate = async (p) => {
-        if (!window.confirm(`Deactivate patient ${p.first_name}?`)) return;
+        if (!window.confirm(`Deactivate patient ${p.first_name}?`)) return
         try {
-            await deactivatePatient(p.id);
-            await loadPatients();
+            await deactivatePatient(p.id)
+            toast.success('Patient deactivated')
+            await loadPatients()
         } catch (err) {
             const msg =
                 err?.response?.data?.detail ||
                 err?.message ||
-                'Failed to deactivate patient';
-            alert(msg);
+                'Failed to deactivate patient'
+            toast.error('Failed to deactivate patient', { description: msg })
         }
-    };
+    }
 
     const updatePatientInList = (updated) => {
         setPatients((prev) => {
-            const idx = prev.findIndex((p) => p.id === updated.id);
-            if (idx === -1) return prev;
-            const clone = [...prev];
-            clone[idx] = updated;
-            return clone;
-        });
-    };
+            const idx = prev.findIndex((p) => p.id === updated.id)
+            if (idx === -1) return prev
+            const clone = [...prev]
+            clone[idx] = updated
+            return clone
+        })
+    }
+
+    const handleExportExcel = async () => {
+        if (!fromDate || !toDate) {
+            toast.warning('Please select From and To date for Excel export')
+            return
+        }
+        if (toDate < fromDate) {
+            toast.warning('To Date must be on or after From Date')
+            return
+        }
+
+        setExporting(true)
+        try {
+            const params = {
+                from_date: fromDate,
+                to_date: toDate,
+            }
+            if (patientTypeFilter) {
+                params.patient_type = patientTypeFilter
+            }
+
+            const res = await exportPatientsExcel(params)
+            const blob = new Blob(
+                [res.data],
+                {
+                    type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+                }
+            )
+            const url = window.URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = `patients_${fromDate}_to_${toDate}.xlsx`
+            document.body.appendChild(a)
+            a.click()
+            a.remove()
+            window.URL.revokeObjectURL(url)
+
+            toast.success('Patient Excel report downloaded')
+        } catch (err) {
+            const msg =
+                err?.response?.data?.detail ||
+                err?.message ||
+                'Failed to export Excel'
+            toast.error('Failed to export Excel', { description: msg })
+        } finally {
+            setExporting(false)
+        }
+    }
+
+
+    const patientTypeOptions = useMemo(
+        () => lookups.patientTypes || [],
+        [lookups.patientTypes]
+    )
 
     return (
-        <div className="h-full flex flex-col px-3 py-3 sm:px-5 sm:py-4 gap-3 bg-white rounded">
+        <div className="h-full flex flex-col px-3 py-3 sm:px-5 sm:py-4 gap-3 text-black rounded">
             {/* Header */}
             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                 <div>
@@ -132,24 +212,104 @@ export default function PatientPage() {
                 </button>
             </div>
 
-            {/* Search */}
-            <form
-                onSubmit={handleSearchSubmit}
-                className="flex flex-col sm:flex-row gap-2"
-            >
-                <input
-                    className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
-                    placeholder="Search by UHID, name, mobile, email..."
-                    value={q}
-                    onChange={(e) => setQ(e.target.value)}
-                />
-                <button
-                    type="submit"
-                    className="px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+            {/* Search + Filters */}
+            <div className="space-y-2">
+                {/* Search bar */}
+                <form
+                    onSubmit={handleSearchSubmit}
+                    className="flex flex-col sm:flex-row gap-2"
                 >
-                    Search
-                </button>
-            </form>
+                    <input
+                        className="flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+                        placeholder="Search by UHID, name, mobile, email..."
+                        value={q}
+                        onChange={(e) => setQ(e.target.value)}
+                    />
+                    <button
+                        type="submit"
+                        className="px-3 py-2 text-sm rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                    >
+                        Search
+                    </button>
+                </form>
+
+                {/* Filters + Excel export */}
+                <div className="flex flex-col md:flex-row gap-2 md:items-end md:justify-between">
+                    {/* Left: filters */}
+                    <div className="flex flex-wrap gap-2">
+                        <div className="flex flex-col">
+                            <label className="text-[11px] text-slate-500 mb-0.5">
+                                Patient Type
+                            </label>
+                            <select
+                                className="min-w-[160px] border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm"
+                                value={patientTypeFilter}
+                                onChange={(e) => setPatientTypeFilter(e.target.value)}
+                            >
+                                <option value="">All Types</option>
+                                {patientTypeOptions.map((pt) => (
+                                    <option
+                                        key={pt.code || pt.name}
+                                        value={pt.code || pt.name}
+                                    >
+                                        {pt.name || pt.code}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+                        <div className="flex items-end gap-2">
+                            <button
+                                type="button"
+                                onClick={handleFilterApply}
+                                className="px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white text-slate-700 hover:bg-slate-50"
+                            >
+                                Apply Filter
+                            </button>
+                            <button
+                                type="button"
+                                onClick={handleFilterReset}
+                                className="px-3 py-1.5 text-xs rounded-lg border border-slate-200 bg-white text-slate-500 hover:bg-slate-50"
+                            >
+                                Reset
+                            </button>
+                        </div>
+                    </div>
+
+                    {/* Right: Excel export */}
+                    <div className="flex flex-wrap gap-2 items-end">
+                        <div className="flex flex-col">
+                            <label className="text-[11px] text-slate-500 mb-0.5">
+                                From Date
+                            </label>
+                            <input
+                                type="date"
+                                className="border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm"
+                                value={fromDate}
+                                onChange={(e) => setFromDate(e.target.value)}
+                            />
+                        </div>
+                        <div className="flex flex-col">
+                            <label className="text-[11px] text-slate-500 mb-0.5">
+                                To Date
+                            </label>
+                            <input
+                                type="date"
+                                className="border border-slate-200 rounded-lg px-2.5 py-1.5 text-sm"
+                                value={toDate}
+                                onChange={(e) => setToDate(e.target.value)}
+                            />
+                        </div>
+                        <button
+                            type="button"
+                            onClick={handleExportExcel}
+                            disabled={exporting}
+                            className="px-3 py-1.5 text-xs rounded-lg bg-emerald-600 text-white hover:bg-emerald-700 disabled:opacity-60"
+                        >
+                            {exporting ? 'Exporting…' : 'Export Excel'}
+                        </button>
+                    </div>
+                </div>
+            </div>
 
             {error && (
                 <div className="text-xs text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
@@ -345,5 +505,5 @@ export default function PatientPage() {
                 onUpdated={updatePatientInList}
             />
         </div>
-    );
+    )
 }

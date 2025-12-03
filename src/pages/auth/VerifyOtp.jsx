@@ -2,16 +2,32 @@
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useAuth } from '../../store/authStore'
-import { Mail, ShieldCheck, Loader2, CheckCircle2, ArrowLeft } from 'lucide-react'
+import {
+    Mail,
+    ShieldCheck,
+    Loader2,
+    CheckCircle2,
+    ArrowLeft,
+    Building2,
+} from 'lucide-react'
 
 export default function VerifyOtp() {
     const loc = useLocation()
     const nav = useNavigate()
-    const verifyOtp = useAuth(s => s.verifyOtp)
-    const fetchProfile = useAuth(s => s.fetchProfile)
+    const verifyOtp = useAuth((s) => s.verifyOtp)
+    const fetchProfile = useAuth((s) => s.fetchProfile)
 
-    // Email persists if page refreshes
-    const [email] = useState(loc.state?.email || localStorage.getItem('pending_email') || '')
+    // Email & tenant persist if page refreshes
+    const [email] = useState(
+        loc.state?.email || localStorage.getItem('pending_email') || ''
+    )
+    const [tenantCode] = useState(
+        loc.state?.tenant_code ||
+        localStorage.getItem('pending_tenant_code') ||
+        localStorage.getItem('tenant_code') ||
+        ''
+    )
+
     const [digits, setDigits] = useState(['', '', '', '', '', ''])
     const [err, setErr] = useState('')
     const [loading, setLoading] = useState(false)
@@ -21,13 +37,15 @@ export default function VerifyOtp() {
     const inputsRef = useRef([])
 
     useEffect(() => {
-        if (!email) nav('/auth/login', { replace: true })
-    }, [email, nav])
+        if (!email || !tenantCode) {
+            nav('/auth/login', { replace: true })
+        }
+    }, [email, tenantCode, nav])
 
     // Start resend countdown
     useEffect(() => {
         if (seconds <= 0) return
-        const id = setInterval(() => setSeconds(s => s - 1), 1000)
+        const id = setInterval(() => setSeconds((s) => s - 1), 1000)
         return () => clearInterval(id)
     }, [seconds])
 
@@ -37,7 +55,7 @@ export default function VerifyOtp() {
     // Handlers for OTP boxes
     const setDigit = (index, val) => {
         const v = (val || '').replace(/\D/g, '').slice(-1) // last typed digit only
-        setDigits(prev => {
+        setDigits((prev) => {
             const next = [...prev]
             next[index] = v
             return next
@@ -48,14 +66,14 @@ export default function VerifyOtp() {
     const onKeyDown = (index, e) => {
         if (e.key === 'Backspace') {
             if (digits[index]) {
-                setDigits(prev => {
+                setDigits((prev) => {
                     const next = [...prev]
                     next[index] = ''
                     return next
                 })
             } else if (index > 0) {
                 inputsRef.current[index - 1]?.focus()
-                setDigits(prev => {
+                setDigits((prev) => {
                     const next = [...prev]
                     next[index - 1] = ''
                     return next
@@ -70,10 +88,19 @@ export default function VerifyOtp() {
 
     const onPaste = (e) => {
         e.preventDefault()
-        const text = (e.clipboardData.getData('text') || '').replace(/\D/g, '').slice(0, 6)
+        const text = (e.clipboardData.getData('text') || '')
+            .replace(/\D/g, '')
+            .slice(0, 6)
         if (!text) return
         const arr = text.split('')
-        setDigits([arr[0] || '', arr[1] || '', arr[2] || '', arr[3] || '', arr[4] || '', arr[5] || ''])
+        setDigits([
+            arr[0] || '',
+            arr[1] || '',
+            arr[2] || '',
+            arr[3] || '',
+            arr[4] || '',
+            arr[5] || '',
+        ])
         inputsRef.current[Math.min(text.length, 5)]?.focus()
     }
 
@@ -83,7 +110,11 @@ export default function VerifyOtp() {
         setErr('')
         setLoading(true)
         try {
-            await verifyOtp({ email, otp: code })
+            await verifyOtp({
+                tenant_code: tenantCode,
+                email,
+                otp: code,
+            })
             await fetchProfile()
             setSuccess(true)
             // small success delay before navigation
@@ -94,18 +125,19 @@ export default function VerifyOtp() {
             }, 400)
         } catch (e) {
             setErr(e?.response?.data?.detail || 'Invalid or expired OTP')
-            // shake animation by toggling a class on the container if you want (optional)
         } finally {
             setLoading(false)
         }
     }
 
     const goBackToLogin = () => {
-        nav('/auth/login', { state: { email }, replace: true })
+        nav('/auth/login', {
+            state: { email, tenant_code: tenantCode },
+            replace: true,
+        })
     }
 
     const resend = () => {
-        // We route back to login so user can re-auth and trigger a new OTP
         goBackToLogin()
     }
 
@@ -127,33 +159,48 @@ export default function VerifyOtp() {
                                     <span className="text-sm font-bold">NDH</span>
                                 </div>
                                 <div>
-                                    <h1 className="text-lg font-semibold tracking-tight">Verify OTP</h1>
-                                    <p className="text-xs text-gray-500">We sent a 6-digit code to your email</p>
+                                    <h1 className="text-lg font-semibold tracking-tight">
+                                        Verify OTP
+                                    </h1>
+                                    <p className="text-xs text-gray-500">
+                                        We sent a 6-digit code to your email
+                                    </p>
                                 </div>
                             </div>
                             <ShieldCheck className="h-6 w-6 text-emerald-600" />
                         </div>
 
-                        {/* Email info */}
-                        <div className="mb-4 flex items-center gap-2 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-sm text-gray-700">
-                            <Mail className="h-4 w-4 text-gray-400" />
-                            <span className="truncate">{email}</span>
-                            <button
-                                type="button"
-                                onClick={goBackToLogin}
-                                className="ml-auto text-xs text-blue-700 underline-offset-2 hover:underline"
-                            >
-                                Change
-                            </button>
+                        {/* Email + Tenant info */}
+                        <div className="mb-4 space-y-2 text-sm">
+                            <div className="flex items-center gap-2 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-gray-700">
+                                <Mail className="h-4 w-4 text-gray-400" />
+                                <span className="truncate">{email}</span>
+                                <button
+                                    type="button"
+                                    onClick={goBackToLogin}
+                                    className="ml-auto text-xs text-blue-700 underline-offset-2 hover:underline"
+                                >
+                                    Change
+                                </button>
+                            </div>
+                            <div className="flex items-center gap-2 rounded-xl border border-gray-100 bg-gray-50 px-3 py-2 text-gray-700">
+                                <Building2 className="h-4 w-4 text-gray-400" />
+                                <span className="text-xs font-medium uppercase">
+                                    Hospital Code: {tenantCode}
+                                </span>
+                            </div>
                         </div>
 
                         {/* OTP inputs */}
                         <form onSubmit={submit} className="space-y-4">
-                            <div className="grid grid-cols-6 gap-2 sm:gap-3" onPaste={onPaste}>
+                            <div
+                                className="grid grid-cols-6 gap-2 sm:gap-3"
+                                onPaste={onPaste}
+                            >
                                 {digits.map((d, i) => (
                                     <input
                                         key={i}
-                                        ref={el => (inputsRef.current[i] = el)}
+                                        ref={(el) => (inputsRef.current[i] = el)}
                                         value={d}
                                         inputMode="numeric"
                                         pattern="[0-9]*"
@@ -193,7 +240,7 @@ export default function VerifyOtp() {
                             <div className="flex items-center justify-between text-xs text-gray-600">
                                 <button
                                     type="button"
-                                    onClick={() => nav('/auth/login')}
+                                    onClick={goBackToLogin}
                                     className="inline-flex items-center gap-1 rounded-lg px-2 py-1 hover:bg-gray-50"
                                 >
                                     <ArrowLeft className="h-3.5 w-3.5" />

@@ -1,11 +1,11 @@
-// frontend/src/branding/BrandingProvider.jsx
+// FILE: frontend/src/branding/BrandingProvider.jsx
 import { createContext, useContext, useEffect, useState } from 'react'
 import { toast } from 'sonner'
-import { getBranding } from '../api/settings'
+import { getPublicBranding, getBranding } from '../api/settings'
 
 const BrandingContext = createContext({
   branding: null,
-  setBranding: () => {},
+  setBranding: () => { },
   loading: true,
 })
 
@@ -34,18 +34,34 @@ function makeAbs(urlOrPath) {
 
 /**
  * Normalise raw branding payload from backend into a shape
- * that always has absolute *_url fields for images.
- *
- * Supports:
- *   - logo_url or logo_path
- *   - login_logo_url or login_logo_path
- *   - favicon_url or favicon_path
- *   - pdf_header_url or pdf_header_path
- *   - pdf_footer_url or pdf_footer_path
+ * that:
+ *  - NEVER has null for color fields
+ *  - Always has absolute *_url fields for images.
  */
 function normalizeBranding(raw) {
   if (!raw) return null
   const b = { ...raw }
+
+  // -------- COLORS: FRONTEND DEFAULTS --------
+  // Primary theme
+  b.primary_color = b.primary_color || '#2563eb'
+  b.primary_color_dark = b.primary_color_dark || null
+
+  // Layout backgrounds
+  b.sidebar_bg_color = b.sidebar_bg_color || '#ffffff'
+  b.content_bg_color = b.content_bg_color || '#f9fafb'
+  b.card_bg_color = b.card_bg_color || '#ffffff'
+  b.border_color = b.border_color || '#e5e7eb'
+
+  // Text colors
+  b.text_color = b.text_color || '#111827'           // main text (sidebar)
+  b.text_muted_color = b.text_muted_color || '#e5e7eb' // topbar text (muted)
+
+  // Icon colors
+  b.icon_color = b.icon_color || b.text_color || '#2563eb'
+  b.icon_bg_color = b.icon_bg_color || 'rgba(37,99,235,0.08)'
+
+  // -------- LOGOS / ICONS (URLs) --------
 
   // logo
   if (b.logo_path && !b.logo_url) {
@@ -56,27 +72,35 @@ function normalizeBranding(raw) {
 
   // login logo
   if (b.login_logo_path && !b.login_logo_url) {
-    b.login_logo_url = makeAbs(`/media/${String(b.login_logo_path).replace(/^\/+/, '')}`)
+    b.login_logo_url = makeAbs(
+      `/media/${String(b.login_logo_path).replace(/^\/+/, '')}`,
+    )
   } else if (b.login_logo_url) {
     b.login_logo_url = makeAbs(b.login_logo_url)
   }
 
   // favicon
   if (b.favicon_path && !b.favicon_url) {
-    b.favicon_url = makeAbs(`/media/${String(b.favicon_path).replace(/^\/+/, '')}`)
+    b.favicon_url = makeAbs(
+      `/media/${String(b.favicon_path).replace(/^\/+/, '')}`,
+    )
   } else if (b.favicon_url) {
     b.favicon_url = makeAbs(b.favicon_url)
   }
 
   // pdf header/footer
   if (b.pdf_header_path && !b.pdf_header_url) {
-    b.pdf_header_url = makeAbs(`/media/${String(b.pdf_header_path).replace(/^\/+/, '')}`)
+    b.pdf_header_url = makeAbs(
+      `/media/${String(b.pdf_header_path).replace(/^\/+/, '')}`,
+    )
   } else if (b.pdf_header_url) {
     b.pdf_header_url = makeAbs(b.pdf_header_url)
   }
 
   if (b.pdf_footer_path && !b.pdf_footer_url) {
-    b.pdf_footer_url = makeAbs(`/media/${String(b.pdf_footer_path).replace(/^\/+/, '')}`)
+    b.pdf_footer_url = makeAbs(
+      `/media/${String(b.pdf_footer_path).replace(/^\/+/, '')}`,
+    )
   } else if (b.pdf_footer_url) {
     b.pdf_footer_url = makeAbs(b.pdf_footer_url)
   }
@@ -88,7 +112,7 @@ export function BrandingProvider({ children }) {
   const [branding, _setBranding] = useState(null)
   const [loading, setLoading] = useState(true)
 
-  // wrap setBranding so ALL writes are normalised
+  // Public setter for other components (always normalized)
   const setBranding = (valueOrUpdater) => {
     if (typeof valueOrUpdater === 'function') {
       _setBranding((prev) => normalizeBranding(valueOrUpdater(prev)))
@@ -102,9 +126,29 @@ export function BrandingProvider({ children }) {
 
     const run = async () => {
       try {
-        const { data } = await getBranding()
+        // 1) Try public branding (works for ALL users)
+        let data
+        try {
+          const res = await getPublicBranding()
+          data = res.data
+        } catch (err) {
+          // Fallback: old backend or route missing
+          console.warn(
+            'Public branding failed, falling back to /settings/ui-branding',
+            err,
+          )
+          const res = await getBranding()
+          data = res.data
+        }
+
         if (!alive) return
-        setBranding(data)
+
+        console.log('[BrandingProvider] raw branding from API:', data)
+
+        const norm = normalizeBranding(data)
+        console.log('[BrandingProvider] normalized branding:', norm)
+
+        _setBranding(norm)
       } catch (err) {
         console.error('Failed to load branding', err)
         toast.error('Failed to load customization settings')

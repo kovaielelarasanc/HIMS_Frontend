@@ -1,3 +1,4 @@
+// FILE: frontend/src/layout/Topbar.jsx (or wherever your Topbar is)
 import { useEffect, useMemo, useState } from 'react'
 import { useAuth } from '../store/authStore'
 import { useUI } from '../store/uiStore'
@@ -16,8 +17,18 @@ export default function Topbar() {
     const [spinning, setSpinning] = useState(false)
     const [syncing, setSyncing] = useState(false)
 
+    // ---- BRANDING COLORS ----
     const primary = branding?.primary_color || '#0f172a'
-    const primaryDark = branding?.primary_color_dark || primary
+    const primaryDark = branding?.primary_color_dark || null
+
+    // Topbar background: prefer dark, fallback to primary, then default
+    const topbarBg = primaryDark || primary || '#0f172a'
+
+    // Topbar text = muted color
+    const topbarText = branding?.text_muted_color || '#e5e7eb'
+    // Icons = icon_color
+    const iconColor = branding?.icon_color || topbarText
+
     const orgName = (branding?.org_name || '').trim() || 'NUTRYAH'
     const orgTagline =
         (branding?.org_tagline || '').trim() || 'Smart • Secure • NABH-Standard'
@@ -73,11 +84,12 @@ export default function Topbar() {
     const Avatar = (
         <svg
             viewBox="0 0 24 24"
-            className="h-9 w-9 text-gray-300"
+            className="h-9 w-9"
             aria-hidden="true"
             fill="none"
             stroke="currentColor"
             strokeWidth="1.5"
+            style={{ color: iconColor }}
         >
             <path
                 strokeLinecap="round"
@@ -96,10 +108,9 @@ export default function Topbar() {
     )
 
     return (
-        // Keep bg-blue-900 as default; override with branding when available
         <header
-            className="sticky top-0 z-30 bg-blue-900 text-white"
-            style={branding?.primary_color_dark ? { backgroundColor: primaryDark } : undefined}
+            className="sticky top-0 z-30"
+            style={{ backgroundColor: topbarBg, color: topbarText }}
         >
             <div className="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-2 sm:px-6">
                 {/* Left: brand + mobile hamburger */}
@@ -115,16 +126,27 @@ export default function Topbar() {
                             stroke="currentColor"
                             strokeWidth="1.5"
                             fill="none"
+                            style={{ color: iconColor }}
                         >
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M4 7h16M4 12h16M4 17h16" />
+                            <path
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                                d="M4 7h16M4 12h16M4 17h16"
+                            />
                         </svg>
                     </button>
                     <div className="flex flex-col">
-                        <span className="text-lg font-semibold tracking-tight sm:text-xl">
+                        <span
+                            className="text-lg font-semibold tracking-tight sm:text-xl"
+                            style={{ color: topbarText }}
+                        >
                             {orgName}
                         </span>
                         {orgTagline && (
-                            <span className="hidden text-[11px] text-white/70 sm:inline-block">
+                            <span
+                                className="hidden text-[11px] sm:inline-block"
+                                style={{ color: topbarText }}
+                            >
                                 {orgTagline}
                             </span>
                         )}
@@ -135,7 +157,9 @@ export default function Topbar() {
                 <div className="hidden items-center gap-3 sm:flex">
                     <div className="flex items-center gap-2 rounded-xl border border-white/15 bg-white/10 px-3 py-1.5 text-sm">
                         <StatusDot ok={online} />
-                        <span className="tabular-nums">{timeLabel}</span>
+                        <span className="tabular-nums" style={{ color: topbarText }}>
+                            {timeLabel}
+                        </span>
                     </div>
 
                     <button
@@ -151,6 +175,7 @@ export default function Topbar() {
                             stroke="currentColor"
                             strokeWidth="1.5"
                             fill="none"
+                            style={{ color: iconColor }}
                         >
                             <path
                                 strokeLinecap="round"
@@ -158,7 +183,7 @@ export default function Topbar() {
                                 d="M16 8V4m0 0h4m-4 0l2 2M8 16v4m0 0H4m4 0-2-2M6 8a6 6 0 1 1 12 0 6 6 0 0 1-12 0Z"
                             />
                         </svg>
-                        <span>Sync</span>
+                        <span style={{ color: topbarText }}>Sync</span>
                     </button>
 
                     <button
@@ -172,6 +197,7 @@ export default function Topbar() {
                             stroke="currentColor"
                             strokeWidth="1.5"
                             fill="none"
+                            style={{ color: iconColor }}
                         >
                             <path
                                 strokeLinecap="round"
@@ -179,7 +205,7 @@ export default function Topbar() {
                                 d="M16.023 9.348h4.992V4.356M21 12a9 9 0 1 1-3-6.708"
                             />
                         </svg>
-                        <span>Refresh</span>
+                        <span style={{ color: topbarText }}>Refresh</span>
                     </button>
                 </div>
 
@@ -193,31 +219,36 @@ export default function Topbar() {
                         title="Account"
                     >
                         <div className="relative">
-                            <span className="absolute -right-0.5 -top-0.5 rounded-full bg-emerald-500 p-1 ring-2 ring-blue-900"></span>
+                            <span className="absolute -right-0.5 -top-0.5 rounded-full bg-emerald-500 p-1 ring-2 ring-[rgba(0,0,0,0.2)]" />
                             {Avatar}
                         </div>
                         <div className="hidden min-w-[9rem] text-left sm:block">
                             <div className="leading-tight">
-                                <div className="truncate text-sm font-medium">
+                                <div className="truncate text-sm font-medium" style={{ color: topbarText }}>
                                     {user?.name || '—'}
                                 </div>
-                                <div className="truncate text-[11px] text-white/70">{roleLabel}</div>
+                                <div className="truncate text-[11px]" style={{ color: topbarText }}>
+                                    {roleLabel}
+                                </div>
                             </div>
                         </div>
                         <svg
                             viewBox="0 0 24 24"
-                            className={`hidden h-4 w-4 text-white/70 sm:block transition ${menuOpen ? 'rotate-180' : ''
+                            className={`hidden h-4 w-4 sm:block transition ${menuOpen ? 'rotate-180' : ''
                                 }`}
                             fill="none"
                             stroke="currentColor"
                             strokeWidth="1.5"
+                            style={{ color: iconColor }}
                         >
                             <path strokeLinecap="round" strokeLinejoin="round" d="M6 9l6 6 6-6" />
                         </svg>
                     </button>
 
                     <div
-                        className={`absolute right-0 mt-2 w-64 origin-top-right rounded-2xl border border-gray-200 bg-gray-900 p-3 shadow-lg transition ${menuOpen ? 'scale-100 opacity-100' : 'pointer-events-none scale-95 opacity-0'
+                        className={`absolute right-0 mt-2 w-64 origin-top-right rounded-2xl border border-gray-200 bg-gray-900 p-3 shadow-lg transition ${menuOpen
+                                ? 'scale-100 opacity-100'
+                                : 'pointer-events-none scale-95 opacity-0'
                             }`}
                     >
                         <div className="mb-3 flex items-center gap-3">
@@ -244,6 +275,7 @@ export default function Topbar() {
                                     fill="none"
                                     stroke="currentColor"
                                     strokeWidth="1.5"
+                                    style={{ color: iconColor }}
                                 >
                                     <path
                                         strokeLinecap="round"
@@ -251,7 +283,7 @@ export default function Topbar() {
                                         d="M4.5 12a7.5 7.5 0 0 1 13.5-4.5M19.5 12A7.5 7.5 0 0 1 6 16.5M3 12h3m12 0h3"
                                     />
                                 </svg>
-                                Sync data
+                                <span>Sync data</span>
                             </button>
 
                             <button
@@ -264,6 +296,7 @@ export default function Topbar() {
                                     fill="none"
                                     stroke="currentColor"
                                     strokeWidth="1.5"
+                                    style={{ color: iconColor }}
                                 >
                                     <path
                                         strokeLinecap="round"
@@ -271,7 +304,7 @@ export default function Topbar() {
                                         d="M16.023 9.348h4.992V4.356M21 12a9 9 0 1 1-3-6.708"
                                     />
                                 </svg>
-                                Refresh page
+                                <span>Refresh page</span>
                             </button>
 
                             <div className="my-1 h-px bg-gray-100" />
@@ -286,6 +319,7 @@ export default function Topbar() {
                                     fill="none"
                                     stroke="currentColor"
                                     strokeWidth="1.5"
+                                    style={{ color: iconColor }}
                                 >
                                     <path
                                         strokeLinecap="round"
@@ -293,7 +327,7 @@ export default function Topbar() {
                                         d="M15.75 9V5.25A2.25 2.25 0 0 0 13.5 3h-6A2.25 2.25 0 0 0 5.25 5.25v13.5A2.25 2.25 0 0 0 7.5 21h6a2.25 2.25 0 0 0 2.25-2.25V15M12 8l-4 4m0 0 4 4m-4-4h12"
                                     />
                                 </svg>
-                                Logout
+                                <span>Logout</span>
                             </button>
                         </div>
                     </div>

@@ -59,7 +59,7 @@ export default function Orders() {
     const total = useMemo(() => rows.length, [rows])
 
     return (
-        <div className="p-4 md:p-6">
+        <div className="p-4 md:p-6 text-black">
             <header className="mb-4 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                     <FlaskConical className="h-5 w-5" />

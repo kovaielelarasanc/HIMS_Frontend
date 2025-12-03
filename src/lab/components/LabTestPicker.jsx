@@ -32,7 +32,7 @@ export default function LabTestPicker({ value = [], onChange }) {
     }
 
     return (
-        <div className="space-y-2">
+        <div className="space-y-2 text-black">
             <label className="text-sm font-medium">Select Tests</label>
             <div className="relative">
                 <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />

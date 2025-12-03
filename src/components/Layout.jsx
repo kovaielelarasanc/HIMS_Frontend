@@ -2,6 +2,7 @@ import { Outlet } from 'react-router-dom'
 import Sidebar from './Sidebar'
 import Topbar from './Topbar'
 import { useBranding } from '../branding/BrandingProvider'
+import AppFooter from './AppFooter'
 
 export default function Layout() {
     const { branding } = useBranding() || {}
@@ -34,9 +35,14 @@ export default function Layout() {
                         <div className="mx-auto w-full max-w-7xl px-4 py-4 sm:px-6 lg:px-8">
                             <Outlet />
                         </div>
+                        <div>
+                            <AppFooter />
+                        </div>
                     </main>
                 </div>
+               
             </div>
+             
         </div>
     )
 }

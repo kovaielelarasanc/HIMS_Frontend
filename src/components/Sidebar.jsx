@@ -1,3 +1,4 @@
+// FILE: frontend/src/layout/Sidebar.jsx (or wherever your Sidebar is)
 import { NavLink, useLocation } from 'react-router-dom'
 import { useMemo, useEffect, useState } from 'react'
 import { useAuth } from '../store/authStore'
@@ -32,7 +33,6 @@ import {
   RotateCcw,
   Factory,
   MapPin,
-  // NEW icons for LIS/RIS/OT/Billing
   FlaskConical,
   PackageOpen,
   Scan,
@@ -41,6 +41,9 @@ import {
   ScrollText,
   Stamp,
   Receipt,
+  Activity,
+  BarChart2,
+  Scissors,
 } from 'lucide-react'
 
 const defaultPrimary = '#2563eb'
@@ -61,7 +64,7 @@ const GROUPS = [
   {
     key: 'Dashboard',
     label: 'Dashboard',
-    icon: UsersIcon,
+    icon: LayoutDashboard,
     flatLink: { to: '/dashboard', reqAny: ['patients.view'] },
   },
   {
@@ -75,53 +78,33 @@ const GROUPS = [
   },
   {
     key: 'patients masters',
-    label: 'patients masters',
-    icon: UsersIcon,
+    label: 'Patients masters',
+    icon: ClipboardList,
     flatLink: { to: '/patients/masters', reqAny: ['patients.masters.view'] },
   },
   {
     key: 'MIS',
-    label: 'MIS',
-    icon: UsersIcon,
+    label: 'MIS & Analytics',
+    icon: BarChart2,
     flatLink: { to: '/mis', reqAny: ['mis.view'] },
   },
   {
     key: 'emr',
     label: 'Patients EMR',
-    icon: UsersIcon,
+    icon: FileText,
     flatLink: { to: '/emr', reqAny: ['emr.view'] },
   },
+
+  // Pharmacy
   {
     key: 'pharmacy',
     label: 'Pharmacy',
     icon: Pill,
     items: [
-     
-      // {
-      //   key: 'pharmacy-sales',
-      //   label: 'Counter Sale / OTC',
-      //   to: '/pharmacy/sales',       // direct sale (no Rx)
-      //   icon: ShoppingCart,
-      //   reqAny: ['pharmacy.sales.create', 'pharmacy.sales.view'],
-      // },
-      // {
-      //   key: 'pharmacy-billing',
-      //   label: 'Pharmacy Billing',
-      //   to: '/pharmacy/billing',     // billing console specific to pharmacy
-      //   icon: Receipt,
-      //   reqAny: ['pharmacy.billing.view', 'pharmacy.billing.create'],
-      // },
-      // {
-      //   key: 'pharmacy-returns',
-      //   label: 'Returns',
-      //   to: '/pharmacy/returns',     // sale-level returns / credit notes
-      //   icon: RotateCcw,
-      //   reqAny: ['pharmacy.returns.view', 'pharmacy.returns.manage'],
-      // },
       {
         key: 'pharmacy-inventory',
         label: 'Inventory & Stock',
-        to: '/pharmacy/inventory',   // your existing inventory module
+        to: '/pharmacy/inventory',
         icon: Boxes,
         reqAny: [
           'pharmacy.inventory.stock.view',
@@ -133,51 +116,23 @@ const GROUPS = [
         key: 'pharmacy-barcode',
         label: 'Barcode / QR Lookup',
         to: '/inventory/barcode-lookup',
-        icon: PackageOpen,
+        icon: Scan,
         reqAny: ['pharmacy.inventory.stock.view'],
       },
-      // {
-      //   key: 'pharmacy-barcode',
-      //   label: 'pharmacy rx-exp',
-      //   to: '/pharmacy/rx-explorer',
-      //   icon: PackageOpen,
-      //   reqAny: ['pharmacy.inventory.stock.view'],
-      // },
       {
         key: 'pharmacy RX',
-        label: 'pharmacy RX',
+        label: 'Pharmacy RX',
         to: '/pharmacy/rx',
-        icon: PackageOpen,
+        icon: NotebookPen,
         reqAny: ['pharmacy.inventory.stock.view'],
       },
       {
         key: 'pharmacy dispense',
-        label: 'pharmacy dispense',
+        label: 'Pharmacy Dispense',
         to: '/pharmacy/dispense',
-        icon: PackageOpen,
+        icon: ShoppingCart,
         reqAny: ['pharmacy.inventory.stock.view'],
       },
-      // {
-      //   key: 'IPD Pharma',
-      //   label: 'IPD PHARMA',
-      //   to: '/ipd/phramacy',
-      //   icon: PackageOpen,
-      //   reqAny: ['pharmacy.inventory.stock.view'],
-      // },
-      // {
-      //   key: 'Counter Pharma',
-      //   label: 'Counter',
-      //   to: '/counter/phramacy',
-      //   icon: PackageOpen,
-      //   reqAny: ['pharmacy.inventory.stock.view'],
-      // },
-      // {
-      //   key: 'OT pharma',
-      //   label: 'OT PHARMA',
-      //   to: '/ot/phramacy',
-      //   icon: PackageOpen,
-      //   reqAny: ['pharmacy.inventory.stock.view'],
-      // },
     ],
   },
 
@@ -185,7 +140,7 @@ const GROUPS = [
   {
     key: 'user-mgmt',
     label: 'User Management',
-    icon: UsersIcon,
+    icon: ShieldCheck,
     items: [
       {
         key: 'departments',
@@ -216,37 +171,6 @@ const GROUPS = [
     ],
   },
 
-  // // Templates
-  // {
-  //   key: 'templates',
-  //   label: 'Templates',
-  //   icon: LayoutTemplate,
-  //   items: [
-  //     {
-  //       key: 'tpl-list',
-  //       label: 'Templates',
-  //       to: '/templates',
-  //       icon: FileText,
-  //       reqAny: ['templates.view', 'templates.manage'],
-  //     },
-  //     {
-  //       key: 'tpl-generate',
-  //       label: 'Generate Reports',
-  //       to: '/templates/generate',
-  //       icon: ScrollText,
-  //       reqAny: ['templates.view', 'patients.view', 'emr.view'],
-  //     },
-  //     {
-  //       key: 'consents',
-  //       label: 'Patient Consents',
-  //       to: '/templates/consents',
-  //       icon: Stamp,
-  //       reqAny: ['consents.view', 'patients.view'],
-  //     },
-  //   ],
-  // },
-
-  // OP
   // OP
   {
     key: 'op',
@@ -264,14 +188,14 @@ const GROUPS = [
         key: 'appointments',
         label: 'Appointments',
         to: '/opd/appointments',
-        icon: NotebookPen,
+        icon: CalendarClock,
         reqAny: ['appointments.view', 'appointments.create'],
       },
       {
         key: 'triage',
         label: 'Vitals (Triage)',
         to: '/opd/triage',
-        icon: Clock3,
+        icon: Activity,
         reqAny: ['vitals.create'],
       },
       {
@@ -285,8 +209,7 @@ const GROUPS = [
         key: 'followups',
         label: 'Follow-ups (Waiting)',
         to: '/opd/followups',
-        icon: CalendarClock,
-        // front desk / OP staff who can manage waiting follow-ups
+        icon: Clock3,
         reqAny: ['appointments.view', 'appointments.update'],
       },
       {
@@ -294,20 +217,17 @@ const GROUPS = [
         label: 'No-show Reschedule',
         to: '/opd/no-shows',
         icon: History,
-        // same permission as appointment reschedule
         reqAny: ['appointments.view', 'appointments.update'],
       },
       {
-        key: 'OPD_Pharmacy',
-        label: 'OPD_pharmacy',
-        to: '/opd/phramacy',
-        icon: History,
-        // same permission as appointment reschedule
+        key: 'Doctor Fees',
+        label: 'Doctor Fees',
+        to: '/opd/doctor-fees',
+        icon: Receipt,
         reqAny: ['appointments.view', 'appointments.update'],
       },
     ],
   },
-
 
   // IP
   {
@@ -424,13 +344,13 @@ const GROUPS = [
   {
     key: 'ot',
     label: 'Operation Theatre',
-    icon: Scan,
+    icon: Scissors,
     items: [
       {
         key: 'ot-orders',
         label: 'OT Orders',
         to: '/ot/orders',
-        icon: Scan,
+        icon: Scissors,
         reqAny: ['ot.cases.view', 'ot.cases.create', 'ipd.view'],
       },
       {
@@ -472,18 +392,6 @@ const GROUPS = [
         icon: CalendarClock,
         reqAny: ['schedules.manage'],
       },
-      // {
-      //   key: 'opd-masters',
-      //   label: 'OPD Masters',
-      //   to: '/opd/masters',
-      //   icon: KeyRound,
-      //   reqAny: [
-      //     'pharmacy.masters.manage',
-      //     'lab.masters.manage',
-      //     'radiology.masters.manage',
-      //     'ipd.masters.manage',
-      //   ],
-      // },
       {
         key: 'ui-branding',
         label: 'Customization & Templates',
@@ -523,8 +431,8 @@ export default function Sidebar() {
 
   const primary = branding?.primary_color || defaultPrimary
   const sidebarBgColor = branding?.sidebar_bg_color || '#ffffff'
-  const sidebarTextColor = branding?.text_color || '#111827'
-  const iconColor = branding?.icon_color || primary
+  const sidebarTextColor = branding?.text_color || '#111827'    // ← sidebar text
+  const iconColor = branding?.icon_color || sidebarTextColor    // ← sidebar icon color
   const iconBgColor = branding?.icon_bg_color || 'rgba(37,99,235,0.08)'
   const activeBg = makeActiveBg(primary)
   const activeBorder = makeActiveBorder(primary)
@@ -674,7 +582,7 @@ export default function Sidebar() {
                   {orgName}
                 </div>
                 {orgTagline && (
-                  <div className="text-[10px] text-slate-500 leading-tight">
+                  <div className="text-[10px] leading-tight">
                     {orgTagline}
                   </div>
                 )}
@@ -688,7 +596,7 @@ export default function Sidebar() {
             className="md:hidden inline-flex h-8 w-8 items-center justify-center rounded-xl hover:bg-gray-50 active:scale-95 transition"
             aria-label="Close sidebar"
           >
-            <X className="h-5 w-5" />
+            <X className="h-5 w-5" style={{ color: iconColor }} />
           </button>
 
           {/* Collapse toggle (desktop) */}
@@ -698,7 +606,11 @@ export default function Sidebar() {
             aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             title={collapsed ? 'Expand' : 'Collapse'}
           >
-            {collapsed ? <ChevronRight className="h-5 w-5" /> : <ChevronLeft className="h-5 w-5" />}
+            {collapsed ? (
+              <ChevronRight className="h-5 w-5" style={{ color: iconColor }} />
+            ) : (
+              <ChevronLeft className="h-5 w-5" style={{ color: iconColor }} />
+            )}
           </button>
         </div>
 
@@ -734,10 +646,14 @@ export default function Sidebar() {
                 >
                   <GIcon
                     className="h-5 w-5 shrink-0"
-                    style={{ color: isGroupRouteActive(group) ? '#ffffff' : iconColor }}
+                    style={{
+                      color: isGroupRouteActive(group) ? '#ffffff' : iconColor,
+                    }}
                   />
                   {!collapsed && (
-                    <span className="transition-all duration-300">{group.label}</span>
+                    <span className="transition-all duration-300">
+                      {group.label}
+                    </span>
                   )}
                 </NavLink>
               )
@@ -765,15 +681,16 @@ export default function Sidebar() {
                   }}
                 >
                   <span className="flex items-center gap-3">
-                    <GIcon className="h-5 w-5 shrink-0" style={{ color: iconColor }} />
+                    <GIcon
+                      className="h-5 w-5 shrink-0"
+                      style={{ color: iconColor }}
+                    />
                     {!collapsed && <span className="font-medium">{group.label}</span>}
                   </span>
                   {!collapsed && (
                     <ChevronDown
-                      className={[
-                        'h-4 w-4 transition-transform',
-                        isOpen ? 'rotate-180' : '',
-                      ].join(' ')}
+                      className="h-4 w-4 transition-transform"
+                      style={{ color: iconColor }}
                     />
                   )}
                 </button>
@@ -831,7 +748,9 @@ export default function Sidebar() {
               Tip: Click the chevron to collapse the sidebar.
             </div>
           ) : (
-            <div className="grid place-items-center text-[10px] text-gray-400">v1.0</div>
+            <div className="grid place-items-center text-[10px] text-gray-400">
+              v1.0
+            </div>
           )}
         </div>
       </aside>

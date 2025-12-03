@@ -10,6 +10,7 @@ import {
     openPatientPrintWindow,
     abhaGenerate,
     abhaVerifyOtp,
+    listPatientAuditLogs,
 } from '../api/patients'
 
 function safe(val) {
@@ -28,6 +29,54 @@ function formatRefSource(code) {
     return map[code] || code
 }
 
+// ---- helpers for audit log UI ----
+
+function formatAuditValue(value) {
+    if (value === null || value === undefined) return '—'
+    if (typeof value === 'string') {
+        const trimmed = value.trim()
+        if (!trimmed) return '—'
+        return trimmed.length > 24 ? `${trimmed.slice(0, 24)}…` : trimmed
+    }
+    if (typeof value === 'number' || typeof value === 'boolean') {
+        return String(value)
+    }
+    try {
+        const json = JSON.stringify(value)
+        return json.length > 24 ? `${json.slice(0, 24)}…` : json
+    } catch {
+        return '—'
+    }
+}
+
+function getAuditChanges(log) {
+    const oldVals = log?.old_values || {}
+    const newVals = log?.new_values || {}
+
+    const keys = Array.from(
+        new Set([...Object.keys(oldVals || {}), ...Object.keys(newVals || {})])
+    )
+
+    const changes = []
+    for (const key of keys) {
+        const before = oldVals ? oldVals[key] : undefined
+        const after = newVals ? newVals[key] : undefined
+
+        const beforeStr =
+            before === undefined ? undefined : JSON.stringify(before)
+        const afterStr = after === undefined ? undefined : JSON.stringify(after)
+
+        if (beforeStr !== afterStr) {
+            changes.push({
+                field: key,
+                before,
+                after,
+            })
+        }
+    }
+    return changes
+}
+
 export default function PatientDetailDrawer({
     open,
     onClose,
@@ -37,10 +86,12 @@ export default function PatientDetailDrawer({
     const [fullPatient, setFullPatient] = useState(null)
     const [docs, setDocs] = useState([])
     const [consents, setConsents] = useState([])
+    const [auditLogs, setAuditLogs] = useState([])
 
     const [loading, setLoading] = useState(false)
     const [uploading, setUploading] = useState(false)
     const [savingConsent, setSavingConsent] = useState(false)
+    const [auditLoading, setAuditLoading] = useState(false)
     const [error, setError] = useState('')
 
     const [newDocFile, setNewDocFile] = useState(null)
@@ -87,6 +138,18 @@ export default function PatientDetailDrawer({
             setError(msg)
         } finally {
             setLoading(false)
+        }
+
+        // Load audit logs separately so failure here doesn't block patient view
+        setAuditLoading(true)
+        try {
+            const res = await listPatientAuditLogs(id, { limit: 30 })
+            setAuditLogs(res.data || [])
+        } catch (err) {
+            // Silent fail – audit endpoint might not be ready yet
+            // console.warn('Failed to load audit logs', err)
+        } finally {
+            setAuditLoading(false)
         }
     }
 
@@ -156,51 +219,8 @@ export default function PatientDetailDrawer({
         }
     }
 
-    // const handleAbhaGenerate = async () => {
-    //     if (!p.phone || !p.dob) {
-    //         setError('Need mobile and DOB to generate ABHA (demo).')
-    //         return
-    //     }
-    //     setError('')
-    //     try {
-    //         const res = await abhaGenerate({
-    //             name: `${p.first_name} ${p.last_name || ''}`.trim(),
-    //             dob: p.dob,
-    //             mobile: p.phone,
-    //         })
-    //         setAbhaTxnId(res.data.txnId)
-    //         setAbhaPhase('otp')
-    //         // res.data.debug_otp may contain demo OTP in dev
-    //     } catch (err) {
-    //         const msg =
-    //             err?.response?.data?.detail ||
-    //             err?.message ||
-    //             'Failed to generate ABHA OTP'
-    //         setError(msg)
-    //     }
-    // }
-
-    // const handleAbhaVerify = async () => {
-    //     if (!abhaTxnId || !abhaOtp) return
-    //     setError('')
-    //     try {
-    //         await abhaVerifyOtp({
-    //             txnId: abhaTxnId,
-    //             otp: abhaOtp,
-    //             patientId: p.id,
-    //         })
-    //         setAbhaPhase('idle')
-    //         setAbhaOtp('')
-    //         setAbhaTxnId('')
-    //         await loadAll(p.id)
-    //     } catch (err) {
-    //         const msg =
-    //             err?.response?.data?.detail ||
-    //             err?.message ||
-    //             'ABHA OTP verification failed'
-    //         setError(msg)
-    //     }
-    // }
+    // const handleAbhaGenerate = async () => { ... }
+    // const handleAbhaVerify = async () => { ... }
 
     // --- preview helpers: use axios with Authorization + blob ---
     const openPreview = async (doc) => {
@@ -346,45 +366,8 @@ export default function PatientDetailDrawer({
                         >
                             Print Info / PDF
                         </button>
-{/* 
-                        {!p.abha_number && (
-                            <button
-                                type="button"
-                                onClick={handleAbhaGenerate}
-                                className="px-3 py-1.5 text-xs rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
-                            >
-                                Generate ABHA (Demo)
-                            </button>
-                        )} */}
-                        {/* {p.abha_number && (
-                            <span className="px-3 py-1.5 text-xs rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-100">
-                                ABHA: {p.abha_number}
-                            </span>
-                        )} */}
+                        {/* ABHA demo buttons are commented out for now */}
                     </section>
-
-                    {/* {abhaPhase === 'otp' && (
-                        <section className="border border-emerald-200 bg-emerald-50 rounded-2xl p-3 sm:p-4 space-y-2">
-                            <p className="text-xs text-emerald-800 font-medium">
-                                Enter demo OTP (check debug_otp in response while developing).
-                            </p>
-                            <div className="flex flex-col sm:flex-row gap-2 items-stretch sm:items-center">
-                                <input
-                                    className="flex-1 border border-emerald-200 rounded-lg px-2 py-1 text-sm"
-                                    placeholder="Enter OTP"
-                                    value={abhaOtp}
-                                    onChange={(e) => setAbhaOtp(e.target.value)}
-                                />
-                                <button
-                                    type="button"
-                                    onClick={handleAbhaVerify}
-                                    className="px-3 py-1.5 text-xs rounded-lg bg-emerald-600 text-white hover:bg-emerald-700"
-                                >
-                                    Verify
-                                </button>
-                            </div>
-                        </section>
-                    )} */}
 
                     {/* Patient info + reference + address */}
                     <section className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -484,7 +467,9 @@ export default function PatientDetailDrawer({
                                         <span className="font-medium text-slate-600">
                                             Reference Source:{' '}
                                         </span>
-                                        <span className="font-medium text-slate-800">{formatRefSource(p.ref_source)}</span>
+                                        <span className="font-medium text-slate-800">
+                                            {formatRefSource(p.ref_source)}
+                                        </span>
                                     </div>
                                     <div>
                                         <span className="font-medium text-slate-600">
@@ -534,7 +519,9 @@ export default function PatientDetailDrawer({
                                         <span className="font-medium text-slate-600">
                                             Principal Member:{' '}
                                         </span>
-                                        <span className="font-medium text-slate-800">{safe(p.principal_member_name)}</span>
+                                        <span className="font-medium text-slate-800">
+                                            {safe(p.principal_member_name)}
+                                        </span>
                                     </div>
                                     <div>
                                         <span className="font-medium text-slate-600">
@@ -546,7 +533,9 @@ export default function PatientDetailDrawer({
                                         <span className="font-medium text-slate-600">
                                             Principal Member Address:{' '}
                                         </span>
-                                        <span className="font-medium text-slate-800">{safe(p.principal_member_address)}</span>
+                                        <span className="font-medium text-slate-800">
+                                            {safe(p.principal_member_address)}
+                                        </span>
                                     </div>
                                 </div>
                             </div>
@@ -707,6 +696,132 @@ export default function PatientDetailDrawer({
                                 </li>
                             ))}
                         </ul>
+                    </section>
+
+                    {/* Audit trail */}
+                    <section className="bg-white border border-slate-200 rounded-2xl p-3 sm:p-4 space-y-2">
+                        <div className="flex items-center justify-between gap-2">
+                            <h3 className="text-xs font-semibold text-slate-800">
+                                Activity / Audit Trail
+                            </h3>
+                            <div className="text-[11px] text-slate-500">
+                                {auditLoading
+                                    ? 'Loading…'
+                                    : auditLogs.length
+                                        ? `Latest ${auditLogs.length} change${auditLogs.length > 1 ? 's' : ''}`
+                                        : 'No history yet'}
+                            </div>
+                        </div>
+
+                        {auditLogs.length === 0 && !auditLoading && (
+                            <p className="text-[11px] text-slate-500">
+                                No change history captured yet for this patient.
+                            </p>
+                        )}
+
+                        {auditLogs.length > 0 && (
+                            <ol className="space-y-2">
+                                {auditLogs.map((log) => {
+                                    const changes = getAuditChanges(log)
+                                    const extraCount =
+                                        changes.length > 3 ? changes.length - 3 : 0
+                                    const actor =
+                                        log.user_name ||
+                                        log.user_email ||
+                                        (log.user_id
+                                            ? `User #${log.user_id}`
+                                            : 'System')
+                                    const ts = log.created_at
+                                        ? new Date(log.created_at).toLocaleString()
+                                        : ''
+
+                                    return (
+                                        <li
+                                            key={log.id}
+                                            className="flex gap-2"
+                                        >
+                                            <div className="flex flex-col items-center pt-1">
+                                                <div className="h-2 w-2 rounded-full bg-slate-900" />
+                                                <div className="mt-1 flex-1 w-px bg-slate-200" />
+                                            </div>
+                                            <div className="flex-1 rounded-xl border border-slate-200 bg-slate-50/80 px-2.5 py-2">
+                                                <div className="flex flex-wrap items-center justify-between gap-1">
+                                                    <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                                                        <span className="inline-flex items-center rounded-full bg-slate-900 text-white px-1.5 py-0.5 text-[10px] tracking-wide">
+                                                            {log.action || 'UPDATE'}
+                                                        </span>
+                                                        <span className="text-slate-700">
+                                                            {actor}
+                                                        </span>
+                                                    </div>
+                                                    {ts && (
+                                                        <div className="text-[10px] text-slate-500">
+                                                            {ts}
+                                                        </div>
+                                                    )}
+                                                </div>
+
+                                                {changes.length > 0 && (
+                                                    <ul className="mt-1.5 space-y-0.5 text-[11px] text-slate-700">
+                                                        {changes.slice(0, 3).map((ch) => (
+                                                            <li
+                                                                key={ch.field}
+                                                                className="flex flex-wrap gap-1"
+                                                            >
+                                                                <span className="font-medium">
+                                                                    {ch.field}
+                                                                </span>
+                                                                <span className="text-slate-500">
+                                                                    changed
+                                                                </span>
+                                                                <span className="line-through text-slate-400">
+                                                                    {formatAuditValue(ch.before)}
+                                                                </span>
+                                                                <span className="mx-1 text-slate-400">
+                                                                    →
+                                                                </span>
+                                                                <span className="font-medium">
+                                                                    {formatAuditValue(ch.after)}
+                                                                </span>
+                                                            </li>
+                                                        ))}
+                                                        {extraCount > 0 && (
+                                                            <li className="text-[10px] text-slate-500">
+                                                                +{extraCount} more field
+                                                                {extraCount > 1 ? 's' : ''} updated
+                                                            </li>
+                                                        )}
+                                                    </ul>
+                                                )}
+
+                                                {changes.length === 0 &&
+                                                    (log.old_values || log.new_values) && (
+                                                        <p className="mt-1.5 text-[11px] text-slate-600">
+                                                            Multiple fields updated.
+                                                        </p>
+                                                    )}
+
+                                                {(log.ip_address || log.user_agent) && (
+                                                    <p className="mt-1 text-[10px] text-slate-400">
+                                                        {log.ip_address && (
+                                                            <span>IP: {log.ip_address}</span>
+                                                        )}
+                                                        {log.ip_address && log.user_agent && (
+                                                            <span className="mx-1">·</span>
+                                                        )}
+                                                        {log.user_agent && (
+                                                            <span className="line-clamp-1">
+                                                                {log.user_agent}
+                                                            </span>
+                                                        )}
+                                                    </p>
+                                                )}
+                                            </div>
+                                        </li>
+                                    )
+                                })}
+                            </ol>
+                        )}
                     </section>
                 </div>
             </div>

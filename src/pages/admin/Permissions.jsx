@@ -58,7 +58,7 @@ export default function Permissions() {
   }
 
   return (
-    <section className="card">
+    <section className="card text-black">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold">Permissions</h3>
       </div>

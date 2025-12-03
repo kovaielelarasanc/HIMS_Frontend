@@ -116,7 +116,7 @@ export default function OrderDetail() {
     if (!order) return <div className="p-6">Order not found</div>
 
     return (
-        <div className="p-4 md:p-6 space-y-6">
+        <div className="p-4 md:p-6 space-y-6 text-black">
             <header className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h1 className="text-xl font-semibold">Lab Order #{order.id}</h1>

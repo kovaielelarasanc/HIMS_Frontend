@@ -1,20 +1,32 @@
-// FILE: src/patients/PatientFormModal.jsx
-import { useEffect, useMemo, useState } from 'react';
-import { createPatient, updatePatient } from '../api/patients';
+import { useEffect, useMemo, useState } from 'react'
+import { createPatient, updatePatient } from '../api/patients'
 
-const BLOOD_GROUPS = ['', 'A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-'];
-const MARITAL_STATUSES = ['', 'Single', 'Married', 'Widowed', 'Divorced'];
-const PATIENT_TYPES = ['none', 'camp', 'corporate', 'insurance'];
-const CREDIT_TYPES = ['', 'insurance', 'corporate', 'govt', 'other'];
+const BLOOD_GROUPS = ['', 'A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-']
+const MARITAL_STATUSES = ['', 'Single', 'Married', 'Widowed', 'Divorced']
+const PREFIXES = ['', 'Mr', 'Ms', 'Mrs', 'Dr', 'Baby', 'Master']
+
+// Fallback patient types if master not loaded
+const PATIENT_TYPES_FALLBACK = [
+    { code: 'OPD', name: 'OPD' },
+    { code: 'IPD', name: 'IPD' },
+    { code: 'EMERGENCY', name: 'Emergency' },
+    { code: 'HEALTH_CHECK', name: 'Health Check' },
+    { code: 'CAMP', name: 'Camp' },
+    { code: 'CORPORATE', name: 'Corporate' },
+    { code: 'INSURANCE', name: 'Insurance' },
+]
+
+const CREDIT_TYPES = ['', 'insurance', 'corporate', 'govt', 'other']
 
 const EMPTY_FORM = {
+    prefix: '',
     first_name: '',
     last_name: '',
     gender: '',
     dob: '',
     phone: '',
     email: '',
-    aadhar_last4: '',
+    // aadhar_last4 removed as per new model
     blood_group: '',
     marital_status: '',
     ref_source: '',
@@ -25,7 +37,7 @@ const EMPTY_FORM = {
     guardian_name: '',
     guardian_phone: '',
     guardian_relation: '',
-    patient_type: 'none',
+    patient_type: '',
     tag: '',
     religion: '',
     occupation: '',
@@ -49,24 +61,24 @@ const EMPTY_FORM = {
         pincode: '',
         country: 'India',
     },
-};
+}
 
 function makeEmptyForm() {
     // Simple deep clone to avoid shared reference issues
-    return JSON.parse(JSON.stringify(EMPTY_FORM));
+    return JSON.parse(JSON.stringify(EMPTY_FORM))
 }
 
 function mapPatientToForm(p) {
-    if (!p) return makeEmptyForm();
-    const addr = (p.addresses && p.addresses[0]) || null;
+    if (!p) return makeEmptyForm()
+    const addr = (p.addresses && p.addresses[0]) || null
     return {
+        prefix: p.prefix || '',
         first_name: p.first_name || '',
         last_name: p.last_name || '',
         gender: p.gender || '',
         dob: p.dob || '',
         phone: p.phone || '',
         email: p.email || '',
-        aadhar_last4: p.aadhar_last4 || '',
         blood_group: p.blood_group || '',
         marital_status: p.marital_status || '',
         ref_source: p.ref_source || '',
@@ -77,7 +89,7 @@ function mapPatientToForm(p) {
         guardian_name: p.guardian_name || '',
         guardian_phone: p.guardian_phone || '',
         guardian_relation: p.guardian_relation || '',
-        patient_type: p.patient_type || 'none',
+        patient_type: p.patient_type || '',
         tag: p.tag || '',
         religion: p.religion || '',
         occupation: p.occupation || '',
@@ -101,7 +113,13 @@ function mapPatientToForm(p) {
             pincode: addr?.pincode || '',
             country: addr?.country || 'India',
         },
-    };
+    }
+}
+
+function toIntOrNull(val) {
+    if (val === undefined || val === null || val === '') return null
+    const n = Number(val)
+    return Number.isNaN(n) ? null : n
 }
 
 export default function PatientFormModal({
@@ -111,74 +129,98 @@ export default function PatientFormModal({
     initialPatient,
     lookups,
 }) {
-    const [form, setForm] = useState(makeEmptyForm);
-    const [saving, setSaving] = useState(false);
-    const [error, setError] = useState('');
+    const [form, setForm] = useState(makeEmptyForm)
+    const [saving, setSaving] = useState(false)
+    const [error, setError] = useState('')
 
     const mode = useMemo(
         () => (initialPatient ? 'edit' : 'create'),
         [initialPatient]
-    );
+    )
 
     useEffect(() => {
         if (open) {
-            setError('');
+            setError('')
             if (initialPatient) {
-                setForm(mapPatientToForm(initialPatient));
+                setForm(mapPatientToForm(initialPatient))
             } else {
-                setForm(makeEmptyForm());
+                setForm(makeEmptyForm())
             }
         }
-    }, [open, initialPatient]);
+    }, [open, initialPatient])
 
-    if (!open) return null;
+    if (!open) return null
 
     const handleChange = (field) => (e) => {
-        const value = e.target.value;
-        setForm((prev) => ({ ...prev, [field]: value }));
-    };
+        let value = e.target.value
+
+        // Phone: only digits, max 10 to satisfy backend validator
+        if (field === 'phone') {
+            const digits = value.replace(/\D/g, '')
+            value = digits.slice(0, 10)
+        }
+
+        setForm((prev) => ({ ...prev, [field]: value }))
+    }
 
     const handleAddressChange = (field) => (e) => {
-        const value = e.target.value;
+        const value = e.target.value
         setForm((prev) => ({
             ...prev,
             address: { ...prev.address, [field]: value },
-        }));
-    };
+        }))
+    }
 
     const handleSubmit = async (e) => {
-        e.preventDefault();
-        setError('');
-        setSaving(true);
+        e.preventDefault()
+        setError('')
+        setSaving(true)
         try {
             const payload = {
                 ...form,
-                ref_doctor_id: form.ref_doctor_id || null,
-                credit_payer_id: form.credit_payer_id || null,
-                credit_tpa_id: form.credit_tpa_id || null,
-                credit_plan_id: form.credit_plan_id || null,
-                family_id: form.family_id || null,
-            };
-            let res;
-            if (mode === 'create') {
-                res = await createPatient(payload);
-            } else {
-                res = await updatePatient(initialPatient.id, payload);
+                // numeric IDs -> null if empty
+                ref_doctor_id: toIntOrNull(form.ref_doctor_id),
+                credit_payer_id: toIntOrNull(form.credit_payer_id),
+                credit_tpa_id: toIntOrNull(form.credit_tpa_id),
+                credit_plan_id: toIntOrNull(form.credit_plan_id),
+                family_id: toIntOrNull(form.family_id),
+                // normalize optional enums
+                credit_type: form.credit_type || null,
+                patient_type: form.patient_type || null,
             }
-            onSaved && onSaved(res.data);
-            onClose && onClose();
+
+            let res
+            if (mode === 'create') {
+                res = await createPatient(payload)
+            } else {
+                res = await updatePatient(initialPatient.id, payload)
+            }
+            onSaved && onSaved(res.data)
+            onClose && onClose()
         } catch (err) {
             const msg =
                 err?.response?.data?.detail ||
                 err?.message ||
-                'Failed to save patient';
-            setError(msg);
+                'Failed to save patient'
+            setError(msg)
         } finally {
-            setSaving(false);
+            setSaving(false)
         }
-    };
+    }
 
-    const { refSources, doctors, payers, tpas, creditPlans } = lookups || {};
+    const {
+        refSources,
+        doctors,
+        payers,
+        tpas,
+        creditPlans,
+        patientTypes,
+    } = lookups || {}
+
+    const patientTypeOptions =
+        patientTypes && patientTypes.length
+            ? patientTypes // [{id, code, name, ...}]
+            : PATIENT_TYPES_FALLBACK
 
     return (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-stretch justify-center">
@@ -243,6 +285,25 @@ export default function PatientFormModal({
                                 )}
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {/* Prefix (required) */}
+                                <div>
+                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                        Prefix<span className="text-red-500">*</span>
+                                    </label>
+                                    <select
+                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        value={form.prefix}
+                                        onChange={handleChange('prefix')}
+                                        required
+                                    >
+                                        {PREFIXES.map((p) => (
+                                            <option key={p} value={p}>
+                                                {p || 'Select'}
+                                            </option>
+                                        ))}
+                                    </select>
+                                </div>
+
                                 <div>
                                     <label className="block text-xs font-medium text-slate-600 mb-1">
                                         First Name<span className="text-red-500">*</span>
@@ -264,6 +325,7 @@ export default function PatientFormModal({
                                         onChange={handleChange('last_name')}
                                     />
                                 </div>
+
                                 <div>
                                     <label className="block text-xs font-medium text-slate-600 mb-1">
                                         Gender<span className="text-red-500">*</span>
@@ -283,13 +345,14 @@ export default function PatientFormModal({
 
                                 <div>
                                     <label className="block text-xs font-medium text-slate-600 mb-1">
-                                        Date of Birth
+                                        Date of Birth<span className="text-red-500">*</span>
                                     </label>
                                     <input
                                         type="date"
                                         className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
                                         value={form.dob || ''}
                                         onChange={handleChange('dob')}
+                                        required
                                     />
                                 </div>
                                 <div>
@@ -310,12 +373,13 @@ export default function PatientFormModal({
                                 </div>
                                 <div>
                                     <label className="block text-xs font-medium text-slate-600 mb-1">
-                                        Marital Status
+                                        Marital Status<span className="text-red-500">*</span>
                                     </label>
                                     <select
                                         className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
                                         value={form.marital_status}
                                         onChange={handleChange('marital_status')}
+                                        required
                                     >
                                         {MARITAL_STATUSES.map((st) => (
                                             <option key={st} value={st}>
@@ -327,50 +391,48 @@ export default function PatientFormModal({
 
                                 <div>
                                     <label className="block text-xs font-medium text-slate-600 mb-1">
-                                        Mobile
+                                        Mobile<span className="text-red-500">*</span>
                                     </label>
                                     <input
                                         className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
                                         value={form.phone}
                                         onChange={handleChange('phone')}
+                                        required
                                     />
+                                    <p className="mt-0.5 text-[11px] text-slate-400">
+                                        10 digit mobile number
+                                    </p>
                                 </div>
                                 <div>
                                     <label className="block text-xs font-medium text-slate-600 mb-1">
-                                        Email
+                                        Email<span className="text-red-500">*</span>
                                     </label>
                                     <input
                                         type="email"
                                         className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
                                         value={form.email}
                                         onChange={handleChange('email')}
+                                        required
                                     />
                                 </div>
 
                                 <div>
                                     <label className="block text-xs font-medium text-slate-600 mb-1">
-                                        Aadhaar Last 4
-                                    </label>
-                                    <input
-                                        maxLength={4}
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
-                                        value={form.aadhar_last4}
-                                        onChange={handleChange('aadhar_last4')}
-                                    />
-                                </div>
-
-                                <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
-                                        Patient Type
+                                        Patient Type<span className="text-red-500">*</span>
                                     </label>
                                     <select
                                         className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
-                                        value={form.patient_type}
+                                        value={form.patient_type || ''}
                                         onChange={handleChange('patient_type')}
+                                        required
                                     >
-                                        {PATIENT_TYPES.map((t) => (
-                                            <option key={t} value={t}>
-                                                {t || 'Select'}
+                                        <option value="">Select</option>
+                                        {patientTypeOptions.map((pt) => (
+                                            <option
+                                                key={pt.code || pt.name}
+                                                value={pt.code || pt.name}
+                                            >
+                                                {pt.name || pt.code}
                                             </option>
                                         ))}
                                     </select>
@@ -445,7 +507,9 @@ export default function PatientFormModal({
                                         {doctors?.map((d) => (
                                             <option key={d.id} value={d.id}>
                                                 {d.name}
-                                                {d.department_name ? ` (${d.department_name})` : ''}
+                                                {d.department_name
+                                                    ? ` (${d.department_name})`
+                                                    : ''}
                                             </option>
                                         ))}
                                     </select>
@@ -770,5 +834,5 @@ export default function PatientFormModal({
                 </form>
             </div>
         </div>
-    );
+    )
 }

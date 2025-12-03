@@ -58,7 +58,7 @@ export default function BedBoard() {
     }
 
     return (
-        <div className="p-4 space-y-3">
+        <div className="p-4 space-y-3 text-black">
             <h1 className="text-lg font-semibold">Bedboard</h1>
             {loading ? <div>Loading…</div> : err ? <div className="text-rose-700">{err}</div> : null}
             <div className="space-y-4">

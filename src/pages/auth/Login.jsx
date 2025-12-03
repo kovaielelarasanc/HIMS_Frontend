@@ -2,23 +2,40 @@
 import { useState, useMemo } from 'react'
 import { useAuth } from '../../store/authStore'
 import { useNavigate, useLocation } from 'react-router-dom'
-import { Mail, Lock, Eye, EyeOff, Loader2, ShieldCheck } from 'lucide-react'
+import {
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  Loader2,
+  ShieldCheck,
+  Building2,
+} from 'lucide-react'
 
 export default function Login() {
   const loc = useLocation()
+  const nav = useNavigate()
+  const login = useAuth((s) => s.login)
+
   const [form, setForm] = useState({
-    email: loc.state?.email || '',
-    password: ''
+    tenant_code:
+      loc.state?.tenant_code ||
+      localStorage.getItem('tenant_code') ||
+      localStorage.getItem('pending_tenant_code') ||
+      '',
+    email: loc.state?.email || localStorage.getItem('pending_email') || '',
+    password: '',
   })
   const [err, setErr] = useState('')
   const [loading, setLoading] = useState(false)
   const [showPass, setShowPass] = useState(false)
 
-  const login = useAuth(s => s.login)
-  const nav = useNavigate()
-
   const canSubmit = useMemo(
-    () => form.email.trim() && form.password.trim() && !loading,
+    () =>
+      form.tenant_code.trim() &&
+      form.email.trim() &&
+      form.password.trim() &&
+      !loading,
     [form, loading]
   )
 
@@ -28,11 +45,24 @@ export default function Login() {
     setErr('')
     setLoading(true)
     try {
-      await login({ email: form.email.trim(), password: form.password })
+      await login({
+        tenant_code: form.tenant_code.trim(),
+        email: form.email.trim(),
+        password: form.password,
+      })
+
+      // Save pending for OTP step
       localStorage.setItem('pending_email', form.email.trim())
-      nav('/auth/verify', { state: { email: form.email.trim() } })
+      localStorage.setItem('pending_tenant_code', form.tenant_code.trim())
+
+      nav('/auth/verify', {
+        state: {
+          email: form.email.trim(),
+          tenant_code: form.tenant_code.trim(),
+        },
+      })
     } catch (e) {
-      setErr(e?.response?.data?.detail || 'Invalid email or password')
+      setErr(e?.response?.data?.detail || 'Invalid credentials')
     } finally {
       setLoading(false)
     }
@@ -55,20 +85,54 @@ export default function Login() {
             <div className="mb-6 flex items-center justify-between gap-3">
               <div className="flex items-center gap-3">
                 <div className="grid h-10 w-10 place-items-center rounded-xl bg-blue-600 text-white ring-8 ring-blue-50">
-                  <span className="text-sm font-bold tracking-tight">NDH</span>
+                  <span className="text-sm font-bold tracking-tight">
+                    NDH
+                  </span>
                 </div>
                 <div>
-                  <h1 className="text-lg font-semibold tracking-tight">NUTRYAH's HIMS &amp; EMR</h1>
-                  <p className="text-xs text-gray-500">Secure sign-in with email + OTP</p>
+                  <h1 className="text-lg font-semibold tracking-tight">
+                    NUTRYAH&apos;s HIMS &amp; EMR
+                  </h1>
+                  <p className="text-xs text-gray-500">
+                    Multi-tenant login with Hospital Code + Email + OTP
+                  </p>
                 </div>
               </div>
               <ShieldCheck className="h-6 w-6 text-emerald-600" />
             </div>
 
             <form onSubmit={submit} className="space-y-4" aria-busy={loading}>
+              {/* Tenant / Hospital Code */}
+              <label className="block">
+                <span className="mb-1 block text-sm text-gray-600">
+                  Hospital Code
+                </span>
+                <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 focus-within:ring-2 focus-within:ring-blue-200">
+                  <Building2 className="h-4 w-4 text-gray-400" />
+                  <input
+                    className="w-full bg-transparent outline-none placeholder:text-gray-400 uppercase"
+                    placeholder="KGH001"
+                    value={form.tenant_code}
+                    onChange={(e) =>
+                      setForm((f) => ({
+                        ...f,
+                        tenant_code: e.target.value.toUpperCase(),
+                      }))
+                    }
+                    required
+                    disabled={loading}
+                  />
+                </div>
+                <p className="mt-1 text-[11px] text-gray-500">
+                  Hospital / Clinic code assigned by NUTRYAH (Tenant Code).
+                </p>
+              </label>
+
               {/* Email */}
               <label className="block">
-                <span className="mb-1 block text-sm text-gray-600">Email</span>
+                <span className="mb-1 block text-sm text-gray-600">
+                  Email
+                </span>
                 <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 focus-within:ring-2 focus-within:ring-blue-200">
                   <Mail className="h-4 w-4 text-gray-400" />
                   <input
@@ -77,7 +141,9 @@ export default function Login() {
                     type="email"
                     autoComplete="email"
                     value={form.email}
-                    onChange={(e) => setForm({ ...form, email: e.target.value })}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, email: e.target.value }))
+                    }
                     required
                     disabled={loading}
                   />
@@ -86,7 +152,9 @@ export default function Login() {
 
               {/* Password */}
               <label className="block">
-                <span className="mb-1 block text-sm text-gray-600">Password</span>
+                <span className="mb-1 block text-sm text-gray-600">
+                  Password
+                </span>
                 <div className="flex items-center gap-2 rounded-xl border border-gray-200 bg-white px-3 py-2 focus-within:ring-2 focus-within:ring-blue-200">
                   <Lock className="h-4 w-4 text-gray-400" />
                   <input
@@ -95,7 +163,9 @@ export default function Login() {
                     type={showPass ? 'text' : 'password'}
                     autoComplete="current-password"
                     value={form.password}
-                    onChange={(e) => setForm({ ...form, password: e.target.value })}
+                    onChange={(e) =>
+                      setForm((f) => ({ ...f, password: e.target.value }))
+                    }
                     required
                     disabled={loading}
                   />
@@ -107,7 +177,11 @@ export default function Login() {
                     tabIndex={-1}
                     disabled={loading}
                   >
-                    {showPass ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {showPass ? (
+                      <EyeOff className="h-4 w-4" />
+                    ) : (
+                      <Eye className="h-4 w-4" />
+                    )}
                   </button>
                 </div>
               </label>
@@ -137,7 +211,8 @@ export default function Login() {
 
               {/* Tiny help */}
               <p className="text-center text-xs text-gray-500">
-                Tip: You’ll receive a 6-digit OTP in your email. Keep this tab open.
+                Tip: You&apos;ll receive a 6-digit OTP in your email. Keep this
+                tab open.
               </p>
             </form>
 
@@ -168,12 +243,12 @@ export default function Login() {
 
           {/* Footer brand strip */}
           <div className="mx-auto mt-6 text-center text-xs text-gray-500">
-            © {new Date().getFullYear()} NUTRYAH — Secure Access
+            © {new Date().getFullYear()} NUTRYAH — Multi-tenant Secure Access
           </div>
         </div>
       </div>
 
-      {/* keyframes for the indeterminate bar (uses arbitrary value syntax) */}
+      {/* keyframes for the indeterminate bar */}
       <style>{`
         @keyframes progress {
           0% { transform: translateX(-120%); }

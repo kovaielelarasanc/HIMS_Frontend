@@ -124,7 +124,7 @@ export default function OtOrderDetail() {
     const nexts = statusNextActions(order.status)
 
     return (
-        <div className="p-4 space-y-6">
+        <div className="p-4 space-y-6 text-black">
             <header className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h1 className="text-xl font-semibold">OT Case #{order.id}</h1>
@@ -180,17 +180,33 @@ export default function OtOrderDetail() {
 
             <section className="rounded-xl border bg-white p-4 space-y-4">
                 <div className="flex items-center justify-between">
-                    <h3 className="font-medium">Attachments</h3>
+                    <h3 className="font-medium">Attachments & Anaesthesia Records</h3>
                 </div>
 
                 {canUpload && (
                     <div className="grid gap-3 md:grid-cols-[1fr_auto]">
                         <div className="grid gap-2 sm:grid-cols-[2fr_1fr]">
-                            <input type="file" ref={fileRef} className="input" onChange={onUpload} aria-label="Upload file" />
-                            <input className="input" placeholder="Note (optional)" value={note} onChange={(e) => setNote(e.target.value)} />
+                            <input
+                                type="file"
+                                ref={fileRef}
+                                className="input"
+                                onChange={onUpload}
+                                aria-label="Upload file"
+                            />
+                            <input
+                                className="input"
+                                placeholder="Note (e.g., Anaesthesia chart, Consent, OT notes)"
+                                value={note}
+                                onChange={(e) => setNote(e.target.value)}
+                            />
                         </div>
                         <div className="flex gap-2">
-                            <input className="input" placeholder="or paste link (https://...)" value={linkUrl} onChange={(e) => setLinkUrl(e.target.value)} />
+                            <input
+                                className="input"
+                                placeholder="or paste link (https://...)"
+                                value={linkUrl}
+                                onChange={(e) => setLinkUrl(e.target.value)}
+                            />
                             <button className="btn-ghost" disabled={busy} onClick={addLink}>
                                 <Paperclip className="h-4 w-4 mr-2" /> Add Link
                             </button>
@@ -198,12 +214,86 @@ export default function OtOrderDetail() {
                     </div>
                 )}
 
-                <div className="rounded-lg border">
-                    <div className="p-3 text-sm text-gray-500">
-                        Uploaded files and links are stored against this case. Use the upload field to add new items.
+                <div className="rounded-lg border bg-gray-50">
+                    <div className="p-3 text-sm text-gray-600">
+                        Upload anaesthesia records, OT notes, scanned consent forms and other
+                        reports. Images & PDFs can be previewed and downloaded for NABH audit.
                     </div>
+
+                    {Array.isArray(order.attachments) && order.attachments.length > 0 ? (
+                        <div className="divide-y border-t bg-white">
+                            {order.attachments.map((att) => {
+                                const url = att.file_url || att.url
+                                const isImage =
+                                    url && /\.(png|jpe?g|gif|webp)$/i.test(url)
+                                const isPdf = url && /\.pdf(\?|$)/i.test(url)
+
+                                return (
+                                    <div
+                                        key={att.id}
+                                        className="p-3 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"
+                                    >
+                                        <div className="flex-1 min-w-0">
+                                            <div className="text-sm font-medium break-all">
+                                                {att.note || 'Attachment'}
+                                            </div>
+                                            <div className="text-xs text-gray-500 break-all">
+                                                {url}
+                                            </div>
+                                            <div className="text-xs text-gray-400 mt-0.5">
+                                                Added: {fmtDT(att.created_at)}
+                                            </div>
+
+                                            {isImage && (
+                                                <div className="mt-2">
+                                                    <img
+                                                        src={url}
+                                                        alt={att.note || 'attachment preview'}
+                                                        className="max-h-32 rounded border"
+                                                    />
+                                                </div>
+                                            )}
+
+                                            {isPdf && (
+                                                <div className="mt-2">
+                                                    <iframe
+                                                        src={url}
+                                                        title="Attachment preview"
+                                                        className="h-40 w-full rounded border"
+                                                    />
+                                                </div>
+                                            )}
+                                        </div>
+                                        <div className="flex gap-2 sm:flex-col md:flex-row sm:items-end sm:justify-end shrink-0">
+                                            <a
+                                                href={url}
+                                                target="_blank"
+                                                rel="noreferrer"
+                                                className="btn-ghost text-xs"
+                                            >
+                                                Open
+                                            </a>
+                                            <a
+                                                href={url}
+                                                download
+                                                className="btn text-xs"
+                                            >
+                                                Download
+                                            </a>
+                                        </div>
+                                    </div>
+                                )
+                            })}
+                        </div>
+                    ) : (
+                        <div className="p-3 text-xs text-gray-400 border-t">
+                            No attachments yet for this OT case.
+                        </div>
+                    )}
                 </div>
             </section>
+
+
         </div>
     )
 }

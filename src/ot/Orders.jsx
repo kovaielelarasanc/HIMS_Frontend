@@ -48,7 +48,7 @@ export default function OtOrders() {
     const total = useMemo(() => rows.length, [rows])
 
     return (
-        <div className="p-4 space-y-6">
+        <div className="p-4 space-y-6 text-black">
             <header className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h1 className="text-xl font-semibold">OT Orders</h1>

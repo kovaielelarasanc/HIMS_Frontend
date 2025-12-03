@@ -6,11 +6,15 @@ export const getPatientById = (id) => API.get(`/patients/${id}`);
 
 // -------- core patients --------
 
-export function listPatients(q = '') {
-    const params = q ? { q } : {};
-    return API.get('/patients', { params });
+export const listPatients = (queryOrParams) => {
+    let params = {}
+    if (typeof queryOrParams === 'string') {
+        if (queryOrParams) params.q = queryOrParams
+    } else if (queryOrParams && typeof queryOrParams === 'object') {
+        params = queryOrParams
+    }
+    return API.get('/patients', { params })
 }
-
 export function getPatient(id) {
     return API.get(`/patients/${id}`);
 }
@@ -135,3 +139,61 @@ export function abhaVerifyOtp({ txnId, otp, patientId }) {
         }
     );
 }
+
+
+
+export function exportPatientsExcel(params) {
+    // params: { from_date, to_date, patient_type? }
+    return API.get('/patients/export', {
+        params,
+        responseType: 'blob',
+    })
+}
+
+// -------- Masters used in PatientForm --------
+
+
+// Optional: if you want a separate Patient Type master screen
+export const listPatientTypes = (params = {}) =>
+    API.get('/patient-types', { params })
+
+export const createPatientType = (payload) =>
+    API.post('/patient-types', payload)
+
+export const updatePatientType = (id, payload) =>
+    API.put(`/patient-types/${id}`, payload)
+
+export const deactivatePatientType = (id) =>
+    API.delete(`/patient-types/${id}`)
+
+
+
+
+// src/api/patients.js
+export function listPatientAuditLogs(patientId, params = {}) {
+    const query = {
+        table_name: 'patients',
+        record_id: patientId,
+        ...params,
+    };
+    return API.get('/audit-logs', { params: query });  // 👈 GET
+}
+
+
+
+
+
+
+
+
+// -------- audit logs (per-patient) --------
+// Uses generic /audit-logs endpoint filtered by table_name + record_id.
+// Backend: GET /audit-logs?table_name=patients&record_id=<patientId>&limit=30
+// export function listPatientAuditLogs(patientId, params = {}) {
+//     const query = {
+//         table_name: 'patients',
+//         record_id: patientId,
+//         ...params,
+//     };
+//     return API.get('/audit-logs', { params: query });
+// }

@@ -45,7 +45,7 @@ export default function RisOrders() {
     }, [q])
 
     return (
-        <div className="space-y-5">
+        <div className="space-y-5 text-black">
             <header className="flex flex-wrap items-center justify-between gap-3">
                 <div>
                     <h1 className="text-xl font-semibold">Radiology Orders</h1>
