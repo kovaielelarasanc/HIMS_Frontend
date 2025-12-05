@@ -6,7 +6,7 @@ import Login from './pages/auth/Login'
 import RegisterAdmin from './pages/auth/RegisterAdmin'
 import VerifyOtp from './pages/auth/VerifyOtp'
 import AdminDashboard from './pages/dashboards/AdminDashboard'
-import UserDashboard from './pages/dashboards/UserDashboard'
+
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 import Roles from './pages/admin/Roles'
@@ -24,15 +24,13 @@ import BedBoard from './ipd/Bedboard'
 
 import { Toaster } from 'sonner'
 
-import LabOrders from './lab/Orders'
+
 import LabOrderDetail from './lab/OrderDetail'
 import LabMasters from './lab/Masters'
 import RisOrders from './ris/Orders'
 import RisMasters from './ris/Masters'
 import RisOrderDetail from './ris/OrderDetail'
-import OtOrders from './ot/Orders'
-import OtOrderDetail from './ot/OrderDetail'
-import OtMasters from './ot/Masters'
+
 
 import InvoiceDetail from './billing/InvoiceDetail'
 import PatientEmrTimeline from './emr/PatientEmrTimeline'
@@ -73,6 +71,12 @@ import PharmacyCounterOrder from './pharmacy/PharmacyCounterOrder'
 import OtConsumableOrder from './pharmacy/OtConsumableOrder'
 import OpdPharmacyOrder from './opd/OpdPharmacyPrescriptionTab'
 import DoctorFees from './opd/DoctorFees'
+import LisMasters from './lab/LisMasters'
+import LabReportPrint from './lab/LabReportPrint'
+import OrdersList from './lab/Orders'
+import OtTheatreSchedulePage from './ot/OtTheatreSchedulePage'
+import OtMastersPage from './ot/OtMastersPage'
+import OtCaseDetailPage from './ot/OtCaseDetailPage'
 
 export default function App() {
     useEffect(() => {
@@ -148,17 +152,20 @@ export default function App() {
                         <Route path="/ipd/masters" element={<IpMasters />} />
 
                         {/* Lab / RIS / OT */}
-                        <Route path="/lab/orders" element={<LabOrders />} />
+                        <Route path="/lab/orders" element={<OrdersList />} />
                         <Route path="/lab/orders/:id" element={<LabOrderDetail />} />
                         <Route path="/lab/masters" element={<LabMasters />} />
+                        <Route path="/lab/service/masters" element={<LisMasters />} />
+                        <Route path="/lab/orders/:id/print" element={<LabReportPrint  />} />
 
                         <Route path="/ris/orders" element={<RisOrders />} />
                         <Route path="/ris/orders/:id" element={<RisOrderDetail />} />
                         <Route path="/ris/masters" element={<RisMasters />} />
 
-                        <Route path="/ot/orders" element={<OtOrders />} />
-                        <Route path="/ot/orders/:id" element={<OtOrderDetail />} />
-                        <Route path="/ot/masters" element={<OtMasters />} />
+
+                        <Route path="/ot/schedule" element={<OtTheatreSchedulePage />} />
+                        <Route path="/ot/masters" element={<OtMastersPage />} />
+                        <Route path="/ot/cases/:caseId" element={<OtCaseDetailPage />} />
 
                         {/* Billing */}
                         <Route path="/billing" element={<BillingConsole />} />

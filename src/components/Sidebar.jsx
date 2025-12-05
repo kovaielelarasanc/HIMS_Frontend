@@ -305,6 +305,13 @@ const GROUPS = [
         icon: KeyRound,
         reqAny: ['lab.masters.manage'],
       },
+      {
+        key: 'LAB_SERVICE MASTER',
+        label: 'LAB_SERVICE MASTER',
+        to: '/lab/service/masters',
+        icon: KeyRound,
+        reqAny: ['lab.masters.manage'],
+      },
     ],
   },
 
@@ -347,19 +354,20 @@ const GROUPS = [
     icon: Scissors,
     items: [
       {
-        key: 'ot-orders',
-        label: 'OT Orders',
-        to: '/ot/orders',
+        key: 'ot_masters',
+        label: 'ot_masters',
+        to: '/ot/masters',
         icon: Scissors,
         reqAny: ['ot.cases.view', 'ot.cases.create', 'ipd.view'],
       },
       {
-        key: 'ot-masters',
-        label: 'OT Masters',
-        to: '/ot/masters',
-        icon: KeyRound,
-        reqAny: ['ot.masters.view', 'ot.masters.manage'],
+        key: 'ot-schedule',
+        label: 'ot_schedule',
+        to: '/ot/schedule',
+        icon: Scissors,
+        reqAny: ['ot.cases.view', 'ot.cases.create', 'ipd.view'],
       },
+    
     ],
   },
 

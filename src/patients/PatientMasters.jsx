@@ -22,7 +22,9 @@ const PAYER_TYPES = [
 
 export default function PatientMasters() {
     const [tab, setTab] = useState('payers')
-    const canView = useCan('patients.masters.view')
+    const canMastersView = useCan('patients.masters.view')
+    const canPatientsView = useCan('patients.view')
+    const canView = canMastersView || canPatientsView
 
     if (!canView) {
         return (
@@ -87,8 +89,8 @@ function MastersTabButton({ label, active, onClick }) {
         <button
             onClick={onClick}
             className={`px-3 py-2 text-sm transition ${active
-                    ? 'border-b-2 border-blue-600 font-medium text-blue-700'
-                    : 'text-gray-600 hover:text-gray-800'
+                ? 'border-b-2 border-blue-600 font-medium text-blue-700'
+                : 'text-gray-600 hover:text-gray-800'
                 }`}
         >
             {label}
@@ -229,8 +231,8 @@ function PatientTypesTab() {
                                     <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
                                         <span
                                             className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] ${t.is_active
-                                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                                                    : 'bg-gray-100 text-gray-500 border border-gray-200'
+                                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                                : 'bg-gray-100 text-gray-500 border border-gray-200'
                                                 }`}
                                         >
                                             {t.is_active ? 'Active' : 'Inactive'}
@@ -305,8 +307,8 @@ function PatientTypesTab() {
                                     <td className="p-2">
                                         <span
                                             className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] ${t.is_active
-                                                    ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                                                    : 'bg-gray-100 text-gray-500 border border-gray-200'
+                                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
+                                                : 'bg-gray-100 text-gray-500 border border-gray-200'
                                                 }`}
                                         >
                                             {t.is_active ? 'Active' : 'Inactive'}
@@ -555,7 +557,11 @@ function PatientTypeModal({ existing, onClose, onSaved, onDeleted }) {
 
 function PayersTab() {
     const canView = useCan('patients.masters.view')
-    const canManage = useCan('patients.masters.manage')
+    const canMastersView = useCan('patients.masters.view')
+    const canPatientsView = useCan('patients.masters.manage')
+    const canManage = canMastersView || canPatientsView
+    
+    
 
     const [items, setItems] = useState([])
     const [loading, setLoading] = useState(false)

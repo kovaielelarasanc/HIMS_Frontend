@@ -18,3 +18,10 @@ export function uploadBrandingAssets(formData) {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
 }
+
+// NEW: upload letterhead (PDF / image / doc)
+export function uploadLetterhead(formData) {
+  return API.post('/settings/ui-branding/letterhead', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}

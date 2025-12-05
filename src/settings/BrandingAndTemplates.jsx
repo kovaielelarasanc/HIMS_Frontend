@@ -3,7 +3,11 @@ import { useEffect, useState } from 'react'
 import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 
-import { updateBranding, uploadBrandingAssets } from '../api/settings'
+import {
+    updateBranding,
+    uploadBrandingAssets,
+    uploadLetterhead,        // ✅ ADD THIS
+} from '../api/settings'
 import { useBranding } from '../branding/BrandingProvider'
 
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
@@ -49,10 +53,13 @@ export default function BrandingAndTemplates() {
     const [faviconFile, setFaviconFile] = useState(null)
     const [headerFile, setHeaderFile] = useState(null)
     const [footerFile, setFooterFile] = useState(null)
+    const [letterheadFile, setLetterheadFile] = useState(null) // ✅ NEW
+    const [letterheadPosition, setLetterheadPosition] = useState('background') // ✅ NEW
 
     // ---------- INIT FROM BACKEND ----------
     useEffect(() => {
         if (!branding) return
+        setLetterheadPosition(branding.letterhead_position || 'background')
         setForm({
             // --- Organisation ---
             org_name: branding.org_name || '',
@@ -88,6 +95,7 @@ export default function BrandingAndTemplates() {
                 typeof branding.pdf_show_page_number === 'boolean'
                     ? branding.pdf_show_page_number
                     : true,
+
         })
     }, [branding])
 
@@ -149,6 +157,31 @@ export default function BrandingAndTemplates() {
     const handleSavePdfSettings = async (e) => {
         e.preventDefault()
         await saveBranding()
+    }
+    const handleUploadLetterhead = async () => {
+        if (!letterheadFile) {
+            toast.warning('Select a letterhead file first')
+            return
+        }
+
+        const fd = new FormData()
+        fd.append('file', letterheadFile)
+        fd.append('position', letterheadPosition)   // ✅ send choice
+
+        try {
+            const { data } = await uploadLetterhead(fd)
+            setBranding?.(data)
+            toast.success('Letterhead updated successfully')
+            setLetterheadFile(null)
+        } catch (err) {
+            console.error('Failed to upload letterhead', err)
+            const msg =
+                err?.response?.data?.detail ||
+                err?.response?.data?.message ||
+                err?.message ||
+                'Could not upload letterhead'
+            toast.error(msg)
+        }
     }
 
     // ---------- FILE UPLOADS (LOGOS + HEADER/FOOTER) ----------
@@ -604,6 +637,9 @@ export default function BrandingAndTemplates() {
                                         {uploadingFiles ? 'Uploading…' : 'Upload artwork'}
                                     </Button>
                                 </div>
+                                {/* FULL-PAGE LETTERHEAD UPLOAD */}
+
+
                             </form>
 
                             {/* PDF behaviour (heights, page number) */}
@@ -676,6 +712,67 @@ export default function BrandingAndTemplates() {
                                     </Button>
                                 </div>
                             </form>
+
+                            <div className="space-y-2">
+                                <Label className="text-xs font-medium text-slate-600">
+                                    Upload Letterhead (PDF / JPG / PNG / DOCX)
+                                </Label>
+
+                                <div className="border border-dashed p-3 rounded-xl space-y-3">
+                                    {branding?.letterhead_url && (
+                                        <p className="text-xs text-slate-600">
+                                            Current file:{' '}
+                                            <span className="font-medium">
+                                                {branding.letterhead_url.split('/').pop()}
+                                            </span>
+                                        </p>
+                                    )}
+
+                                    {/* Position options */}
+                                    <div className="flex flex-wrap items-center gap-4 text-xs text-slate-600">
+                                        <label className="inline-flex items-center gap-1">
+                                            <input
+                                                type="radio"
+                                                className="h-3 w-3"
+                                                value="background"
+                                                checked={letterheadPosition === 'background'}
+                                                onChange={(e) => setLetterheadPosition(e.target.value)}
+                                            />
+                                            <span>Full-page background</span>
+                                        </label>
+                                        <label className="inline-flex items-center gap-1">
+                                            <input
+                                                type="radio"
+                                                className="h-3 w-3"
+                                                value="none"
+                                                checked={letterheadPosition === 'none'}
+                                                onChange={(e) => setLetterheadPosition(e.target.value)}
+                                            />
+                                            <span>Disable letterhead background (use header/footer only)</span>
+                                        </label>
+                                        {/* if later you support more, add here */}
+                                    </div>
+
+                                    <Input
+                                        type="file"
+                                        accept="image/*,application/pdf,.doc,.docx"
+                                        onChange={(e) => setLetterheadFile(e.target.files?.[0] || null)}
+                                    />
+
+                                    {letterheadFile && (
+                                        <p className="text-xs mt-1 text-slate-600">{letterheadFile.name}</p>
+                                    )}
+
+                                    <Button
+                                        disabled={!letterheadFile}
+                                        onClick={handleUploadLetterhead}
+                                        className="mt-2"
+                                    >
+                                        Upload Letterhead
+                                    </Button>
+                                </div>
+                            </div>
+
                         </TabsContent>
                     </Tabs>
                 </CardContent>
