@@ -44,6 +44,10 @@ import {
   Activity,
   BarChart2,
   Scissors,
+
+  Settings2,
+  CalendarDays,
+
 } from 'lucide-react'
 
 const defaultPrimary = '#2563eb'
@@ -351,30 +355,29 @@ const GROUPS = [
   {
     key: 'ot',
     label: 'Operation Theatre',
-    icon: Scissors,
+    icon: Scissors, // main OT section
     items: [
       {
-        key: 'ot_masters',
-        label: 'ot_masters',
+        key: 'ot-masters',
+        label: 'OT Masters',
         to: '/ot/masters',
-        icon: Scissors,
+        icon: Settings2, // config / setup
         reqAny: ['ot.cases.view', 'ot.cases.create', 'ipd.view'],
       },
       {
         key: 'ot-schedule',
-        label: 'ot_schedule',
+        label: 'OT Schedule',
         to: '/ot/schedule',
-        icon: Scissors,
+        icon: CalendarDays, // day-wise schedule
         reqAny: ['ot.cases.view', 'ot.cases.create', 'ipd.view'],
       },
       {
-        key: 'ot-Log',
-        label: 'OT LOGS',
+        key: 'ot-logs',
+        label: 'OT Logs / Register',
         to: '/ot/logs',
-        icon: Scissors,
+        icon: ClipboardList, // log / register
         reqAny: ['ot.cases.view', 'ot.cases.create', 'ipd.view'],
       },
-    
     ],
   },
 
