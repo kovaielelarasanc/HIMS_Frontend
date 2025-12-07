@@ -1,29 +1,41 @@
+
 // frontend/src/opd/components/DoctorPicker.jsx
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner'
 import {
     fetchDepartments,
     fetchDepartmentUsers,
 } from '../../api/opd'
+import {
+    Building2,
+    Stethoscope,
+    Loader2,
+    AlertCircle,
+    CheckCircle2,
+} from 'lucide-react'
 
 /**
  * Props:
  *   value: doctor_user_id (number | null)
  *   onChange: (doctorId: number | null, meta: { department_id: number | null }) => void
+ *   label?: string
  */
 export default function DoctorPicker({
     value,
     onChange,
-    label = 'Department ➜ Doctor',
+    label = 'Primary Doctor — Department · Role · User',
 }) {
     const [depts, setDepts] = useState([])
-    const [deptId, setDeptId] = useState('')        // string for <select>
+    const [deptId, setDeptId] = useState('') // string for <select>
     const [users, setUsers] = useState([])
-    const [loadingUsers, setLoadingUsers] = useState(false)
+
     const [loadingDepts, setLoadingDepts] = useState(false)
+    const [loadingUsers, setLoadingUsers] = useState(false)
     const [err, setErr] = useState('')
 
+    // ------------------------------------------------------
     // Load departments once
+    // ------------------------------------------------------
     useEffect(() => {
         let alive = true
         setLoadingDepts(true)
@@ -35,26 +47,36 @@ export default function DoctorPicker({
             .catch((e) => {
                 if (!alive) return
                 console.error('fetchDepartments error', e)
-                toast.error('Failed to load departments')
+                const msg =
+                    e?.response?.data?.detail || 'Failed to load departments.'
                 setDepts([])
+                setErr(msg)
+                toast.error(msg)
             })
             .finally(() => {
                 if (!alive) return
                 setLoadingDepts(false)
             })
+
         return () => {
             alive = false
         }
     }, [])
 
-    // Whenever department changes: clear doctor, notify parent, load doctors for that dept
+    // ------------------------------------------------------
+    // Whenever department changes:
+    //  - clear selected doctor
+    //  - inform parent about new dept
+    //  - load doctors for that department
+    // ------------------------------------------------------
     useEffect(() => {
         let alive = true
         setErr('')
         setUsers([])
 
-        // Tell parent: doctor cleared, dept changed
         const deptNum = deptId ? Number(deptId) : null
+
+        // Tell parent: doctor cleared, dept changed
         onChange?.(null, { department_id: deptNum })
 
         if (!deptId) return
@@ -62,7 +84,7 @@ export default function DoctorPicker({
         setLoadingUsers(true)
         fetchDepartmentUsers({
             departmentId: deptNum,
-            isDoctor: true, // 🔥 ONLY doctors
+            isDoctor: true, // ONLY doctors
         })
             .then((r) => {
                 if (!alive) return
@@ -71,9 +93,11 @@ export default function DoctorPicker({
             .catch((e) => {
                 if (!alive) return
                 console.error('fetchDepartmentUsers error', e)
-                setErr(e?.response?.data?.detail || 'Failed to load doctors')
-                toast.error(e?.response?.data?.detail || 'Failed to load doctors')
+                const msg =
+                    e?.response?.data?.detail || 'Failed to load doctors.'
+                setErr(msg)
                 setUsers([])
+                toast.error(msg)
             })
             .finally(() => {
                 if (!alive) return
@@ -83,18 +107,18 @@ export default function DoctorPicker({
         return () => {
             alive = false
         }
-        // IMPORTANT: do NOT add `onChange` here, we only care when deptId changes
+        // NOTE: do NOT add `onChange` to deps; we only react to deptId here
     }, [deptId])
 
     const selectedDoctor = useMemo(
         () => users.find((u) => u.id === value) || null,
-        [users, value],
+        [users, value]
     )
 
     const handleDeptChange = (e) => {
         const newDeptId = e.target.value
         setDeptId(newDeptId)
-        // doctor will be cleared + parent notified inside useEffect above
+        // doctor will be cleared + parent notified in useEffect above
     }
 
     const handleDoctorChange = (e) => {
@@ -105,62 +129,113 @@ export default function DoctorPicker({
     }
 
     return (
-        <div className="space-y-2">
-            <label className="text-sm font-medium">{label}</label>
-
-            <div className="grid gap-3 md:grid-cols-2">
-                {/* Department */}
-                <select
-                    className="input"
-                    value={deptId}
-                    onChange={handleDeptChange}
-                    disabled={loadingDepts}
-                >
-                    <option value="">
-                        {loadingDepts ? 'Loading departments…' : 'Select department'}
-                    </option>
-                    {depts.map((d) => (
-                        <option key={d.id} value={d.id}>
-                            {d.name}
-                        </option>
-                    ))}
-                </select>
-
-                {/* Doctor list (filtered by dept + is_doctor=true) */}
-                <select
-                    className="input"
-                    value={value || ''}
-                    onChange={handleDoctorChange}
-                    disabled={!deptId || loadingUsers || users.length === 0}
-                >
-                    <option value="">
-                        {loadingUsers
-                            ? 'Loading doctors…'
-                            : !deptId
-                                ? 'Select department first'
-                                : users.length === 0
-                                    ? 'No doctors in this department'
-                                    : 'Select doctor'}
-                    </option>
-                    {users.map((u) => (
-                        <option key={u.id} value={u.id}>
-                            {u.name}
-                            {u.email ? ` (${u.email})` : ''}
-                        </option>
-                    ))}
-                </select>
+        <div className="space-y-3">
+            {/* Header + helper text */}
+            <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-col">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                        Doctor & Department
+                    </span>
+                    <span className="text-sm font-medium text-slate-900">
+                        {label}
+                    </span>
+                </div>
+                <p className="text-[11px] text-slate-500">
+                    Choose the admitting department and responsible doctor for this stay.
+                </p>
             </div>
 
+            {/* Pickers */}
+            <div className="grid gap-3 md:grid-cols-2">
+                {/* Department */}
+                <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-xs text-slate-600">
+                        <Building2 className="h-4 w-4 text-slate-500" />
+                        <span className="font-medium">Department</span>
+                    </div>
+                    <div className="relative">
+                        {loadingDepts && (
+                            <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-slate-400" />
+                        )}
+                        <select
+                            className="input w-full rounded-2xl border border-slate-200 bg-white text-sm shadow-sm focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                            value={deptId}
+                            onChange={handleDeptChange}
+                            disabled={loadingDepts}
+                        >
+                            <option value="">
+                                {loadingDepts
+                                    ? 'Loading departments…'
+                                    : 'Select department'}
+                            </option>
+                            {depts.map((d) => (
+                                <option key={d.id} value={d.id}>
+                                    {d.name}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+
+                {/* Doctor */}
+                <div className="space-y-1">
+                    <div className="flex items-center gap-2 text-xs text-slate-600">
+                        <Stethoscope className="h-4 w-4 text-slate-500" />
+                        <span className="font-medium">Doctor</span>
+                    </div>
+                    <div className="relative">
+                        {loadingUsers && (
+                            <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-slate-400" />
+                        )}
+                        <select
+                            className="input w-full rounded-2xl border border-slate-200 bg-white text-sm shadow-sm focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                            value={value || ''}
+                            onChange={handleDoctorChange}
+                            disabled={!deptId || loadingUsers || users.length === 0}
+                        >
+                            <option value="">
+                                {loadingUsers
+                                    ? 'Loading doctors…'
+                                    : !deptId
+                                        ? 'Select department first'
+                                        : users.length === 0
+                                            ? 'No doctors in this department'
+                                            : 'Select doctor'}
+                            </option>
+                            {users.map((u) => (
+                                <option key={u.id} value={u.id}>
+                                    {u.name}
+                                    {u.email ? ` (${u.email})` : ''}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            {/* Selected doctor summary */}
             {selectedDoctor && (
-                <div className="rounded-xl border bg-emerald-50 px-3 py-2 text-sm">
-                    Selected:{' '}
-                    <span className="font-medium">{selectedDoctor.name}</span>
+                <div className="inline-flex items-center gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800">
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span className="font-semibold">
+                        Selected doctor:
+                    </span>
+                    <span className="font-medium">
+                        {selectedDoctor.name}
+                    </span>
+                    {selectedDoctor.email && (
+                        <span className="text-emerald-700">
+                            · {selectedDoctor.email}
+                        </span>
+                    )}
                 </div>
             )}
 
+            {/* Error box */}
             {err && (
-                <div className="rounded-xl border border-red-200 bg-red-50 p-2 text-sm text-red-700">
-                    {err}
+                <div className="flex items-start gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                    <AlertCircle className="mt-0.5 h-4 w-4" />
+                    <span>{err}</span>
                 </div>
             )}
         </div>

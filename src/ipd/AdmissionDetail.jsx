@@ -1,119 +1,107 @@
-// FILE: src/ipd/AdmissionDetail.jsx
-import { useEffect, useState } from 'react'
-import { useParams, useLocation } from 'react-router-dom'
-import { useCan } from '../hooks/usePerm'
+
+// FILE: src/ipd/Admissions.jsx
+import { useEffect, useMemo, useState, useRef } from 'react';
+import PermGate from '../components/PermGate'
 import {
-    getAdmission,
-    updateAdmission,
-    cancelAdmission,
-    transferBed,
+    listAdmissions,
+    createAdmission,
     listBeds,
-    getPatient,
+    listPackages,
 } from '../api/ipd'
+import PatientPagedPicker from './components/PatientPagedPicker'
 import WardRoomBedPicker from './components/WardRoomBedPicker'
-import DeptRoleUserPicker from '../opd/components/DeptRoleUserPicker'
-
-// tabs (do NOT gate these with PermGate anymore)
-import Nursing from './tabs/Nursing'
-import Vitals from './tabs/Vitals'
-import IntakeOutput from './tabs/IntakeOutput'
-import ShiftHandover from './tabs/ShiftHandover'
-import DoctorRounds from './tabs/DoctorRounds'
-import ProgressNotes from './tabs/ProgressNotes'
-import Referrals from './tabs/Referrals'
-import Discharge from './tabs/Discharge'
-import OtModule from './tabs/Ot'
-import BedCharges from './tabs/BedCharges'
-import PharmacyOrdersTab from './tabs/PharmacyOrders'
-
+import DeptRoleUserPicker from '../opd/components/DoctorPicker'
 import {
-    Tabs as UITabs,
-    TabsList,
-    TabsTrigger,
-    TabsContent,
-} from '@/components/ui/tabs'
+    CheckCircle2,
+    AlertTriangle,
+    XCircle,
+    X,
+    BedDouble,
+    User,
+    ClipboardList,
+} from 'lucide-react'
 
-const TABS = [
-    { key: 'nursing', label: 'Nursing Notes', el: Nursing, writePerm: 'ipd.nursing' },
-    { key: 'vitals', label: 'Vitals', el: Vitals, writePerm: 'ipd.nursing' },
-    { key: 'io', label: 'Intake/Output', el: IntakeOutput, writePerm: 'ipd.nursing' },
-    { key: 'handover', label: 'Shift Handover', el: ShiftHandover, writePerm: 'ipd.nursing' },
-    { key: 'rounds', label: 'Doctor Rounds', el: DoctorRounds, writePerm: 'ipd.doctor' },
-    { key: 'progress', label: 'Progress Notes', el: ProgressNotes, writePerm: 'ipd.doctor' },
-    { key: 'pharmacy', label: 'Pharmacy Orders', el: PharmacyOrdersTab, writePerm: 'ipd.doctor' },
-    { key: 'referrals', label: 'Referrals', el: Referrals, writePerm: 'ipd.manage' },
-    { key: 'ot', label: 'OT', el: OtModule, writePerm: 'ipd.manage' },
-    { key: 'discharge', label: 'Discharge', el: Discharge, writePerm: 'ipd.manage' },
-    { key: 'charges', label: 'Bed Charges', el: BedCharges, writePerm: 'ipd.manage' },
-]
+export { } // quiet ts/eslint
 
-export default function AdmissionDetail() {
-    const { id } = useParams()
-    const location = useLocation()
-    const admissionFromList = location?.state?.admission || null
+// ---------- Small Toast component (fixed top) ----------
+function Toast({ kind = 'success', title, message, onClose }) {
+    const map = {
+        success: {
+            bg: 'bg-emerald-50',
+            border: 'border-emerald-200',
+            text: 'text-emerald-700',
+            Icon: CheckCircle2,
+        },
+        warn: {
+            bg: 'bg-amber-50',
+            border: 'border-amber-200',
+            text: 'text-amber-800',
+            Icon: AlertTriangle,
+        },
+        error: {
+            bg: 'bg-rose-50',
+            border: 'border-rose-200',
+            text: 'text-rose-700',
+            Icon: XCircle,
+        },
+    }
 
-    const [admission, setAdmission] = useState(admissionFromList)
+    const S = map[kind] || map.success
+
+    return (
+        <div
+            className={
+                `flex w-full max-w-md items-start gap-3 rounded-xl border ` +
+                `${S.border} ${S.bg} p-3 shadow-lg`
+            }
+            role="alert"
+            aria-live="polite"
+        >
+            <S.Icon className={`mt-0.5 h-5 w-5 ${S.text}`} />
+            <div className="text-sm">
+                <div className="font-medium">{title}</div>
+                {message ? (
+                    <div className="mt-0.5 text-[13px] opacity-90">{message}</div>
+                ) : null}
+            </div>
+            <button
+                className="ml-auto inline-flex h-7 w-7 items-center justify-center rounded-lg hover:bg-black/5"
+                onClick={onClose}
+                aria-label="Close notification"
+                type="button"
+            >
+                <X className="h-4 w-4" />
+            </button>
+        </div>
+    )
+}
+
+// strict positive integer check (rejects 0, "", null, undefined, NaN)
+const isPosInt = (v) => {
+    if (typeof v === 'number') return Number.isInteger(v) && v > 0
+    if (typeof v === 'string' && v.trim() !== '' && /^\d+$/.test(v))
+        return Number(v) > 0
+    return false
+}
+
+const toIsoSecs = (v) => (!v ? undefined : v.length === 16 ? `${v}:00` : v)
+
+export default function Admissions() {
+    // lookups
     const [beds, setBeds] = useState([])
-    const [active, setActive] = useState('nursing')
-    const [error, setError] = useState('')
+    const [packages, setPackages] = useState([])
     const [loading, setLoading] = useState(false)
-    const [patient, setPatient] = useState(null)
 
-    // global view perm (backend needs ipd.view to list anything)
-    const canView = useCan('ipd.view')
-    const canManage = useCan('ipd.manage')
-
-    // per-module write perms (used in tabs, but *top-level* hooks only)
-    const canNursingWrite = useCan('ipd.nursing')
-    const canDoctorWrite = useCan('ipd.doctor')
-
-    const permMap = {
-        'ipd.nursing': canNursingWrite,
-        'ipd.doctor': canDoctorWrite,
-        'ipd.manage': canManage,
-    }
-
-    const load = async () => {
-        setLoading(true)
-        setError('')
-        try {
-            const [{ data: a }, b] = await Promise.all([
-                getAdmission(Number(id)),
-                listBeds(),
-            ])
-            setAdmission(a || admissionFromList || null)
-            setBeds(b.data || [])
-            try {
-                const { data: p } = await getPatient(a.patient_id)
-                setPatient(p)
-            } catch {
-                /* no-op */
-            }
-        } catch (e) {
-            const s = e?.status || e?.response?.status
-            if (s === 404 && admissionFromList) {
-                setAdmission(admissionFromList)
-            } else {
-                setError(e?.response?.data?.detail || 'Failed to load')
-            }
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    useEffect(() => {
-        load()
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [id])
-
-    const admissionCode = (aid) => `ADM-${String(aid).padStart(6, '0')}`
-
-    const [edit, setEdit] = useState({
-        practitioner_user_id: '',
-        department_id: '',
+    // form state
+    const [patientId, setPatientId] = useState(null)
+    const [departmentId, setDepartmentId] = useState(null)
+    const [doctorUserId, setDoctorUserId] = useState(null)
+    const [bedId, setBedId] = useState(null)
+    const [form, setForm] = useState({
+        admission_type: 'planned',
         expected_discharge_at: '',
         package_id: '',
-        payor_type: '',
+        payor_type: 'cash',
         insurer_name: '',
         policy_number: '',
         preliminary_diagnosis: '',
@@ -121,317 +109,534 @@ export default function AdmissionDetail() {
         care_plan: '',
     })
 
+    // ui messages
+    const [toast, setToast] = useState(null)
+    const timerRef = useRef(null)
+
+    const showToast = (t) => {
+        if (timerRef.current) clearTimeout(timerRef.current)
+        setToast(t)
+        timerRef.current = setTimeout(() => setToast(null), 4500)
+    }
+
+    // cleanup toast timer on unmount (avoid memory leak)
     useEffect(() => {
-        if (!admission) return
-        setEdit({
-            practitioner_user_id: admission.practitioner_user_id || '',
-            department_id: admission.department_id || '',
-            expected_discharge_at: admission.expected_discharge_at
-                ? new Date(admission.expected_discharge_at).toISOString().slice(0, 16)
-                : '',
-            package_id: admission.package_id || '',
-            payor_type: admission.payor_type || 'cash',
-            insurer_name: admission.insurer_name || '',
-            policy_number: admission.policy_number || '',
-            preliminary_diagnosis: admission.preliminary_diagnosis || '',
-            history: admission.history || '',
-            care_plan: admission.care_plan || '',
-        })
-    }, [admission])
+        return () => {
+            if (timerRef.current) clearTimeout(timerRef.current)
+        }
+    }, [])
 
-    const toIsoSecs = (v) =>
-        !v ? undefined : v.length === 16 ? `${v}:00` : v
+    const selectedBed = useMemo(
+        () => beds.find((b) => b.id === Number(bedId)) || null,
+        [beds, bedId]
+    )
 
-    const saveEdit = async (e) => {
-        e.preventDefault()
+    // load lookups
+    useEffect(() => {
+        let alive = true
+            ; (async () => {
+                setLoading(true)
+                try {
+                    const [b, p] = await Promise.all([listBeds(), listPackages()])
+                    if (!alive) return
+                    setBeds(b.data || [])
+                    setPackages(p.data || [])
+                } catch (e) {
+                    if (!alive) return
+                    console.error('Admissions lookup load error', e)
+                    showToast({
+                        kind: 'error',
+                        title: 'Failed to load data',
+                        message:
+                            e?.response?.data?.detail ||
+                            'Could not load beds / packages. Please refresh and try again.',
+                    })
+                } finally {
+                    alive && setLoading(false)
+                }
+            })()
+        return () => {
+            alive = false
+        }
+    }, [])
+
+    // duplicate guard
+    const checkAlreadyAdmitted = async (pid) => {
         try {
-            const payload = {
-                practitioner_user_id: edit.practitioner_user_id
-                    ? Number(edit.practitioner_user_id)
-                    : undefined,
-                department_id: edit.department_id
-                    ? Number(edit.department_id)
-                    : undefined,
-                expected_discharge_at: toIsoSecs(edit.expected_discharge_at),
-                package_id: edit.package_id ? Number(edit.package_id) : undefined,
-                payor_type: edit.payor_type || 'cash',
-                insurer_name: edit.insurer_name || '',
-                policy_number: edit.policy_number || '',
-                preliminary_diagnosis: edit.preliminary_diagnosis || '',
-                history: edit.history || '',
-                care_plan: edit.care_plan || '',
+            const { data } = await listAdmissions({
+                status: 'admitted',
+                patient_id: pid,
+            })
+            return Array.isArray(data) && data.length > 0 ? data[0] : null
+        } catch {
+            return null
+        }
+    }
+
+    const handleSubmit = async (e) => {
+        e.preventDefault()
+        if (loading) return
+
+        if (!isPosInt(patientId)) {
+            showToast({
+                kind: 'warn',
+                title: 'Select a patient',
+                message: 'Pick a patient before admitting.',
+            })
+            return
+        }
+        if (!isPosInt(bedId)) {
+            showToast({
+                kind: 'warn',
+                title: 'Select a bed',
+                message: 'Choose Ward → Room → Bed.',
+            })
+            return
+        }
+
+        const bed = beds.find((b) => b.id === Number(bedId))
+        if (!bed) {
+            showToast({
+                kind: 'warn',
+                title: 'Selected bed is unavailable',
+                message: 'Refresh beds and select again.',
+            })
+            return
+        }
+
+        setLoading(true)
+        try {
+            // prevent duplicate active admission
+            const dup = await checkAlreadyAdmitted(Number(patientId))
+            if (dup?.id) {
+                const code = `ADM-${String(dup.id).padStart(6, '0')}`
+                showToast({
+                    kind: 'warn',
+                    title: 'Patient already admitted',
+                    message: `Active admission ${code} exists. Open Tracking / My Admissions to view.`,
+                })
+                return
             }
+
+            const payload = {
+                patient_id: Number(patientId),
+                bed_id: Number(bedId),
+                admission_type: form.admission_type || 'planned',
+                expected_discharge_at: toIsoSecs(form.expected_discharge_at),
+                department_id: isPosInt(departmentId)
+                    ? Number(departmentId)
+                    : undefined,
+                practitioner_user_id: isPosInt(doctorUserId)
+                    ? Number(doctorUserId)
+                    : undefined,
+                package_id: isPosInt(form.package_id)
+                    ? Number(form.package_id)
+                    : undefined,
+                payor_type: form.payor_type || 'cash',
+                insurer_name: form.insurer_name || '',
+                policy_number: form.policy_number || '',
+                preliminary_diagnosis: form.preliminary_diagnosis || '',
+                history: form.history || '',
+                care_plan: form.care_plan || '',
+            }
+
             Object.keys(payload).forEach(
                 (k) => payload[k] === undefined && delete payload[k]
             )
-            await updateAdmission(admission.id, payload)
-            await load()
-        } catch (e1) {
-            setError(e1?.response?.data?.detail || 'Update failed')
-        }
-    }
 
-    const doCancel = async () => {
-        if (!window.confirm('Cancel this admission?')) return
-        try {
-            await cancelAdmission(admission.id)
-            window.location.assign('/ipd/tracking')
-        } catch (e1) {
-            setError(e1?.response?.data?.detail || 'Cancel failed')
-        }
-    }
+            const { data } = await createAdmission(payload)
 
-    const doTransfer = async (newBedId) => {
-        try {
-            await transferBed(admission.id, {
-                to_bed_id: Number(newBedId),
-                reason: 'Transfer',
+            showToast({
+                kind: 'success',
+                title: 'Admission created',
+                message: `Admission ADM-${String(data.id).padStart(6, '0')} has been created successfully.`,
             })
-            await load()
+
+            // refresh beds to reflect occupancy
+            try {
+                const b = await listBeds()
+                setBeds(b.data || [])
+            } catch {
+                /* ignore */
+            }
+
+            // clear relevant fields for next admission
+            setBedId(null)
+            setForm((s) => ({
+                ...s,
+                expected_discharge_at: '',
+                preliminary_diagnosis: '',
+                history: '',
+                care_plan: '',
+                package_id: '',
+                payor_type: 'cash',
+                insurer_name: '',
+                policy_number: '',
+            }))
         } catch (e1) {
-            setError(e1?.response?.data?.detail || 'Transfer failed')
+            console.error('Admission create error', e1)
+            const raw = e1?.response?.data
+            const detail = Array.isArray(raw?.detail)
+                ? raw.detail
+                    .map((d) => d?.msg)
+                    .filter(Boolean)
+                    .join(', ')
+                : raw?.detail || e1.message || 'Failed to create admission'
+
+            const msg = /Bed not found/i.test(detail)
+                ? 'Please select a valid bed.'
+                : /Bed not available/i.test(detail)
+                    ? 'That bed is not available. Pick another one.'
+                    : detail
+
+            showToast({
+                kind: 'error',
+                title: 'Admission failed',
+                message: msg,
+            })
+        } finally {
+            setLoading(false)
         }
     }
 
-    if (!canView && !canManage) {
-        return (
-            <div className="p-4 text-sm text-rose-700">
-                Access denied (need ipd.view).
-            </div>
-        )
-    }
-
-    if (loading && !admission) {
-        return <div className="p-4 text-sm">Loading…</div>
-    }
-    if (!admission) {
-        return <div className="p-4 text-sm">No data</div>
-    }
-
-    const Header = () => (
-        <div className="rounded-xl border bg-white p-3 text-sm grid md:grid-cols-4 gap-2">
-            <div>
-                <span className="text-gray-500">Admission:</span>{' '}
-                {admissionCode(admission.id)}
-            </div>
-            <div>
-                <span className="text-gray-500">Patient:</span>{' '}
-                {patient?.uhid || `P-${admission.patient_id}`}
-            </div>
-            <div>
-                <span className="text-gray-500">Bed:</span>{' '}
-                {admission.current_bed_id
-                    ? beds.find((b) => b.id === admission.current_bed_id)?.code ||
-                    '—'
-                    : '—'}
-            </div>
-            <div>
-                <span className="text-gray-500">Status:</span>{' '}
-                {admission.status}
-            </div>
-        </div>
-    )
+    const isInsurancePayor = ['insurance', 'tpa'].includes(form.payor_type)
 
     return (
-        <div className="p-4 space-y-4">
-            <div className="flex items-center justify-between">
-                <h1 className="text-lg font-semibold">Patient Tracking</h1>
-            </div>
-
-            <Header />
-
-            {/* Update/Transfer panel is still gated by ipd.manage */}
-            {canManage && (
-                <div className="rounded-xl border bg-white p-3 text-sm grid md:grid-cols-2 gap-4">
-                    <form onSubmit={saveEdit} className="space-y-3">
-                        <div className="text-sm font-medium">Update Admission</div>
-
-                        <DeptRoleUserPicker
-                            value={edit.practitioner_user_id || ''}
-                            onChange={(userId, ctx) => {
-                                setEdit((s) => ({
-                                    ...s,
-                                    practitioner_user_id: userId || '',
-                                    department_id:
-                                        ctx?.department_id || s.department_id,
-                                }))
-                            }}
-                            label="Primary Doctor — Department · Role · User"
-                        />
-
-                        <div className="grid gap-3 md:grid-cols-2">
-                            <div>
-                                <label className="text-xs text-gray-500">
-                                    Expected discharge
-                                </label>
-                                <input
-                                    type="datetime-local"
-                                    className="input"
-                                    value={edit.expected_discharge_at}
-                                    onChange={(e) =>
-                                        setEdit((s) => ({
-                                            ...s,
-                                            expected_discharge_at: e.target.value,
-                                        }))
-                                    }
-                                />
-                            </div>
-                            <div>
-                                <label className="text-xs text-gray-500">
-                                    Payor type
-                                </label>
-                                <select
-                                    className="input"
-                                    value={edit.payor_type}
-                                    onChange={(e) =>
-                                        setEdit((s) => ({
-                                            ...s,
-                                            payor_type: e.target.value,
-                                        }))
-                                    }
-                                >
-                                    {['cash', 'insurance', 'tpa'].map((x) => (
-                                        <option key={x} value={x}>
-                                            {x}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-                            <input
-                                className="input"
-                                placeholder="Insurer name"
-                                value={edit.insurer_name}
-                                onChange={(e) =>
-                                    setEdit((s) => ({
-                                        ...s,
-                                        insurer_name: e.target.value,
-                                    }))
-                                }
-                            />
-                            <input
-                                className="input"
-                                placeholder="Policy number"
-                                value={edit.policy_number}
-                                onChange={(e) =>
-                                    setEdit((s) => ({
-                                        ...s,
-                                        policy_number: e.target.value,
-                                    }))
-                                }
-                            />
-                            <input
-                                className="input md:col-span-2"
-                                placeholder="Preliminary diagnosis"
-                                value={edit.preliminary_diagnosis}
-                                onChange={(e) =>
-                                    setEdit((s) => ({
-                                        ...s,
-                                        preliminary_diagnosis: e.target.value,
-                                    }))
-                                }
-                            />
-                            <input
-                                className="input"
-                                placeholder="History"
-                                value={edit.history}
-                                onChange={(e) =>
-                                    setEdit((s) => ({
-                                        ...s,
-                                        history: e.target.value,
-                                    }))
-                                }
-                            />
-                            <input
-                                className="input"
-                                placeholder="Care plan"
-                                value={edit.care_plan}
-                                onChange={(e) =>
-                                    setEdit((s) => ({
-                                        ...s,
-                                        care_plan: e.target.value,
-                                    }))
-                                }
-                            />
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                            <button className="btn">Save</button>
-                            <button
-                                type="button"
-                                className="btn bg-rose-600 hover:bg-rose-700"
-                                onClick={doCancel}
-                            >
-                                Cancel Admission
-                            </button>
-                        </div>
-
-                        {error && (
-                            <div className="rounded-xl border border-rose-200 bg-rose-50 p-2 text-rose-700 text-sm">
-                                {error}
-                            </div>
-                        )}
-                    </form>
-
-                    <div className="space-y-2">
-                        <div className="text-sm font-medium">Transfer Bed</div>
-                        <WardRoomBedPicker value={''} onChange={doTransfer} />
-                        <div className="text-xs text-gray-500">
-                            Pick a target bed (vacant) to transfer.
-                        </div>
-                    </div>
+        <div className="min-h-screen bg-slate-50 px-4 py-4 text-black md:px-6 md:py-6">
+            {/* Global Toast – fixed at top */}
+            {toast && (
+                <div className="fixed inset-x-0 top-16 z-50 flex justify-center px-4 sm:justify-end sm:px-6">
+                    <Toast
+                        kind={toast.kind}
+                        title={toast.title}
+                        message={toast.message}
+                        onClose={() => setToast(null)}
+                    />
                 </div>
             )}
 
-            {/* IPD TABS – shadcn Tabs so click always shows correct pane */}
-            <div className="rounded-xl border bg-white">
-                <UITabs
-                    value={active}
-                    onValueChange={setActive}
-                    className="w-full"
-                >
-                    <div className="border-b px-3 py-2 flex flex-wrap gap-2">
-                        <TabsList className="h-auto bg-transparent flex flex-wrap gap-2 p-0">
-                            {TABS.map((t) => {
-                                const canWriteThis = permMap[t.writePerm] ?? false
-                                return (
-                                    <TabsTrigger
-                                        key={t.key}
-                                        value={t.key}
-                                        className="px-3 py-1 rounded-lg text-xs sm:text-sm data-[state=active]:bg-slate-900 data-[state=active]:text-white bg-slate-100 text-slate-700 hover:bg-slate-200"
-                                    >
-                                        {t.label}
-                                        {!canWriteThis && (
-                                            <span className="ml-2 text-[10px] rounded bg-slate-200 px-1.5 py-0.5 text-slate-700 align-middle">
-                                                view-only
-                                            </span>
-                                        )}
-                                    </TabsTrigger>
-                                )
-                            })}
-                        </TabsList>
+            {/* Page header + description */}
+            <div className="mx-auto mb-4 flex max-w-6xl flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                    <h1 className="text-xl font-semibold tracking-tight text-slate-900">
+                        IPD Admission
+                    </h1>
+                    <p className="mt-1 max-w-2xl text-sm text-slate-600">
+                        Use this screen to admit an in-patient. Select the patient, assign
+                        a primary doctor and bed, and capture admission details and payer
+                        information. The system automatically prevents duplicate active
+                        admissions for the same patient.
+                    </p>
+                </div>
+                <div className="grid grid-cols-3 gap-2 text-xs">
+                    <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+                        <User className="h-4 w-4 text-slate-500" />
+                        <span className="leading-tight">
+                            <span className="font-medium text-slate-800">Step 1</span>
+                            <br />
+                            Pick patient
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+                        <ClipboardList className="h-4 w-4 text-slate-500" />
+                        <span className="leading-tight">
+                            <span className="font-medium text-slate-800">Step 2</span>
+                            <br />
+                            Doctor &amp; details
+                        </span>
+                    </div>
+                    <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+                        <BedDouble className="h-4 w-4 text-slate-500" />
+                        <span className="leading-tight">
+                            <span className="font-medium text-slate-800">Step 3</span>
+                            <br />
+                            Assign bed
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            {/* Main card */}
+            <div className="mx-auto max-w-6xl">
+                <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <div className="border-b border-slate-200 px-4 py-3">
+                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                            <span className="text-sm font-semibold text-slate-900">
+                                New Admission
+                            </span>
+                            <span className="text-[11px] uppercase tracking-wide text-slate-500">
+                                IPD · Admission Management
+                            </span>
+                        </div>
                     </div>
 
-                    <div className="p-3">
-                        {TABS.map((t) => {
-                            const TabEl = t.el
-                            const canWriteThis = permMap[t.writePerm] ?? false
-                            return (
-                                <TabsContent
-                                    key={t.key}
-                                    value={t.key}
-                                    className="mt-2"
-                                >
-                                    <TabEl
-                                        admissionId={admission.id}
-                                        admission={admission}
-                                        patient={patient}
-                                        canWrite={canWriteThis}
+                    <PermGate
+                        anyOf={['ipd.manage']}
+                        fallback={
+                            <div className="rounded-b-2xl border-t border-amber-200 bg-amber-50 p-4 text-xs text-amber-700">
+                                You do not have permission to create admissions. Please
+                                contact the administrator to enable{' '}
+                                <span className="font-semibold">IPD Manage</span> access.
+                            </div>
+                        }
+                    >
+                        <form
+                            onSubmit={handleSubmit}
+                            className="space-y-6 p-4 text-sm md:p-6"
+                        >
+                            {/* Patient selection */}
+                            <section className="space-y-2">
+                                <PatientPagedPicker
+                                    value={patientId ?? undefined}
+                                    onChange={setPatientId}
+                                />
+                                {isPosInt(patientId) && (
+                                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                                        Tip: If this patient already has an active admission, you
+                                        will see a warning and the system will block duplicate
+                                        admission.
+                                    </div>
+                                )}
+                            </section>
+
+                            {/* Doctor + Department */}
+                            <section className="space-y-2">
+                                <DeptRoleUserPicker
+                                    label="Primary doctor — Department · Role · User"
+                                    value={doctorUserId ?? undefined}
+                                    onChange={(userId, ctx) => {
+                                        setDoctorUserId(userId || null)
+                                        setDepartmentId(ctx?.department_id || null)
+                                    }}
+                                />
+                            </section>
+
+                            {/* Bed selection */}
+                            <section className="space-y-2">
+                                <WardRoomBedPicker
+                                    value={bedId ?? ''}
+                                    onChange={(v) =>
+                                        setBedId(isPosInt(v) ? Number(v) : null)
+                                    }
+                                />
+
+                                {selectedBed && (
+                                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                                        <span className="text-slate-500">Selected bed: </span>
+                                        <span className="font-medium text-slate-900">
+                                            {selectedBed.code}
+                                        </span>
+                                        <span className="mx-1 text-slate-400">•</span>
+                                        <span className="text-slate-500">State: </span>
+                                        <span
+                                            className={[
+                                                'inline-flex items-center rounded-md border px-1.5 py-0.5 text-[11px]',
+                                                selectedBed.state === 'vacant'
+                                                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                                    : selectedBed.state === 'reserved'
+                                                        ? 'border-amber-200 bg-amber-50 text-amber-700'
+                                                        : 'border-slate-200 bg-slate-100 text-slate-700',
+                                            ].join(' ')}
+                                        >
+                                            {selectedBed.state}
+                                        </span>
+                                        {selectedBed.reserved_until && (
+                                            <span className="ml-2 text-slate-500">
+                                                until{' '}
+                                                {new Date(
+                                                    selectedBed.reserved_until
+                                                ).toLocaleString()}
+                                            </span>
+                                        )}
+                                    </div>
+                                )}
+                            </section>
+
+                            {/* Admission, package, payor + clinical details */}
+                            <section className="space-y-3">
+                                <div className="flex items-center justify-between gap-2">
+                                    <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+                                        Admission details
+                                    </h2>
+                                    <p className="text-[11px] text-slate-500">
+                                        Choose admission type, expected discharge and payer
+                                        details.
+                                    </p>
+                                </div>
+
+                                <div className="grid gap-3 md:grid-cols-4">
+                                    {/* Admission type */}
+                                    <div>
+                                        <label className="mb-1 block text-xs text-slate-500">
+                                            Admission type
+                                        </label>
+                                        <select
+                                            className="input w-full rounded-2xl border border-slate-200 bg-white text-sm shadow-sm focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                                            value={form.admission_type}
+                                            onChange={(e) =>
+                                                setForm((prev) => ({
+                                                    ...prev,
+                                                    admission_type: e.target.value,
+                                                }))
+                                            }
+                                        >
+                                            {['planned', 'emergency', 'daycare'].map((t) => (
+                                                <option key={t} value={t}>
+                                                    {t}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    {/* Expected discharge */}
+                                    <div>
+                                        <label className="mb-1 block text-xs text-slate-500">
+                                            Expected discharge
+                                        </label>
+                                        <input
+                                            type="datetime-local"
+                                            className="input w-full rounded-2xl border border-slate-200 bg-white text-sm shadow-sm focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                                            value={form.expected_discharge_at}
+                                            onChange={(e) =>
+                                                setForm((prev) => ({
+                                                    ...prev,
+                                                    expected_discharge_at: e.target.value,
+                                                }))
+                                            }
+                                        />
+                                    </div>
+
+                                    {/* Package */}
+                                    <div>
+                                        <label className="mb-1 block text-xs text-slate-500">
+                                            Package
+                                        </label>
+                                        <select
+                                            className="input w-full rounded-2xl border border-slate-200 bg-white text-sm shadow-sm focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                                            value={form.package_id}
+                                            onChange={(e) =>
+                                                setForm((prev) => ({
+                                                    ...prev,
+                                                    package_id: e.target.value,
+                                                }))
+                                            }
+                                        >
+                                            <option value="">—</option>
+                                            {packages.map((p) => (
+                                                <option key={p.id} value={p.id}>
+                                                    {p.name}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    {/* Payor type */}
+                                    <div>
+                                        <label className="mb-1 block text-xs text-slate-500">
+                                            Payor type
+                                        </label>
+                                        <select
+                                            className="input w-full rounded-2xl border border-slate-200 bg-white text-sm shadow-sm focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                                            value={form.payor_type}
+                                            onChange={(e) =>
+                                                setForm((prev) => ({
+                                                    ...prev,
+                                                    payor_type: e.target.value,
+                                                }))
+                                            }
+                                        >
+                                            {['cash', 'insurance', 'tpa'].map((x) => (
+                                                <option key={x} value={x}>
+                                                    {x}
+                                                </option>
+                                            ))}
+                                        </select>
+                                    </div>
+
+                                    {/* Insurance block – only when payor is insurance/TPA */}
+                                    {isInsurancePayor && (
+                                        <>
+                                            <input
+                                                className="input md:col-span-2 rounded-2xl border border-slate-200 bg-white text-sm shadow-sm focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                                                placeholder="Insurer name"
+                                                value={form.insurer_name}
+                                                onChange={(e) =>
+                                                    setForm((prev) => ({
+                                                        ...prev,
+                                                        insurer_name: e.target.value,
+                                                    }))
+                                                }
+                                            />
+                                            <input
+                                                className="input rounded-2xl border border-slate-200 bg-white text-sm shadow-sm focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                                                placeholder="Policy number"
+                                                value={form.policy_number}
+                                                onChange={(e) =>
+                                                    setForm((prev) => ({
+                                                        ...prev,
+                                                        policy_number: e.target.value,
+                                                    }))
+                                                }
+                                            />
+                                        </>
+                                    )}
+
+                                    {/* Clinical details */}
+                                    <input
+                                        className="input md:col-span-2 rounded-2xl border border-slate-200 bg-white text-sm shadow-sm focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                                        placeholder="Preliminary diagnosis"
+                                        value={form.preliminary_diagnosis}
+                                        onChange={(e) =>
+                                            setForm((prev) => ({
+                                                ...prev,
+                                                preliminary_diagnosis: e.target.value,
+                                            }))
+                                        }
                                     />
-                                </TabsContent>
-                            )
-                        })}
-                    </div>
-                </UITabs>
+                                    <input
+                                        className="input rounded-2xl border border-slate-200 bg-white text-sm shadow-sm focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                                        placeholder="History"
+                                        value={form.history}
+                                        onChange={(e) =>
+                                            setForm((prev) => ({
+                                                ...prev,
+                                                history: e.target.value,
+                                            }))
+                                        }
+                                    />
+                                    <input
+                                        className="input md:col-span-3 rounded-2xl border border-slate-200 bg-white text-sm shadow-sm focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                                        placeholder="Care plan"
+                                        value={form.care_plan}
+                                        onChange={(e) =>
+                                            setForm((prev) => ({
+                                                ...prev,
+                                                care_plan: e.target.value,
+                                            }))
+                                        }
+                                    />
+                                </div>
+                            </section>
+
+                            {/* Actions */}
+                            <div className="flex flex-col gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-end">
+                                <p className="text-[11px] text-slate-500">
+                                    Once admitted, you can manage vitals, nursing notes and
+                                    discharge from the Admission Detail screen.
+                                </p>
+                                <button
+                                    type="submit"
+                                    className="btn sm:min-w-[140px]"
+                                    disabled={
+                                        loading || !isPosInt(patientId) || !isPosInt(bedId)
+                                    }
+                                >
+                                    {loading ? 'Admitting…' : 'Admit patient'}
+                                </button>
+                            </div>
+                        </form>
+                    </PermGate>
+                </div>
             </div>
         </div>
     )

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react';
 import { createPatient, updatePatient } from '../api/patients'
 
 const BLOOD_GROUPS = ['', 'A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-']
@@ -26,7 +26,6 @@ const EMPTY_FORM = {
     dob: '',
     phone: '',
     email: '',
-    // aadhar_last4 removed as per new model
     blood_group: '',
     marital_status: '',
     ref_source: '',
@@ -122,6 +121,56 @@ function toIntOrNull(val) {
     return Number.isNaN(n) ? null : n
 }
 
+// Helper: parse FastAPI + Pydantic 422 errors into field-wise errors + general message
+function parseApiError(err) {
+    // Default fallback
+    let generalMessage = 'Failed to save patient'
+    const fieldErrors = {}
+
+    const detail = err?.response?.data?.detail
+
+    if (Array.isArray(detail)) {
+        // Pydantic validation errors: [{loc, msg, type, ...}]
+        generalMessage = 'Please correct the highlighted fields.'
+
+        for (const e of detail) {
+            const loc = e.loc || []
+            const msg = e.msg || 'Invalid value'
+
+            // Typical loc example: ['body', 'first_name']
+            // Or nested: ['body', 'address', 'pincode']
+            if (loc[0] === 'body' && loc.length >= 2) {
+                if (loc[1] === 'address' && loc[2]) {
+                    const field = `address.${loc[2]}`
+                    // Combine multiple messages if needed
+                    fieldErrors[field] = fieldErrors[field]
+                        ? `${fieldErrors[field]}; ${msg}`
+                        : msg
+                } else {
+                    const field = loc[1]
+                    fieldErrors[field] = fieldErrors[field]
+                        ? `${fieldErrors[field]}; ${msg}`
+                        : msg
+                }
+            }
+        }
+
+        // If somehow no specific field errors, show the first message
+        if (!Object.keys(fieldErrors).length && detail[0]?.msg) {
+            generalMessage = detail[0].msg
+        }
+    } else if (typeof detail === 'string') {
+        // HTTPException(detail="some message")
+        generalMessage = detail
+    } else if (detail && typeof detail === 'object' && detail.msg) {
+        generalMessage = detail.msg
+    } else if (err?.message) {
+        generalMessage = err.message
+    }
+
+    return { generalMessage, fieldErrors }
+}
+
 export default function PatientFormModal({
     open,
     onClose,
@@ -131,7 +180,8 @@ export default function PatientFormModal({
 }) {
     const [form, setForm] = useState(makeEmptyForm)
     const [saving, setSaving] = useState(false)
-    const [error, setError] = useState('')
+    const [error, setError] = useState('') // string for general error
+    const [fieldErrors, setFieldErrors] = useState({}) // { fieldName: message }
 
     const mode = useMemo(
         () => (initialPatient ? 'edit' : 'create'),
@@ -141,6 +191,7 @@ export default function PatientFormModal({
     useEffect(() => {
         if (open) {
             setError('')
+            setFieldErrors({})
             if (initialPatient) {
                 setForm(mapPatientToForm(initialPatient))
             } else {
@@ -161,6 +212,12 @@ export default function PatientFormModal({
         }
 
         setForm((prev) => ({ ...prev, [field]: value }))
+        // Clear field-specific error on change
+        setFieldErrors((prev) => {
+            const copy = { ...prev }
+            delete copy[field]
+            return copy
+        })
     }
 
     const handleAddressChange = (field) => (e) => {
@@ -169,12 +226,20 @@ export default function PatientFormModal({
             ...prev,
             address: { ...prev.address, [field]: value },
         }))
+        setFieldErrors((prev) => {
+            const key = `address.${field}`
+            const copy = { ...prev }
+            delete copy[key]
+            return copy
+        })
     }
 
     const handleSubmit = async (e) => {
         e.preventDefault()
         setError('')
+        setFieldErrors({})
         setSaving(true)
+
         try {
             const payload = {
                 ...form,
@@ -198,11 +263,10 @@ export default function PatientFormModal({
             onSaved && onSaved(res.data)
             onClose && onClose()
         } catch (err) {
-            const msg =
-                err?.response?.data?.detail ||
-                err?.message ||
-                'Failed to save patient'
-            setError(msg)
+            console.error('Patient save error:', err?.response?.data || err)
+            const { generalMessage, fieldErrors } = parseApiError(err)
+            setError(generalMessage)
+            setFieldErrors(fieldErrors)
         } finally {
             setSaving(false)
         }
@@ -221,6 +285,13 @@ export default function PatientFormModal({
         patientTypes && patientTypes.length
             ? patientTypes // [{id, code, name, ...}]
             : PATIENT_TYPES_FALLBACK
+
+    const hasFieldError = (name) => !!fieldErrors[name]
+
+    const fieldErrorText = (name) =>
+        fieldErrors[name] ? (
+            <p className="mt-0.5 text-[11px] text-red-600">{fieldErrors[name]}</p>
+        ) : null
 
     return (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-stretch justify-center">
@@ -291,7 +362,10 @@ export default function PatientFormModal({
                                         Prefix<span className="text-red-500">*</span>
                                     </label>
                                     <select
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`w-full border rounded-lg px-2.5 py-2 text-sm ${hasFieldError('prefix')
+                                                ? 'border-red-300'
+                                                : 'border-slate-200'
+                                            }`}
                                         value={form.prefix}
                                         onChange={handleChange('prefix')}
                                         required
@@ -302,6 +376,7 @@ export default function PatientFormModal({
                                             </option>
                                         ))}
                                     </select>
+                                    {fieldErrorText('prefix')}
                                 </div>
 
                                 <div>
@@ -309,11 +384,15 @@ export default function PatientFormModal({
                                         First Name<span className="text-red-500">*</span>
                                     </label>
                                     <input
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10"
+                                        className={`w-full border rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 ${hasFieldError('first_name')
+                                                ? 'border-red-300'
+                                                : 'border-slate-200'
+                                            }`}
                                         value={form.first_name}
                                         onChange={handleChange('first_name')}
                                         required
                                     />
+                                    {fieldErrorText('first_name')}
                                 </div>
                                 <div>
                                     <label className="block text-xs font-medium text-slate-600 mb-1">
@@ -331,7 +410,10 @@ export default function PatientFormModal({
                                         Gender<span className="text-red-500">*</span>
                                     </label>
                                     <select
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`w-full border rounded-lg px-2.5 py-2 text-sm ${hasFieldError('gender')
+                                                ? 'border-red-300'
+                                                : 'border-slate-200'
+                                            }`}
                                         value={form.gender}
                                         onChange={handleChange('gender')}
                                         required
@@ -341,6 +423,7 @@ export default function PatientFormModal({
                                         <option value="female">Female</option>
                                         <option value="other">Other</option>
                                     </select>
+                                    {fieldErrorText('gender')}
                                 </div>
 
                                 <div>
@@ -349,11 +432,15 @@ export default function PatientFormModal({
                                     </label>
                                     <input
                                         type="date"
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`w-full border rounded-lg px-2.5 py-2 text-sm ${hasFieldError('dob')
+                                                ? 'border-red-300'
+                                                : 'border-slate-200'
+                                            }`}
                                         value={form.dob || ''}
                                         onChange={handleChange('dob')}
                                         required
                                     />
+                                    {fieldErrorText('dob')}
                                 </div>
                                 <div>
                                     <label className="block text-xs font-medium text-slate-600 mb-1">
@@ -376,7 +463,10 @@ export default function PatientFormModal({
                                         Marital Status<span className="text-red-500">*</span>
                                     </label>
                                     <select
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`w-full border rounded-lg px-2.5 py-2 text-sm ${hasFieldError('marital_status')
+                                                ? 'border-red-300'
+                                                : 'border-slate-200'
+                                            }`}
                                         value={form.marital_status}
                                         onChange={handleChange('marital_status')}
                                         required
@@ -387,6 +477,7 @@ export default function PatientFormModal({
                                             </option>
                                         ))}
                                     </select>
+                                    {fieldErrorText('marital_status')}
                                 </div>
 
                                 <div>
@@ -394,7 +485,10 @@ export default function PatientFormModal({
                                         Mobile<span className="text-red-500">*</span>
                                     </label>
                                     <input
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`w-full border rounded-lg px-2.5 py-2 text-sm ${hasFieldError('phone')
+                                                ? 'border-red-300'
+                                                : 'border-slate-200'
+                                            }`}
                                         value={form.phone}
                                         onChange={handleChange('phone')}
                                         required
@@ -402,6 +496,7 @@ export default function PatientFormModal({
                                     <p className="mt-0.5 text-[11px] text-slate-400">
                                         10 digit mobile number
                                     </p>
+                                    {fieldErrorText('phone')}
                                 </div>
                                 <div>
                                     <label className="block text-xs font-medium text-slate-600 mb-1">
@@ -409,11 +504,15 @@ export default function PatientFormModal({
                                     </label>
                                     <input
                                         type="email"
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`w-full border rounded-lg px-2.5 py-2 text-sm ${hasFieldError('email')
+                                                ? 'border-red-300'
+                                                : 'border-slate-200'
+                                            }`}
                                         value={form.email}
                                         onChange={handleChange('email')}
                                         required
                                     />
+                                    {fieldErrorText('email')}
                                 </div>
 
                                 <div>
@@ -421,7 +520,10 @@ export default function PatientFormModal({
                                         Patient Type<span className="text-red-500">*</span>
                                     </label>
                                     <select
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`w-full border rounded-lg px-2.5 py-2 text-sm ${hasFieldError('patient_type')
+                                                ? 'border-red-300'
+                                                : 'border-slate-200'
+                                            }`}
                                         value={form.patient_type || ''}
                                         onChange={handleChange('patient_type')}
                                         required
@@ -436,6 +538,7 @@ export default function PatientFormModal({
                                             </option>
                                         ))}
                                     </select>
+                                    {fieldErrorText('patient_type')}
                                 </div>
 
                                 <div>
@@ -589,10 +692,14 @@ export default function PatientFormModal({
                                         Address Line 1
                                     </label>
                                     <input
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`w-full border rounded-lg px-2.5 py-2 text-sm ${hasFieldError('address.line1')
+                                                ? 'border-red-300'
+                                                : 'border-slate-200'
+                                            }`}
                                         value={form.address.line1}
                                         onChange={handleAddressChange('line1')}
                                     />
+                                    {fieldErrorText('address.line1')}
                                 </div>
                                 <div className="sm:col-span-2">
                                     <label className="block text-xs font-medium text-slate-600 mb-1">
@@ -609,30 +716,42 @@ export default function PatientFormModal({
                                         City
                                     </label>
                                     <input
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`w-full border rounded-lg px-2.5 py-2 text-sm ${hasFieldError('address.city')
+                                                ? 'border-red-300'
+                                                : 'border-slate-200'
+                                            }`}
                                         value={form.address.city}
                                         onChange={handleAddressChange('city')}
                                     />
+                                    {fieldErrorText('address.city')}
                                 </div>
                                 <div>
                                     <label className="block text-xs font-medium text-slate-600 mb-1">
                                         State
                                     </label>
                                     <input
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`w-full border rounded-lg px-2.5 py-2 text-sm ${hasFieldError('address.state')
+                                                ? 'border-red-300'
+                                                : 'border-slate-200'
+                                            }`}
                                         value={form.address.state}
                                         onChange={handleAddressChange('state')}
                                     />
+                                    {fieldErrorText('address.state')}
                                 </div>
                                 <div>
                                     <label className="block text-xs font-medium text-slate-600 mb-1">
                                         Pincode
                                     </label>
                                     <input
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`w-full border rounded-lg px-2.5 py-2 text-sm ${hasFieldError('address.pincode')
+                                                ? 'border-red-300'
+                                                : 'border-slate-200'
+                                            }`}
                                         value={form.address.pincode}
                                         onChange={handleAddressChange('pincode')}
                                     />
+                                    {fieldErrorText('address.pincode')}
                                 </div>
                                 <div>
                                     <label className="block text-xs font-medium text-slate-600 mb-1">

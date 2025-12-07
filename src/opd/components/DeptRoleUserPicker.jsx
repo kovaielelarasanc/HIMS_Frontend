@@ -1,123 +1,179 @@
-// frontend/src/opd/components/DeptRoleUserPicker.jsx
-import { useEffect, useState } from 'react'
-import {
-    fetchDepartments,
-    fetchDepartmentRoles,
-    fetchDepartmentUsers,
-} from '../../api/opd'
+// FILE: src/opd/components/DeptRoleUserPicker.jsx
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { listOpdDepartments, listOpdUsers } from '../../api/opd'
 
+/**
+ * Props:
+ *  - label?: string
+ *  - value?: number | string  -> practitioner_user_id
+ *  - onChange?: (userId: number | null, ctx?: { department_id?: number | null, user?: any }) => void
+ */
 export default function DeptRoleUserPicker({
+    label = 'Department · Doctor',
     value,
     onChange,
-    label = 'Department · Role · User',
-    onlyDoctors = false,
 }) {
-    const [depts, setDepts] = useState([])
-    const [deptId, setDeptId] = useState('')
-    const [roles, setRoles] = useState([])
-    const [roleId, setRoleId] = useState('')
-    const [users, setUsers] = useState([])
-    const [userId, setUserId] = useState('')
+    const [departments, setDepartments] = useState([])
+    const [doctors, setDoctors] = useState([])
 
+    const [departmentId, setDepartmentId] = useState(null)
+    const [selectedUserId, setSelectedUserId] = useState(null)
+    const [loading, setLoading] = useState(false)
+    const [error, setError] = useState('')
+
+    // ---------- 1. Load departments on mount ----------
     useEffect(() => {
         let alive = true
-        fetchDepartments()
-            .then((r) => alive && setDepts(r.data || []))
-            .catch(() => alive && setDepts([]))
+            ; (async () => {
+                setLoading(true)
+                setError('')
+                try {
+                    const { data } = await listOpdDepartments()
+                    if (!alive) return
+                    setDepartments(data || [])
+                } catch (e) {
+                    if (!alive) return
+                    setError(
+                        e?.response?.data?.detail ||
+                        'Failed to load departments'
+                    )
+                } finally {
+                    alive && setLoading(false)
+                }
+            })()
         return () => {
             alive = false
         }
     }, [])
 
+    // ---------- 2. Load doctors when department changes ----------
     useEffect(() => {
-        let alive = true
-        setRoleId('')
-        setUsers([])
-        setUserId('')
-        if (!deptId) {
-            setRoles([])
+        if (!departmentId) {
+            setDoctors([])
             return
         }
-        fetchDepartmentRoles({ departmentId: Number(deptId) })
-            .then((r) => alive && setRoles(r.data || []))
-            .catch(() => alive && setRoles([]))
-        return () => {
-            alive = false
-        }
-    }, [deptId])
-
-    useEffect(() => {
         let alive = true
-        setUsers([])
-        setUserId('')
-        if (!deptId || !roleId) return
-        fetchDepartmentUsers({
-            departmentId: Number(deptId),
-            roleId: Number(roleId),
-            isDoctor: onlyDoctors,
-        })
-            .then((r) => alive && setUsers(r.data || []))
-            .catch(() => alive && setUsers([]))
+            ; (async () => {
+                setLoading(true)
+                setError('')
+                try {
+                    const { data } = await listOpdUsers({
+                        departmentId,
+                        isDoctor: true,
+                    })
+                    if (!alive) return
+                    setDoctors(data || [])
+                } catch (e) {
+                    if (!alive) return
+                    setError(e?.response?.data?.detail || 'Failed to load doctors')
+                } finally {
+                    alive && setLoading(false)
+                }
+            })()
         return () => {
             alive = false
         }
-    }, [deptId, roleId, onlyDoctors])
+    }, [departmentId])
 
+    // ---------- 3. Sync `value` from parent into local state (NO onChange here) ----------
     useEffect(() => {
-        onChange?.(
-            userId ? Number(userId) : null,
-            {
-                department_id: deptId ? Number(deptId) : null,
-                role_id: roleId ? Number(roleId) : null,
-            },
-        )
-    }, [userId, deptId, roleId, onChange])
+        if (value == null || value === '') {
+            // parent cleared selection
+            setSelectedUserId(null)
+            return
+        }
+        const numVal = Number(value)
+        if (!Number.isFinite(numVal)) return
+
+        // avoid useless setState => no extra renders
+        setSelectedUserId((prev) => (prev === numVal ? prev : numVal))
+    }, [value])
+
+    const currentDoctor = useMemo(
+        () => doctors.find((d) => d.id === selectedUserId) || null,
+        [doctors, selectedUserId]
+    )
+
+    const handleDeptChange = useCallback((e) => {
+        const v = e.target.value
+        const nextDeptId = v ? Number(v) : null
+
+        setDepartmentId(nextDeptId)
+        // whenever department changes, clear doctor locally + notify parent with null
+        setSelectedUserId(null)
+        if (onChange) {
+            onChange(null, { department_id: nextDeptId })
+        }
+    }, [onChange])
+
+    const handleDoctorChange = useCallback(
+        (e) => {
+            const v = e.target.value
+            const nextUserId = v ? Number(v) : null
+
+            setSelectedUserId(nextUserId)
+
+            if (onChange) {
+                const ctx = {
+                    department_id: departmentId,
+                    user: doctors.find((d) => d.id === nextUserId) || null,
+                }
+                onChange(nextUserId, ctx)
+            }
+        },
+        [onChange, departmentId, doctors]
+    )
 
     return (
-        <div className="space-y-2">
-            <label className="text-sm font-medium">{label}</label>
-            <div className="grid gap-3 sm:grid-cols-3">
+        <div className="space-y-1 text-sm">
+            {label && (
+                <label className="block text-xs font-medium text-gray-600">
+                    {label}
+                </label>
+            )}
+
+            <div className="grid gap-2 md:grid-cols-2">
+                {/* Department select */}
                 <select
                     className="input"
-                    value={deptId}
-                    onChange={(e) => setDeptId(e.target.value)}
+                    value={departmentId ?? ''}
+                    onChange={handleDeptChange}
                 >
                     <option value="">Select department</option>
-                    {depts.map((d) => (
+                    {departments.map((d) => (
                         <option key={d.id} value={d.id}>
                             {d.name}
                         </option>
                     ))}
                 </select>
 
+                {/* Doctor select */}
                 <select
                     className="input"
-                    value={roleId}
-                    onChange={(e) => setRoleId(e.target.value)}
-                    disabled={!deptId}
+                    value={selectedUserId ?? ''}
+                    onChange={handleDoctorChange}
+                    disabled={!departmentId || loading}
                 >
-                    <option value="">Select role</option>
-                    {roles.map((r) => (
-                        <option key={r.id} value={r.id}>
-                            {r.name}
-                        </option>
-                    ))}
-                </select>
-
-                <select
-                    className="input"
-                    value={userId}
-                    onChange={(e) => setUserId(e.target.value)}
-                    disabled={!roleId}
-                >
-                    <option value="">Select user</option>
-                    {users.map((u) => (
+                    <option value="">
+                        {departmentId
+                            ? loading
+                                ? 'Loading doctors…'
+                                : 'Select doctor'
+                            : 'Select department first'}
+                    </option>
+                    {doctors.map((u) => (
                         <option key={u.id} value={u.id}>
-                            {u.name}
+                            {u.full_name || u.name || `User #${u.id}`}
                         </option>
                     ))}
                 </select>
             </div>
+
+            {error && (
+                <div className="rounded-md border border-rose-200 bg-rose-50 px-2 py-1 text-xs text-rose-700">
+                    {error}
+                </div>
+            )}
         </div>
     )
 }

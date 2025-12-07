@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { listOtCases, addOtCase, updateOtCase, getAnaesthesia, saveAnaesthesia } from '../../api/ipd'
+import { listOtCases, addOtCase, getAnaesthesia, saveAnaesthesia } from '../../api/ipd'
 
 export default function OtModule({ admissionId }) {
     const [rows, setRows] = useState([])
