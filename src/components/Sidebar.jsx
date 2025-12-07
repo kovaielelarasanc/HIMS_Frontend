@@ -367,6 +367,13 @@ const GROUPS = [
         icon: Scissors,
         reqAny: ['ot.cases.view', 'ot.cases.create', 'ipd.view'],
       },
+      {
+        key: 'ot-Log',
+        label: 'OT LOGS',
+        to: '/ot/logs',
+        icon: Scissors,
+        reqAny: ['ot.cases.view', 'ot.cases.create', 'ipd.view'],
+      },
     
     ],
   },

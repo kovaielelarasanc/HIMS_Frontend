@@ -77,6 +77,7 @@ import OrdersList from './lab/Orders'
 import OtTheatreSchedulePage from './ot/OtTheatreSchedulePage'
 import OtMastersPage from './ot/OtMastersPage'
 import OtCaseDetailPage from './ot/OtCaseDetailPage'
+import OtLogsAdmin from './ot/OtLogsAdmin'
 
 export default function App() {
     useEffect(() => {
@@ -166,6 +167,7 @@ export default function App() {
                         <Route path="/ot/schedule" element={<OtTheatreSchedulePage />} />
                         <Route path="/ot/masters" element={<OtMastersPage />} />
                         <Route path="/ot/cases/:caseId" element={<OtCaseDetailPage />} />
+                        <Route path="/ot/logs" element={<OtLogsAdmin />} />
 
                         {/* Billing */}
                         <Route path="/billing" element={<BillingConsole />} />

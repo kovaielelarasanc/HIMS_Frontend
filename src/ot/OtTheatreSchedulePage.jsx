@@ -1,32 +1,31 @@
 // FILE: frontend/src/ot/OtTheatreSchedulePage.jsx
 import { useEffect, useMemo, useState } from 'react'
 import {
-    listOtTheatres,
     listOtSchedules,
     createOtSchedule,
     updateOtSchedule,
     openOtCaseFromSchedule,
-
+    listOtProcedures,
 } from '../api/ot'
 import { useCan } from '../hooks/useCan'
 import {
     CalendarDays,
     RefreshCcw,
-    AlertTriangle,
     Search,
-    ChevronRight,
     Clock3,
     User,
     Stethoscope,
     Activity,
     Plus,
     X,
+    Sparkles,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 
 // 🔁 Reusable pickers
 import PatientPicker from '../components/pickers/PatientPicker'
 import DoctorPicker from '../components/pickers/DoctorPicker'
+import WardRoomBedPicker from '../components/pickers/BedPicker'
 
 const formatDateInput = (d) => {
     if (!d) return ''
@@ -84,110 +83,52 @@ function PriorityBadge({ priority }) {
     )
 }
 
-function TheatreList({ theatres, selectedId, onSelect, loading }) {
-    const [searchTerm, setSearchTerm] = useState('')
-
-    const filtered = useMemo(() => {
-        const term = searchTerm.trim().toLowerCase()
-        if (!term) return theatres
-        return theatres.filter(
-            (th) =>
-                (th.name || '').toLowerCase().includes(term) ||
-                (th.code || '').toLowerCase().includes(term) ||
-                (th.location || '').toLowerCase().includes(term),
-        )
-    }, [theatres, searchTerm])
-
+// ---------------------------------------------------------------------
+// Bed-based filter panel (left side)
+// ---------------------------------------------------------------------
+function BedFilterPanel({ selectedBedId, onSelectBed }) {
     return (
         <div className="flex h-full flex-col rounded-2xl border bg-white/80 backdrop-blur-sm">
-            <div className="flex items-center justify-between border-b px-4 py-3">
-                <div>
-                    <h2 className="text-sm font-semibold text-slate-900">
-                        OT Theatres
-                    </h2>
-                    <p className="text-xs text-slate-500">
-                        Select a theatre to view schedule
-                    </p>
-                </div>
+            <div className="border-b px-4 py-3">
+                <h2 className="text-sm font-semibold text-slate-900">
+                    OT Location / Bed Filter
+                </h2>
+                <p className="text-xs text-slate-500">
+                    Filter OT schedule by ward &amp; bed, or leave blank to see all.
+                </p>
             </div>
 
-            <div className="border-b px-3 py-2">
-                <div className="relative">
-                    <Search className="absolute left-2 top-2.5 h-4 w-4 text-slate-400" />
-                    <input
-                        type="text"
-                        className="w-full rounded-lg border border-slate-200 bg-slate-50 py-2 pl-8 pr-2 text-xs text-slate-800 placeholder:text-slate-400 focus:border-sky-500 focus:bg-white focus:outline-none focus:ring-1 focus:ring-sky-500"
-                        placeholder="Search by name, code, location..."
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
+            <div className="flex-1 space-y-3 px-3 py-3">
+                <WardRoomBedPicker
+                    value={selectedBedId ? Number(selectedBedId) : null}
+                    onChange={(bedId) => onSelectBed(bedId || null)}
+                />
+                <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600">
+                    {selectedBedId ? (
+                        <>Showing cases for <span className="font-semibold">Bed #{selectedBedId}</span>.</>
+                    ) : (
+                        <>No specific bed selected – showing <span className="font-semibold">all OT beds</span> for this day.</>
+                    )}
                 </div>
-            </div>
-
-            <div className="flex-1 space-y-1 overflow-y-auto px-2 py-2">
-                {loading && (
-                    <>
-                        {Array.from({ length: 4 }).map((_, idx) => (
-                            <div
-                                key={idx}
-                                className="animate-pulse rounded-xl border border-slate-100 bg-slate-50 px-3 py-2.5"
-                            >
-                                <div className="mb-1.5 h-3 w-2/3 rounded bg-slate-200" />
-                                <div className="mb-1 h-2 w-1/2 rounded bg-slate-200" />
-                                <div className="h-2 w-1/3 rounded bg-slate-200" />
-                            </div>
-                        ))}
-                    </>
-                )}
-
-                {!loading && filtered.length === 0 && (
-                    <div className="flex flex-col items-center justify-center gap-1 py-8 text-center text-xs text-slate-500">
-                        <AlertTriangle className="h-4 w-4 text-amber-500" />
-                        <span>No theatres found.</span>
-                    </div>
-                )}
-
-                {!loading &&
-                    filtered.map((th) => {
-                        const isSelected = th.id === selectedId
-                        return (
-                            <button
-                                key={th.id}
-                                type="button"
-                                onClick={() => onSelect(th.id)}
-                                className={`w-full rounded-xl border px-3 py-2.5 text-left text-xs transition-all ${isSelected
-                                    ? 'border-sky-500 bg-sky-50/80 shadow-sm'
-                                    : 'border-slate-100 bg-white hover:border-sky-300 hover:bg-sky-50/40'
-                                    }`}
-                            >
-                                <div className="flex items-start justify-between gap-2">
-                                    <div>
-                                        <div className="flex items-center gap-1.5">
-                                            <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                                                {th.code}
-                                            </span>
-                                            <ChevronRight className="h-3 w-3 text-slate-400" />
-                                        </div>
-                                        <div className="text-[13px] font-semibold text-slate-900">
-                                            {th.name}
-                                        </div>
-                                        {th.location && (
-                                            <div className="mt-0.5 text-[11px] text-slate-500">
-                                                {th.location}
-                                            </div>
-                                        )}
-                                    </div>
-                                </div>
-                            </button>
-                        )
-                    })}
             </div>
         </div>
     )
 }
 
-function ScheduleTable({ schedules, loading, date, theatreName, onEdit, onOpenCase }) {
-
+// ---------------------------------------------------------------------
+// Schedule Table (right side)
+// ---------------------------------------------------------------------
+function ScheduleTable({
+    schedules,
+    loading,
+    date,
+    bedId,
+    onEdit,
+    onOpenCase,
+}) {
+    const headerSubtitle = bedId
+        ? `Bed #${bedId} · ${date}`
+        : `All locations · ${date}`
 
     return (
         <div className="flex h-full flex-col rounded-2xl border bg-white/90 backdrop-blur-sm">
@@ -197,15 +138,7 @@ function ScheduleTable({ schedules, loading, date, theatreName, onEdit, onOpenCa
                         OT Day Schedule
                     </h2>
                     <p className="text-xs text-slate-500">
-                        {theatreName ? (
-                            <>
-                                {theatreName} &middot; <span>{date}</span>
-                            </>
-                        ) : (
-                            <>
-                                All theatres &middot; <span>{date}</span>
-                            </>
-                        )}
+                        {headerSubtitle}
                     </p>
                 </div>
             </div>
@@ -218,7 +151,7 @@ function ScheduleTable({ schedules, loading, date, theatreName, onEdit, onOpenCa
                                 Time
                             </th>
                             <th className="px-4 py-2 text-[11px] font-semibold text-slate-500">
-                                Theatre
+                                Location / Bed
                             </th>
                             <th className="px-4 py-2 text-[11px] font-semibold text-slate-500">
                                 Patient
@@ -303,6 +236,11 @@ function ScheduleTable({ schedules, loading, date, theatreName, onEdit, onOpenCa
                                     s.anaesthetist?.full_name ||
                                     s.anaesthetist_name ||
                                     null
+                                const primaryProcName =
+                                    s.primary_procedure?.name || s.procedure_name
+                                const additionalCount = (s.procedures || []).filter(
+                                    (l) => !l.is_primary,
+                                ).length
 
                                 return (
                                     <tr
@@ -318,16 +256,17 @@ function ScheduleTable({ schedules, loading, date, theatreName, onEdit, onOpenCa
                                             </div>
                                         </td>
                                         <td className="px-4 py-2 align-top text-xs text-slate-700">
-                                            <div className="font-medium text-slate-800">
-                                                {s.theatre?.name ||
-                                                    `#${s.theatre_id}`}
-                                            </div>
-                                            {s.theatre?.code && (
-                                                <div className="text-[11px] text-slate-500">
-                                                    {s.theatre.code}
+                                            {s.bed_id ? (
+                                                <div className="font-medium text-slate-800">
+                                                    Bed #{s.bed_id}
+                                                </div>
+                                            ) : (
+                                                <div className="font-medium text-slate-400">
+                                                    No bed assigned
                                                 </div>
                                             )}
                                         </td>
+
                                         <td className="px-4 py-2 align-top text-xs text-slate-700">
                                             <div className="flex items-center gap-1.5">
                                                 <User className="h-3.5 w-3.5 text-slate-400" />
@@ -351,12 +290,17 @@ function ScheduleTable({ schedules, loading, date, theatreName, onEdit, onOpenCa
                                         </td>
                                         <td className="max-w-xs px-4 py-2 align-top text-xs text-slate-700">
                                             <div className="line-clamp-2 font-medium text-slate-900">
-                                                {s.procedure_name}
+                                                {primaryProcName || '—'}
                                             </div>
                                             <div className="mt-0.5 flex flex-wrap items-center gap-1">
                                                 {s.side && (
                                                     <span className="rounded-full bg-slate-100 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-slate-600">
                                                         {s.side}
+                                                    </span>
+                                                )}
+                                                {additionalCount > 0 && (
+                                                    <span className="rounded-full bg-sky-50 px-1.5 py-0.5 text-[10px] text-sky-700">
+                                                        +{additionalCount} more
                                                     </span>
                                                 )}
                                             </div>
@@ -398,29 +342,19 @@ function ScheduleTable({ schedules, loading, date, theatreName, onEdit, onOpenCa
                                                     Edit
                                                 </button>
 
-                                                {s.case_id ? (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => navigate(`/ot/cases/${s.case_id}`)}
-                                                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 hover:border-sky-400 hover:text-sky-700"
-                                                    >
-                                                        <Activity className="h-3.5 w-3.5" />
-                                                        Details
-                                                    </button>
-                                                ) : (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => onOpenCase(s)}
-                                                        className="inline-flex items-center gap-1 rounded-lg border border-emerald-600 bg-emerald-600 px-2.5 py-1 text-[11px] font-medium text-white hover:bg-emerald-700"
-                                                    >
-                                                        <Activity className="h-3.5 w-3.5" />
-                                                        Open Case
-                                                    </button>
-                                                )}
+                                                <button
+                                                    type="button"
+                                                    onClick={() => onOpenCase(s)}
+                                                    className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-[11px] font-medium ${s.case_id
+                                                        ? 'border-slate-200 bg-white text-slate-700 hover:border-sky-400 hover:text-sky-700'
+                                                        : 'border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700'
+                                                        }`}
+                                                >
+                                                    <Activity className="h-3.5 w-3.5" />
+                                                    {s.case_id ? 'Details' : 'Open Case'}
+                                                </button>
                                             </div>
                                         </td>
-
-
                                     </tr>
                                 )
                             })}
@@ -432,7 +366,7 @@ function ScheduleTable({ schedules, loading, date, theatreName, onEdit, onOpenCa
 }
 
 // ---------------------------------------------------------------------
-// Schedule Modal
+// Schedule Modal (bed-based, no theatre_id)
 // ---------------------------------------------------------------------
 
 function ScheduleModal({
@@ -440,27 +374,30 @@ function ScheduleModal({
     mode, // 'create' | 'edit'
     onClose,
     onSaved,
-    theatres,
-    defaultTheatreId,
     defaultDate,
+    defaultBedId,
     editingSchedule,
 }) {
     const isEdit = mode === 'edit'
 
     const [form, setForm] = useState({
-        theatre_id: defaultTheatreId || '',
         date: defaultDate || '',
         planned_start_time: '',
         planned_end_time: '',
         patient_id: '',
         admission_id: '',
+        bed_id: defaultBedId || '',
         surgeon_user_id: '',
         anaesthetist_user_id: '',
         procedure_name: '',
         side: '',
         priority: 'Elective',
         notes: '',
+        // 🔹 NEW: procedure master linkage
+        primary_procedure_id: '',
+        additional_procedure_ids: [],
     })
+
     const [submitting, setSubmitting] = useState(false)
     const [error, setError] = useState(null)
 
@@ -469,10 +406,6 @@ function ScheduleModal({
 
         if (isEdit && editingSchedule) {
             setForm({
-                theatre_id:
-                    editingSchedule.theatre_id ||
-                    defaultTheatreId ||
-                    '',
                 date: editingSchedule.date || defaultDate || '',
                 planned_start_time: toTimeInput(
                     editingSchedule.planned_start_time,
@@ -482,35 +415,47 @@ function ScheduleModal({
                 ),
                 patient_id: editingSchedule.patient_id || '',
                 admission_id: editingSchedule.admission_id || '',
+                bed_id: editingSchedule.bed_id || defaultBedId || '',
                 surgeon_user_id:
                     editingSchedule.surgeon_user_id || '',
                 anaesthetist_user_id:
                     editingSchedule.anaesthetist_user_id || '',
                 procedure_name:
-                    editingSchedule.procedure_name || '',
+                    editingSchedule.procedure_name ||
+                    editingSchedule.primary_procedure?.name ||
+                    '',
                 side: editingSchedule.side || '',
                 priority: editingSchedule.priority || 'Elective',
                 notes: editingSchedule.notes || '',
+                primary_procedure_id:
+                    editingSchedule.primary_procedure_id || '',
+                additional_procedure_ids:
+                    editingSchedule.procedures
+                        ?.filter((l) => !l.is_primary)
+                        .map((l) => l.procedure_id) || [],
             })
         } else {
             setForm({
-                theatre_id: defaultTheatreId || (theatres[0]?.id ?? ''),
                 date: defaultDate || '',
                 planned_start_time: '',
                 planned_end_time: '',
                 patient_id: '',
                 admission_id: '',
+                bed_id: defaultBedId || '',
                 surgeon_user_id: '',
                 anaesthetist_user_id: '',
                 procedure_name: '',
                 side: '',
                 priority: 'Elective',
                 notes: '',
+                primary_procedure_id: '',
+                additional_procedure_ids: [],
             })
         }
+
         setError(null)
         setSubmitting(false)
-    }, [open, isEdit, editingSchedule, defaultTheatreId, defaultDate, theatres])
+    }, [open, isEdit, editingSchedule, defaultBedId, defaultDate])
 
     if (!open) return null
 
@@ -522,11 +467,12 @@ function ScheduleModal({
     }
 
     const validate = () => {
-        if (!form.theatre_id) return 'Please select a theatre'
         if (!form.date) return 'Please select a date'
         if (!form.planned_start_time) return 'Please enter start time'
         if (!form.procedure_name) return 'Please enter procedure name'
         if (!form.surgeon_user_id) return 'Please select surgeon'
+        // bed is not hard-mandatory, but you can enforce if you want:
+        // if (!form.bed_id) return 'Please select bed / OT location'
         return null
     }
 
@@ -542,16 +488,12 @@ function ScheduleModal({
         setError(null)
         try {
             const payload = {
-                theatre_id: Number(form.theatre_id),
                 date: form.date,
                 planned_start_time: form.planned_start_time,
                 planned_end_time: form.planned_end_time || null,
-                patient_id: form.patient_id
-                    ? Number(form.patient_id)
-                    : null,
-                admission_id: form.admission_id
-                    ? Number(form.admission_id)
-                    : null,
+                patient_id: form.patient_id ? Number(form.patient_id) : null,
+                admission_id: form.admission_id ? Number(form.admission_id) : null,
+                bed_id: form.bed_id ? Number(form.bed_id) : null,
                 surgeon_user_id: form.surgeon_user_id
                     ? Number(form.surgeon_user_id)
                     : null,
@@ -562,7 +504,15 @@ function ScheduleModal({
                 side: form.side || null,
                 priority: form.priority || 'Elective',
                 notes: form.notes || null,
+                primary_procedure_id: form.primary_procedure_id
+                    ? Number(form.primary_procedure_id)
+                    : null,
+                additional_procedure_ids: (form.additional_procedure_ids || []).map(
+                    (id) => Number(id),
+                ),
             }
+            console.log(payload, "bed no");
+            
 
             if (isEdit && editingSchedule?.id) {
                 await updateOtSchedule(editingSchedule.id, payload)
@@ -614,49 +564,17 @@ function ScheduleModal({
                     <div className="grid grid-cols-1 gap-4 px-5 py-4 md:grid-cols-2">
                         {/* Left column */}
                         <div className="space-y-3">
-                            <div className="space-y-1">
-                                <label className="text-xs font-medium text-slate-700">
-                                    OT Theatre{' '}
-                                    <span className="text-rose-500">
-                                        *
-                                    </span>
-                                </label>
-                                <select
-                                    className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                                    value={form.theatre_id}
-                                    onChange={(e) =>
-                                        handleChange(
-                                            'theatre_id',
-                                            e.target.value,
-                                        )
-                                    }
-                                >
-                                    <option value="">Select theatre</option>
-                                    {theatres.map((t) => (
-                                        <option key={t.id} value={t.id}>
-                                            {t.code} – {t.name}
-                                        </option>
-                                    ))}
-                                </select>
-                            </div>
-
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1">
                                     <label className="text-xs font-medium text-slate-700">
-                                        Date{' '}
-                                        <span className="text-rose-500">
-                                            *
-                                        </span>
+                                        Date <span className="text-rose-500">*</span>
                                     </label>
                                     <input
                                         type="date"
                                         className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                         value={form.date}
                                         onChange={(e) =>
-                                            handleChange(
-                                                'date',
-                                                e.target.value,
-                                            )
+                                            handleChange('date', e.target.value)
                                         }
                                     />
                                 </div>
@@ -668,18 +586,11 @@ function ScheduleModal({
                                         className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                         value={form.priority}
                                         onChange={(e) =>
-                                            handleChange(
-                                                'priority',
-                                                e.target.value,
-                                            )
+                                            handleChange('priority', e.target.value)
                                         }
                                     >
-                                        <option value="Elective">
-                                            Elective
-                                        </option>
-                                        <option value="Emergency">
-                                            Emergency
-                                        </option>
+                                        <option value="Elective">Elective</option>
+                                        <option value="Emergency">Emergency</option>
                                     </select>
                                 </div>
                             </div>
@@ -687,10 +598,7 @@ function ScheduleModal({
                             <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1">
                                     <label className="text-xs font-medium text-slate-700">
-                                        Start time{' '}
-                                        <span className="text-rose-500">
-                                            *
-                                        </span>
+                                        Start time <span className="text-rose-500">*</span>
                                     </label>
                                     <input
                                         type="time"
@@ -756,26 +664,56 @@ function ScheduleModal({
                                     />
                                 </div>
                             </div>
+
+                            {/* Ward → Room → Bed mapping */}
+                            <WardRoomBedPicker
+                                value={form.bed_id ? Number(form.bed_id) : null}
+                                onChange={(bedId) =>
+                                    setForm((f) => ({
+                                        ...f,
+                                        bed_id: bedId || '',
+                                    }))
+                                }
+                            />
                         </div>
 
                         {/* Right column */}
                         <div className="space-y-3">
+                            {/* Pick primary + additional procedures from master */}
+                            <ProcedurePicker
+                                primaryId={
+                                    form.primary_procedure_id
+                                        ? Number(form.primary_procedure_id)
+                                        : null
+                                }
+                                additionalIds={form.additional_procedure_ids || []}
+                                onChange={(vals) => {
+                                    setForm((f) => ({
+                                        ...f,
+                                        primary_procedure_id:
+                                            vals.primary_procedure_id ?? f.primary_procedure_id,
+                                        additional_procedure_ids:
+                                            vals.additional_procedure_ids ?? f.additional_procedure_ids,
+                                        procedure_name:
+                                            vals.primary_procedure_name && !f.procedure_name
+                                                ? vals.primary_procedure_name
+                                                : f.procedure_name,
+                                    }))
+                                }}
+                            />
+
+                            {/* Free-text procedure display / override */}
                             <div className="space-y-1">
                                 <label className="text-xs font-medium text-slate-700">
-                                    Procedure name{' '}
-                                    <span className="text-rose-500">
-                                        *
-                                    </span>
+                                    Procedure name (display){' '}
+                                    <span className="text-rose-500">*</span>
                                 </label>
                                 <textarea
                                     rows={2}
                                     className="w-full resize-none rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                     value={form.procedure_name}
                                     onChange={(e) =>
-                                        handleChange(
-                                            'procedure_name',
-                                            e.target.value,
-                                        )
+                                        handleChange('procedure_name', e.target.value)
                                     }
                                     placeholder="E.g., Laparoscopic cholecystectomy"
                                 />
@@ -790,62 +728,46 @@ function ScheduleModal({
                                         className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                         value={form.side}
                                         onChange={(e) =>
-                                            handleChange(
-                                                'side',
-                                                e.target.value,
-                                            )
+                                            handleChange('side', e.target.value)
                                         }
                                     >
-                                        <option value="">
-                                            Not applicable
-                                        </option>
+                                        <option value="">Not applicable</option>
                                         <option value="Right">Right</option>
                                         <option value="Left">Left</option>
-                                        <option value="Bilateral">
-                                            Bilateral
-                                        </option>
-                                        <option value="Midline">
-                                            Midline
-                                        </option>
+                                        <option value="Bilateral">Bilateral</option>
+                                        <option value="Midline">Midline</option>
                                     </select>
                                 </div>
-                                <div className="space-y-1">
-                                    {/* Surgeon picker */}
-                                    <DoctorPicker
-                                        label="Surgeon"
-                                        value={
-                                            form.surgeon_user_id
-                                                ? Number(
-                                                    form.surgeon_user_id,
-                                                )
-                                                : null
-                                        }
-                                        onChange={(doctorId) =>
-                                            setForm((f) => ({
-                                                ...f,
-                                                surgeon_user_id:
-                                                    doctorId || '',
-                                            }))
-                                        }
-                                    />
-                                </div>
+
+                                {/* Surgeon picker */}
+                                <DoctorPicker
+                                    label="Surgeon"
+                                    value={
+                                        form.surgeon_user_id
+                                            ? Number(form.surgeon_user_id)
+                                            : null
+                                    }
+                                    onChange={(doctorId) =>
+                                        setForm((f) => ({
+                                            ...f,
+                                            surgeon_user_id: doctorId || '',
+                                        }))
+                                    }
+                                />
                             </div>
 
-                            {/* Anaesthetist */}
+                            {/* Anaesthetist picker */}
                             <DoctorPicker
                                 label="Anaesthetist"
                                 value={
                                     form.anaesthetist_user_id
-                                        ? Number(
-                                            form.anaesthetist_user_id,
-                                        )
+                                        ? Number(form.anaesthetist_user_id)
                                         : null
                                 }
                                 onChange={(doctorId) =>
                                     setForm((f) => ({
                                         ...f,
-                                        anaesthetist_user_id:
-                                            doctorId || '',
+                                        anaesthetist_user_id: doctorId || '',
                                     }))
                                 }
                             />
@@ -902,7 +824,148 @@ function ScheduleModal({
 }
 
 // ---------------------------------------------------------------------
-// Page component
+// ProcedurePicker (primary + additional) using OT Procedure Master
+// ---------------------------------------------------------------------
+function ProcedurePicker({ primaryId, additionalIds, onChange }) {
+    const [items, setItems] = useState([])
+    const [loading, setLoading] = useState(false)
+    const [search, setSearch] = useState('')
+
+    useEffect(() => {
+        const load = async () => {
+            try {
+                setLoading(true)
+                const res = await listOtProcedures({ limit: 500 })
+                setItems(res.data || [])
+            } catch (err) {
+                console.error('Failed to load OT procedures', err)
+            } finally {
+                setLoading(false)
+            }
+        }
+        load()
+    }, [])
+
+    const filtered = useMemo(() => {
+        const term = search.trim().toLowerCase()
+        if (!term) return items
+        return items.filter((it) => {
+            const name = (it.name || '').toLowerCase()
+            const code = (it.code || '').toLowerCase()
+            return name.includes(term) || code.includes(term)
+        })
+    }, [items, search])
+
+    const handlePrimaryChange = (val) => {
+        const id = val ? Number(val) : null
+        onChange({
+            primary_procedure_id: id,
+            additional_procedure_ids: additionalIds || [],
+            primary_procedure_name:
+                id ? items.find((x) => x.id === id)?.name || '' : '',
+        })
+    }
+
+    const handleToggleAdditional = (id) => {
+        const cur = new Set(additionalIds || [])
+        if (cur.has(id)) {
+            cur.delete(id)
+        } else {
+            cur.add(id)
+        }
+        onChange({
+            primary_procedure_id: primaryId || null,
+            additional_procedure_ids: Array.from(cur),
+        })
+    }
+
+    return (
+        <div className="space-y-2">
+            <div className="flex items-center justify-between">
+                <label className="text-xs font-medium text-slate-700">
+                    Procedures (from master)
+                </label>
+                <div className="relative w-40">
+                    <Search className="pointer-events-none absolute left-2 top-1.5 h-3.5 w-3.5 text-slate-400" />
+                    <input
+                        type="text"
+                        className="w-full rounded-lg border border-slate-200 bg-white pl-7 pr-1.5 py-1 text-[11px] text-slate-800 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                        placeholder="Search..."
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                    />
+                </div>
+            </div>
+
+            <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/60 p-2">
+                {loading && (
+                    <div className="text-[11px] text-slate-500">
+                        Loading procedures...
+                    </div>
+                )}
+
+                {!loading && filtered.length === 0 && (
+                    <div className="text-[11px] text-slate-500">
+                        No procedures found.
+                    </div>
+                )}
+
+                {!loading && filtered.length > 0 && (
+                    <>
+                        <div className="space-y-1">
+                            <div className="flex items-center gap-1.5 text-[11px] font-medium text-slate-600">
+                                <Sparkles className="h-3 w-3" />
+                                Primary procedure
+                            </div>
+                            <select
+                                className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                value={primaryId || ''}
+                                onChange={(e) => handlePrimaryChange(e.target.value)}
+                            >
+                                <option value="">Not selected</option>
+                                {filtered.map((p) => (
+                                    <option key={p.id} value={p.id}>
+                                        {(p.code ? p.code + ' – ' : '') + p.name}
+                                    </option>
+                                ))}
+                            </select>
+                        </div>
+
+                        <div className="space-y-1">
+                            <div className="text-[11px] font-medium text-slate-600">
+                                Additional procedures
+                            </div>
+                            <div className="max-h-32 space-y-1 overflow-auto rounded-lg border border-slate-100 bg-white p-1.5 text-[11px]">
+                                {filtered.map((p) => {
+                                    const checked = (additionalIds || []).includes(p.id)
+                                    return (
+                                        <label
+                                            key={p.id}
+                                            className="flex cursor-pointer items-center gap-1.5 rounded-md px-1 py-0.5 hover:bg-slate-50"
+                                        >
+                                            <input
+                                                type="checkbox"
+                                                className="h-3 w-3 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                                                checked={checked}
+                                                onChange={() => handleToggleAdditional(p.id)}
+                                            />
+                                            <span className="truncate">
+                                                {(p.code ? p.code + ' – ' : '') + p.name}
+                                            </span>
+                                        </label>
+                                    )
+                                })}
+                            </div>
+                        </div>
+                    </>
+                )}
+            </div>
+        </div>
+    )
+}
+
+// ---------------------------------------------------------------------
+// Page component (now bed-based, name kept same for routing)
 // ---------------------------------------------------------------------
 
 export default function OtTheatreSchedulePage() {
@@ -911,11 +974,9 @@ export default function OtTheatreSchedulePage() {
     const canUpdateSchedule = useCan('ot.schedule.update')
 
     const [date, setDate] = useState(formatDateInput(new Date()))
-    const [theatres, setTheatres] = useState([])
-    const [selectedTheatreId, setSelectedTheatreId] = useState(null)
+    const [selectedBedId, setSelectedBedId] = useState(null)
     const [schedules, setSchedules] = useState([])
 
-    const [loadingTheatres, setLoadingTheatres] = useState(false)
     const [loadingSchedule, setLoadingSchedule] = useState(false)
     const [error, setError] = useState(null)
 
@@ -925,51 +986,6 @@ export default function OtTheatreSchedulePage() {
 
     const navigate = useNavigate()
 
-    const selectedTheatre = useMemo(
-        () => theatres.find((t) => t.id === selectedTheatreId),
-        [theatres, selectedTheatreId],
-    )
-
-    const loadTheatres = async () => {
-        try {
-            setLoadingTheatres(true)
-            setError(null)
-            const res = await listOtTheatres({ active: true })
-            const items = res.data || []
-            setTheatres(items)
-            if (!selectedTheatreId && items.length > 0) {
-                setSelectedTheatreId(items[0].id)
-            }
-        } catch (err) {
-            console.error('Failed to load OT theatres', err)
-            setError('Failed to load OT theatres')
-        } finally {
-            setLoadingTheatres(false)
-        }
-    }
-    const handleOpenCase = async (schedule) => {
-        try {
-            // Call backend to open/create the case
-            const res = await openOtCaseFromSchedule(schedule.id)
-
-            // Axios response → case data is in res.data
-            const caseId = res?.data?.id
-
-            // Refresh schedule so the row shows case_id & status in_progress
-            await loadSchedule()
-
-            // Immediately navigate to the case detail page
-            if (caseId) {
-                navigate(`/ot/cases/${caseId}`)
-            } else {
-                console.warn('No case id returned from open-case response', res)
-            }
-        } catch (err) {
-            console.error('Failed to open OT case', err)
-            // optionally setError('Failed to open OT case') or toast
-        }
-    }
-
     const loadSchedule = async () => {
         if (!date) return
         try {
@@ -977,7 +993,7 @@ export default function OtTheatreSchedulePage() {
             setError(null)
             const res = await listOtSchedules({
                 date,
-                theatre_id: selectedTheatreId || undefined, // 🔧 use theatre_id, not theatreId
+                bedId: selectedBedId || undefined,   // ✅ use bedId, not bed_id
             })
             setSchedules(res.data || [])
         } catch (err) {
@@ -988,19 +1004,38 @@ export default function OtTheatreSchedulePage() {
         }
     }
 
-    useEffect(() => {
-        if (canViewSchedule) {
-            loadTheatres()
+    const handleOpenCase = async (schedule) => {
+        try {
+            // If case already exists -> just go to details
+            if (schedule.case_id) {
+                navigate(`/ot/cases/${schedule.case_id}`)
+                return
+            }
+
+            // Otherwise create/open case from schedule
+            const res = await openOtCaseFromSchedule(schedule.id)
+            const caseId = res?.data?.id
+
+            // Refresh schedule so row shows case_id & status in_progress
+            await loadSchedule()
+
+            if (caseId) {
+                navigate(`/ot/cases/${caseId}`)
+            } else {
+                console.warn('No case id returned from open-case response', res)
+            }
+        } catch (err) {
+            console.error('Failed to open OT case', err)
+            // Optionally: setError('Failed to open OT case')
         }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [canViewSchedule])
+    }
 
     useEffect(() => {
         if (canViewSchedule) {
             loadSchedule()
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [date, selectedTheatreId, canViewSchedule])
+    }, [date, selectedBedId, canViewSchedule])
 
     const handleOpenCreate = () => {
         if (!canCreateSchedule) return
@@ -1033,11 +1068,10 @@ export default function OtTheatreSchedulePage() {
                 <div className="flex flex-wrap items-center justify-between gap-3">
                     <div>
                         <h1 className="text-lg font-semibold text-slate-900">
-                            OT Theatre Schedule
+                            OT Schedule (Beds)
                         </h1>
                         <p className="text-xs text-slate-500">
-                            View and manage OT bookings by theatre and day,
-                            aligned with NABH OT records.
+                            View and manage OT bookings by date and bed / location, aligned with NABH OT records.
                         </p>
                     </div>
 
@@ -1053,10 +1087,7 @@ export default function OtTheatreSchedulePage() {
                         </div>
                         <button
                             type="button"
-                            onClick={() => {
-                                loadTheatres()
-                                loadSchedule()
-                            }}
+                            onClick={loadSchedule}
                             className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:border-sky-500 hover:text-sky-700"
                         >
                             <RefreshCcw className="h-3.5 w-3.5" />
@@ -1083,17 +1114,15 @@ export default function OtTheatreSchedulePage() {
 
                 {/* Main grid */}
                 <div className="grid h-[calc(100vh-170px)] grid-cols-1 gap-3 md:grid-cols-[minmax(260px,0.32fr)_minmax(0,0.68fr)]">
-                    <TheatreList
-                        theatres={theatres}
-                        selectedId={selectedTheatreId}
-                        onSelect={setSelectedTheatreId}
-                        loading={loadingTheatres}
+                    <BedFilterPanel
+                        selectedBedId={selectedBedId}
+                        onSelectBed={setSelectedBedId}
                     />
                     <ScheduleTable
                         schedules={schedules}
                         loading={loadingSchedule}
                         date={date}
-                        theatreName={selectedTheatre?.name}
+                        bedId={selectedBedId}
                         onEdit={handleOpenEdit}
                         onOpenCase={handleOpenCase}
                     />
@@ -1106,9 +1135,8 @@ export default function OtTheatreSchedulePage() {
                 mode={modalMode}
                 onClose={() => setModalOpen(false)}
                 onSaved={loadSchedule}
-                theatres={theatres}
-                defaultTheatreId={selectedTheatreId}
                 defaultDate={date}
+                defaultBedId={selectedBedId}
                 editingSchedule={editingSchedule}
             />
         </>

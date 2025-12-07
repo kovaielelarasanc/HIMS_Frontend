@@ -40,6 +40,40 @@ export function deleteOtSpeciality(id) {
     return API.delete(`/ot/specialities/${id}`)
 }
 
+
+// ============================================================
+//  OT PROCEDURES MASTER
+// ============================================================
+
+export function listOtProcedures({ search, specialityId, isActive, limit } = {}) {
+    const params = toParams({
+        search,
+        speciality_id: specialityId,
+        is_active: typeof isActive === 'boolean' ? isActive : undefined,
+        limit,
+    })
+    return API.get('/ot/procedures', { params })
+}
+
+export function getOtProcedure(id) {
+    return API.get(`/ot/procedures/${id}`)
+}
+
+export function createOtProcedure(data) {
+    return API.post('/ot/procedures', data)
+}
+
+export function updateOtProcedure(id, data) {
+    return API.put(`/ot/procedures/${id}`, data)
+}
+
+export function deleteOtProcedure(id) {
+    return API.delete(`/ot/procedures/${id}`)
+}
+
+
+
+
 // ---------- OT THEATRES ----------
 
 export function listOtTheatres({ active, search, specialityId } = {}) {
@@ -125,14 +159,14 @@ export function deleteOtEnvironmentSetting(id) {
 
 export function listOtSchedules({
     date,
-    theatreId,
+    bedId,
     surgeonUserId,
     patientId,
     status,
 } = {}) {
     const params = toParams({
         date,
-        theatre_id: theatreId,
+        bed_id: bedId,
         surgeon_user_id: surgeonUserId,
         patient_id: patientId,
         status,
@@ -145,11 +179,13 @@ export function getOtSchedule(id) {
 }
 
 export function createOtSchedule(data) {
-    return API.post('/ot/schedule', data)
+    // backend: @router.post("/schedules", ...)
+    return API.post('/ot/schedules', data)
 }
 
 export function updateOtSchedule(id, data) {
-    return API.put(`/ot/schedule/${id}`, data)
+    // backend: @router.put("/schedules/{schedule_id}", ...)
+    return API.put(`/ot/schedules/${id}`, data)
 }
 
 export function cancelOtSchedule(id, reason) {
@@ -226,29 +262,31 @@ export function updatePreAnaesthesia(caseId, data) {
     return API.put(`/ot/cases/${caseId}/pre-anaesthesia`, data)
 }
 
-// ============================================================
-//  CLINICAL: PRE-OP CHECKLIST
-// ============================================================
-
+// GET – returns OtPreopChecklistOut JSON
 export function getPreOpChecklist(caseId) {
-    return API.get(`/ot/cases/${caseId}/preop-checklist`)
+    return API.get(`/ot/cases/${caseId}/preop-checklist`).then(
+        (res) => res.data
+    )
 }
 
-export function createPreOpChecklist(caseId, data) {
-    return API.post(`/ot/cases/${caseId}/preop-checklist`, {
-        ...data,
-        case_id: caseId,
-    })
+// POST – body must match OtPreopChecklistIn (FLAT FIELDS)
+export function createPreOpChecklist(caseId, payload) {
+    // payload = { patient_identity_confirmed, consent_checked, ..., completed }
+    return API.post(`/ot/cases/${caseId}/preop-checklist`, payload).then(
+        (res) => res.data
+    )
 }
 
-export function updatePreOpChecklist(caseId, data) {
-    return API.put(`/ot/cases/${caseId}/preop-checklist`, data)
+// PUT – same body as POST
+export function updatePreOpChecklist(caseId, payload) {
+    return API.put(`/ot/cases/${caseId}/preop-checklist`, payload).then(
+        (res) => res.data
+    )
 }
 
 // ============================================================
 //  CLINICAL: SURGICAL SAFETY CHECKLIST
 // ============================================================
-
 export function getSafetyChecklist(caseId) {
     return API.get(`/ot/cases/${caseId}/safety-checklist`)
 }
@@ -256,7 +294,7 @@ export function getSafetyChecklist(caseId) {
 export function createSafetyChecklist(caseId, data) {
     return API.post(`/ot/cases/${caseId}/safety-checklist`, {
         ...data,
-        case_id: caseId,
+        case_id: caseId, // extra field: safely ignored by OtSafetyChecklistIn
     })
 }
 
@@ -267,66 +305,21 @@ export function updateSafetyChecklist(caseId, data) {
 // ============================================================
 //  CLINICAL: ANAESTHESIA RECORD
 // ============================================================
+// examples – adjust if your names differ
+export const getAnaesthesiaRecord = (caseId) => API.get(`/ot/cases/${caseId}/anaesthesia-record`)
+export const createAnaesthesiaRecord = (caseId, data) => API.post(`/ot/cases/${caseId}/anaesthesia-record`, data)
+export const updateAnaesthesiaRecord = (caseId, data) => API.put(`/ot/cases/${caseId}/anaesthesia-record`, data)
 
-export function getAnaesthesiaRecord(caseId) {
-    return API.get(`/ot/cases/${caseId}/anaesthesia-record`)
-}
+export const listAnaesthesiaVitals = (recordId) => API.get(`/ot/anaesthesia-records/${recordId}/vitals`)
+export const createAnaesthesiaVital = (recordId, data) => API.post(`/ot/anaesthesia-records/${recordId}/vitals`, data)
+export const deleteAnaesthesiaVital = (vitalId) => API.delete(`/ot/anaesthesia-vitals/${vitalId}`)
 
-export function createAnaesthesiaRecord(caseId, data) {
-    return API.post(`/ot/cases/${caseId}/anaesthesia-record`, {
-        ...data,
-        case_id: caseId,
-    })
-}
-
-export function updateAnaesthesiaRecord(caseId, data) {
-    return API.put(`/ot/cases/${caseId}/anaesthesia-record`, data)
-}
-
-// ----- Anaesthesia Vitals -----
-
-export function listAnaesthesiaVitals(recordId) {
-    return API.get(`/ot/anaesthesia-records/${recordId}/vitals`)
-}
-
-export function createAnaesthesiaVital(recordId, data) {
-    return API.post(`/ot/anaesthesia-records/${recordId}/vitals`, {
-        ...data,
-        record_id: recordId,
-    })
-}
-
-export function updateAnaesthesiaVital(vitalId, data) {
-    return API.put(`/ot/anaesthesia-vitals/${vitalId}`, data)
-}
-
-export function deleteAnaesthesiaVital(vitalId) {
-    return API.delete(`/ot/anaesthesia-vitals/${vitalId}`)
-}
-
-// ----- Anaesthesia Drugs -----
-
-export function listAnaesthesiaDrugs(recordId) {
-    return API.get(`/ot/anaesthesia-records/${recordId}/drugs`)
-}
-
-export function createAnaesthesiaDrug(recordId, data) {
-    return API.post(`/ot/anaesthesia-records/${recordId}/drugs`, {
-        ...data,
-        record_id: recordId,
-    })
-}
-
-export function updateAnaesthesiaDrug(drugId, data) {
-    return API.put(`/ot/anaesthesia-drugs/${drugId}`, data)
-}
-
-export function deleteAnaesthesiaDrug(drugId) {
-    return API.delete(`/ot/anaesthesia-drugs/${drugId}`)
-}
+export const listAnaesthesiaDrugs = (recordId) => API.get(`/ot/anaesthesia-records/${recordId}/drugs`)
+export const createAnaesthesiaDrug = (recordId, data) => API.post(`/ot/anaesthesia-records/${recordId}/drugs`, data)
+export const deleteAnaesthesiaDrug = (drugId) => API.delete(`/ot/anaesthesia-drugs/${drugId}`)
 
 // ============================================================
-//  CLINICAL: NURSING RECORD
+//  Nursing Record
 // ============================================================
 
 export function getNursingRecord(caseId) {
@@ -337,31 +330,33 @@ export function createNursingRecord(caseId, data) {
     return API.post(`/ot/cases/${caseId}/nursing-record`, {
         ...data,
         case_id: caseId,
+        // let backend default to current user if primary_nurse_id is None
+        primary_nurse_id: data.primary_nurse_id ?? null,
     })
 }
 
 export function updateNursingRecord(caseId, data) {
-    return API.put(`/ot/cases/${caseId}/nursing-record`, data)
+    return API.put(`/ot/cases/${caseId}/nursing-record`, {
+        ...data,
+        case_id: caseId,
+        primary_nurse_id: data.primary_nurse_id ?? null,
+    })
 }
 
-// ============================================================
-//  CLINICAL: SPONGE & INSTRUMENT COUNT
-// ============================================================
+// CLINICAL: SPONGE & INSTRUMENT COUNT (flat)
 
 export function getCountsRecord(caseId) {
     return API.get(`/ot/cases/${caseId}/counts`)
 }
 
 export function createCountsRecord(caseId, data) {
-    return API.post(`/ot/cases/${caseId}/counts`, {
-        ...data,
-        case_id: caseId,
-    })
+    return API.post(`/ot/cases/${caseId}/counts`, data)
 }
 
 export function updateCountsRecord(caseId, data) {
     return API.put(`/ot/cases/${caseId}/counts`, data)
 }
+
 
 // ============================================================
 //  CLINICAL: IMPLANTS / PROSTHESIS
@@ -385,7 +380,6 @@ export function updateImplant(implantId, data) {
 export function deleteImplant(implantId) {
     return API.delete(`/ot/implants/${implantId}`)
 }
-
 // ============================================================
 //  CLINICAL: OPERATION NOTES
 // ============================================================
@@ -405,9 +399,12 @@ export function updateOperationNote(caseId, data) {
     return API.put(`/ot/cases/${caseId}/operation-note`, data)
 }
 
+
 // ============================================================
 //  CLINICAL: BLOOD TRANSFUSION (OT SIDE)
 // ============================================================
+
+// CLINICAL: BLOOD TRANSFUSION (OT SIDE)
 
 export function listOtBloodTransfusions(caseId) {
     return API.get(`/ot/cases/${caseId}/blood-transfusions`)
@@ -427,6 +424,7 @@ export function updateOtBloodTransfusion(recordId, data) {
 export function deleteOtBloodTransfusion(recordId) {
     return API.delete(`/ot/blood-transfusions/${recordId}`)
 }
+
 
 // ============================================================
 //  CLINICAL: PACU / RECOVERY
