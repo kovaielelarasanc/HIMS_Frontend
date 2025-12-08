@@ -2220,9 +2220,9 @@ function OtEnvironmentSettingsTab() {
 const TABS = [
     { id: 'specialities', label: 'Specialities' },
     { id: 'procedures', label: 'Procedures' },
-    { id: 'theatres', label: 'Theatres' },
-    { id: 'equipment', label: 'Equipment' },
-    { id: 'environment', label: 'Environment Settings' },
+    // { id: 'theatres', label: 'Theatres' },
+    // { id: 'equipment', label: 'Equipment' },
+    // { id: 'environment', label: 'Environment Settings' },
 ]
 
 export default function OtMastersPage() {
@@ -2266,9 +2266,9 @@ export default function OtMastersPage() {
             <div className="flex-1 overflow-auto pt-2">
                 {tab === 'specialities' && <OtSpecialitiesTab />}
                 {tab === 'procedures' && <OtProceduresTab />}
-                {tab === 'theatres' && <OtTheatresTab />}
+                {/* {tab === 'theatres' && <OtTheatresTab />}
                 {tab === 'equipment' && <OtEquipmentTab />}
-                {tab === 'environment' && <OtEnvironmentSettingsTab />}
+                {tab === 'environment' && <OtEnvironmentSettingsTab />} */}
             </div>
         </div>
     )

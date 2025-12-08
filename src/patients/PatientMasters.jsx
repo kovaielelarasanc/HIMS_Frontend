@@ -11,7 +11,11 @@ import {
     Pencil,
     Trash2,
     Search,
+    Users,
+    CreditCard,
+    Shield,
 } from 'lucide-react'
+import { toast } from 'sonner'
 
 const PAYER_TYPES = [
     { value: 'insurance', label: 'Insurance' },
@@ -19,6 +23,58 @@ const PAYER_TYPES = [
     { value: 'govt', label: 'Govt Scheme' },
     { value: 'other', label: 'Other' },
 ]
+// Small chip used for filters
+function FilterChip({ label, active, onClick }) {
+    return (
+        <button
+            type="button"
+            onClick={onClick}
+            className={[
+                "inline-flex items-center rounded-full px-3 py-1 text-xs sm:text-sm transition-all",
+                active
+                    ? "bg-blue-600 text-white shadow-sm"
+                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+            ].join(" ")}
+        >
+            {label}
+        </button>
+    )
+}
+
+// Modal wrapper: bottom sheet on mobile, centered on desktop
+function ResponsiveModal({ title, subtitle, onClose, children }) {
+    return (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-0 sm:p-4">
+            <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto
+                            rounded-t-3xl sm:rounded-2xl bg-white shadow-2xl
+                            px-4 py-4 sm:px-5 sm:py-5
+                            transform transition-transform duration-200 ease-out translate-y-0">
+                {/* Header */}
+                <div className="mb-4 flex items-center justify-between gap-2">
+                    <div>
+                        <h3 className="text-base sm:text-lg font-semibold text-slate-900">
+                            {title}
+                        </h3>
+                        {subtitle && (
+                            <p className="mt-1 text-xs sm:text-sm text-slate-500">
+                                {subtitle}
+                            </p>
+                        )}
+                    </div>
+                    <button
+                        onClick={onClose}
+                        type="button"
+                        className="rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                    >
+                        <X className="h-4 w-4" />
+                    </button>
+                </div>
+
+                {children}
+            </div>
+        </div>
+    )
+}
 
 export default function PatientMasters() {
     const [tab, setTab] = useState('payers')
@@ -28,53 +84,87 @@ export default function PatientMasters() {
 
     if (!canView) {
         return (
-            <div className="rounded-2xl border border-yellow-200 bg-yellow-50 p-4 text-sm text-yellow-800">
+            <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-sm text-amber-800 shadow-sm">
                 You do not have permission to view patient masters.
             </div>
         )
     }
 
     return (
-        <div className="space-y-4 bg-white p-3 rounded">
-            {/* Header */}
-            <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2">
-                    <Building2 className="h-5 w-5 text-blue-600" />
+        <div className="space-y-4">
+            {/* Top hero – teal style like sample login */}
+            <div className="rounded-3xl bg-gradient-to-b from-teal-700 to-teal-600 text-white p-5 pb-6 shadow-sm">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div>
-                        <h2 className="text-xl font-semibold text-black">Patient Masters</h2>
-                        <p className="text-xs text-gray-500">
-                            Configure patient types, payers, TPAs and credit plans used in registration & billing.
+                        <div className="text-xl sm:text-2xl font-semibold">Hello!</div>
+                        <div className="mt-1 text-sm sm:text-base text-teal-50">
+                            Welcome to <span className="font-semibold">Patient Masters</span>
+                        </div>
+                        <p className="mt-2 max-w-xl text-xs sm:text-sm text-teal-50/90">
+                            Configure patient types, payers, TPAs & credit plans that drive
+                            registration and billing workflows.
                         </p>
                     </div>
+                    <div className="flex gap-2 text-[11px] sm:text-xs justify-start sm:justify-end">
+                        <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-3 py-1">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                            IPD / OPD ready
+                        </span>
+                        <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-3 py-1">
+                            <ShieldCheck className="h-3 w-3" />
+                            NABH aligned
+                        </span>
+                    </div>
+                </div>
+
+                {/* Desktop tab chips */}
+                <div className="mt-4 hidden sm:flex gap-2">
+                    <MastersTabButton
+                        label="Patient Types"
+                        icon={Users}
+                        active={tab === 'types'}
+                        onClick={() => setTab('types')}
+                    />
+                    <MastersTabButton
+                        label="Payers"
+                        icon={Building2}
+                        active={tab === 'payers'}
+                        onClick={() => setTab('payers')}
+                    />
+                    <MastersTabButton
+                        label="TPAs"
+                        icon={Shield}
+                        active={tab === 'tpas'}
+                        onClick={() => setTab('tpas')}
+                    />
+                    <MastersTabButton
+                        label="Credit Plans"
+                        icon={CreditCard}
+                        active={tab === 'plans'}
+                        onClick={() => setTab('plans')}
+                    />
                 </div>
             </div>
 
-            {/* Tabs */}
-            <div className="flex flex-wrap gap-2 border-b">
-                <MastersTabButton
-                    label="Patient Types"
-                    active={tab === 'types'}
-                    onClick={() => setTab('types')}
-                />
-                <MastersTabButton
-                    label="Payers"
-                    active={tab === 'payers'}
-                    onClick={() => setTab('payers')}
-                />
-                <MastersTabButton
-                    label="TPAs"
-                    active={tab === 'tpas'}
-                    onClick={() => setTab('tpas')}
-                />
-                <MastersTabButton
-                    label="Credit Plans"
-                    active={tab === 'plans'}
-                    onClick={() => setTab('plans')}
-                />
+            {/* Mobile sticky dropdown for tabs */}
+            <div className="sm:hidden sticky top-0 z-20 -mt-3 -mx-3 mb-2 bg-slate-50/95 backdrop-blur px-3 pt-3 pb-2">
+                <label className="block text-xs font-medium text-slate-600 mb-1">
+                    Section
+                </label>
+                <select
+                    value={tab}
+                    onChange={(e) => setTab(e.target.value)}
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
+                >
+                    <option value="types">Patient Types</option>
+                    <option value="payers">Payers</option>
+                    <option value="tpas">TPAs</option>
+                    <option value="plans">Credit Plans</option>
+                </select>
             </div>
 
-            {/* Body */}
-            <div>
+            {/* Active tab body */}
+            <div className="rounded-3xl border border-slate-100 bg-white/95 p-3 sm:p-4 shadow-sm">
                 {tab === 'types' && <PatientTypesTab />}
                 {tab === 'payers' && <PayersTab />}
                 {tab === 'tpas' && <TpasTab />}
@@ -84,16 +174,21 @@ export default function PatientMasters() {
     )
 }
 
-function MastersTabButton({ label, active, onClick }) {
+
+function MastersTabButton({ label, active, onClick, icon: Icon }) {
     return (
         <button
             onClick={onClick}
-            className={`px-3 py-2 text-sm transition ${active
-                ? 'border-b-2 border-blue-600 font-medium text-blue-700'
-                : 'text-gray-600 hover:text-gray-800'
-                }`}
+            className={[
+                'inline-flex items-center gap-1 rounded-full px-3 py-1.5 transition-all duration-150',
+                'border text-xs sm:text-[13px]',
+                active
+                    ? 'border-blue-600 bg-blue-600 text-white shadow-sm'
+                    : 'border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50',
+            ].join(' ')}
         >
-            {label}
+            {Icon && <Icon className="h-3.5 w-3.5" />}
+            <span>{label}</span>
         </button>
     )
 }
@@ -103,10 +198,9 @@ function MastersTabButton({ label, active, onClick }) {
 --------------------------------------------------- */
 
 function PatientTypesTab() {
-    // Backend uses patients.view / patients.update
     const canView = useCan('patients.view') || useCan('patients.masters.view')
     const canManage = useCan('patients.update') || useCan('patients.masters.manage')
-
+    const [statusFilter, setStatusFilter] = useState('all')
     const [items, setItems] = useState([])
     const [loading, setLoading] = useState(false)
     const [err, setErr] = useState('')
@@ -125,7 +219,9 @@ function PatientTypesTab() {
             })
             setItems(data || [])
         } catch (e) {
-            setErr(e?.response?.data?.detail || 'Failed to load patient types')
+            const msg = e?.response?.data?.detail || 'Failed to load patient types'
+            setErr(msg)
+            toast.error(msg)
         } finally {
             setLoading(false)
         }
@@ -136,15 +232,24 @@ function PatientTypesTab() {
     }, [load])
 
     const filtered = useMemo(() => {
-        if (!q) return items
+        let data = [...items]
+
+        if (statusFilter === 'active') {
+            data = data.filter((t) => t.is_active)
+        } else if (statusFilter === 'inactive') {
+            data = data.filter((t) => !t.is_active)
+        }
+
+        if (!q) return data
         const ql = q.toLowerCase()
-        return items.filter(
+        return data.filter(
             (t) =>
                 t.name?.toLowerCase().includes(ql) ||
                 t.code?.toLowerCase().includes(ql) ||
                 t.description?.toLowerCase().includes(ql)
         )
-    }, [items, q])
+    }, [items, q, statusFilter])
+
 
     const openCreate = () => {
         setEditing(null)
@@ -157,24 +262,52 @@ function PatientTypesTab() {
         setModalOpen(true)
     }
 
-    const onSaved = () => {
+    const onSaved = (mode) => {
         setModalOpen(false)
         setEditing(null)
         load()
+        toast.success(
+            mode === 'update' ? 'Patient type updated successfully' : 'Patient type created successfully'
+        )
     }
 
     const onDeleted = () => {
         load()
+        toast.success('Patient type deactivated successfully')
     }
 
     return (
         <div className="space-y-4">
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs sm:text-sm">
+                <span className="text-[11px] sm:text-xs text-slate-500 mr-1">
+                    Status:
+                </span>
+                <FilterChip
+                    label="All"
+                    active={statusFilter === 'all'}
+                    onClick={() => setStatusFilter('all')}
+                />
+                <FilterChip
+                    label="Active"
+                    active={statusFilter === 'active'}
+                    onClick={() => setStatusFilter('active')}
+                />
+                <FilterChip
+                    label="Inactive"
+                    active={statusFilter === 'inactive'}
+                    onClick={() => setStatusFilter('inactive')}
+                />
+            </div>
             {/* Top bar */}
-            <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <ShieldCheck className="h-4 w-4" />
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-2 text-xs text-slate-600 sm:text-sm">
+                    <ShieldCheck className="mt-0.5 h-4 w-4 text-blue-600" />
                     <span>
-                        Patient types used in registration: Emergency, OPD, IPD, Health Checkup, etc.
+                        Define patient visit types like{' '}
+                        <span className="font-medium text-slate-800">
+                            Emergency, OPD, IPD, Health Checkup
+                        </span>{' '}
+                        used in registration & triage.
                     </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -183,14 +316,15 @@ function PatientTypesTab() {
                             value={q}
                             onChange={(e) => setQ(e.target.value)}
                             placeholder="Search code, name, description…"
-                            className="w-60 max-w-full rounded-xl border px-8 py-1.5 text-sm"
+                            className="w-60 max-w-full rounded-2xl border border-slate-200 bg-slate-50 px-8 py-1.5 text-xs text-slate-800 outline-none ring-0 transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
                         />
-                        <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                        <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     </div>
                     {canManage && (
                         <button
                             onClick={openCreate}
-                            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 active:scale-95"
+                            className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700 hover:shadow-md active:scale-95 sm:text-sm"
+
                         >
                             <Plus className="h-4 w-4" />
                             New Patient Type
@@ -200,44 +334,56 @@ function PatientTypesTab() {
             </div>
 
             {err && (
-                <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                <div className="rounded-xl border border-rose-200 bg-rose-50/80 p-3 text-xs text-rose-700 sm:text-sm">
                     {err}
                 </div>
             )}
 
-            {/* Mobile cards */}
+            {/* Mobile cards (stacked layout) */}
             <div className="grid gap-3 sm:hidden">
                 {loading && (
-                    <div className="rounded-2xl border bg-white p-4 text-center text-sm text-gray-500">
-                        Loading…
+                    <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-center text-xs text-slate-500 shadow-sm">
+                        Loading patient types…
                     </div>
                 )}
                 {!loading &&
                     filtered.map((t) => (
                         <div
                             key={t.id}
-                            className="rounded-2xl border bg-white p-4 shadow-sm transition hover:shadow-md"
+                            className="group rounded-2xl border border-slate-100 bg-white p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
                         >
                             <div className="flex items-start justify-between gap-3">
-                                <div>
-                                    <div className="text-sm font-semibold">
-                                        {t.name}{' '}
+                                <div className="space-y-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <span className="text-sm font-semibold text-slate-900">
+                                            {t.name}
+                                        </span>
                                         {t.code && (
-                                            <span className="ml-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-mono text-gray-600">
+                                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-mono text-slate-600">
                                                 {t.code}
                                             </span>
                                         )}
                                     </div>
-                                    <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-gray-500">
+                                    <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
                                         <span
-                                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] ${t.is_active
-                                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                                                : 'bg-gray-100 text-gray-500 border border-gray-200'
-                                                }`}
+                                            className={[
+                                                'inline-flex items-center rounded-full border px-2 py-0.5',
+                                                t.is_active
+                                                    ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
+                                                    : 'border-slate-200 bg-slate-100 text-slate-500',
+                                            ].join(' ')}
                                         >
+                                            <span
+                                                className={[
+                                                    'mr-1 h-1.5 w-1.5 rounded-full',
+                                                    t.is_active
+                                                        ? 'bg-emerald-500'
+                                                        : 'bg-slate-400',
+                                                ].join(' ')}
+                                            />
                                             {t.is_active ? 'Active' : 'Inactive'}
                                         </span>
-                                        <span className="text-[11px] text-gray-400">
+                                        <span className="text-[11px] text-slate-400">
                                             Sort: {t.sort_order ?? 0}
                                         </span>
                                     </div>
@@ -245,7 +391,8 @@ function PatientTypesTab() {
                                 {canManage && (
                                     <button
                                         onClick={() => openEdit(t)}
-                                        className="inline-flex items-center gap-1 rounded-xl border px-2 py-1 text-xs hover:bg-gray-50"
+                                        className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-50"
+
                                     >
                                         <Pencil className="h-3.5 w-3.5" />
                                         Edit
@@ -253,24 +400,24 @@ function PatientTypesTab() {
                                 )}
                             </div>
                             {t.description && (
-                                <div className="mt-2 text-xs text-gray-600">
+                                <div className="mt-2 text-[11px] text-slate-600">
                                     {t.description}
                                 </div>
                             )}
                         </div>
                     ))}
                 {!loading && filtered.length === 0 && (
-                    <div className="rounded-2xl border bg-white p-4 text-center text-sm text-gray-500">
-                        No patient types found.
+                    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-xs text-slate-500">
+                        No patient types found. {canManage && 'Click “New Patient Type” to add one.'}
                     </div>
                 )}
             </div>
 
-            {/* Desktop table */}
-            <div className="hidden overflow-x-auto rounded-2xl border bg-white sm:block">
+            {/* Tablet / Desktop table (data-first layout) */}
+            <div className="hidden overflow-x-auto rounded-2xl border border-slate-100 bg-white sm:block">
                 <table className="min-w-full text-sm">
-                    <thead className="bg-gray-50">
-                        <tr className="text-left text-xs font-medium text-gray-600">
+                    <thead className="bg-slate-50/80">
+                        <tr className="text-left text-[11px] font-medium uppercase tracking-wide text-slate-500">
                             <th className="p-2">#</th>
                             <th className="p-2">Code</th>
                             <th className="p-2">Name</th>
@@ -283,8 +430,11 @@ function PatientTypesTab() {
                     <tbody>
                         {loading && (
                             <tr>
-                                <td colSpan={7} className="p-4 text-center text-sm text-gray-500">
-                                    Loading…
+                                <td
+                                    colSpan={7}
+                                    className="p-4 text-center text-xs text-slate-500 sm:text-sm"
+                                >
+                                    Loading patient types…
                                 </td>
                             </tr>
                         )}
@@ -292,25 +442,42 @@ function PatientTypesTab() {
                             filtered.map((t, idx) => (
                                 <tr
                                     key={t.id}
-                                    className={`border-t text-xs ${t.is_active ? 'text-black' : 'text-gray-400 bg-gray-50'
-                                        }`}
+                                    className={[
+                                        'border-t border-slate-100 text-xs transition',
+                                        t.is_active ? 'bg-white' : 'bg-slate-50/70 text-slate-400',
+                                        'hover:bg-slate-50',
+                                    ].join(' ')}
                                 >
-                                    <td className="p-2">{idx + 1}</td>
-                                    <td className="p-2 font-mono text-[11px]">{t.code}</td>
-                                    <td className="p-2">{t.name}</td>
+                                    <td className="p-2 text-slate-600">{idx + 1}</td>
+                                    <td className="p-2 font-mono text-[11px] text-slate-700">
+                                        {t.code}
+                                    </td>
+                                    <td className="p-2 text-slate-900">{t.name}</td>
                                     <td className="p-2 max-w-xs">
-                                        <div className="line-clamp-2 text-[11px] text-gray-600">
+                                        <div className="line-clamp-2 text-[11px] text-slate-600">
                                             {t.description || '—'}
                                         </div>
                                     </td>
-                                    <td className="p-2">{t.sort_order ?? 0}</td>
+                                    <td className="p-2 text-slate-700">
+                                        {t.sort_order ?? 0}
+                                    </td>
                                     <td className="p-2">
                                         <span
-                                            className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] ${t.is_active
-                                                ? 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                                                : 'bg-gray-100 text-gray-500 border border-gray-200'
-                                                }`}
+                                            className={[
+                                                'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px]',
+                                                t.is_active
+                                                    ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
+                                                    : 'border-slate-200 bg-slate-100 text-slate-500',
+                                            ].join(' ')}
                                         >
+                                            <span
+                                                className={[
+                                                    'mr-1 h-1.5 w-1.5 rounded-full',
+                                                    t.is_active
+                                                        ? 'bg-emerald-500'
+                                                        : 'bg-slate-400',
+                                                ].join(' ')}
+                                            />
                                             {t.is_active ? 'Active' : 'Inactive'}
                                         </span>
                                     </td>
@@ -318,7 +485,8 @@ function PatientTypesTab() {
                                         {canManage && (
                                             <button
                                                 onClick={() => openEdit(t)}
-                                                className="inline-flex items-center gap-1 rounded border px-2 py-1 text-[11px] bg-green-300 hover:bg-gray-50"
+                                                className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-50"
+
                                             >
                                                 <Pencil className="h-3.5 w-3.5" />
                                                 Edit
@@ -331,7 +499,7 @@ function PatientTypesTab() {
                             <tr>
                                 <td
                                     colSpan={7}
-                                    className="p-6 text-center text-sm text-gray-500"
+                                    className="p-6 text-center text-xs text-slate-500 sm:text-sm"
                                 >
                                     No patient types found.
                                 </td>
@@ -380,12 +548,15 @@ function PatientTypeModal({ existing, onClose, onSaved, onDeleted }) {
             }
             if (existing) {
                 await API.put(`/patient-types/${existing.id}`, payload)
+                onSaved && onSaved('update')
             } else {
                 await API.post('/patient-types', payload)
+                onSaved && onSaved('create')
             }
-            onSaved && onSaved()
         } catch (e) {
-            setErr(e?.response?.data?.detail || 'Failed to save patient type')
+            const msg = e?.response?.data?.detail || 'Failed to save patient type'
+            setErr(msg)
+            toast.error(msg)
         } finally {
             setSaving(false)
         }
@@ -401,153 +572,146 @@ function PatientTypeModal({ existing, onClose, onSaved, onDeleted }) {
             onDeleted && onDeleted()
             onClose && onClose()
         } catch (e) {
-            setErr(e?.response?.data?.detail || 'Failed to deactivate patient type')
+            const msg = e?.response?.data?.detail || 'Failed to deactivate patient type'
+            setErr(msg)
+            toast.error(msg)
         } finally {
             setSaving(false)
         }
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-5 shadow-xl">
-                <div className="mb-4 flex items-center justify-between">
+
+        <ResponsiveModal
+            title={existing ? 'Edit Patient Type' : 'New Patient Type'}
+            subtitle="Define master types like Emergency, OPD, IPD, Health Checkup, etc."
+            onClose={onClose}
+        >
+            {err && (
+                <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50/80 p-3 text-xs sm:text-sm text-rose-700">
+                    {err}
+                </div>
+            )}
+
+            <form onSubmit={save} className="space-y-3 text-sm">
+                <div className="grid gap-3 md:grid-cols-2">
                     <div>
-                        <h3 className="text-lg font-semibold text-black">
-                            {existing ? 'Edit Patient Type' : 'New Patient Type'}
-                        </h3>
-                        <p className="text-xs text-gray-500">
-                            Define master types like Emergency, OPD, IPD, Health Checkup, etc.
+                        <label className="mb-1 block text-xs font-medium text-slate-800">
+                            Code
+                        </label>
+                        <input
+                            className="input text-slate-800"
+                            value={form.code}
+                            onChange={(e) =>
+                                setForm({
+                                    ...form,
+                                    code: e.target.value.toUpperCase(),
+                                })
+                            }
+                            required
+                        />
+                        <p className="mt-1 text-[11px] text-slate-400">
+                            Example: EMERGENCY, OPD, IPD, HC
                         </p>
                     </div>
-                    <button
-                        onClick={onClose}
-                        className="rounded-xl p-2 hover:bg-gray-100"
-                    >
-                        <X className="h-5 w-5" />
-                    </button>
-                </div>
-
-                {err && (
-                    <div className="mb-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
-                        {err}
-                    </div>
-                )}
-
-                <form onSubmit={save} className="space-y-3 text-sm">
-                    <div className="grid gap-3 md:grid-cols-2">
-                        <div>
-                            <label className="mb-1 block text-xs font-medium text-black">
-                                Code
-                            </label>
-                            <input
-                                className="input text-gray-800"
-                                value={form.code}
-                                onChange={(e) =>
-                                    setForm({
-                                        ...form,
-                                        code: e.target.value.toUpperCase(),
-                                    })
-                                }
-                                required
-                            />
-                            <p className="mt-0.5 text-[10px] text-gray-400">
-                                Example: EMERGENCY, OPD, IPD, HC
-                            </p>
-                        </div>
-                        <div>
-                            <label className="mb-1 block text-xs font-medium text-black">
-                                Name
-                            </label>
-                            <input
-                                className="input text-gray-800"
-                                value={form.name}
-                                onChange={(e) =>
-                                    setForm({ ...form, name: e.target.value })
-                                }
-                                required
-                            />
-                        </div>
-                    </div>
-
                     <div>
-                        <label className="mb-1 block text-xs font-medium text-black">
-                            Description (optional)
+                        <label className="mb-1 block text-xs font-medium text-slate-800">
+                            Name
                         </label>
-                        <textarea
-                            className="input min-h-[80px] text-gray-800"
-                            value={form.description}
+                        <input
+                            className="input text-slate-800"
+                            value={form.name}
                             onChange={(e) =>
-                                setForm({ ...form, description: e.target.value })
+                                setForm({ ...form, name: e.target.value })
                             }
+                            required
                         />
                     </div>
+                </div>
 
-                    <div className="grid gap-3 md:grid-cols-2 items-center">
-                        <div>
-                            <label className="mb-1 block text-xs font-medium text-black">
-                                Sort Order
-                            </label>
-                            <input
-                                className="input text-gray-800"
-                                type="number"
-                                value={form.sort_order}
-                                onChange={(e) =>
-                                    setForm({
-                                        ...form,
-                                        sort_order: e.target.value,
-                                    })
-                                }
-                            />
-                            <p className="mt-0.5 text-[10px] text-gray-400">
-                                Lower number shows earlier in dropdowns.
-                            </p>
-                        </div>
-                        <div className="flex items-center gap-2 mt-4 md:mt-7">
-                            <input
-                                id="pt-active"
-                                type="checkbox"
-                                className="h-4 w-4"
-                                checked={form.is_active}
-                                onChange={(e) =>
-                                    setForm({ ...form, is_active: e.target.checked })
-                                }
-                            />
-                            <label
-                                htmlFor="pt-active"
-                                className="text-xs font-medium text-black"
-                            >
-                                Active
-                            </label>
-                        </div>
-                    </div>
+                <div>
+                    <label className="mb-1 block text-xs font-medium text-slate-800">
+                        Description (optional)
+                    </label>
+                    <textarea
+                        className="input min-h-[80px] text-slate-800"
+                        value={form.description}
+                        onChange={(e) =>
+                            setForm({ ...form, description: e.target.value })
+                        }
+                    />
+                </div>
 
-                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                        {existing && (
-                            <button
-                                type="button"
-                                onClick={remove}
-                                className="inline-flex items-center gap-2 rounded-xl border border-rose-200 px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-50"
-                            >
-                                <Trash2 className="h-3.5 w-3.5" />
-                                Deactivate
-                            </button>
-                        )}
-                        <div className="ml-auto flex gap-2">
-                            <button
-                                type="button"
-                                onClick={onClose}
-                                className="rounded-xl border px-4 py-1.5 text-xs hover:bg-gray-50"
-                            >
-                                Cancel
-                            </button>
-                            <button className="btn" disabled={saving || !canManage}>
-                                {saving ? 'Saving…' : 'Save'}
-                            </button>
-                        </div>
+                <div className="grid items-center gap-3 md:grid-cols-2">
+                    <div>
+                        <label className="mb-1 block text-xs font-medium text-slate-800">
+                            Sort Order
+                        </label>
+                        <input
+                            className="input text-slate-800"
+                            type="number"
+                            value={form.sort_order}
+                            onChange={(e) =>
+                                setForm({
+                                    ...form,
+                                    sort_order: e.target.value,
+                                })
+                            }
+                        />
+                        <p className="mt-1 text-[11px] text-slate-400">
+                            Lower number shows earlier in dropdowns.
+                        </p>
                     </div>
-                </form>
-            </div>
-        </div>
+                    <div className="mt-2 flex items-center gap-2 md:mt-7">
+                        <input
+                            id="pt-active"
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                            checked={form.is_active}
+                            onChange={(e) =>
+                                setForm({ ...form, is_active: e.target.checked })
+                            }
+                        />
+                        <label
+                            htmlFor="pt-active"
+                            className="text-xs font-medium text-slate-800"
+                        >
+                            Active
+                        </label>
+                    </div>
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                    {existing && (
+                        <button
+                            type="button"
+                            onClick={remove}
+                            className="inline-flex items-center gap-2 rounded-full border border-rose-200 px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-50"
+                        >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            Deactivate
+                        </button>
+                    )}
+                    <div className="ml-auto flex gap-2">
+                        <button
+                            type="button"
+                            onClick={onClose}
+                            className="rounded-full border border-slate-200 px-4 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
+                        >
+                            Cancel
+                        </button>
+                        <button
+                            className="btn rounded-full px-4 py-1.5 text-xs"
+                            disabled={saving || !canManage}
+                        >
+                            {saving ? 'Saving…' : 'Save'}
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </ResponsiveModal>
+
+
     )
 }
 
@@ -560,8 +724,8 @@ function PayersTab() {
     const canMastersView = useCan('patients.masters.view')
     const canPatientsView = useCan('patients.masters.manage')
     const canManage = canMastersView || canPatientsView
-    
-    
+    const [payerTypeFilter, setPayerTypeFilter] = useState('all') // all | insurance | corporate | govt | other
+
 
     const [items, setItems] = useState([])
     const [loading, setLoading] = useState(false)
@@ -579,7 +743,9 @@ function PayersTab() {
             const { data } = await API.get('/patient-masters/payers')
             setItems(data || [])
         } catch (e) {
-            setErr(e?.response?.data?.detail || 'Failed to load payers')
+            const msg = e?.response?.data?.detail || 'Failed to load payers'
+            setErr(msg)
+            toast.error(msg)
         } finally {
             setLoading(false)
         }
@@ -590,15 +756,22 @@ function PayersTab() {
     }, [load])
 
     const filtered = useMemo(() => {
-        if (!q) return items
+        let data = [...items]
+
+        if (payerTypeFilter !== 'all') {
+            data = data.filter((p) => p.payer_type === payerTypeFilter)
+        }
+
+        if (!q) return data
         const ql = q.toLowerCase()
-        return items.filter(
+        return data.filter(
             (p) =>
                 p.name?.toLowerCase().includes(ql) ||
                 p.code?.toLowerCase().includes(ql) ||
                 p.payer_type?.toLowerCase().includes(ql)
         )
-    }, [items, q])
+    }, [items, q, payerTypeFilter])
+
 
     const openCreate = () => {
         setEditing(null)
@@ -611,23 +784,52 @@ function PayersTab() {
         setModalOpen(true)
     }
 
-    const onSaved = () => {
+    const onSaved = (mode) => {
         setModalOpen(false)
         setEditing(null)
         load()
+        toast.success(
+            mode === 'update' ? 'Payer updated successfully' : 'Payer created successfully'
+        )
     }
 
     const onDeleted = () => {
         load()
+        toast.success('Payer deactivated successfully')
     }
 
     return (
         <div className="space-y-4">
+            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs sm:text-sm">
+                <span className="text-[11px] sm:text-xs text-slate-500 mr-1">
+                    Payer type:
+                </span>
+                <FilterChip
+                    label="All"
+                    active={payerTypeFilter === 'all'}
+                    onClick={() => setPayerTypeFilter('all')}
+                />
+                {PAYER_TYPES.map((t) => (
+                    <FilterChip
+                        key={t.value}
+                        label={t.label}
+                        active={payerTypeFilter === t.value}
+                        onClick={() => setPayerTypeFilter(t.value)}
+                    />
+                ))}
+            </div>
+
             {/* Top bar */}
-            <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <ShieldCheck className="h-4 w-4" />
-                    <span>Payers (Insurance / Corporate / Govt schemes)</span>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-2 text-xs text-slate-600 sm:text-sm">
+                    <ShieldCheck className="mt-0.5 h-4 w-4 text-blue-600" />
+                    <span>
+                        Payers used for{' '}
+                        <span className="font-medium text-slate-800">
+                            insurance, corporate and government schemes
+                        </span>{' '}
+                        in OPD/IPD billing.
+                    </span>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                     <div className="relative">
@@ -635,14 +837,14 @@ function PayersTab() {
                             value={q}
                             onChange={(e) => setQ(e.target.value)}
                             placeholder="Search code, name, type…"
-                            className="w-52 max-w-full rounded-xl border px-8 py-1.5 text-sm"
+                            className="w-52 max-w-full rounded-2xl border border-slate-200 bg-slate-50 px-8 py-1.5 text-xs text-slate-800 outline-none ring-0 transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
                         />
-                        <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                        <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     </div>
                     {canManage && (
                         <button
                             onClick={openCreate}
-                            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 active:scale-95"
+                            className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-blue-700 hover:shadow-md active:scale-95 sm:text-sm"
                         >
                             <Plus className="h-4 w-4" />
                             New Payer
@@ -652,7 +854,7 @@ function PayersTab() {
             </div>
 
             {err && (
-                <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                <div className="rounded-xl border border-rose-200 bg-rose-50/80 p-3 text-xs text-rose-700 sm:text-sm">
                     {err}
                 </div>
             )}
@@ -660,62 +862,91 @@ function PayersTab() {
             {/* Mobile cards */}
             <div className="grid gap-3 sm:hidden">
                 {loading && (
-                    <div className="rounded-2xl border bg-white p-4 text-center text-sm text-gray-500">
-                        Loading…
+                    <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-center text-xs text-slate-500 shadow-sm">
+                        Loading payers…
                     </div>
                 )}
                 {!loading &&
                     filtered.map((p) => (
                         <div
                             key={p.id}
-                            className="rounded-2xl border bg-white p-4 shadow-sm transition hover:shadow-md"
+                            className="group rounded-2xl border border-slate-100 bg-white p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
                         >
                             <div className="flex items-start justify-between gap-3">
                                 <div>
-                                    <div className="text-sm font-semibold ">
-                                        {p.name}{' '}
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <span className="text-sm font-semibold text-slate-900">
+                                            {p.name}
+                                        </span>
                                         {p.code && (
-                                            <span className="ml-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-mono text-gray-600">
+                                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-mono text-slate-600">
                                                 {p.code}
                                             </span>
                                         )}
                                     </div>
-                                    <div className="mt-1 text-xs text-gray-500 capitalize">
+                                    <div className="mt-1 text-[11px] capitalize text-slate-500">
                                         {p.payer_type || '—'}
                                     </div>
                                 </div>
                                 {canManage && (
                                     <button
                                         onClick={() => openEdit(p)}
-                                        className="inline-flex items-center gap-1 rounded-xl border px-2 py-1 text-xs hover:bg-gray-50"
+                                        className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-[13px] font-bold text-slate-700 transition hover:bg-slate-50"
+
                                     >
                                         <Pencil className="h-3.5 w-3.5" />
                                         Edit
                                     </button>
                                 )}
                             </div>
-                            <div className="mt-2 space-y-1 text-xs text-gray-600">
-                                {p.contact_person && <div>Contact: {p.contact_person}</div>}
-                                {p.phone && <div>Phone: {p.phone}</div>}
-                                {p.email && <div>Email: {p.email}</div>}
+                            <div className="mt-2 space-y-1 text-[11px] text-slate-600">
+                                {p.contact_person && (
+                                    <div>
+                                        <span className="font-medium text-slate-700">
+                                            Contact:
+                                        </span>{' '}
+                                        {p.contact_person}
+                                    </div>
+                                )}
+                                {p.phone && (
+                                    <div>
+                                        <span className="font-medium text-slate-700">
+                                            Phone:
+                                        </span>{' '}
+                                        {p.phone}
+                                    </div>
+                                )}
+                                {p.email && (
+                                    <div>
+                                        <span className="font-medium text-slate-700">
+                                            Email:
+                                        </span>{' '}
+                                        {p.email}
+                                    </div>
+                                )}
                                 {p.address && (
-                                    <div className="line-clamp-2">Address: {p.address}</div>
+                                    <div className="line-clamp-2">
+                                        <span className="font-medium text-slate-700">
+                                            Address:
+                                        </span>{' '}
+                                        {p.address}
+                                    </div>
                                 )}
                             </div>
                         </div>
                     ))}
                 {!loading && filtered.length === 0 && (
-                    <div className="rounded-2xl border bg-white p-4 text-center text-sm text-gray-500">
+                    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-xs text-slate-500">
                         No payers found.
                     </div>
                 )}
             </div>
 
             {/* Desktop table */}
-            <div className="hidden overflow-x-auto rounded-2xl border bg-white sm:block">
+            <div className="hidden overflow-x-auto rounded-2xl border border-slate-100 bg-white sm:block">
                 <table className="min-w-full text-sm">
-                    <thead className="bg-gray-50">
-                        <tr className="text-left text-xs font-medium text-gray-600">
+                    <thead className="bg-slate-50/80">
+                        <tr className="text-left text-[11px] font-medium uppercase tracking-wide text-slate-500">
                             <th className="p-2">#</th>
                             <th className="p-2">Code</th>
                             <th className="p-2">Name</th>
@@ -729,27 +960,39 @@ function PayersTab() {
                     <tbody>
                         {loading && (
                             <tr>
-                                <td colSpan={8} className="p-4 text-center text-sm text-gray-500">
-                                    Loading…
+                                <td
+                                    colSpan={8}
+                                    className="p-4 text-center text-xs text-slate-500 sm:text-sm"
+                                >
+                                    Loading payers…
                                 </td>
                             </tr>
                         )}
                         {!loading &&
                             filtered.map((p, idx) => (
-                                <tr key={p.id} className="border-t text-xs text-black">
+                                <tr
+                                    key={p.id}
+                                    className="border-t border-slate-100 text-xs text-slate-800 transition hover:bg-slate-50"
+                                >
                                     <td className="p-2">{idx + 1}</td>
-                                    <td className="p-2 font-mono text-[11px]">{p.code}</td>
+                                    <td className="p-2 font-mono text-[11px] text-slate-700">
+                                        {p.code}
+                                    </td>
                                     <td className="p-2">{p.name}</td>
-                                    <td className="p-2 capitalize">{p.payer_type || '—'}</td>
-                                    <td className="p-2">{p.contact_person || '—'}</td>
+                                    <td className="p-2 capitalize text-slate-700">
+                                        {p.payer_type || '—'}
+                                    </td>
+                                    <td className="p-2 text-slate-700">
+                                        {p.contact_person || '—'}
+                                    </td>
                                     <td className="p-2">
                                         <div>{p.phone || '—'}</div>
-                                        <div className="text-[11px] text-gray-500">
+                                        <div className="text-[11px] text-slate-500">
                                             {p.email || '—'}
                                         </div>
                                     </td>
                                     <td className="p-2 max-w-xs">
-                                        <div className="line-clamp-2 text-[11px] text-gray-600">
+                                        <div className="line-clamp-2 text-[11px] text-slate-600">
                                             {p.address || '—'}
                                         </div>
                                     </td>
@@ -757,7 +1000,7 @@ function PayersTab() {
                                         {canManage && (
                                             <button
                                                 onClick={() => openEdit(p)}
-                                                className="inline-flex items-center gap-1 rounded border px-2 py-1 text-[11px] bg-green-300 hover:bg-gray-50"
+                                                className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-[11px] text-slate-700 transition hover:bg-slate-50"
                                             >
                                                 <Pencil className="h-3.5 w-3.5" />
                                                 Edit
@@ -770,7 +1013,7 @@ function PayersTab() {
                             <tr>
                                 <td
                                     colSpan={8}
-                                    className="p-6 text-center text-sm text-gray-500"
+                                    className="p-6 text-center text-xs text-slate-500 sm:text-sm"
                                 >
                                     No payers found.
                                 </td>
@@ -817,12 +1060,15 @@ function PayerModal({ existing, onClose, onSaved, onDeleted }) {
         try {
             if (existing) {
                 await API.put(`/patient-masters/payers/${existing.id}`, form)
+                onSaved && onSaved('update')
             } else {
                 await API.post('/patient-masters/payers', form)
+                onSaved && onSaved('create')
             }
-            onSaved && onSaved()
         } catch (e) {
-            setErr(e?.response?.data?.detail || 'Failed to save payer')
+            const msg = e?.response?.data?.detail || 'Failed to save payer'
+            setErr(msg)
+            toast.error(msg)
         } finally {
             setSaving(false)
         }
@@ -838,44 +1084,49 @@ function PayerModal({ existing, onClose, onSaved, onDeleted }) {
             onDeleted && onDeleted()
             onClose && onClose()
         } catch (e) {
-            setErr(e?.response?.data?.detail || 'Failed to deactivate payer')
+            const msg = e?.response?.data?.detail || 'Failed to deactivate payer'
+            setErr(msg)
+            toast.error(msg)
         } finally {
             setSaving(false)
         }
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-5 shadow-xl">
-                <div className="mb-4 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-3 sm:p-4">
+            <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl sm:p-5">
+                <div className="mb-4 flex items-center justify-between gap-2">
                     <div>
-                        <h3 className="text-lg font-semibold text-black">
+                        <h3 className="text-base font-semibold text-slate-900 sm:text-lg">
                             {existing ? 'Edit Payer' : 'New Payer'}
                         </h3>
-                        <p className="text-xs text-gray-500">
+                        <p className="mt-1 text-[11px] text-slate-500 sm:text-xs">
                             Master record used for credit / insurance patients.
                         </p>
                     </div>
                     <button
                         onClick={onClose}
-                        className="rounded-xl p-2 bg-yellow-300 hover:bg-gray-100 text-black"
+                        type="button"
+                        className="rounded-full p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
                     >
-                        <X className="h-5 w-5" />
+                        <X className="h-4 w-4" />
                     </button>
                 </div>
 
                 {err && (
-                    <div className="mb-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                    <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50/80 p-3 text-xs text-rose-700 sm:text-sm">
                         {err}
                     </div>
                 )}
 
-                <form onSubmit={save} className="space-y-3 text-sm">
+                <form onSubmit={save} className="space-y-3 text-xs sm:text-sm">
                     <div className="grid gap-3 md:grid-cols-2">
                         <div>
-                            <label className="mb-1 block text-xs font-medium text-black">Code</label>
+                            <label className="mb-1 block text-[11px] font-medium text-slate-800">
+                                Code
+                            </label>
                             <input
-                                className="input text-gray-800"
+                                className="input text-slate-800"
                                 value={form.code}
                                 onChange={(e) =>
                                     setForm({ ...form, code: e.target.value.toUpperCase() })
@@ -884,9 +1135,11 @@ function PayerModal({ existing, onClose, onSaved, onDeleted }) {
                             />
                         </div>
                         <div>
-                            <label className="mb-1 block text-xs font-medium text-black">Name</label>
+                            <label className="mb-1 block text-[11px] font-medium text-slate-800">
+                                Name
+                            </label>
                             <input
-                                className="input text-gray-800"
+                                className="input text-slate-800"
                                 value={form.name}
                                 onChange={(e) => setForm({ ...form, name: e.target.value })}
                                 required
@@ -896,9 +1149,11 @@ function PayerModal({ existing, onClose, onSaved, onDeleted }) {
 
                     <div className="grid gap-3 md:grid-cols-3">
                         <div>
-                            <label className="mb-1 block text-xs font-medium text-black">Type</label>
+                            <label className="mb-1 block text-[11px] font-medium text-slate-800">
+                                Type
+                            </label>
                             <select
-                                className="input text-gray-800"
+                                className="input text-slate-800"
                                 value={form.payer_type}
                                 onChange={(e) =>
                                     setForm({ ...form, payer_type: e.target.value })
@@ -912,11 +1167,11 @@ function PayerModal({ existing, onClose, onSaved, onDeleted }) {
                             </select>
                         </div>
                         <div className="md:col-span-2">
-                            <label className="mb-1 block text-xs font-medium text-black">
+                            <label className="mb-1 block text-[11px] font-medium text-slate-800">
                                 Contact Person
                             </label>
                             <input
-                                className="input text-gray-800"
+                                className="input text-slate-800"
                                 value={form.contact_person}
                                 onChange={(e) =>
                                     setForm({ ...form, contact_person: e.target.value })
@@ -927,9 +1182,11 @@ function PayerModal({ existing, onClose, onSaved, onDeleted }) {
 
                     <div className="grid gap-3 md:grid-cols-2">
                         <div>
-                            <label className="mb-1 block text-xs font-medium text-black">Phone</label>
+                            <label className="mb-1 block text-[11px] font-medium text-slate-800">
+                                Phone
+                            </label>
                             <input
-                                className="input text-gray-800"
+                                className="input text-slate-800"
                                 value={form.phone}
                                 onChange={(e) =>
                                     setForm({ ...form, phone: e.target.value })
@@ -937,9 +1194,11 @@ function PayerModal({ existing, onClose, onSaved, onDeleted }) {
                             />
                         </div>
                         <div>
-                            <label className="mb-1 block text-xs font-medium text-black">Email</label>
+                            <label className="mb-1 block text-[11px] font-medium text-slate-800">
+                                Email
+                            </label>
                             <input
-                                className="input text-gray-800"
+                                className="input text-slate-800"
                                 type="email"
                                 value={form.email}
                                 onChange={(e) =>
@@ -950,9 +1209,11 @@ function PayerModal({ existing, onClose, onSaved, onDeleted }) {
                     </div>
 
                     <div>
-                        <label className="mb-1 block text-xs font-medium text-black">Address</label>
+                        <label className="mb-1 block text-[11px] font-medium text-slate-800">
+                            Address
+                        </label>
                         <textarea
-                            className="input min-h-[80px] text-gray-800"
+                            className="input min-h-[80px] text-slate-800"
                             value={form.address}
                             onChange={(e) => setForm({ ...form, address: e.target.value })}
                         />
@@ -963,7 +1224,7 @@ function PayerModal({ existing, onClose, onSaved, onDeleted }) {
                             <button
                                 type="button"
                                 onClick={remove}
-                                className="inline-flex items-center gap-2 rounded-xl border border-rose-200 px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-50"
+                                className="inline-flex items-center gap-2 rounded-full border border-rose-200 px-3 py-1.5 text-[11px] font-medium text-rose-700 transition hover:bg-rose-50"
                             >
                                 <Trash2 className="h-3.5 w-3.5" />
                                 Deactivate
@@ -973,11 +1234,14 @@ function PayerModal({ existing, onClose, onSaved, onDeleted }) {
                             <button
                                 type="button"
                                 onClick={onClose}
-                                className="rounded-xl border px-4 py-1.5 text-xs bg-red-700 hover:bg-red-500"
+                                className="rounded-full border border-slate-200 px-4 py-1.5 text-[11px] text-slate-700 transition hover:bg-slate-50"
                             >
                                 Cancel
                             </button>
-                            <button className="btn" disabled={saving || !canManage}>
+                            <button
+                                className="btn rounded-full px-4 py-1.5 text-[11px]"
+                                disabled={saving || !canManage}
+                            >
                                 {saving ? 'Saving…' : 'Save'}
                             </button>
                         </div>
@@ -1018,7 +1282,9 @@ function TpasTab() {
             setItems(tpaRes.data || [])
             setPayers(payerRes.data || [])
         } catch (e) {
-            setErr(e?.response?.data?.detail || 'Failed to load TPAs')
+            const msg = e?.response?.data?.detail || 'Failed to load TPAs'
+            setErr(msg)
+            toast.error(msg)
         } finally {
             setLoading(false)
         }
@@ -1056,22 +1322,26 @@ function TpasTab() {
         setModalOpen(true)
     }
 
-    const onSaved = () => {
+    const onSaved = (mode) => {
         setModalOpen(false)
         setEditing(null)
         load()
+        toast.success(
+            mode === 'update' ? 'TPA updated successfully' : 'TPA created successfully'
+        )
     }
 
     const onDeleted = () => {
         load()
+        toast.success('TPA deactivated successfully')
     }
 
     return (
         <div className="space-y-4">
             {/* Top bar */}
-            <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <ShieldCheck className="h-4 w-4" />
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-2 text-xs text-slate-600 sm:text-sm">
+                    <Shield className="mt-0.5 h-4 w-4 text-blue-600" />
                     <span>Third-party administrators (TPAs) linked to payers.</span>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -1080,14 +1350,14 @@ function TpasTab() {
                             value={q}
                             onChange={(e) => setQ(e.target.value)}
                             placeholder="Search code, name, payer…"
-                            className="w-52 max-w-full rounded-xl border px-8 py-1.5 text-sm"
+                            className="w-52 max-w-full rounded-2xl border border-slate-200 bg-slate-50 px-8 py-1.5 text-xs text-slate-800 outline-none ring-0 transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
                         />
-                        <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                        <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     </div>
                     {canManage && (
                         <button
                             onClick={openCreate}
-                            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 active:scale-95"
+                            className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-blue-700 hover:shadow-md active:scale-95 sm:text-sm"
                         >
                             <Plus className="h-4 w-4" />
                             New TPA
@@ -1097,7 +1367,7 @@ function TpasTab() {
             </div>
 
             {err && (
-                <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                <div className="rounded-xl border border-rose-200 bg-rose-50/80 p-3 text-xs text-rose-700 sm:text-sm">
                     {err}
                 </div>
             )}
@@ -1105,61 +1375,82 @@ function TpasTab() {
             {/* Mobile cards */}
             <div className="grid gap-3 sm:hidden">
                 {loading && (
-                    <div className="rounded-2xl border bg-white p-4 text-center text-sm text-gray-500">
-                        Loading…
+                    <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-center text-xs text-slate-500 shadow-sm">
+                        Loading TPAs…
                     </div>
                 )}
                 {!loading &&
                     filtered.map((t) => (
                         <div
                             key={t.id}
-                            className="rounded-2xl border bg-white p-4 shadow-sm transition hover:shadow-md"
+                            className="group rounded-2xl border border-slate-100 bg-white p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
                         >
                             <div className="flex items-start justify-between gap-3">
                                 <div>
-                                    <div className="text-sm font-semibold">
-                                        {t.name}{' '}
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <span className="text-sm font-semibold text-slate-900">
+                                            {t.name}
+                                        </span>
                                         {t.code && (
-                                            <span className="ml-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-mono text-gray-600">
+                                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-mono text-slate-600">
                                                 {t.code}
                                             </span>
                                         )}
                                     </div>
-                                    <div className="mt-1 text-xs text-gray-500">
+                                    <div className="mt-1 text-[11px] text-slate-500">
                                         Payer: {payerMap[t.payer_id]?.name || '—'}
                                     </div>
                                 </div>
                                 {canManage && (
                                     <button
                                         onClick={() => openEdit(t)}
-                                        className="inline-flex items-center gap-1 rounded-xl border px-2 py-1 text-xs hover:bg-gray-50"
+                                        className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50"
                                     >
                                         <Pencil className="h-3.5 w-3.5" />
                                         Edit
                                     </button>
                                 )}
                             </div>
-                            <div className="mt-2 space-y-1 text-xs text-gray-600">
+                            <div className="mt-2 space-y-1 text-[11px] text-slate-600">
                                 {t.contact_person && (
-                                    <div>Contact: {t.contact_person}</div>
+                                    <div>
+                                        <span className="font-medium text-slate-700">
+                                            Contact:
+                                        </span>{' '}
+                                        {t.contact_person}
+                                    </div>
                                 )}
-                                {t.phone && <div>Phone: {t.phone}</div>}
-                                {t.email && <div>Email: {t.email}</div>}
+                                {t.phone && (
+                                    <div>
+                                        <span className="font-medium text-slate-700">
+                                            Phone:
+                                        </span>{' '}
+                                        {t.phone}
+                                    </div>
+                                )}
+                                {t.email && (
+                                    <div>
+                                        <span className="font-medium text-slate-700">
+                                            Email:
+                                        </span>{' '}
+                                        {t.email}
+                                    </div>
+                                )}
                             </div>
                         </div>
                     ))}
                 {!loading && filtered.length === 0 && (
-                    <div className="rounded-2xl border bg-white p-4 text-center text-sm text-gray-500">
+                    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-xs text-slate-500">
                         No TPAs found.
                     </div>
                 )}
             </div>
 
             {/* Desktop table */}
-            <div className="hidden overflow-x-auto rounded-2xl border bg-white sm:block">
+            <div className="hidden overflow-x-auto rounded-2xl border border-slate-100 bg-white sm:block">
                 <table className="min-w-full text-sm">
-                    <thead className="bg-gray-50">
-                        <tr className="text-left text-xs font-medium text-gray-600">
+                    <thead className="bg-slate-50/80">
+                        <tr className="text-left text-[11px] font-medium uppercase tracking-wide text-slate-500">
                             <th className="p-2">#</th>
                             <th className="p-2">Code</th>
                             <th className="p-2">Name</th>
@@ -1172,28 +1463,34 @@ function TpasTab() {
                     <tbody>
                         {loading && (
                             <tr>
-                                <td colSpan={7} className="p-4 text-center text-sm text-gray-500">
-                                    Loading…
+                                <td
+                                    colSpan={7}
+                                    className="p-4 text-center text-xs text-slate-500 sm:text-sm"
+                                >
+                                    Loading TPAs…
                                 </td>
                             </tr>
                         )}
                         {!loading &&
                             filtered.map((t, idx) => (
-                                <tr key={t.id} className="border-t text-xs">
-                                    <td className="p-2 text-gray-800">{idx + 1}</td>
-                                    <td className="p-2 font-mono text-[11px] text-gray-800">
+                                <tr
+                                    key={t.id}
+                                    className="border-t border-slate-100 text-xs text-slate-800 transition hover:bg-slate-50"
+                                >
+                                    <td className="p-2 text-slate-800">{idx + 1}</td>
+                                    <td className="p-2 font-mono text-[11px] text-slate-700">
                                         {t.code}
                                     </td>
-                                    <td className="p-2 text-gray-800">{t.name}</td>
-                                    <td className="p-2 text-gray-800">
+                                    <td className="p-2 text-slate-900">{t.name}</td>
+                                    <td className="p-2 text-slate-800">
                                         {payerMap[t.payer_id]?.name || '—'}
                                     </td>
-                                    <td className="p-2 text-gray-800">
+                                    <td className="p-2 text-slate-800">
                                         {t.contact_person || '—'}
                                     </td>
-                                    <td className="p-2 text-gray-800">
+                                    <td className="p-2 text-slate-800">
                                         <div>{t.phone || '—'}</div>
-                                        <div className="text-[11px] text-gray-500">
+                                        <div className="text-[11px] text-slate-500">
                                             {t.email || '—'}
                                         </div>
                                     </td>
@@ -1201,7 +1498,7 @@ function TpasTab() {
                                         {canManage && (
                                             <button
                                                 onClick={() => openEdit(t)}
-                                                className="inline-flex items-center gap-1 rounded-xl border px-2 py-1 text-[11px] hover:bg-gray-500 bg-green-300"
+                                                className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-[11px] text-slate-700 transition hover:bg-slate-50"
                                             >
                                                 <Pencil className="h-3.5 w-3.5" />
                                                 Edit
@@ -1214,7 +1511,7 @@ function TpasTab() {
                             <tr>
                                 <td
                                     colSpan={7}
-                                    className="p-6 text-center text-sm text-gray-500"
+                                    className="p-6 text-center text-xs text-slate-500 sm:text-sm"
                                 >
                                     No TPAs found.
                                 </td>
@@ -1265,12 +1562,15 @@ function TpaModal({ existing, payers, onClose, onSaved, onDeleted }) {
             }
             if (existing) {
                 await API.put(`/patient-masters/tpas/${existing.id}`, payload)
+                onSaved && onSaved('update')
             } else {
                 await API.post('/patient-masters/tpas', payload)
+                onSaved && onSaved('create')
             }
-            onSaved && onSaved()
         } catch (e) {
-            setErr(e?.response?.data?.detail || 'Failed to save TPA')
+            const msg = e?.response?.data?.detail || 'Failed to save TPA'
+            setErr(msg)
+            toast.error(msg)
         } finally {
             setSaving(false)
         }
@@ -1286,44 +1586,49 @@ function TpaModal({ existing, payers, onClose, onSaved, onDeleted }) {
             onDeleted && onDeleted()
             onClose && onClose()
         } catch (e) {
-            setErr(e?.response?.data?.detail || 'Failed to deactivate TPA')
+            const msg = e?.response?.data?.detail || 'Failed to deactivate TPA'
+            setErr(msg)
+            toast.error(msg)
         } finally {
             setSaving(false)
         }
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-5 shadow-xl">
-                <div className="mb-4 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-3 sm:p-4">
+            <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl sm:p-5">
+                <div className="mb-4 flex items-center justify-between gap-2">
                     <div>
-                        <h3 className="text-lg font-semibold">
+                        <h3 className="text-base font-semibold text-slate-900 sm:text-lg">
                             {existing ? 'Edit TPA' : 'New TPA'}
                         </h3>
-                        <p className="text-xs text-gray-500">
+                        <p className="mt-1 text-[11px] text-slate-500 sm:text-xs">
                             Third-party administrator master, mapped to payer.
                         </p>
                     </div>
                     <button
                         onClick={onClose}
-                        className="rounded-xl p-2 hover:bg-gray-100"
+                        type="button"
+                        className="rounded-full p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
                     >
-                        <X className="h-5 w-5" />
+                        <X className="h-4 w-4" />
                     </button>
                 </div>
 
                 {err && (
-                    <div className="mb-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                    <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50/80 p-3 text-xs text-rose-700 sm:text-sm">
                         {err}
                     </div>
                 )}
 
-                <form onSubmit={save} className="space-y-3 text-sm">
+                <form onSubmit={save} className="space-y-3 text-xs sm:text-sm">
                     <div className="grid gap-3 md:grid-cols-2">
                         <div>
-                            <label className="mb-1 block text-xs font-medium">Code</label>
+                            <label className="mb-1 block text-[11px] font-medium text-slate-800">
+                                Code
+                            </label>
                             <input
-                                className="input"
+                                className="input text-slate-800"
                                 value={form.code}
                                 onChange={(e) =>
                                     setForm({ ...form, code: e.target.value.toUpperCase() })
@@ -1332,9 +1637,11 @@ function TpaModal({ existing, payers, onClose, onSaved, onDeleted }) {
                             />
                         </div>
                         <div>
-                            <label className="mb-1 block text-xs font-medium">Name</label>
+                            <label className="mb-1 block text-[11px] font-medium text-slate-800">
+                                Name
+                            </label>
                             <input
-                                className="input"
+                                className="input text-slate-800"
                                 value={form.name}
                                 onChange={(e) =>
                                     setForm({ ...form, name: e.target.value })
@@ -1345,9 +1652,11 @@ function TpaModal({ existing, payers, onClose, onSaved, onDeleted }) {
                     </div>
 
                     <div>
-                        <label className="mb-1 block text-xs font-medium">Payer</label>
+                        <label className="mb-1 block text-[11px] font-medium text-slate-800">
+                            Payer
+                        </label>
                         <select
-                            className="input"
+                            className="input text-slate-800"
                             value={form.payer_id || ''}
                             onChange={(e) =>
                                 setForm({ ...form, payer_id: e.target.value || '' })
@@ -1365,11 +1674,11 @@ function TpaModal({ existing, payers, onClose, onSaved, onDeleted }) {
 
                     <div className="grid gap-3 md:grid-cols-2">
                         <div>
-                            <label className="mb-1 block text-xs font-medium">
+                            <label className="mb-1 block text-[11px] font-medium text-slate-800">
                                 Contact Person
                             </label>
                             <input
-                                className="input"
+                                className="input text-slate-800"
                                 value={form.contact_person}
                                 onChange={(e) =>
                                     setForm({ ...form, contact_person: e.target.value })
@@ -1377,9 +1686,11 @@ function TpaModal({ existing, payers, onClose, onSaved, onDeleted }) {
                             />
                         </div>
                         <div>
-                            <label className="mb-1 block text-xs font-medium">Phone</label>
+                            <label className="mb-1 block text-[11px] font-medium text-slate-800">
+                                Phone
+                            </label>
                             <input
-                                className="input"
+                                className="input text-slate-800"
                                 value={form.phone}
                                 onChange={(e) =>
                                     setForm({ ...form, phone: e.target.value })
@@ -1389,9 +1700,11 @@ function TpaModal({ existing, payers, onClose, onSaved, onDeleted }) {
                     </div>
 
                     <div>
-                        <label className="mb-1 block text-xs font-medium">Email</label>
+                        <label className="mb-1 block text-[11px] font-medium text-slate-800">
+                            Email
+                        </label>
                         <input
-                            className="input"
+                            className="input text-slate-800"
                             type="email"
                             value={form.email}
                             onChange={(e) =>
@@ -1405,7 +1718,7 @@ function TpaModal({ existing, payers, onClose, onSaved, onDeleted }) {
                             <button
                                 type="button"
                                 onClick={remove}
-                                className="inline-flex items-center gap-2 rounded-xl border border-rose-200 px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-50"
+                                className="inline-flex items-center gap-2 rounded-full border border-rose-200 px-3 py-1.5 text-[11px] font-medium text-rose-700 transition hover:bg-rose-50"
                             >
                                 <Trash2 className="h-3.5 w-3.5" />
                                 Deactivate
@@ -1415,11 +1728,14 @@ function TpaModal({ existing, payers, onClose, onSaved, onDeleted }) {
                             <button
                                 type="button"
                                 onClick={onClose}
-                                className="rounded-xl border px-4 py-1.5 text-xs hover:bg-gray-50"
+                                className="rounded-full border border-slate-200 px-4 py-1.5 text-[11px] text-slate-700 transition hover:bg-slate-50"
                             >
                                 Cancel
                             </button>
-                            <button className="btn" disabled={saving || !canManage}>
+                            <button
+                                className="btn rounded-full px-4 py-1.5 text-[11px]"
+                                disabled={saving || !canManage}
+                            >
                                 {saving ? 'Saving…' : 'Save'}
                             </button>
                         </div>
@@ -1463,7 +1779,9 @@ function CreditPlansTab() {
             setPayers(payerRes.data || [])
             setTpas(tpaRes.data || [])
         } catch (e) {
-            setErr(e?.response?.data?.detail || 'Failed to load credit plans')
+            const msg = e?.response?.data?.detail || 'Failed to load credit plans'
+            setErr(msg)
+            toast.error(msg)
         } finally {
             setLoading(false)
         }
@@ -1508,22 +1826,28 @@ function CreditPlansTab() {
         setModalOpen(true)
     }
 
-    const onSaved = () => {
+    const onSaved = (mode) => {
         setModalOpen(false)
         setEditing(null)
         load()
+        toast.success(
+            mode === 'update'
+                ? 'Credit plan updated successfully'
+                : 'Credit plan created successfully'
+        )
     }
 
     const onDeleted = () => {
         load()
+        toast.success('Credit plan deactivated successfully')
     }
 
     return (
         <div className="space-y-4">
             {/* Top bar */}
-            <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2 text-sm text-gray-600">
-                    <Layers className="h-4 w-4" />
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex items-start gap-2 text-xs text-slate-600 sm:text-sm">
+                    <Layers className="mt-0.5 h-4 w-4 text-blue-600" />
                     <span>
                         Credit / insurance plans used for IPD/OPD billing & authorization.
                     </span>
@@ -1534,14 +1858,14 @@ function CreditPlansTab() {
                             value={q}
                             onChange={(e) => setQ(e.target.value)}
                             placeholder="Search code, name, payer, TPA…"
-                            className="w-60 max-w-full rounded-xl border px-8 py-1.5 text-sm"
+                            className="w-60 max-w-full rounded-2xl border border-slate-200 bg-slate-50 px-8 py-1.5 text-xs text-slate-800 outline-none ring-0 transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
                         />
-                        <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                        <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                     </div>
                     {canManage && (
                         <button
                             onClick={openCreate}
-                            className="inline-flex items-center gap-2 rounded-xl bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700 active:scale-95"
+                            className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-blue-700 hover:shadow-md active:scale-95 sm:text-sm"
                         >
                             <Plus className="h-4 w-4" />
                             New Plan
@@ -1551,7 +1875,7 @@ function CreditPlansTab() {
             </div>
 
             {err && (
-                <div className="rounded-2xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                <div className="rounded-xl border border-rose-200 bg-rose-50/80 p-3 text-xs text-rose-700 sm:text-sm">
                     {err}
                 </div>
             )}
@@ -1559,37 +1883,39 @@ function CreditPlansTab() {
             {/* Mobile cards */}
             <div className="grid gap-3 sm:hidden">
                 {loading && (
-                    <div className="rounded-2xl border bg-white p-4 text-center text-sm text-gray-500">
-                        Loading…
+                    <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-center text-xs text-slate-500 shadow-sm">
+                        Loading credit plans…
                     </div>
                 )}
                 {!loading &&
                     filtered.map((cp) => (
                         <div
                             key={cp.id}
-                            className="rounded-2xl border bg-white p-4 shadow-sm transition hover:shadow-md"
+                            className="group rounded-2xl border border-slate-100 bg-white p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
                         >
                             <div className="flex items-start justify-between gap-3">
                                 <div>
-                                    <div className="text-sm font-semibold">
-                                        {cp.name}{' '}
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <span className="text-sm font-semibold text-slate-900">
+                                            {cp.name}
+                                        </span>
                                         {cp.code && (
-                                            <span className="ml-1 rounded-full bg-gray-100 px-2 py-0.5 text-[11px] font-mono text-gray-600">
+                                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-mono text-slate-600">
                                                 {cp.code}
                                             </span>
                                         )}
                                     </div>
-                                    <div className="mt-1 text-xs text-gray-500">
+                                    <div className="mt-1 text-[11px] text-slate-500">
                                         Payer: {payerMap[cp.payer_id]?.name || '—'}
                                     </div>
-                                    <div className="mt-0.5 text-xs text-gray-500">
+                                    <div className="mt-0.5 text-[11px] text-slate-500">
                                         TPA: {tpaMap[cp.tpa_id]?.name || '—'}
                                     </div>
                                 </div>
                                 {canManage && (
                                     <button
                                         onClick={() => openEdit(cp)}
-                                        className="inline-flex items-center gap-1 rounded-xl border px-2 py-1 text-xs hover:bg-gray-50"
+                                        className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50"
                                     >
                                         <Pencil className="h-3.5 w-3.5" />
                                         Edit
@@ -1597,24 +1923,24 @@ function CreditPlansTab() {
                                 )}
                             </div>
                             {cp.description && (
-                                <div className="mt-2 text-xs text-gray-600">
+                                <div className="mt-2 text-[11px] text-slate-600">
                                     {cp.description}
                                 </div>
                             )}
                         </div>
                     ))}
                 {!loading && filtered.length === 0 && (
-                    <div className="rounded-2xl border bg-white p-4 text-center text-sm text-gray-500">
+                    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-xs text-slate-500">
                         No credit plans found.
                     </div>
                 )}
             </div>
 
             {/* Desktop table */}
-            <div className="hidden overflow-x-auto rounded-2xl border bg-white sm:block">
+            <div className="hidden overflow-x-auto rounded-2xl border border-slate-100 bg-white sm:block">
                 <table className="min-w-full text-sm">
-                    <thead className="bg-gray-50">
-                        <tr className="text-left text-xs font-medium text-gray-600">
+                    <thead className="bg-slate-50/80">
+                        <tr className="text-left text-[11px] font-medium uppercase tracking-wide text-slate-500">
                             <th className="p-2">#</th>
                             <th className="p-2">Code</th>
                             <th className="p-2">Name</th>
@@ -1627,16 +1953,24 @@ function CreditPlansTab() {
                     <tbody>
                         {loading && (
                             <tr>
-                                <td colSpan={7} className="p-4 text-center text-sm text-gray-500">
-                                    Loading…
+                                <td
+                                    colSpan={7}
+                                    className="p-4 text-center text-xs text-slate-500 sm:text-sm"
+                                >
+                                    Loading credit plans…
                                 </td>
                             </tr>
                         )}
                         {!loading &&
                             filtered.map((cp, idx) => (
-                                <tr key={cp.id} className="border-t text-xs text-black">
+                                <tr
+                                    key={cp.id}
+                                    className="border-t border-slate-100 text-xs text-slate-800 transition hover:bg-slate-50"
+                                >
                                     <td className="p-2">{idx + 1}</td>
-                                    <td className="p-2 font-mono text-[11px]">{cp.code}</td>
+                                    <td className="p-2 font-mono text-[11px] text-slate-700">
+                                        {cp.code}
+                                    </td>
                                     <td className="p-2">{cp.name}</td>
                                     <td className="p-2">
                                         {payerMap[cp.payer_id]?.name || '—'}
@@ -1645,7 +1979,7 @@ function CreditPlansTab() {
                                         {tpaMap[cp.tpa_id]?.name || '—'}
                                     </td>
                                     <td className="p-2 max-w-xs">
-                                        <div className="line-clamp-2 text-[11px] text-gray-600">
+                                        <div className="line-clamp-2 text-[11px] text-slate-600">
                                             {cp.description || '—'}
                                         </div>
                                     </td>
@@ -1653,7 +1987,7 @@ function CreditPlansTab() {
                                         {canManage && (
                                             <button
                                                 onClick={() => openEdit(cp)}
-                                                className="inline-flex items-center gap-1 rounded border px-2 py-1 text-[11px] bg-green-300 hover:bg-gray-50"
+                                                className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-[11px] text-slate-700 transition hover:bg-slate-50"
                                             >
                                                 <Pencil className="h-3.5 w-3.5" />
                                                 Edit
@@ -1666,7 +2000,7 @@ function CreditPlansTab() {
                             <tr>
                                 <td
                                     colSpan={7}
-                                    className="p-6 text-center text-sm text-gray-500"
+                                    className="p-6 text-center text-xs text-slate-500 sm:text-sm"
                                 >
                                     No credit plans found.
                                 </td>
@@ -1718,12 +2052,15 @@ function CreditPlanModal({ existing, payers, tpas, onClose, onSaved, onDeleted }
             }
             if (existing) {
                 await API.put(`/patient-masters/credit-plans/${existing.id}`, payload)
+                onSaved && onSaved('update')
             } else {
                 await API.post('/patient-masters/credit-plans', payload)
+                onSaved && onSaved('create')
             }
-            onSaved && onSaved()
         } catch (e) {
-            setErr(e?.response?.data?.detail || 'Failed to save credit plan')
+            const msg = e?.response?.data?.detail || 'Failed to save credit plan'
+            setErr(msg)
+            toast.error(msg)
         } finally {
             setSaving(false)
         }
@@ -1739,44 +2076,49 @@ function CreditPlanModal({ existing, payers, tpas, onClose, onSaved, onDeleted }
             onDeleted && onDeleted()
             onClose && onClose()
         } catch (e) {
-            setErr(e?.response?.data?.detail || 'Failed to deactivate credit plan')
+            const msg = e?.response?.data?.detail || 'Failed to deactivate credit plan'
+            setErr(msg)
+            toast.error(msg)
         } finally {
             setSaving(false)
         }
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4">
-            <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-5 shadow-xl">
-                <div className="mb-4 flex items-center justify-between">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-3 sm:p-4">
+            <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl sm:p-5">
+                <div className="mb-4 flex items-center justify-between gap-2">
                     <div>
-                        <h3 className="text-lg font-semibold">
+                        <h3 className="text-base font-semibold text-slate-900 sm:text-lg">
                             {existing ? 'Edit Credit Plan' : 'New Credit Plan'}
                         </h3>
-                        <p className="text-xs text-gray-500">
+                        <p className="mt-1 text-[11px] text-slate-500 sm:text-xs">
                             Map plan to payer & optional TPA for billing workflows.
                         </p>
                     </div>
                     <button
                         onClick={onClose}
-                        className="rounded-xl p-2 hover:bg-gray-100"
+                        type="button"
+                        className="rounded-full p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
                     >
-                        <X className="h-5 w-5" />
+                        <X className="h-4 w-4" />
                     </button>
                 </div>
 
                 {err && (
-                    <div className="mb-3 rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                    <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50/80 p-3 text-xs text-rose-700 sm:text-sm">
                         {err}
                     </div>
                 )}
 
-                <form onSubmit={save} className="space-y-3 text-sm">
+                <form onSubmit={save} className="space-y-3 text-xs sm:text-sm">
                     <div className="grid gap-3 md:grid-cols-2">
                         <div>
-                            <label className="mb-1 block text-xs font-medium">Code</label>
+                            <label className="mb-1 block text-[11px] font-medium text-slate-800">
+                                Code
+                            </label>
                             <input
-                                className="input"
+                                className="input text-slate-800"
                                 value={form.code}
                                 onChange={(e) =>
                                     setForm({ ...form, code: e.target.value.toUpperCase() })
@@ -1785,9 +2127,11 @@ function CreditPlanModal({ existing, payers, tpas, onClose, onSaved, onDeleted }
                             />
                         </div>
                         <div>
-                            <label className="mb-1 block text-xs font-medium">Name</label>
+                            <label className="mb-1 block text-[11px] font-medium text-slate-800">
+                                Name
+                            </label>
                             <input
-                                className="input"
+                                className="input text-slate-800"
                                 value={form.name}
                                 onChange={(e) =>
                                     setForm({ ...form, name: e.target.value })
@@ -1799,9 +2143,11 @@ function CreditPlanModal({ existing, payers, tpas, onClose, onSaved, onDeleted }
 
                     <div className="grid gap-3 md:grid-cols-2">
                         <div>
-                            <label className="mb-1 block text-xs font-medium">Payer</label>
+                            <label className="mb-1 block text-[11px] font-medium text-slate-800">
+                                Payer
+                            </label>
                             <select
-                                className="input"
+                                className="input text-slate-800"
                                 value={form.payer_id || ''}
                                 onChange={(e) =>
                                     setForm({ ...form, payer_id: e.target.value || '' })
@@ -1817,11 +2163,11 @@ function CreditPlanModal({ existing, payers, tpas, onClose, onSaved, onDeleted }
                             </select>
                         </div>
                         <div>
-                            <label className="mb-1 block text-xs font-medium">
+                            <label className="mb-1 block text-[11px] font-medium text-slate-800">
                                 TPA (optional)
                             </label>
                             <select
-                                className="input"
+                                className="input text-slate-800"
                                 value={form.tpa_id || ''}
                                 onChange={(e) =>
                                     setForm({ ...form, tpa_id: e.target.value || '' })
@@ -1838,11 +2184,11 @@ function CreditPlanModal({ existing, payers, tpas, onClose, onSaved, onDeleted }
                     </div>
 
                     <div>
-                        <label className="mb-1 block text-xs font-medium">
+                        <label className="mb-1 block text-[11px] font-medium text-slate-800">
                             Description / Notes
                         </label>
                         <textarea
-                            className="input min-h-[80px]"
+                            className="input min-h-[80px] text-slate-800"
                             value={form.description}
                             onChange={(e) =>
                                 setForm({ ...form, description: e.target.value })
@@ -1855,7 +2201,7 @@ function CreditPlanModal({ existing, payers, tpas, onClose, onSaved, onDeleted }
                             <button
                                 type="button"
                                 onClick={remove}
-                                className="inline-flex items-center gap-2 rounded-xl border border-rose-200 px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-50"
+                                className="inline-flex items-center gap-2 rounded-full border border-rose-200 px-3 py-1.5 text-[11px] font-medium text-rose-700 transition hover:bg-rose-50"
                             >
                                 <Trash2 className="h-3.5 w-3.5" />
                                 Deactivate
@@ -1865,11 +2211,14 @@ function CreditPlanModal({ existing, payers, tpas, onClose, onSaved, onDeleted }
                             <button
                                 type="button"
                                 onClick={onClose}
-                                className="rounded-xl border px-4 py-1.5 text-xs hover:bg-gray-50"
+                                className="rounded-full border border-slate-200 px-4 py-1.5 text-[11px] text-slate-700 transition hover:bg-slate-50"
                             >
                                 Cancel
                             </button>
-                            <button className="btn" disabled={saving || !canManage}>
+                            <button
+                                className="btn rounded-full px-4 py-1.5 text-[11px]"
+                                disabled={saving || !canManage}
+                            >
                                 {saving ? 'Saving…' : 'Save'}
                             </button>
                         </div>

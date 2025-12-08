@@ -197,6 +197,10 @@ export function deleteOtSchedule(id) {
     return API.delete(`/ot/schedule/${id}`)
 }
 
+export function closeOtCase(caseId, payload) {
+  // payload: { outcome: string, actual_end_time?: string, icu_required?: boolean, immediate_postop_condition?: string }
+  return API.post(`/ot/cases/${caseId}/close`, payload)
+}
 // ============================================================
 //  OT CASES
 // ============================================================
@@ -238,9 +242,9 @@ export function openOtCaseForSchedule(scheduleId, data) {
     return API.post(`/ot/schedule/${scheduleId}/open-case`, data)
 }
 
-export function closeOtCase(caseId, data) {
-    return API.post(`/ot/cases/${caseId}/close`, data)
-}
+// export function closeOtCase(caseId, data) {
+//     return API.post(`/ot/cases/${caseId}/close`, data)
+// }
 
 // ============================================================
 //  CLINICAL: PRE-ANAESTHESIA
@@ -321,6 +325,8 @@ export const deleteAnaesthesiaDrug = (drugId) => API.delete(`/ot/anaesthesia-dru
 // ============================================================
 //  Nursing Record
 // ============================================================
+
+
 
 export function getNursingRecord(caseId) {
     return API.get(`/ot/cases/${caseId}/nursing-record`)

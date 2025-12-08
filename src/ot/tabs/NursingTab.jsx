@@ -306,11 +306,11 @@ function NursingTab({ caseId }) {
                         </span>
                     )}
 
-                    {data?.primary_nurse && (
+                    {/* {data?.primary_nurse && (
                         <span className="rounded-full bg-sky-50 px-2 py-0.5 text-[11px] text-sky-700">
                             Primary nurse: {data.primary_nurse.first_name} {data.primary_nurse.last_name}
                         </span>
-                    )}
+                    )} */}
                 </div>
             </div>
 

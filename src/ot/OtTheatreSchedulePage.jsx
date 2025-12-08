@@ -6,6 +6,8 @@ import {
     updateOtSchedule,
     openOtCaseFromSchedule,
     listOtProcedures,
+    closeOtCase,
+    
 } from '../api/ot'
 import { useCan } from '../hooks/useCan'
 import {
@@ -19,8 +21,10 @@ import {
     Plus,
     X,
     Sparkles,
+    CheckCircle2,
 } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
 
 // 🔁 Reusable pickers
 import PatientPicker from '../components/pickers/PatientPicker'
@@ -125,6 +129,7 @@ function ScheduleTable({
     bedId,
     onEdit,
     onOpenCase,
+    onMarkSuccess,
 }) {
     const headerSubtitle = bedId
         ? `Bed #${bedId} · ${date}`
@@ -333,7 +338,8 @@ function ScheduleTable({
                                             <StatusBadge status={s.status} />
                                         </td>
                                         <td className="px-4 py-2 align-top">
-                                            <div className="flex items-center justify-end gap-1.5">
+                                            <div className="flex flex-wrap items-center justify-end gap-1.5">
+                                                {/* Edit schedule */}
                                                 <button
                                                     type="button"
                                                     className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] font-medium text-slate-700 hover:border-sky-400 hover:text-sky-700"
@@ -342,19 +348,34 @@ function ScheduleTable({
                                                     Edit
                                                 </button>
 
+                                                {/* Open / View case */}
                                                 <button
                                                     type="button"
                                                     onClick={() => onOpenCase(s)}
                                                     className={`inline-flex items-center gap-1 rounded-lg border px-2.5 py-1 text-[11px] font-medium ${s.case_id
-                                                        ? 'border-slate-200 bg-white text-slate-700 hover:border-sky-400 hover:text-sky-700'
-                                                        : 'border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700'
+                                                            ? 'border-slate-200 bg-white text-slate-700 hover:border-sky-400 hover:text-sky-700'
+                                                            : 'border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700'
                                                         }`}
                                                 >
                                                     <Activity className="h-3.5 w-3.5" />
                                                     {s.case_id ? 'Details' : 'Open Case'}
                                                 </button>
+
+                                                {/* ✅ Mark Success button – only if case exists, not completed, and handler provided */}
+                                                {onMarkSuccess && s.case_id && s.status !== 'completed' && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => onMarkSuccess(s)}
+                                                        className="inline-flex items-center gap-1 rounded-lg border border-emerald-600 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 hover:bg-emerald-100"
+                                                        title="Mark OT as completed (success) for billing"
+                                                    >
+                                                        <CheckCircle2 className="h-3.5 w-3.5" />
+                                                        Success
+                                                    </button>
+                                                )}
                                             </div>
                                         </td>
+
                                     </tr>
                                 )
                             })}
@@ -512,7 +533,7 @@ function ScheduleModal({
                 ),
             }
             console.log(payload, "bed no");
-            
+
 
             if (isEdit && editingSchedule?.id) {
                 await updateOtSchedule(editingSchedule.id, payload)
@@ -972,6 +993,7 @@ export default function OtTheatreSchedulePage() {
     const canViewSchedule = useCan('ot.schedule.view')
     const canCreateSchedule = useCan('ot.schedule.create')
     const canUpdateSchedule = useCan('ot.schedule.update')
+    const canCloseCase = useCan('ot.cases.close') || useCan('ot.cases.update')
 
     const [date, setDate] = useState(formatDateInput(new Date()))
     const [selectedBedId, setSelectedBedId] = useState(null)
@@ -1036,6 +1058,34 @@ export default function OtTheatreSchedulePage() {
         }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [date, selectedBedId, canViewSchedule])
+    const handleMarkSuccess = async (schedule) => {
+        if (!schedule.case_id) {
+            toast.error?.('No OT case opened for this schedule yet.')
+            return
+        }
+
+        try {
+            // Backend will:
+            // - validate actual_start_time
+            // - set outcome
+            // - set actual_end_time = now (if not given)
+            // - set schedule.status = completed
+            await closeOtCase(schedule.case_id, {
+                outcome: 'Completed',
+                // actual_end_time: new Date().toISOString(), // optional, backend will default to now
+            })
+
+            toast.success?.('OT case marked as Completed')
+            await loadSchedule()
+        } catch (err) {
+            console.error('Failed to mark OT case as completed', err)
+            const apiMsg =
+                err?.response?.data?.detail ||
+                err?.message ||
+                'Failed to update OT status'
+            toast.error?.(apiMsg)
+        }
+    }
 
     const handleOpenCreate = () => {
         if (!canCreateSchedule) return
@@ -1125,6 +1175,7 @@ export default function OtTheatreSchedulePage() {
                         bedId={selectedBedId}
                         onEdit={handleOpenEdit}
                         onOpenCase={handleOpenCase}
+                        onMarkSuccess={canCloseCase ? handleMarkSuccess : undefined}
                     />
                 </div>
             </div>

@@ -38,6 +38,8 @@ import {
     RefreshCcw,
     AlertCircle,
     BarChart3,
+    Search,
+    Download,
 } from "lucide-react";
 
 import {
@@ -56,8 +58,8 @@ import { cn } from "@/lib/utils";
 
 // ---------- helpers ----------
 
-// Neutral-ish chart palette (soft blues/greys)
-const chartColors = ["#0f172a", "#1e293b", "#475569", "#64748b", "#94a3b8"];
+// Neutral-ish chart palette (soft blues/greys/teal-ish)
+const chartColors = ["#0f172a", "#0f766e", "#1e293b", "#475569", "#64748b"];
 
 function formatDateInput(d) {
     return d.toISOString().slice(0, 10);
@@ -133,6 +135,7 @@ export default function MIS() {
     const [loadingReport, setLoadingReport] = useState(false);
 
     const [error, setError] = useState("");
+    const [activeTab, setActiveTab] = useState("summary"); // for desktop tabs + mobile dropdown
 
     const hasDates = Boolean(dateFrom && dateTo);
 
@@ -189,6 +192,9 @@ export default function MIS() {
             const first = new Date(base.getFullYear(), base.getMonth(), 1);
             setDateFrom(formatDateInput(first));
             setDateTo(formatDateInput(base));
+        } else if (preset === "custom") {
+            // just mark as custom, keep current dates
+            setActivePreset("custom");
         }
     };
 
@@ -259,9 +265,18 @@ export default function MIS() {
             ? "Showing latest results"
             : "Awaiting first run";
 
+    // Tabs list config (for desktop + mobile dropdown)
+    const tabOptions = [
+        { value: "summary", label: "Summary" },
+        { value: "charts", label: "Charts" },
+    ];
+    if (result?.table) {
+        tabOptions.push({ value: "details", label: "Detailed view" });
+    }
+
     return (
         <motion.div
-            className="relative min-h-[calc(100vh-4rem)] bg-slate-50 px-2.5 py-3 sm:px-3 sm:py-4 md:px-6 md:py-6 lg:px-8"
+            className="relative min-h-[calc(100vh-4rem)] bg-slate-50 px-3 py-3 sm:px-4 sm:py-4 md:px-6 md:py-6 lg:px-8"
             variants={pageVariants}
             initial="hidden"
             animate="visible"
@@ -269,130 +284,119 @@ export default function MIS() {
             <div className="mx-auto w-full max-w-6xl space-y-4 md:space-y-5 lg:space-y-6">
                 {/* TOP ROW: badge + device mode */}
                 <motion.div
-                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-[10px] md:text-[11px]"
+                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 text-xs md:text-sm"
                     custom={0}
                     variants={sectionVariants}
                     initial="hidden"
                     animate="visible"
                 >
-                    <div className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-slate-800 shadow-sm">
-                        <FileSpreadsheet className="w-3 h-3" />
+                    <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-800 shadow-sm">
+                        <FileSpreadsheet className="w-4 h-4" />
                         <span className="font-medium">MIS · Management Information System</span>
                     </div>
 
-                    <div className="flex items-center gap-1.5 text-slate-500">
+                    <div className="flex items-center gap-1.5 text-slate-500 text-[11px]">
                         <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                        <span className="inline-flex md:hidden rounded-full bg-white px-2 py-0.5 text-[9px] uppercase tracking-wide border border-slate-200">
+                        <span className="inline-flex md:hidden rounded-full bg-white px-2 py-0.5 uppercase tracking-wide border border-slate-200">
                             Mobile view
                         </span>
-                        <span className="hidden md:inline-flex lg:hidden rounded-full bg-white px-2 py-0.5 text-[9px] uppercase tracking-wide border border-slate-200">
+                        <span className="hidden md:inline-flex lg:hidden rounded-full bg-white px-2 py-0.5 uppercase tracking-wide border border-slate-200">
                             Tablet / Laptop
                         </span>
-                        <span className="hidden lg:inline-flex rounded-full bg-white px-2 py-0.5 text-[9px] uppercase tracking-wide border border-slate-200">
+                        <span className="hidden lg:inline-flex rounded-full bg-white px-2 py-0.5 uppercase tracking-wide border border-slate-200">
                             Desktop workspace
                         </span>
                     </div>
                 </motion.div>
 
-                {/* HERO HEADER */}
+                {/* HERO HEADER (gradient, module hero spec) */}
                 <motion.div
                     variants={sectionVariants}
                     custom={0.05}
                     initial="hidden"
                     animate="visible"
                 >
-                    <Card className="rounded-3xl border border-slate-200 bg-white shadow-sm overflow-hidden">
-                        <CardContent className="p-4 sm:p-5 md:p-6 lg:p-7 flex flex-col gap-4 md:gap-5 lg:gap-6">
-                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                                {/* Left: title + description */}
-                                <div className="space-y-3 max-w-xl">
-                                    <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1 text-[10px] md:text-[11px] font-medium text-slate-700">
-                                        <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-900 text-white text-[10px]">
-                                            MIS
-                                        </span>
-                                        Clean, light-weight analytics console
-                                    </div>
-
-                                    <div className="flex items-start gap-3">
-                                        <div className="inline-flex h-10 w-10 md:h-11 md:w-11 items-center justify-center rounded-3xl bg-slate-900 text-slate-50 shadow-sm">
-                                            <BarChart3 className="w-5 h-5" />
-                                        </div>
-                                        <div className="space-y-1.5">
-                                            <h1 className="text-[20px] md:text-[24px] lg:text-[28px] font-semibold tracking-tight text-slate-900">
-                                                MIS Reports Console
-                                            </h1>
-                                            <p className="text-[11px] md:text-[12px] text-slate-600 leading-relaxed">
-                                                Generate{" "}
-                                                <span className="font-medium text-slate-900">
-                                                    clinical, operational and financial
-                                                </span>{" "}
-                                                MIS reports for your hospital in a simple, distraction-free,
-                                                light theme workspace.
-                                            </p>
-                                        </div>
-                                    </div>
-
-                                    {activeDefinition && (
-                                        <div className="flex flex-wrap gap-1.5">
-                                            <Badge
-                                                variant="outline"
-                                                className="border-slate-200 text-slate-700 bg-slate-50 text-[10px] px-2 py-0.5"
-                                            >
-                                                {categoryLabel}
-                                            </Badge>
-                                            {Array.isArray(activeDefinition.tags) &&
-                                                activeDefinition.tags.map((t) => (
-                                                    <Badge
-                                                        key={t}
-                                                        variant="outline"
-                                                        className="border-slate-200 text-slate-600 bg-white text-[10px] px-2 py-0.5"
-                                                    >
-                                                        {t}
-                                                    </Badge>
-                                                ))}
-                                        </div>
-                                    )}
+                    <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-teal-700 via-teal-600 to-blue-600 text-white shadow-md">
+                        <div className="absolute inset-0 opacity-20 pointer-events-none bg-[radial-gradient(circle_at_top,_#e0f2fe,_transparent_55%)]" />
+                        <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-7 lg:px-10 lg:py-8">
+                            {/* Left: title + description */}
+                            <div className="space-y-3 max-w-xl">
+                                <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium backdrop-blur-sm border border-white/20">
+                                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/20 text-[11px]">
+                                        MIS
+                                    </span>
+                                    Clean, focused analytics for your hospital
                                 </div>
 
-                                {/* Right: current context snapshot */}
-                                <div className="w-full md:w-auto">
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 md:gap-3 text-[11px]">
-                                        <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 flex flex-col gap-1 shadow-xs">
-                                            <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">
-                                                Active report
-                                            </span>
-                                            <span className="text-[11px] font-semibold text-slate-900 line-clamp-2">
-                                                {activeReportName}
-                                            </span>
-                                        </div>
-                                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2.5 flex flex-col gap-1 shadow-xs">
-                                            <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">
-                                                Date range
-                                            </span>
-                                            <span className="text-[11px] font-semibold text-slate-900">
-                                                {dateRangeLabel}
-                                            </span>
-                                        </div>
-                                        <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 flex flex-col gap-1 shadow-xs">
-                                            <span className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">
-                                                Status
-                                            </span>
-                                            <span className="text-[11px] font-semibold text-slate-900 flex items-center gap-1.5">
-                                                <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                                                {runStatus}
-                                            </span>
-                                        </div>
+                                <div className="flex items-start gap-3">
+                                    <div className="inline-flex h-11 w-11 md:h-12 md:w-12 items-center justify-center rounded-3xl bg-white/10 text-white shadow-sm border border-white/20">
+                                        <BarChart3 className="w-6 h-6" />
+                                    </div>
+                                    <div className="space-y-1.5">
+                                        <h1 className="text-xl md:text-2xl lg:text-3xl font-semibold tracking-tight">
+                                            MIS Reports Console
+                                        </h1>
+                                        <p className="text-sm md:text-base text-teal-50/90 leading-relaxed">
+                                            Generate{" "}
+                                            <span className="font-semibold">
+                                                clinical, operational and financial
+                                            </span>{" "}
+                                            MIS reports in a light, distraction-free workspace.
+                                        </p>
+                                    </div>
+                                </div>
+
+                                {activeDefinition?.description && (
+                                    <p className="text-xs sm:text-sm text-teal-50/90">
+                                        {activeDefinition.description}
+                                    </p>
+                                )}
+                            </div>
+
+                            {/* Right: status chips, context */}
+                            <div className="w-full md:w-auto space-y-3">
+                                <div className="flex flex-wrap gap-2 justify-start md:justify-end">
+                                    <Badge className="bg-white/15 text-xs font-semibold border border-white/25 text-white rounded-full px-3 py-1">
+                                        IPD / OPD Ready
+                                    </Badge>
+                                    <Badge className="bg-white/10 text-xs border border-white/20 text-teal-50 rounded-full px-3 py-1">
+                                        NABH-aligned KPIs
+                                    </Badge>
+                                    <Badge className="bg-white/10 text-xs border border-white/20 text-teal-50 rounded-full px-3 py-1">
+                                        {categoryLabel}
+                                    </Badge>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-xs">
+                                    <div className="rounded-2xl bg-white/10 px-3 py-2.5 flex flex-col gap-1 border border-white/15">
+                                        <span className="text-[11px] font-medium text-teal-50/80 uppercase tracking-wide">
+                                            Active report
+                                        </span>
+                                        <span className="text-sm font-semibold line-clamp-2">
+                                            {activeReportName}
+                                        </span>
+                                    </div>
+                                    <div className="rounded-2xl bg-white/10 px-3 py-2.5 flex flex-col gap-1 border border-white/15">
+                                        <span className="text-[11px] font-medium text-teal-50/80 uppercase tracking-wide">
+                                            Date range
+                                        </span>
+                                        <span className="text-sm font-semibold">
+                                            {dateRangeLabel}
+                                        </span>
+                                    </div>
+                                    <div className="rounded-2xl bg-white/10 px-3 py-2.5 flex flex-col gap-1 border border-white/15">
+                                        <span className="text-[11px] font-medium text-teal-50/80 uppercase tracking-wide">
+                                            Status
+                                        </span>
+                                        <span className="text-sm font-semibold flex items-center gap-1.5">
+                                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-300 animate-pulse" />
+                                            {runStatus}
+                                        </span>
                                     </div>
                                 </div>
                             </div>
-
-                            {activeDefinition?.description && (
-                                <div className="pt-2 border-t border-slate-100 text-[11px] text-slate-600">
-                                    {activeDefinition.description}
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
+                        </div>
+                    </div>
                 </motion.div>
 
                 {/* ERROR */}
@@ -403,14 +407,13 @@ export default function MIS() {
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: -4 }}
                         >
-                            <Alert
-                                variant="destructive"
-                                className="bg-rose-50 border-rose-300 text-rose-900"
-                            >
+                            <Alert className="bg-red-50 border-red-200 text-red-800 rounded-2xl">
                                 <AlertCircle className="h-4 w-4 mt-0.5" />
                                 <div>
-                                    <AlertTitle className="text-rose-900">MIS error</AlertTitle>
-                                    <AlertDescription className="text-rose-800/90">
+                                    <AlertTitle className="text-red-900 font-semibold">
+                                        MIS error
+                                    </AlertTitle>
+                                    <AlertDescription className="text-red-800/90 text-sm">
                                         {error}
                                     </AlertDescription>
                                 </div>
@@ -428,19 +431,19 @@ export default function MIS() {
                     className="grid gap-4 lg:gap-5 lg:grid-cols-[minmax(0,320px)_minmax(0,1fr)] xl:grid-cols-[minmax(0,340px)_minmax(0,1fr)]"
                 >
                     {/* LEFT: CONTROL PANEL (sticky on desktop) */}
-                    <div className="space-y-3 lg:space-y-4 lg:sticky lg:top-20 self-start">
+                    <div className="space-y-3 lg:space-y-4 lg:sticky lg:top-24 self-start">
                         {/* Report & Dates */}
                         <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
                             <CardHeader className="pb-2 flex flex-row items-center justify-between gap-2">
                                 <div className="flex items-center gap-2">
-                                    <div className="h-7 w-7 rounded-xl bg-slate-900 text-white flex items-center justify-center">
+                                    <div className="h-8 w-8 rounded-xl bg-teal-600 text-white flex items-center justify-center">
                                         <BarChart3 className="w-4 h-4" />
                                     </div>
                                     <div>
                                         <CardTitle className="text-sm font-semibold text-slate-900">
                                             Report & Date
                                         </CardTitle>
-                                        <p className="text-[10px] text-slate-500">
+                                        <p className="text-xs text-slate-500">
                                             Choose MIS view and time window
                                         </p>
                                     </div>
@@ -450,10 +453,10 @@ export default function MIS() {
                                 {/* Report select */}
                                 <div className="space-y-1.5">
                                     <div className="flex items-center justify-between gap-2">
-                                        <span className="text-[11px] font-medium text-slate-800">
+                                        <span className="text-xs font-medium text-slate-800">
                                             Report
                                         </span>
-                                        <span className="text-[10px] text-slate-500 flex items-center gap-1">
+                                        <span className="text-[11px] text-slate-500 flex items-center gap-1">
                                             <Filter className="w-3 h-3" />
                                             MIS group
                                         </span>
@@ -468,7 +471,7 @@ export default function MIS() {
                                                 setResult(null);
                                             }}
                                         >
-                                            <SelectTrigger className="h-9 rounded-xl border-slate-200 bg-white text-xs text-slate-900 focus:ring-slate-400">
+                                            <SelectTrigger className="h-9 rounded-xl border-slate-200 bg-white text-xs text-slate-900 focus:ring-teal-200">
                                                 <SelectValue placeholder="Select report" />
                                             </SelectTrigger>
                                             <SelectContent className="bg-white border-slate-200 text-slate-900 max-h-72">
@@ -488,7 +491,7 @@ export default function MIS() {
 
                                 {/* Date presets */}
                                 <div className="space-y-1">
-                                    <span className="text-[11px] font-medium text-slate-800">
+                                    <span className="text-xs font-medium text-slate-800">
                                         Quick ranges
                                     </span>
                                     <div className="flex flex-wrap gap-1.5">
@@ -504,9 +507,9 @@ export default function MIS() {
                                                 type="button"
                                                 onClick={() => handlePresetChange(p.key)}
                                                 className={cn(
-                                                    "px-2.5 py-1 rounded-full text-[10px] font-medium border transition-colors",
+                                                    "px-3 py-1 rounded-full text-[11px] font-medium border transition-colors",
                                                     activePreset === p.key
-                                                        ? "bg-slate-900 text-white border-slate-900"
+                                                        ? "bg-blue-600 text-white border-blue-600"
                                                         : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
                                                 )}
                                             >
@@ -518,33 +521,33 @@ export default function MIS() {
 
                                 {/* Date inputs */}
                                 <div className="space-y-1.5">
-                                    <span className="text-[11px] font-medium text-slate-800">
+                                    <span className="text-xs font-medium text-slate-800">
                                         Custom date range
                                     </span>
                                     <div className="flex flex-col gap-2">
                                         <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-2">
                                             <Calendar className="w-4 h-4 text-slate-500 shrink-0" />
-                                            <div className="flex flex-col gap-1 w-full text-[11px] text-slate-800">
-                                                <div className="flex items-center gap-1 w-full">
-                                                    <span className="w-10 text-[10px] text-slate-500">
+                                            <div className="flex flex-col gap-2 w-full text-xs text-slate-800">
+                                                <div className="flex items-center gap-2 w-full">
+                                                    <span className="w-10 text-[11px] text-slate-500">
                                                         From
                                                     </span>
                                                     <Input
                                                         type="date"
                                                         value={dateFrom}
                                                         onChange={handleDateChange(setDateFrom)}
-                                                        className="h-7 w-full border-slate-200 bg-slate-50 text-[11px] text-slate-900"
+                                                        className="h-8 w-full rounded-lg border-slate-200 bg-slate-50 text-xs text-slate-900"
                                                     />
                                                 </div>
-                                                <div className="flex items-center gap-1 w-full">
-                                                    <span className="w-10 text-[10px] text-slate-500">
+                                                <div className="flex items-center gap-2 w-full">
+                                                    <span className="w-10 text-[11px] text-slate-500">
                                                         To
                                                     </span>
                                                     <Input
                                                         type="date"
                                                         value={dateTo}
                                                         onChange={handleDateChange(setDateTo)}
-                                                        className="h-7 w-full border-slate-200 bg-slate-50 text-[11px] text-slate-900"
+                                                        className="h-8 w-full rounded-lg border-slate-200 bg-slate-50 text-xs text-slate-900"
                                                     />
                                                 </div>
                                             </div>
@@ -556,7 +559,7 @@ export default function MIS() {
                                 <div className="pt-1">
                                     <Button
                                         size="sm"
-                                        className="h-9 w-full rounded-xl inline-flex items-center justify-center gap-2 bg-slate-900 hover:bg-slate-800 text-white"
+                                        className="h-9 w-full rounded-full inline-flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white font-semibold text-sm"
                                         onClick={handleRun}
                                         disabled={loadingReport || !selectedCode || !hasDates}
                                     >
@@ -586,7 +589,7 @@ export default function MIS() {
                                             <Filter className="w-4 h-4 text-slate-500" />
                                             Advanced filters
                                         </CardTitle>
-                                        <span className="text-[10px] text-slate-500">
+                                        <span className="text-[11px] text-slate-500">
                                             Tailor output for this report
                                         </span>
                                     </CardHeader>
@@ -597,11 +600,11 @@ export default function MIS() {
                                                     return (
                                                         <div key={f.key} className="space-y-1">
                                                             <div className="flex items-center justify-between gap-2">
-                                                                <span className="text-[11px] font-medium text-slate-800">
+                                                                <span className="text-xs font-medium text-slate-800">
                                                                     {f.label}
                                                                 </span>
                                                                 {f.required && (
-                                                                    <span className="text-[10px] text-rose-500">
+                                                                    <span className="text-[11px] text-rose-500">
                                                                         *
                                                                     </span>
                                                                 )}
@@ -616,9 +619,9 @@ export default function MIS() {
                                                                     handleFilterChange(f.key, val)
                                                                 }
                                                             >
-                                                                <SelectTrigger className="h-8 rounded-xl border-slate-200 bg-slate-50 text-xs text-slate-900">
+                                                                <SelectTrigger className="h-9 rounded-xl border-slate-200 bg-slate-50 text-xs text-slate-900">
                                                                     <SelectValue
-                                                                        placeholder={`All ${f.label}`}
+                                                                        placeholder={`All ${f.label.toLowerCase()}`}
                                                                     />
                                                                 </SelectTrigger>
                                                                 <SelectContent className="bg-white border-slate-200 text-slate-900 max-h-64">
@@ -647,11 +650,11 @@ export default function MIS() {
                                                 return (
                                                     <div key={f.key} className="space-y-1">
                                                         <div className="flex items-center justify-between gap-2">
-                                                            <span className="text-[11px] font-medium text-slate-800">
+                                                            <span className="text-xs font-medium text-slate-800">
                                                                 {f.label}
                                                             </span>
                                                             {f.required && (
-                                                                <span className="text-[10px] text-rose-500">
+                                                                <span className="text-[11px] text-rose-500">
                                                                     *
                                                                 </span>
                                                             )}
@@ -661,8 +664,8 @@ export default function MIS() {
                                                             onChange={(e) =>
                                                                 handleFilterChange(f.key, e.target.value)
                                                             }
-                                                            placeholder={`Filter by ${f.label}`}
-                                                            className="h-8 rounded-xl border-slate-200 bg-slate-50 text-xs text-slate-900 placeholder:text-slate-400"
+                                                            placeholder={`Filter by ${f.label.toLowerCase()}`}
+                                                            className="h-9 rounded-xl border-slate-200 bg-slate-50 text-xs text-slate-900 placeholder:text-slate-400"
                                                         />
                                                     </div>
                                                 );
@@ -682,13 +685,13 @@ export default function MIS() {
                                     <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200 mb-1">
                                         <BarChart3 className="w-6 h-6 text-slate-700" />
                                     </div>
-                                    <h2 className="text-sm md:text-base font-semibold text-slate-900">
+                                    <h2 className="text-base md:text-lg font-semibold text-slate-900">
                                         Run your first MIS report
                                     </h2>
-                                    <p className="text-[11px] md:text-[12px] text-slate-600 max-w-md">
+                                    <p className="text-sm text-slate-600 max-w-md">
                                         Select a report on the left, choose a date range, add
                                         filters if needed and click{" "}
-                                        <span className="font-medium text-slate-900">
+                                        <span className="font-semibold text-slate-900">
                                             “Run MIS report”
                                         </span>{" "}
                                         to see KPIs, charts and detailed records.
@@ -720,36 +723,48 @@ export default function MIS() {
                                 initial="hidden"
                                 animate="visible"
                             >
-                                <Tabs defaultValue="summary" className="w-full">
-                                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-2">
+                                <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+                                    {/* MOBILE: sticky dropdown for sections */}
+                                    <div className="sticky top-[4.25rem] z-10 mb-2 bg-slate-50/95 backdrop-blur-sm border-b border-slate-200/80 pb-2 md:hidden">
+                                        <div className="flex flex-col gap-1">
+                                            <span className="text-[11px] text-slate-600 font-medium">
+                                                Section
+                                            </span>
+                                            <div className="relative">
+                                                <select
+                                                    className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-500"
+                                                    value={activeTab}
+                                                    onChange={(e) => setActiveTab(e.target.value)}
+                                                >
+                                                    {tabOptions.map((tab) => (
+                                                        <option key={tab.value} value={tab.value}>
+                                                            {tab.label}
+                                                        </option>
+                                                    ))}
+                                                </select>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    {/* DESKTOP/TABLET TABS LIST */}
+                                    <div className="hidden md:flex md:flex-row md:items-center md:justify-between gap-2 mb-2">
                                         <TabsList className="flex flex-nowrap overflow-x-auto gap-1 rounded-full bg-slate-100 p-1 border border-slate-200">
-                                            <TabsTrigger
-                                                value="summary"
-                                                className="px-3 py-1.5 text-xs sm:text-sm rounded-full data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
-                                            >
-                                                Summary
-                                            </TabsTrigger>
-                                            <TabsTrigger
-                                                value="charts"
-                                                className="px-3 py-1.5 text-xs sm:text-sm rounded-full data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
-                                            >
-                                                Charts
-                                            </TabsTrigger>
-                                            {result.table && (
+                                            {tabOptions.map((tab) => (
                                                 <TabsTrigger
-                                                    value="details"
+                                                    key={tab.value}
+                                                    value={tab.value}
                                                     className="px-3 py-1.5 text-xs sm:text-sm rounded-full data-[state=active]:bg-white data-[state=active]:text-slate-900 data-[state=active]:shadow-sm"
                                                 >
-                                                    Detailed view
+                                                    {tab.label}
                                                 </TabsTrigger>
-                                            )}
+                                            ))}
                                         </TabsList>
 
-                                        <div className="hidden md:flex items-center gap-2 text-[10px] text-slate-500">
+                                        <div className="hidden md:flex items-center gap-2 text-xs text-slate-500">
                                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
                                             <span>
                                                 Generated for{" "}
-                                                <span className="font-medium text-slate-800">
+                                                <span className="font-semibold text-slate-800">
                                                     {result.name}
                                                 </span>
                                             </span>
@@ -761,7 +776,7 @@ export default function MIS() {
                                         {summaryCards.length > 0 && (
                                             <section className="space-y-2">
                                                 <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
-                                                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                                                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-slate-700 border border-slate-200">
                                                         <BarChart3 className="w-3 h-3" />
                                                     </span>
                                                     Key indicators
@@ -841,17 +856,17 @@ export default function MIS() {
 // ---------- summary card ----------
 
 function SummaryCard({ card }) {
-    // Plain neutral card – no tone-based background
+    // Plain neutral card
     return (
         <motion.div
             whileHover={{ y: -2, scale: 1.01 }}
             transition={{ type: "spring", stiffness: 240, damping: 22 }}
             className={cn(
-                "rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm",
-                "flex flex-col gap-1"
+                "rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm",
+                "flex flex-col gap-1.5"
             )}
         >
-            <div className="text-[10px] uppercase tracking-wide font-semibold text-slate-500">
+            <div className="text-[11px] uppercase tracking-wide font-semibold text-slate-500">
                 {card.label}
             </div>
             <div className="text-xl md:text-2xl font-semibold leading-tight text-slate-900">
@@ -862,7 +877,7 @@ function SummaryCard({ card }) {
                     : card.value}
             </div>
             {card.helper && (
-                <div className="text-[11px] text-slate-500">{card.helper}</div>
+                <div className="text-xs text-slate-500">{card.helper}</div>
             )}
         </motion.div>
     );
@@ -890,7 +905,7 @@ function MISChartCard({ chart }) {
                     <CardTitle className="text-base font-semibold text-slate-900">
                         {chart.title}
                     </CardTitle>
-                    <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600 border border-slate-200">
+                    <span className="rounded-full bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600 border border-slate-200">
                         Distribution
                     </span>
                 </CardHeader>
@@ -948,7 +963,7 @@ function MISChartCard({ chart }) {
                 <CardTitle className="text-base font-semibold text-slate-900">
                     {chart.title}
                 </CardTitle>
-                <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] text-slate-600 border border-slate-200">
+                <span className="rounded-full bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600 border border-slate-200">
                     {config?.label || "Trend"}
                 </span>
             </CardHeader>
@@ -999,7 +1014,7 @@ function MISChartCard({ chart }) {
     );
 }
 
-// ---------- detail list card (no simple table) ----------
+// ---------- detail list (desktop table + mobile cards + search + filters) ----------
 
 function DetailListCard({ table }) {
     const rows = Array.isArray(table.rows) ? table.rows : [];
@@ -1009,6 +1024,9 @@ function DetailListCard({ table }) {
             : rows[0]
                 ? Object.keys(rows[0])
                 : [];
+
+    const [searchTerm, setSearchTerm] = useState("");
+    const [activeFilterChip, setActiveFilterChip] = useState("all");
 
     if (rows.length === 0) {
         return (
@@ -1020,50 +1038,205 @@ function DetailListCard({ table }) {
         );
     }
 
+    const filterChips = [
+        { key: "all", label: "All" },
+        { key: "nonZero", label: "Non-zero values" },
+    ];
+
+    const filteredRows = rows.filter((row) => {
+        // Search across all stringified values
+        if (searchTerm) {
+            const haystack = Object.values(row)
+                .map((v) => (v == null ? "" : String(v)))
+                .join(" ")
+                .toLowerCase();
+            if (!haystack.includes(searchTerm.toLowerCase())) return false;
+        }
+
+        // Chip filter: "nonZero" => at least one numeric > 0
+        if (activeFilterChip === "nonZero") {
+            const hasNonZero = Object.values(row).some(
+                (v) => typeof v === "number" && v > 0
+            );
+            if (!hasNonZero) return false;
+        }
+
+        return true;
+    });
+
+    const handleExport = () => {
+        // simple CSV export for now – production can be replaced with API export
+        const csvHeader = columns.join(",");
+        const csvBody = filteredRows
+            .map((row) =>
+                columns
+                    .map((col) => {
+                        const raw = row[col];
+                        const value = raw == null ? "" : String(raw);
+                        // basic CSV escaping
+                        if (value.includes(",") || value.includes('"') || value.includes("\n")) {
+                            return `"${value.replace(/"/g, '""')}"`;
+                        }
+                        return value;
+                    })
+                    .join(",")
+            )
+            .join("\n");
+
+        const blob = new Blob([csvHeader + "\n" + csvBody], {
+            type: "text/csv;charset=utf-8;",
+        });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = "mis-report.csv";
+        a.click();
+        URL.revokeObjectURL(url);
+    };
+
     return (
         <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
-            <CardContent className="py-3 flex flex-col gap-2 max-h-[480px] overflow-y-auto pr-1">
-                <AnimatePresence>
-                    {rows.map((row, idx) => (
-                        <motion.div
-                            key={idx}
-                            initial={{ opacity: 0, y: 6 }}
-                            animate={{ opacity: 1, y: 0 }}
-                            exit={{ opacity: 0, y: -6 }}
-                            transition={{ duration: 0.2, ease: "easeOut" }}
-                            className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 flex flex-col gap-1 text-xs md:text-sm"
-                        >
-                            {columns.map((col, ci) => (
-                                <div
-                                    key={col}
+            <CardContent className="py-3 flex flex-col gap-3 max-h-[520px] md:max-h-[560px] overflow-hidden">
+                {/* Search + filters + primary button bar (listing spec) */}
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    {/* Search + chips left */}
+                    <div className="space-y-2">
+                        {/* Search input */}
+                        <div className="relative w-full sm:w-64">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                            <input
+                                type="text"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                placeholder="Search in records"
+                                className="w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-500"
+                            />
+                        </div>
+
+                        {/* Filter chips */}
+                        <div className="flex flex-wrap gap-1.5">
+                            {filterChips.map((chip) => (
+                                <button
+                                    key={chip.key}
+                                    type="button"
+                                    onClick={() => setActiveFilterChip(chip.key)}
                                     className={cn(
-                                        "flex justify-between gap-2",
-                                        ci === 0 ? "font-semibold text-slate-900" : "text-slate-700"
+                                        "inline-flex items-center rounded-full px-3 py-1 text-xs sm:text-sm transition",
+                                        activeFilterChip === chip.key
+                                            ? "bg-blue-600 text-white shadow-sm"
+                                            : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                                     )}
                                 >
-                                    <span className="text-[10px] uppercase tracking-wide text-slate-500">
-                                        {col.replace(/_/g, " ")}
-                                    </span>
-                                    <span className="text-right truncate max-w-[60%]">
-                                        {formatCell(row[col])}
-                                    </span>
-                                </div>
+                                    {chip.label}
+                                </button>
                             ))}
-                        </motion.div>
-                    ))}
-                </AnimatePresence>
+                        </div>
+                    </div>
+
+                    {/* Primary action button (same style as “New”) */}
+                    <div className="flex justify-start sm:justify-end">
+                        <Button
+                            type="button"
+                            onClick={handleExport}
+                            className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-4 py-2 text-xs sm:text-sm font-semibold text-white hover:bg-blue-700 active:scale-95 transition"
+                        >
+                            <Download className="w-4 h-4" />
+                            Export CSV
+                        </Button>
+                    </div>
+                </div>
+
+                {/* CONTENT SCROLLER */}
+                <div className="mt-1 flex-1 overflow-y-auto pr-1.5">
+                    {/* Desktop: table layout */}
+                    <div className="hidden md:block">
+                        <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                            <table className="min-w-full text-xs md:text-sm bg-white">
+                                <thead className="bg-slate-50 sticky top-0 z-10">
+                                    <tr>
+                                        {columns.map((col) => (
+                                            <th
+                                                key={col}
+                                                className="px-3 py-2 text-left text-[11px] font-medium uppercase tracking-wide text-slate-600 border-b border-slate-200"
+                                            >
+                                                {col.replace(/_/g, " ")}
+                                            </th>
+                                        ))}
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {filteredRows.map((row, idx) => (
+                                        <tr
+                                            key={idx}
+                                            className="border-t border-slate-100 hover:bg-slate-50/80 transition-colors"
+                                        >
+                                            {columns.map((col, ci) => (
+                                                <td
+                                                    key={col}
+                                                    className={cn(
+                                                        "px-3 py-2 text-[11px] md:text-sm text-slate-800 align-top",
+                                                        ci === 0 && "font-semibold text-slate-900"
+                                                    )}
+                                                >
+                                                    <span className="line-clamp-2">
+                                                        {formatCell(row[col])}
+                                                    </span>
+                                                </td>
+                                            ))}
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    {/* Mobile: card-based layout */}
+                    <div className="grid gap-3 md:hidden mt-1">
+                        <AnimatePresence>
+                            {filteredRows.map((row, idx) => (
+                                <motion.div
+                                    key={idx}
+                                    initial={{ opacity: 0, y: 6 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -6 }}
+                                    transition={{ duration: 0.2, ease: "easeOut" }}
+                                    className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm flex flex-col gap-1"
+                                >
+                                    {columns.map((col, ci) => (
+                                        <div
+                                            key={col}
+                                            className={cn(
+                                                "flex justify-between gap-2",
+                                                ci === 0
+                                                    ? "font-semibold text-slate-900"
+                                                    : "text-slate-700"
+                                            )}
+                                        >
+                                            <span className="text-[11px] uppercase tracking-wide text-slate-500">
+                                                {col.replace(/_/g, " ")}
+                                            </span>
+                                            <span className="text-xs text-right truncate max-w-[60%]">
+                                                {formatCell(row[col])}
+                                            </span>
+                                        </div>
+                                    ))}
+                                </motion.div>
+                            ))}
+                        </AnimatePresence>
+                    </div>
+                </div>
             </CardContent>
         </Card>
     );
 }
 
 function formatCell(value) {
-    if (value == null) return "-";
+    if (value == null) return "—";
     if (typeof value === "number") {
         return value.toLocaleString("en-IN", { maximumFractionDigits: 1 });
     }
-    if (typeof value === "string" && value.length > 60) {
-        return value.slice(0, 60) + "…";
+    if (typeof value === "string" && value.length > 80) {
+        return value.slice(0, 80) + "…";
     }
     return String(value);
 }

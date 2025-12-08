@@ -60,7 +60,23 @@ export function bulkAddFromUnbilled(invoiceId, payload) {
     // payload: { uids?: string[] }
     return API.post(`/billing/invoices/${invoiceId}/unbilled/bulk-add`, payload);
 }
+// ⭐ NEW: Auto IPD Bed Charges
+export function autoAddIpdBedCharges(invoiceId, payload) {
+    // payload: { admission_id, mode: "daily" | "hourly" | "mixed", skip_if_already_billed?: boolean, upto_ts?: string | null }
+    return API.post(
+        `/billing/invoices/${invoiceId}/items/ipd-bed-auto`,
+        payload
+    );
+}
 
+// ⭐ NEW: Auto OT Charges
+export function autoAddOtCharges(invoiceId, payload) {
+    // payload: { case_id: number }
+    return API.post(
+        `/billing/invoices/${invoiceId}/items/ot-auto`,
+        payload
+    );
+}
 // Aliases used by InvoiceDetail.jsx
 export { updateInvoiceItem as updateItem };
 export { voidInvoiceItem as voidItem };

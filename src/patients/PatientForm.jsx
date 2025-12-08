@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
+// FILE: src/patients/PatientForm.jsx
+import { useEffect, useMemo, useState } from 'react'
 import { createPatient, updatePatient } from '../api/patients'
 
 const BLOOD_GROUPS = ['', 'A+', 'A-', 'B+', 'B-', 'O+', 'O-', 'AB+', 'AB-']
@@ -63,7 +64,6 @@ const EMPTY_FORM = {
 }
 
 function makeEmptyForm() {
-    // Simple deep clone to avoid shared reference issues
     return JSON.parse(JSON.stringify(EMPTY_FORM))
 }
 
@@ -123,26 +123,21 @@ function toIntOrNull(val) {
 
 // Helper: parse FastAPI + Pydantic 422 errors into field-wise errors + general message
 function parseApiError(err) {
-    // Default fallback
     let generalMessage = 'Failed to save patient'
     const fieldErrors = {}
 
     const detail = err?.response?.data?.detail
 
     if (Array.isArray(detail)) {
-        // Pydantic validation errors: [{loc, msg, type, ...}]
         generalMessage = 'Please correct the highlighted fields.'
 
         for (const e of detail) {
             const loc = e.loc || []
             const msg = e.msg || 'Invalid value'
 
-            // Typical loc example: ['body', 'first_name']
-            // Or nested: ['body', 'address', 'pincode']
             if (loc[0] === 'body' && loc.length >= 2) {
                 if (loc[1] === 'address' && loc[2]) {
                     const field = `address.${loc[2]}`
-                    // Combine multiple messages if needed
                     fieldErrors[field] = fieldErrors[field]
                         ? `${fieldErrors[field]}; ${msg}`
                         : msg
@@ -155,12 +150,10 @@ function parseApiError(err) {
             }
         }
 
-        // If somehow no specific field errors, show the first message
         if (!Object.keys(fieldErrors).length && detail[0]?.msg) {
             generalMessage = detail[0].msg
         }
     } else if (typeof detail === 'string') {
-        // HTTPException(detail="some message")
         generalMessage = detail
     } else if (detail && typeof detail === 'object' && detail.msg) {
         generalMessage = detail.msg
@@ -180,8 +173,8 @@ export default function PatientFormModal({
 }) {
     const [form, setForm] = useState(makeEmptyForm)
     const [saving, setSaving] = useState(false)
-    const [error, setError] = useState('') // string for general error
-    const [fieldErrors, setFieldErrors] = useState({}) // { fieldName: message }
+    const [error, setError] = useState('')
+    const [fieldErrors, setFieldErrors] = useState({})
 
     const mode = useMemo(
         () => (initialPatient ? 'edit' : 'create'),
@@ -205,14 +198,12 @@ export default function PatientFormModal({
     const handleChange = (field) => (e) => {
         let value = e.target.value
 
-        // Phone: only digits, max 10 to satisfy backend validator
         if (field === 'phone') {
             const digits = value.replace(/\D/g, '')
             value = digits.slice(0, 10)
         }
 
         setForm((prev) => ({ ...prev, [field]: value }))
-        // Clear field-specific error on change
         setFieldErrors((prev) => {
             const copy = { ...prev }
             delete copy[field]
@@ -243,13 +234,11 @@ export default function PatientFormModal({
         try {
             const payload = {
                 ...form,
-                // numeric IDs -> null if empty
                 ref_doctor_id: toIntOrNull(form.ref_doctor_id),
                 credit_payer_id: toIntOrNull(form.credit_payer_id),
                 credit_tpa_id: toIntOrNull(form.credit_tpa_id),
                 credit_plan_id: toIntOrNull(form.credit_plan_id),
                 family_id: toIntOrNull(form.family_id),
-                // normalize optional enums
                 credit_type: form.credit_type || null,
                 patient_type: form.patient_type || null,
             }
@@ -283,7 +272,7 @@ export default function PatientFormModal({
 
     const patientTypeOptions =
         patientTypes && patientTypes.length
-            ? patientTypes // [{id, code, name, ...}]
+            ? patientTypes
             : PATIENT_TYPES_FALLBACK
 
     const hasFieldError = (name) => !!fieldErrors[name]
@@ -293,17 +282,16 @@ export default function PatientFormModal({
             <p className="mt-0.5 text-[11px] text-red-600">{fieldErrors[name]}</p>
         ) : null
 
+    const inputBase =
+        'w-full rounded-xl border px-3 py-2 text-sm text-slate-800 bg-white focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-500'
+
     return (
-        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-stretch justify-center">
-            {/* Click on dark area to close */}
+        <div
+            className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm"
+            onClick={onClose}
+        >
             <div
-                className="absolute inset-0"
-                onClick={onClose}
-                aria-hidden="true"
-            />
-            {/* Modal container */}
-            <div
-                className="relative z-10 w-full max-w-6xl h-full sm:h-[95vh] mx-auto my-0 sm:my-4 bg-white rounded-none sm:rounded-3xl shadow-xl flex flex-col overflow-hidden"
+                className="w-full bg-white rounded-t-3xl sm:rounded-3xl shadow-2xl max-h-[90vh] sm:max-h-[90vh] sm:max-w-5xl mx-auto overflow-hidden flex flex-col"
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* Header */}
@@ -316,6 +304,11 @@ export default function PatientFormModal({
                             <span className="inline-flex items-center rounded-full bg-slate-900/5 px-2 py-0.5 text-[11px] font-medium text-slate-700">
                                 {mode === 'create' ? 'Create' : 'Update'}
                             </span>
+                            {initialPatient?.uhid && (
+                                <span className="inline-flex items-center rounded-full bg-slate-50 px-2 py-0.5 text-[11px] font-mono text-slate-700 border border-slate-200">
+                                    UHID: {initialPatient.uhid}
+                                </span>
+                            )}
                         </div>
                         <p className="text-xs text-slate-500">
                             Fill basic details, address and credit / insurance information.
@@ -333,12 +326,12 @@ export default function PatientFormModal({
                 {/* Form */}
                 <form
                     onSubmit={handleSubmit}
-                    className="flex-1 flex flex-col overflow-hidden"
+                    className="flex-1 flex flex-col overflow-hidden bg-slate-50/80"
                 >
-                    {/* Body (scrollable) */}
-                    <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-6 bg-slate-50/60">
+                    {/* Body */}
+                    <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-5">
                         {error && (
-                            <div className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                            <div className="rounded-2xl border border-red-200 bg-red-50/80 px-3 py-2 text-xs sm:text-sm text-red-700">
                                 {error}
                             </div>
                         )}
@@ -349,23 +342,15 @@ export default function PatientFormModal({
                                 <h3 className="text-sm font-semibold text-slate-800">
                                     Basic Information
                                 </h3>
-                                {initialPatient?.uhid && (
-                                    <span className="text-[11px] px-2 py-0.5 rounded-full bg-slate-900/5 text-slate-700 border border-slate-200">
-                                        UHID: {initialPatient.uhid}
-                                    </span>
-                                )}
                             </div>
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                                {/* Prefix (required) */}
+                                {/* Prefix */}
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         Prefix<span className="text-red-500">*</span>
                                     </label>
                                     <select
-                                        className={`w-full border rounded-lg px-2.5 py-2 text-sm ${hasFieldError('prefix')
-                                                ? 'border-red-300'
-                                                : 'border-slate-200'
-                                            }`}
+                                        className={`${inputBase} ${hasFieldError('prefix') ? 'border-red-300' : 'border-slate-200'}`}
                                         value={form.prefix}
                                         onChange={handleChange('prefix')}
                                         required
@@ -379,41 +364,39 @@ export default function PatientFormModal({
                                     {fieldErrorText('prefix')}
                                 </div>
 
+                                {/* First Name */}
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         First Name<span className="text-red-500">*</span>
                                     </label>
                                     <input
-                                        className={`w-full border rounded-lg px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-slate-900/10 ${hasFieldError('first_name')
-                                                ? 'border-red-300'
-                                                : 'border-slate-200'
-                                            }`}
+                                        className={`${inputBase} ${hasFieldError('first_name') ? 'border-red-300' : 'border-slate-200'}`}
                                         value={form.first_name}
                                         onChange={handleChange('first_name')}
                                         required
                                     />
                                     {fieldErrorText('first_name')}
                                 </div>
+
+                                {/* Last Name */}
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         Last Name
                                     </label>
                                     <input
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`${inputBase} border-slate-200`}
                                         value={form.last_name}
                                         onChange={handleChange('last_name')}
                                     />
                                 </div>
 
+                                {/* Gender */}
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         Gender<span className="text-red-500">*</span>
                                     </label>
                                     <select
-                                        className={`w-full border rounded-lg px-2.5 py-2 text-sm ${hasFieldError('gender')
-                                                ? 'border-red-300'
-                                                : 'border-slate-200'
-                                            }`}
+                                        className={`${inputBase} ${hasFieldError('gender') ? 'border-red-300' : 'border-slate-200'}`}
                                         value={form.gender}
                                         onChange={handleChange('gender')}
                                         required
@@ -426,28 +409,28 @@ export default function PatientFormModal({
                                     {fieldErrorText('gender')}
                                 </div>
 
+                                {/* DOB */}
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         Date of Birth<span className="text-red-500">*</span>
                                     </label>
                                     <input
                                         type="date"
-                                        className={`w-full border rounded-lg px-2.5 py-2 text-sm ${hasFieldError('dob')
-                                                ? 'border-red-300'
-                                                : 'border-slate-200'
-                                            }`}
+                                        className={`${inputBase} ${hasFieldError('dob') ? 'border-red-300' : 'border-slate-200'}`}
                                         value={form.dob || ''}
                                         onChange={handleChange('dob')}
                                         required
                                     />
                                     {fieldErrorText('dob')}
                                 </div>
+
+                                {/* Blood group */}
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         Blood Group
                                     </label>
                                     <select
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`${inputBase} border-slate-200`}
                                         value={form.blood_group}
                                         onChange={handleChange('blood_group')}
                                     >
@@ -458,15 +441,14 @@ export default function PatientFormModal({
                                         ))}
                                     </select>
                                 </div>
+
+                                {/* Marital status */}
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         Marital Status<span className="text-red-500">*</span>
                                     </label>
                                     <select
-                                        className={`w-full border rounded-lg px-2.5 py-2 text-sm ${hasFieldError('marital_status')
-                                                ? 'border-red-300'
-                                                : 'border-slate-200'
-                                            }`}
+                                        className={`${inputBase} ${hasFieldError('marital_status') ? 'border-red-300' : 'border-slate-200'}`}
                                         value={form.marital_status}
                                         onChange={handleChange('marital_status')}
                                         required
@@ -480,15 +462,13 @@ export default function PatientFormModal({
                                     {fieldErrorText('marital_status')}
                                 </div>
 
+                                {/* Phone */}
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         Mobile<span className="text-red-500">*</span>
                                     </label>
                                     <input
-                                        className={`w-full border rounded-lg px-2.5 py-2 text-sm ${hasFieldError('phone')
-                                                ? 'border-red-300'
-                                                : 'border-slate-200'
-                                            }`}
+                                        className={`${inputBase} ${hasFieldError('phone') ? 'border-red-300' : 'border-slate-200'}`}
                                         value={form.phone}
                                         onChange={handleChange('phone')}
                                         required
@@ -498,16 +478,15 @@ export default function PatientFormModal({
                                     </p>
                                     {fieldErrorText('phone')}
                                 </div>
+
+                                {/* Email */}
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         Email<span className="text-red-500">*</span>
                                     </label>
                                     <input
                                         type="email"
-                                        className={`w-full border rounded-lg px-2.5 py-2 text-sm ${hasFieldError('email')
-                                                ? 'border-red-300'
-                                                : 'border-slate-200'
-                                            }`}
+                                        className={`${inputBase} ${hasFieldError('email') ? 'border-red-300' : 'border-slate-200'}`}
                                         value={form.email}
                                         onChange={handleChange('email')}
                                         required
@@ -515,15 +494,13 @@ export default function PatientFormModal({
                                     {fieldErrorText('email')}
                                 </div>
 
+                                {/* Patient type */}
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         Patient Type<span className="text-red-500">*</span>
                                     </label>
                                     <select
-                                        className={`w-full border rounded-lg px-2.5 py-2 text-sm ${hasFieldError('patient_type')
-                                                ? 'border-red-300'
-                                                : 'border-slate-200'
-                                            }`}
+                                        className={`${inputBase} ${hasFieldError('patient_type') ? 'border-red-300' : 'border-slate-200'}`}
                                         value={form.patient_type || ''}
                                         onChange={handleChange('patient_type')}
                                         required
@@ -541,32 +518,37 @@ export default function PatientFormModal({
                                     {fieldErrorText('patient_type')}
                                 </div>
 
+                                {/* Tag */}
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         Tag
                                     </label>
                                     <input
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`${inputBase} border-slate-200`}
                                         value={form.tag}
                                         onChange={handleChange('tag')}
                                     />
                                 </div>
+
+                                {/* Religion */}
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         Religion
                                     </label>
                                     <input
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`${inputBase} border-slate-200`}
                                         value={form.religion}
                                         onChange={handleChange('religion')}
                                     />
                                 </div>
+
+                                {/* Occupation */}
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         Occupation
                                     </label>
                                     <input
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`${inputBase} border-slate-200`}
                                         value={form.occupation}
                                         onChange={handleChange('occupation')}
                                     />
@@ -574,18 +556,18 @@ export default function PatientFormModal({
                             </div>
                         </section>
 
-                        {/* Reference / Guardian */}
+                        {/* Reference & Guardian */}
                         <section className="bg-white border border-slate-200 rounded-2xl px-3 sm:px-4 py-3 sm:py-4 space-y-3">
                             <h3 className="text-sm font-semibold text-slate-800">
                                 Reference & Guardian
                             </h3>
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         Reference Source
                                     </label>
                                     <select
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`${inputBase} border-slate-200`}
                                         value={form.ref_source}
                                         onChange={handleChange('ref_source')}
                                     >
@@ -597,12 +579,13 @@ export default function PatientFormModal({
                                         ))}
                                     </select>
                                 </div>
+
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         Referring Doctor
                                     </label>
                                     <select
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`${inputBase} border-slate-200`}
                                         value={form.ref_doctor_id || ''}
                                         onChange={handleChange('ref_doctor_id')}
                                     >
@@ -617,65 +600,68 @@ export default function PatientFormModal({
                                         ))}
                                     </select>
                                 </div>
+
                                 <div className="sm:col-span-2 lg:col-span-3">
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         Reference Details
                                     </label>
                                     <textarea
                                         rows={2}
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`${inputBase} border-slate-200 min-h-[72px]`}
                                         value={form.ref_details}
                                         onChange={handleChange('ref_details')}
                                     />
                                 </div>
 
+                                {/* Guardian */}
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         Guardian Name
                                     </label>
                                     <input
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`${inputBase} border-slate-200`}
                                         value={form.guardian_name}
                                         onChange={handleChange('guardian_name')}
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         Guardian Phone
                                     </label>
                                     <input
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`${inputBase} border-slate-200`}
                                         value={form.guardian_phone}
                                         onChange={handleChange('guardian_phone')}
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         Guardian Relation
                                     </label>
                                     <input
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`${inputBase} border-slate-200`}
                                         value={form.guardian_relation}
                                         onChange={handleChange('guardian_relation')}
                                     />
                                 </div>
 
+                                {/* ID proof */}
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         ID Proof Type
                                     </label>
                                     <input
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`${inputBase} border-slate-200`}
                                         value={form.id_proof_type}
                                         onChange={handleChange('id_proof_type')}
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         ID Proof No
                                     </label>
                                     <input
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`${inputBase} border-slate-200`}
                                         value={form.id_proof_no}
                                         onChange={handleChange('id_proof_no')}
                                     />
@@ -685,80 +671,70 @@ export default function PatientFormModal({
 
                         {/* Address */}
                         <section className="bg-white border border-slate-200 rounded-2xl px-3 sm:px-4 py-3 sm:py-4 space-y-3">
-                            <h3 className="text-sm font-semibold text-slate-800">Address</h3>
+                            <h3 className="text-sm font-semibold text-slate-800">
+                                Address
+                            </h3>
                             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                                 <div className="sm:col-span-2">
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         Address Line 1
                                     </label>
                                     <input
-                                        className={`w-full border rounded-lg px-2.5 py-2 text-sm ${hasFieldError('address.line1')
-                                                ? 'border-red-300'
-                                                : 'border-slate-200'
-                                            }`}
+                                        className={`${inputBase} ${hasFieldError('address.line1') ? 'border-red-300' : 'border-slate-200'}`}
                                         value={form.address.line1}
                                         onChange={handleAddressChange('line1')}
                                     />
                                     {fieldErrorText('address.line1')}
                                 </div>
                                 <div className="sm:col-span-2">
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         Address Line 2
                                     </label>
                                     <input
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`${inputBase} border-slate-200`}
                                         value={form.address.line2}
                                         onChange={handleAddressChange('line2')}
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         City
                                     </label>
                                     <input
-                                        className={`w-full border rounded-lg px-2.5 py-2 text-sm ${hasFieldError('address.city')
-                                                ? 'border-red-300'
-                                                : 'border-slate-200'
-                                            }`}
+                                        className={`${inputBase} ${hasFieldError('address.city') ? 'border-red-300' : 'border-slate-200'}`}
                                         value={form.address.city}
                                         onChange={handleAddressChange('city')}
                                     />
                                     {fieldErrorText('address.city')}
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         State
                                     </label>
                                     <input
-                                        className={`w-full border rounded-lg px-2.5 py-2 text-sm ${hasFieldError('address.state')
-                                                ? 'border-red-300'
-                                                : 'border-slate-200'
-                                            }`}
+                                        className={`${inputBase} ${hasFieldError('address.state') ? 'border-red-300' : 'border-slate-200'}`}
                                         value={form.address.state}
                                         onChange={handleAddressChange('state')}
                                     />
                                     {fieldErrorText('address.state')}
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         Pincode
                                     </label>
                                     <input
-                                        className={`w-full border rounded-lg px-2.5 py-2 text-sm ${hasFieldError('address.pincode')
-                                                ? 'border-red-300'
-                                                : 'border-slate-200'
-                                            }`}
+                                        className={`${inputBase} ${hasFieldError('address.pincode') ? 'border-red-300' : 'border-slate-200'}`}
                                         value={form.address.pincode}
                                         onChange={handleAddressChange('pincode')}
                                     />
                                     {fieldErrorText('address.pincode')}
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         Country
                                     </label>
                                     <input
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`${inputBase} border-slate-200`}
                                         value={form.address.country}
                                         onChange={handleAddressChange('country')}
                                     />
@@ -772,33 +748,35 @@ export default function PatientFormModal({
                                 File & Credit / Insurance
                             </h3>
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                                {/* File details */}
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         File Number
                                     </label>
                                     <input
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`${inputBase} border-slate-200`}
                                         value={form.file_number}
                                         onChange={handleChange('file_number')}
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         File Location
                                     </label>
                                     <input
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`${inputBase} border-slate-200`}
                                         value={form.file_location}
                                         onChange={handleChange('file_location')}
                                     />
                                 </div>
 
+                                {/* Credit type */}
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         Credit Type
                                     </label>
                                     <select
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`${inputBase} border-slate-200`}
                                         value={form.credit_type}
                                         onChange={handleChange('credit_type')}
                                     >
@@ -809,12 +787,14 @@ export default function PatientFormModal({
                                         ))}
                                     </select>
                                 </div>
+
+                                {/* Payer */}
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         Payer
                                     </label>
                                     <select
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`${inputBase} border-slate-200`}
                                         value={form.credit_payer_id || ''}
                                         onChange={handleChange('credit_payer_id')}
                                     >
@@ -827,12 +807,13 @@ export default function PatientFormModal({
                                     </select>
                                 </div>
 
+                                {/* TPA */}
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         TPA
                                     </label>
                                     <select
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`${inputBase} border-slate-200`}
                                         value={form.credit_tpa_id || ''}
                                         onChange={handleChange('credit_tpa_id')}
                                     >
@@ -845,12 +826,13 @@ export default function PatientFormModal({
                                     </select>
                                 </div>
 
+                                {/* Credit Plan */}
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         Credit Plan
                                     </label>
                                     <select
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`${inputBase} border-slate-200`}
                                         value={form.credit_plan_id || ''}
                                         onChange={handleChange('credit_plan_id')}
                                     >
@@ -863,56 +845,60 @@ export default function PatientFormModal({
                                     </select>
                                 </div>
 
+                                {/* Principal member */}
                                 <div className="sm:col-span-2 lg:col-span-3">
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         Principal Member Name
                                     </label>
                                     <input
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`${inputBase} border-slate-200`}
                                         value={form.principal_member_name}
                                         onChange={handleChange('principal_member_name')}
                                     />
                                 </div>
-
                                 <div className="sm:col-span-2 lg:col-span-3">
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         Principal Member Address
                                     </label>
                                     <textarea
                                         rows={2}
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`${inputBase} border-slate-200 min-h-[72px]`}
                                         value={form.principal_member_address}
-                                        onChange={handleChange('principal_member_address')}
+                                        onChange={handleChange(
+                                            'principal_member_address'
+                                        )}
                                     />
                                 </div>
 
+                                {/* Policy details */}
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         Policy Number
                                     </label>
                                     <input
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`${inputBase} border-slate-200`}
                                         value={form.policy_number}
                                         onChange={handleChange('policy_number')}
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         Policy Name
                                     </label>
                                     <input
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`${inputBase} border-slate-200`}
                                         value={form.policy_name}
                                         onChange={handleChange('policy_name')}
                                     />
                                 </div>
 
+                                {/* Family ID */}
                                 <div>
-                                    <label className="block text-xs font-medium text-slate-600 mb-1">
+                                    <label className="block text-xs font-medium text-slate-800 mb-1">
                                         Family ID
                                     </label>
                                     <input
-                                        className="w-full border border-slate-200 rounded-lg px-2.5 py-2 text-sm"
+                                        className={`${inputBase} border-slate-200`}
                                         value={form.family_id}
                                         onChange={handleChange('family_id')}
                                     />
@@ -921,23 +907,24 @@ export default function PatientFormModal({
                         </section>
                     </div>
 
-                    {/* Footer buttons */}
+                    {/* Footer */}
                     <div className="border-t border-slate-200 px-4 sm:px-6 py-3 bg-white flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2">
                         <p className="text-[11px] text-slate-500">
-                            Fields marked with <span className="text-red-500">*</span> are mandatory.
+                            Fields marked with <span className="text-red-500">*</span> are
+                            mandatory.
                         </p>
                         <div className="flex justify-end gap-2">
                             <button
                                 type="button"
                                 onClick={onClose}
-                                className="px-3 py-1.5 text-sm border border-slate-200 rounded-lg text-slate-700 hover:bg-slate-50"
+                                className="inline-flex items-center justify-center rounded-full border border-slate-200 px-3 py-1.5 text-sm font-semibold text-slate-700 hover:bg-slate-50 transition disabled:opacity-60"
                                 disabled={saving}
                             >
                                 Cancel
                             </button>
                             <button
                                 type="submit"
-                                className="px-4 py-1.5 text-sm rounded-lg bg-slate-900 text-white hover:bg-slate-800 disabled:opacity-60"
+                                className="inline-flex items-center justify-center rounded-full bg-blue-600 px-4 py-1.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 active:scale-95 transition disabled:opacity-60"
                                 disabled={saving}
                             >
                                 {saving

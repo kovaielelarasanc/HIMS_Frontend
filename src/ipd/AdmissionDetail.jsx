@@ -1,642 +1,431 @@
-
-// FILE: src/ipd/Admissions.jsx
-import { useEffect, useMemo, useState, useRef } from 'react';
-import PermGate from '../components/PermGate'
+// FILE: src/ipd/AdmissionDetail.jsx
+import { useEffect, useState } from 'react'
+import { useParams, useLocation } from 'react-router-dom'
+import { useCan } from '../hooks/useCan'
 import {
-    listAdmissions,
-    createAdmission,
+    getAdmission,
+    cancelAdmission,
+    transferBed,
     listBeds,
-    listPackages,
+    getPatient,
 } from '../api/ipd'
-import PatientPagedPicker from './components/PatientPagedPicker'
+
+// Common components
 import WardRoomBedPicker from './components/WardRoomBedPicker'
-import DeptRoleUserPicker from '../opd/components/DoctorPicker'
+
+// Tabs (existing)
+import Nursing from './tabs/Nursing'
+import Vitals from './tabs/Vitals'
+import IntakeOutput from './tabs/IntakeOutput'
+import ShiftHandover from './tabs/ShiftHandover'
+import DoctorRounds from './tabs/DoctorRounds'
+import ProgressNotes from './tabs/ProgressNotes'
+import Referrals from './tabs/Referrals'
+import Discharge from './tabs/Discharge'
+import OtModule from './tabs/Ot'
+import BedCharges from './tabs/BedCharges'
+import PharmacyOrdersTab from './tabs/PharmacyOrders'
+
+// NEW TABS
+import AssessmentsTab from './tabs/Assessments'
+import OrdersTab from './tabs/Orders'
+import MedicationsTab from './tabs/Medications'
+import DressingTransfusionTab from './tabs/DressingTransfusion'
+import DischargeMedsTab from './tabs/DischargeMeds'
+import FeedbackTab from './tabs/Feedback'
+
 import {
-    CheckCircle2,
-    AlertTriangle,
-    XCircle,
-    X,
-    BedDouble,
-    User,
-    ClipboardList,
-} from 'lucide-react'
+    Tabs as UITabs,
+    TabsList,
+    TabsTrigger,
+    TabsContent,
+} from '@/components/ui/tabs'
 
-export { } // quiet ts/eslint
-
-// ---------- Small Toast component (fixed top) ----------
-function Toast({ kind = 'success', title, message, onClose }) {
-    const map = {
-        success: {
-            bg: 'bg-emerald-50',
-            border: 'border-emerald-200',
-            text: 'text-emerald-700',
-            Icon: CheckCircle2,
-        },
-        warn: {
-            bg: 'bg-amber-50',
-            border: 'border-amber-200',
-            text: 'text-amber-800',
-            Icon: AlertTriangle,
-        },
-        error: {
-            bg: 'bg-rose-50',
-            border: 'border-rose-200',
-            text: 'text-rose-700',
-            Icon: XCircle,
-        },
-    }
-
-    const S = map[kind] || map.success
+// ---------------------------------------------------------------------
+// Small helper tab: Bed / Transfer
+// ---------------------------------------------------------------------
+function BedTransferTab({ admission, beds, canWrite, onTransfer }) {
+    const currentBed =
+        admission?.current_bed_id &&
+        beds.find((b) => b.id === admission.current_bed_id)
 
     return (
-        <div
-            className={
-                `flex w-full max-w-md items-start gap-3 rounded-xl border ` +
-                `${S.border} ${S.bg} p-3 shadow-lg`
-            }
-            role="alert"
-            aria-live="polite"
-        >
-            <S.Icon className={`mt-0.5 h-5 w-5 ${S.text}`} />
-            <div className="text-sm">
-                <div className="font-medium">{title}</div>
-                {message ? (
-                    <div className="mt-0.5 text-[13px] opacity-90">{message}</div>
-                ) : null}
+        <div className="space-y-4 text-sm text-slate-900">
+            <div className="flex flex-col gap-1 rounded-2xl border bg-gradient-to-r from-sky-50 via-slate-50 to-emerald-50 p-3 md:flex-row md:items-center md:justify-between">
+                <div>
+                    <h2 className="text-xs font-semibold uppercase tracking-wide text-sky-900">
+                        Bed / Transfer
+                    </h2>
+                    <p className="text-[11px] text-slate-600">
+                        View current bed and transfer the patient to another available bed
+                        with proper tracking. This action affects IPD bed occupancy and
+                        billing.
+                    </p>
+                </div>
+                {currentBed ? (
+                    <div className="text-[11px] text-slate-600">
+                        Current bed:{' '}
+                        <span className="font-semibold text-slate-900">
+                            {currentBed.code}
+                        </span>
+                        {currentBed.ward_name && (
+                            <span className="ml-1 text-slate-500">
+                                ({currentBed.ward_name})
+                            </span>
+                        )}
+                    </div>
+                ) : (
+                    <div className="text-[11px] text-slate-500">
+                        No active bed mapped for this admission.
+                    </div>
+                )}
             </div>
-            <button
-                className="ml-auto inline-flex h-7 w-7 items-center justify-center rounded-lg hover:bg-black/5"
-                onClick={onClose}
-                aria-label="Close notification"
-                type="button"
-            >
-                <X className="h-4 w-4" />
-            </button>
+
+            <div className="rounded-2xl border bg-white p-3 shadow-sm md:p-4">
+                <div className="mb-2 text-xs font-semibold text-slate-800">
+                    Transfer to another bed
+                </div>
+                {!canWrite && (
+                    <div className="mb-3 rounded-lg border border-amber-100 bg-amber-50 px-3 py-2 text-[11px] text-amber-700">
+                        You have view-only access. Contact an IPD incharge / Admin to
+                        perform transfers.
+                    </div>
+                )}
+
+                <div className="grid gap-3 md:grid-cols-[minmax(0,320px)_1fr]">
+                    <div>
+                        <WardRoomBedPicker
+                            value=""
+                            onChange={(bedId) => {
+                                if (!canWrite || !bedId) return
+                                onTransfer(bedId)
+                            }}
+                        />
+                    </div>
+                    <div className="text-[11px] text-slate-500">
+                        <ul className="list-disc space-y-1 pl-4">
+                            <li>Only vacant beds can be selected for transfer.</li>
+                            <li>
+                                Bed transfer will automatically update bed occupancy and
+                                subsequent bed charges.
+                            </li>
+                            <li>
+                                Ensure the new bed type is clinically appropriate for the
+                                patient&apos;s condition (ICU / HDU / Ward etc.).
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+            </div>
         </div>
     )
 }
 
-// strict positive integer check (rejects 0, "", null, undefined, NaN)
-const isPosInt = (v) => {
-    if (typeof v === 'number') return Number.isInteger(v) && v > 0
-    if (typeof v === 'string' && v.trim() !== '' && /^\d+$/.test(v))
-        return Number(v) > 0
-    return false
-}
+// ---------------------------------------------------------------------
+// Tabs config (includes Bed / Transfer)
+// ---------------------------------------------------------------------
+const TABS = [
+    { key: 'nursing', label: 'Nursing Notes', el: Nursing, writePerm: 'ipd.nursing' },
+    { key: 'vitals', label: 'Vitals', el: Vitals, writePerm: 'ipd.nursing' },
+    { key: 'io', label: 'Intake/Output', el: IntakeOutput, writePerm: 'ipd.nursing' },
+    { key: 'handover', label: 'Shift Handover', el: ShiftHandover, writePerm: 'ipd.nursing' },
 
-const toIsoSecs = (v) => (!v ? undefined : v.length === 16 ? `${v}:00` : v)
+    { key: 'rounds', label: 'Doctor Rounds', el: DoctorRounds, writePerm: 'ipd.doctor' },
+    { key: 'progress', label: 'Progress Notes', el: ProgressNotes, writePerm: 'ipd.doctor' },
 
-export default function Admissions() {
-    // lookups
+    // NEW CLINICAL CONTENT
+    { key: 'assessments', label: 'Assessments', el: AssessmentsTab, writePerm: 'ipd.nursing' },
+    { key: 'medications', label: 'Medications / Drug Chart', el: MedicationsTab, writePerm: 'ipd.doctor' },
+    { key: 'dressing', label: 'Dressing / Transfusion', el: DressingTransfusionTab, writePerm: 'ipd.nursing' },
+    { key: 'discharge-meds', label: 'Discharge Meds', el: DischargeMedsTab, writePerm: 'ipd.doctor' },
+
+    // Bed / Transfer tab (new)
+    { key: 'bed-transfer', label: 'Bed / Transfer', el: BedTransferTab, writePerm: 'ipd.manage' },
+
+    { key: 'referrals', label: 'Referrals', el: Referrals, writePerm: 'ipd.manage' },
+    // { key: 'ot', label: 'OT', el: OtModule, writePerm: 'ipd.manage' },
+    { key: 'discharge', label: 'Discharge Summary', el: Discharge, writePerm: 'ipd.manage' },
+    { key: 'charges', label: 'Bed Charges', el: BedCharges, writePerm: 'ipd.manage' },
+    { key: 'feedback', label: 'Feedback', el: FeedbackTab, writePerm: 'ipd.manage' },
+]
+
+// ---------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------
+export default function AdmissionDetail() {
+    const { id } = useParams()
+    const location = useLocation()
+    const admissionFromList = location?.state?.admission || null
+
+    const [admission, setAdmission] = useState(admissionFromList)
     const [beds, setBeds] = useState([])
-    const [packages, setPackages] = useState([])
+    const [active, setActive] = useState('nursing')
+    const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
+    const [patient, setPatient] = useState(null)
 
-    // form state
-    const [patientId, setPatientId] = useState(null)
-    const [departmentId, setDepartmentId] = useState(null)
-    const [doctorUserId, setDoctorUserId] = useState(null)
-    const [bedId, setBedId] = useState(null)
-    const [form, setForm] = useState({
-        admission_type: 'planned',
-        expected_discharge_at: '',
-        package_id: '',
-        payor_type: 'cash',
-        insurer_name: '',
-        policy_number: '',
-        preliminary_diagnosis: '',
-        history: '',
-        care_plan: '',
-    })
+    // global view perm
+    const canView = useCan('ipd.view')
+    const canManage = useCan('ipd.manage')
+    const canNursingWrite = useCan('ipd.nursing')
+    const canDoctorWrite = useCan('ipd.doctor')
 
-    // ui messages
-    const [toast, setToast] = useState(null)
-    const timerRef = useRef(null)
-
-    const showToast = (t) => {
-        if (timerRef.current) clearTimeout(timerRef.current)
-        setToast(t)
-        timerRef.current = setTimeout(() => setToast(null), 4500)
+    const permMap = {
+        'ipd.nursing': canNursingWrite,
+        'ipd.doctor': canDoctorWrite,
+        'ipd.manage': canManage,
     }
 
-    // cleanup toast timer on unmount (avoid memory leak)
-    useEffect(() => {
-        return () => {
-            if (timerRef.current) clearTimeout(timerRef.current)
-        }
-    }, [])
+    const admissionCode = (aid) => `ADM-${String(aid).padStart(6, '0')}`
 
-    const selectedBed = useMemo(
-        () => beds.find((b) => b.id === Number(bedId)) || null,
-        [beds, bedId]
-    )
-
-    // load lookups
-    useEffect(() => {
-        let alive = true
-            ; (async () => {
-                setLoading(true)
-                try {
-                    const [b, p] = await Promise.all([listBeds(), listPackages()])
-                    if (!alive) return
-                    setBeds(b.data || [])
-                    setPackages(p.data || [])
-                } catch (e) {
-                    if (!alive) return
-                    console.error('Admissions lookup load error', e)
-                    showToast({
-                        kind: 'error',
-                        title: 'Failed to load data',
-                        message:
-                            e?.response?.data?.detail ||
-                            'Could not load beds / packages. Please refresh and try again.',
-                    })
-                } finally {
-                    alive && setLoading(false)
-                }
-            })()
-        return () => {
-            alive = false
-        }
-    }, [])
-
-    // duplicate guard
-    const checkAlreadyAdmitted = async (pid) => {
-        try {
-            const { data } = await listAdmissions({
-                status: 'admitted',
-                patient_id: pid,
-            })
-            return Array.isArray(data) && data.length > 0 ? data[0] : null
-        } catch {
-            return null
-        }
-    }
-
-    const handleSubmit = async (e) => {
-        e.preventDefault()
-        if (loading) return
-
-        if (!isPosInt(patientId)) {
-            showToast({
-                kind: 'warn',
-                title: 'Select a patient',
-                message: 'Pick a patient before admitting.',
-            })
-            return
-        }
-        if (!isPosInt(bedId)) {
-            showToast({
-                kind: 'warn',
-                title: 'Select a bed',
-                message: 'Choose Ward → Room → Bed.',
-            })
-            return
-        }
-
-        const bed = beds.find((b) => b.id === Number(bedId))
-        if (!bed) {
-            showToast({
-                kind: 'warn',
-                title: 'Selected bed is unavailable',
-                message: 'Refresh beds and select again.',
-            })
-            return
-        }
-
+    const load = async () => {
         setLoading(true)
+        setError('')
         try {
-            // prevent duplicate active admission
-            const dup = await checkAlreadyAdmitted(Number(patientId))
-            if (dup?.id) {
-                const code = `ADM-${String(dup.id).padStart(6, '0')}`
-                showToast({
-                    kind: 'warn',
-                    title: 'Patient already admitted',
-                    message: `Active admission ${code} exists. Open Tracking / My Admissions to view.`,
-                })
-                return
+            const [{ data: a }, bedsRes] = await Promise.all([
+                getAdmission(Number(id)),
+                listBeds(),
+            ])
+            const adm = a || admissionFromList || null
+            setAdmission(adm)
+            setBeds(bedsRes.data || [])
+
+            if (adm?.patient_id) {
+                try {
+                    const { data: p } = await getPatient(adm.patient_id)
+                    setPatient(p)
+                } catch {
+                    // ignore
+                }
             }
-
-            const payload = {
-                patient_id: Number(patientId),
-                bed_id: Number(bedId),
-                admission_type: form.admission_type || 'planned',
-                expected_discharge_at: toIsoSecs(form.expected_discharge_at),
-                department_id: isPosInt(departmentId)
-                    ? Number(departmentId)
-                    : undefined,
-                practitioner_user_id: isPosInt(doctorUserId)
-                    ? Number(doctorUserId)
-                    : undefined,
-                package_id: isPosInt(form.package_id)
-                    ? Number(form.package_id)
-                    : undefined,
-                payor_type: form.payor_type || 'cash',
-                insurer_name: form.insurer_name || '',
-                policy_number: form.policy_number || '',
-                preliminary_diagnosis: form.preliminary_diagnosis || '',
-                history: form.history || '',
-                care_plan: form.care_plan || '',
+        } catch (e) {
+            const s = e?.status || e?.response?.status
+            if (s === 404 && admissionFromList) {
+                setAdmission(admissionFromList)
+            } else {
+                setError(e?.response?.data?.detail || 'Failed to load admission details')
             }
-
-            Object.keys(payload).forEach(
-                (k) => payload[k] === undefined && delete payload[k]
-            )
-
-            const { data } = await createAdmission(payload)
-
-            showToast({
-                kind: 'success',
-                title: 'Admission created',
-                message: `Admission ADM-${String(data.id).padStart(6, '0')} has been created successfully.`,
-            })
-
-            // refresh beds to reflect occupancy
-            try {
-                const b = await listBeds()
-                setBeds(b.data || [])
-            } catch {
-                /* ignore */
-            }
-
-            // clear relevant fields for next admission
-            setBedId(null)
-            setForm((s) => ({
-                ...s,
-                expected_discharge_at: '',
-                preliminary_diagnosis: '',
-                history: '',
-                care_plan: '',
-                package_id: '',
-                payor_type: 'cash',
-                insurer_name: '',
-                policy_number: '',
-            }))
-        } catch (e1) {
-            console.error('Admission create error', e1)
-            const raw = e1?.response?.data
-            const detail = Array.isArray(raw?.detail)
-                ? raw.detail
-                    .map((d) => d?.msg)
-                    .filter(Boolean)
-                    .join(', ')
-                : raw?.detail || e1.message || 'Failed to create admission'
-
-            const msg = /Bed not found/i.test(detail)
-                ? 'Please select a valid bed.'
-                : /Bed not available/i.test(detail)
-                    ? 'That bed is not available. Pick another one.'
-                    : detail
-
-            showToast({
-                kind: 'error',
-                title: 'Admission failed',
-                message: msg,
-            })
         } finally {
             setLoading(false)
         }
     }
 
-    const isInsurancePayor = ['insurance', 'tpa'].includes(form.payor_type)
+    useEffect(() => {
+        load()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [id])
 
-    return (
-        <div className="min-h-screen bg-slate-50 px-4 py-4 text-black md:px-6 md:py-6">
-            {/* Global Toast – fixed at top */}
-            {toast && (
-                <div className="fixed inset-x-0 top-16 z-50 flex justify-center px-4 sm:justify-end sm:px-6">
-                    <Toast
-                        kind={toast.kind}
-                        title={toast.title}
-                        message={toast.message}
-                        onClose={() => setToast(null)}
-                    />
-                </div>
-            )}
+    const doCancel = async () => {
+        if (!admission) return
+        if (
+            !window.confirm(
+                'Are you sure you want to cancel this admission? This will mark the admission as cancelled.',
+            )
+        ) {
+            return
+        }
+        try {
+            await cancelAdmission(admission.id)
+            window.location.assign('/ipd/tracking')
+        } catch (e1) {
+            setError(e1?.response?.data?.detail || 'Cancel failed')
+        }
+    }
 
-            {/* Page header + description */}
-            <div className="mx-auto mb-4 flex max-w-6xl flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                <div>
-                    <h1 className="text-xl font-semibold tracking-tight text-slate-900">
-                        IPD Admission
-                    </h1>
-                    <p className="mt-1 max-w-2xl text-sm text-slate-600">
-                        Use this screen to admit an in-patient. Select the patient, assign
-                        a primary doctor and bed, and capture admission details and payer
-                        information. The system automatically prevents duplicate active
-                        admissions for the same patient.
-                    </p>
+    const doTransfer = async (newBedId) => {
+        if (!admission || !newBedId) return
+        try {
+            await transferBed(admission.id, {
+                to_bed_id: Number(newBedId),
+                reason: 'Transfer',
+            })
+            await load()
+        } catch (e1) {
+            setError(e1?.response?.data?.detail || 'Transfer failed')
+        }
+    }
+
+    if (!canView && !canManage) {
+        return (
+            <div className="p-4 text-sm text-rose-700">
+                Access denied (need ipd.view).
+            </div>
+        )
+    }
+
+    if (loading && !admission) {
+        return <div className="p-4 text-sm">Loading…</div>
+    }
+
+    if (!admission) {
+        return <div className="p-4 text-sm">No data</div>
+    }
+
+    const currentBed =
+        admission.current_bed_id &&
+        beds.find((b) => b.id === admission.current_bed_id)
+
+    const Header = () => (
+        <div className="grid gap-3 rounded-2xl border bg-white p-3 text-xs text-slate-800 md:grid-cols-4 md:p-4">
+            <div>
+                <div className="text-[11px] uppercase tracking-wide text-slate-400">
+                    Admission
                 </div>
-                <div className="grid grid-cols-3 gap-2 text-xs">
-                    <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
-                        <User className="h-4 w-4 text-slate-500" />
-                        <span className="leading-tight">
-                            <span className="font-medium text-slate-800">Step 1</span>
-                            <br />
-                            Pick patient
-                        </span>
-                    </div>
-                    <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
-                        <ClipboardList className="h-4 w-4 text-slate-500" />
-                        <span className="leading-tight">
-                            <span className="font-medium text-slate-800">Step 2</span>
-                            <br />
-                            Doctor &amp; details
-                        </span>
-                    </div>
-                    <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
-                        <BedDouble className="h-4 w-4 text-slate-500" />
-                        <span className="leading-tight">
-                            <span className="font-medium text-slate-800">Step 3</span>
-                            <br />
-                            Assign bed
-                        </span>
-                    </div>
+                <div className="font-semibold text-slate-900">
+                    {admissionCode(admission.id)}
+                </div>
+                <div className="text-[11px] text-slate-500">
+                    Admitted on:{' '}
+                    {admission.admitted_at
+                        ? new Date(admission.admitted_at).toLocaleString()
+                        : '—'}
                 </div>
             </div>
 
-            {/* Main card */}
-            <div className="mx-auto max-w-6xl">
-                <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
-                    <div className="border-b border-slate-200 px-4 py-3">
-                        <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-                            <span className="text-sm font-semibold text-slate-900">
-                                New Admission
-                            </span>
-                            <span className="text-[11px] uppercase tracking-wide text-slate-500">
-                                IPD · Admission Management
-                            </span>
-                        </div>
+            <div>
+                <div className="text-[11px] uppercase tracking-wide text-slate-400">
+                    Patient
+                </div>
+                <div className="font-semibold text-slate-900">
+                    {patient?.full_name || patient?.name || '—'}
+                </div>
+                <div className="text-[11px] text-slate-500">
+                    UHID:{' '}
+                    <span className="font-medium">
+                        {patient?.uhid || `P-${admission.patient_id}`}
+                    </span>
+                </div>
+            </div>
+
+            <div>
+                <div className="text-[11px] uppercase tracking-wide text-slate-400">
+                    Bed / Ward
+                </div>
+                <div className="font-semibold text-slate-900">
+                    {currentBed?.code || '—'}
+                </div>
+                {currentBed?.ward_name && (
+                    <div className="text-[11px] text-slate-500">
+                        Ward: {currentBed.ward_name}
                     </div>
+                )}
+            </div>
 
-                    <PermGate
-                        anyOf={['ipd.manage']}
-                        fallback={
-                            <div className="rounded-b-2xl border-t border-amber-200 bg-amber-50 p-4 text-xs text-amber-700">
-                                You do not have permission to create admissions. Please
-                                contact the administrator to enable{' '}
-                                <span className="font-semibold">IPD Manage</span> access.
-                            </div>
+            <div>
+                <div className="text-[11px] uppercase tracking-wide text-slate-400">
+                    Status
+                </div>
+                <div className="inline-flex items-center gap-2 rounded-full bg-slate-100 px-3 py-1 text-[11px] font-medium capitalize text-slate-800">
+                    <span
+                        className={
+                            admission.status === 'active'
+                                ? 'h-2 w-2 rounded-full bg-emerald-500'
+                                : 'h-2 w-2 rounded-full bg-slate-400'
                         }
-                    >
-                        <form
-                            onSubmit={handleSubmit}
-                            className="space-y-6 p-4 text-sm md:p-6"
+                    />
+                    {admission.status || '—'}
+                </div>
+                {admission.practitioner_name && (
+                    <div className="mt-1 text-[11px] text-slate-500">
+                        Primary doctor:{' '}
+                        <span className="font-medium">{admission.practitioner_name}</span>
+                    </div>
+                )}
+            </div>
+        </div>
+    )
+
+    return (
+        <div className="space-y-4 p-3 md:p-4">
+            {/* Top bar with title + actions */}
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div>
+                    <h1 className="text-base font-semibold text-slate-900 md:text-lg">
+                        IPD Admission · Patient Tracking
+                    </h1>
+                    <p className="text-xs text-slate-500 md:text-[13px]">
+                        View and manage all in-patient clinical documentation for this
+                        admission — nursing notes, vitals, drug chart, handovers, discharge
+                        summary and more.
+                    </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                    {canManage && (
+                        <button
+                            type="button"
+                            onClick={doCancel}
+                            className="rounded-full bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-rose-700"
                         >
-                            {/* Patient selection */}
-                            <section className="space-y-2">
-                                <PatientPagedPicker
-                                    value={patientId ?? undefined}
-                                    onChange={setPatientId}
-                                />
-                                {isPosInt(patientId) && (
-                                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
-                                        Tip: If this patient already has an active admission, you
-                                        will see a warning and the system will block duplicate
-                                        admission.
-                                    </div>
-                                )}
-                            </section>
+                            Cancel Admission
+                        </button>
+                    )}
+                </div>
+            </div>
 
-                            {/* Doctor + Department */}
-                            <section className="space-y-2">
-                                <DeptRoleUserPicker
-                                    label="Primary doctor — Department · Role · User"
-                                    value={doctorUserId ?? undefined}
-                                    onChange={(userId, ctx) => {
-                                        setDoctorUserId(userId || null)
-                                        setDepartmentId(ctx?.department_id || null)
-                                    }}
-                                />
-                            </section>
+            {/* Error banner */}
+            {error && (
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700 md:text-sm">
+                    {error}
+                </div>
+            )}
 
-                            {/* Bed selection */}
-                            <section className="space-y-2">
-                                <WardRoomBedPicker
-                                    value={bedId ?? ''}
-                                    onChange={(v) =>
-                                        setBedId(isPosInt(v) ? Number(v) : null)
-                                    }
-                                />
+            {/* Header cards */}
+            <Header />
 
-                                {selectedBed && (
-                                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
-                                        <span className="text-slate-500">Selected bed: </span>
-                                        <span className="font-medium text-slate-900">
-                                            {selectedBed.code}
-                                        </span>
-                                        <span className="mx-1 text-slate-400">•</span>
-                                        <span className="text-slate-500">State: </span>
-                                        <span
-                                            className={[
-                                                'inline-flex items-center rounded-md border px-1.5 py-0.5 text-[11px]',
-                                                selectedBed.state === 'vacant'
-                                                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                                                    : selectedBed.state === 'reserved'
-                                                        ? 'border-amber-200 bg-amber-50 text-amber-700'
-                                                        : 'border-slate-200 bg-slate-100 text-slate-700',
-                                            ].join(' ')}
-                                        >
-                                            {selectedBed.state}
-                                        </span>
-                                        {selectedBed.reserved_until && (
-                                            <span className="ml-2 text-slate-500">
-                                                until{' '}
-                                                {new Date(
-                                                    selectedBed.reserved_until
-                                                ).toLocaleString()}
+            {/* Tabs */}
+            <div className="rounded-2xl border bg-white shadow-sm">
+                <UITabs
+                    value={active}
+                    onValueChange={setActive}
+                    className="w-full"
+                >
+                    {/* Tab headers */}
+                    <div className="border-b px-2 py-2 md:px-3">
+                        <TabsList className="h-auto flex flex-wrap gap-1 bg-transparent p-0 md:gap-2">
+                            {TABS.map((t) => {
+                                const canWriteThis = permMap[t.writePerm] ?? false
+                                return (
+                                    <TabsTrigger
+                                        key={t.key}
+                                        value={t.key}
+                                        className="rounded-full px-3 py-1 text-[11px] text-slate-700 data-[state=active]:bg-slate-900 data-[state=active]:text-white md:text-xs"
+                                    >
+                                        {t.label}
+                                        {!canWriteThis && (
+                                            <span className="ml-2 rounded-full bg-slate-200 px-1.5 py-[1px] text-[9px] uppercase tracking-wide text-slate-700">
+                                                view
                                             </span>
                                         )}
-                                    </div>
-                                )}
-                            </section>
+                                    </TabsTrigger>
+                                )
+                            })}
+                        </TabsList>
+                    </div>
 
-                            {/* Admission, package, payor + clinical details */}
-                            <section className="space-y-3">
-                                <div className="flex items-center justify-between gap-2">
-                                    <h2 className="text-xs font-semibold uppercase tracking-wide text-slate-600">
-                                        Admission details
-                                    </h2>
-                                    <p className="text-[11px] text-slate-500">
-                                        Choose admission type, expected discharge and payer
-                                        details.
-                                    </p>
-                                </div>
-
-                                <div className="grid gap-3 md:grid-cols-4">
-                                    {/* Admission type */}
-                                    <div>
-                                        <label className="mb-1 block text-xs text-slate-500">
-                                            Admission type
-                                        </label>
-                                        <select
-                                            className="input w-full rounded-2xl border border-slate-200 bg-white text-sm shadow-sm focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                                            value={form.admission_type}
-                                            onChange={(e) =>
-                                                setForm((prev) => ({
-                                                    ...prev,
-                                                    admission_type: e.target.value,
-                                                }))
-                                            }
-                                        >
-                                            {['planned', 'emergency', 'daycare'].map((t) => (
-                                                <option key={t} value={t}>
-                                                    {t}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-
-                                    {/* Expected discharge */}
-                                    <div>
-                                        <label className="mb-1 block text-xs text-slate-500">
-                                            Expected discharge
-                                        </label>
-                                        <input
-                                            type="datetime-local"
-                                            className="input w-full rounded-2xl border border-slate-200 bg-white text-sm shadow-sm focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                                            value={form.expected_discharge_at}
-                                            onChange={(e) =>
-                                                setForm((prev) => ({
-                                                    ...prev,
-                                                    expected_discharge_at: e.target.value,
-                                                }))
-                                            }
-                                        />
-                                    </div>
-
-                                    {/* Package */}
-                                    <div>
-                                        <label className="mb-1 block text-xs text-slate-500">
-                                            Package
-                                        </label>
-                                        <select
-                                            className="input w-full rounded-2xl border border-slate-200 bg-white text-sm shadow-sm focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                                            value={form.package_id}
-                                            onChange={(e) =>
-                                                setForm((prev) => ({
-                                                    ...prev,
-                                                    package_id: e.target.value,
-                                                }))
-                                            }
-                                        >
-                                            <option value="">—</option>
-                                            {packages.map((p) => (
-                                                <option key={p.id} value={p.id}>
-                                                    {p.name}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-
-                                    {/* Payor type */}
-                                    <div>
-                                        <label className="mb-1 block text-xs text-slate-500">
-                                            Payor type
-                                        </label>
-                                        <select
-                                            className="input w-full rounded-2xl border border-slate-200 bg-white text-sm shadow-sm focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                                            value={form.payor_type}
-                                            onChange={(e) =>
-                                                setForm((prev) => ({
-                                                    ...prev,
-                                                    payor_type: e.target.value,
-                                                }))
-                                            }
-                                        >
-                                            {['cash', 'insurance', 'tpa'].map((x) => (
-                                                <option key={x} value={x}>
-                                                    {x}
-                                                </option>
-                                            ))}
-                                        </select>
-                                    </div>
-
-                                    {/* Insurance block – only when payor is insurance/TPA */}
-                                    {isInsurancePayor && (
-                                        <>
-                                            <input
-                                                className="input md:col-span-2 rounded-2xl border border-slate-200 bg-white text-sm shadow-sm focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                                                placeholder="Insurer name"
-                                                value={form.insurer_name}
-                                                onChange={(e) =>
-                                                    setForm((prev) => ({
-                                                        ...prev,
-                                                        insurer_name: e.target.value,
-                                                    }))
-                                                }
-                                            />
-                                            <input
-                                                className="input rounded-2xl border border-slate-200 bg-white text-sm shadow-sm focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                                                placeholder="Policy number"
-                                                value={form.policy_number}
-                                                onChange={(e) =>
-                                                    setForm((prev) => ({
-                                                        ...prev,
-                                                        policy_number: e.target.value,
-                                                    }))
-                                                }
-                                            />
-                                        </>
-                                    )}
-
-                                    {/* Clinical details */}
-                                    <input
-                                        className="input md:col-span-2 rounded-2xl border border-slate-200 bg-white text-sm shadow-sm focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                                        placeholder="Preliminary diagnosis"
-                                        value={form.preliminary_diagnosis}
-                                        onChange={(e) =>
-                                            setForm((prev) => ({
-                                                ...prev,
-                                                preliminary_diagnosis: e.target.value,
-                                            }))
-                                        }
-                                    />
-                                    <input
-                                        className="input rounded-2xl border border-slate-200 bg-white text-sm shadow-sm focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                                        placeholder="History"
-                                        value={form.history}
-                                        onChange={(e) =>
-                                            setForm((prev) => ({
-                                                ...prev,
-                                                history: e.target.value,
-                                            }))
-                                        }
-                                    />
-                                    <input
-                                        className="input md:col-span-3 rounded-2xl border border-slate-200 bg-white text-sm shadow-sm focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                                        placeholder="Care plan"
-                                        value={form.care_plan}
-                                        onChange={(e) =>
-                                            setForm((prev) => ({
-                                                ...prev,
-                                                care_plan: e.target.value,
-                                            }))
-                                        }
-                                    />
-                                </div>
-                            </section>
-
-                            {/* Actions */}
-                            <div className="flex flex-col gap-2 border-t border-slate-100 pt-4 sm:flex-row sm:items-center sm:justify-end">
-                                <p className="text-[11px] text-slate-500">
-                                    Once admitted, you can manage vitals, nursing notes and
-                                    discharge from the Admission Detail screen.
-                                </p>
-                                <button
-                                    type="submit"
-                                    className="btn sm:min-w-[140px]"
-                                    disabled={
-                                        loading || !isPosInt(patientId) || !isPosInt(bedId)
-                                    }
+                    {/* Tab content */}
+                    <div className="p-2 md:p-3">
+                        {TABS.map((t) => {
+                            const TabEl = t.el
+                            const canWriteThis = permMap[t.writePerm] ?? false
+                            return (
+                                <TabsContent
+                                    key={t.key}
+                                    value={t.key}
+                                    className="mt-2"
                                 >
-                                    {loading ? 'Admitting…' : 'Admit patient'}
-                                </button>
-                            </div>
-                        </form>
-                    </PermGate>
-                </div>
+                                    <TabEl
+                                        admissionId={admission.id}
+                                        admission={admission}
+                                        patient={patient}
+                                        canWrite={canWriteThis}
+                                        beds={beds}           // used by BedTransferTab
+                                        onTransfer={doTransfer} // used by BedTransferTab
+                                    />
+                                </TabsContent>
+                            )
+                        })}
+                    </div>
+                </UITabs>
             </div>
         </div>
     )

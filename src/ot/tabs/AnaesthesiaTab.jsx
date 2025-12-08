@@ -1,3 +1,4 @@
+// FILE: src/ot/tabs/AnaesthesiaTab.jsx
 import { useEffect, useState, useMemo } from 'react'
 import {
     getAnaesthesiaRecord,
@@ -112,6 +113,15 @@ const emptyDrug = {
     remarks: '',
 }
 
+// -------- helpers --------
+function toIntOrNull(value) {
+    if (value === null || value === undefined) return null
+    const trimmed = String(value).trim()
+    if (!trimmed) return null
+    const parsed = parseInt(trimmed, 10)
+    return Number.isNaN(parsed) ? null : parsed
+}
+
 /**
  * AnaesthesiaTab
  * Props:
@@ -148,10 +158,15 @@ export default function AnaesthesiaTab({ caseId }) {
                 const data = res.data
                 if (!alive) return
 
-                setRecord((prev) => ({ ...prev, ...data }))
+                setRecord((prev) => ({
+                    ...prev,
+                    ...data,
+                    monitors: data.monitors || {},
+                    lines: data.lines || {},
+                    airway_devices: data.airway_devices || [],
+                }))
                 setRecordMeta({ id: data.id, created_at: data.created_at })
 
-                // load vitals + drugs
                 if (data.id) {
                     const [vRes, dRes] = await Promise.all([
                         listAnaesthesiaVitals(data.id),
@@ -162,7 +177,6 @@ export default function AnaesthesiaTab({ caseId }) {
                     setDrugs(dRes.data || [])
                 }
             } catch (err) {
-                // 404 -> no record yet -> start empty
                 if (err?.response?.status === 404) {
                     setRecord(emptyRecord)
                     setRecordMeta({ id: null, created_at: null })
@@ -190,12 +204,12 @@ export default function AnaesthesiaTab({ caseId }) {
     const showBanner = useMemo(
         () =>
             error ? (
-                <div className="mb-3 flex items-center gap-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700">
+                <div className="mb-3 flex items-center gap-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-[13px] text-red-700">
                     <AlertCircle className="h-4 w-4" />
                     <span>{error}</span>
                 </div>
             ) : success ? (
-                <div className="mb-3 flex items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-700">
+                <div className="mb-3 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[13px] text-emerald-700">
                     <CheckCircle2 className="h-4 w-4" />
                     <span>{success}</span>
                 </div>
@@ -244,7 +258,12 @@ export default function AnaesthesiaTab({ caseId }) {
         setError(null)
         setSuccess(null)
         try {
-            const payload = { ...record }
+            const payload = {
+                ...record,
+                ventilator_vt: toIntOrNull(record.ventilator_vt),
+                ventilator_rate: toIntOrNull(record.ventilator_rate),
+                ventilator_peep: toIntOrNull(record.ventilator_peep),
+            }
 
             if (recordMeta.id) {
                 await updateAnaesthesiaRecord(caseId, payload)
@@ -379,26 +398,26 @@ export default function AnaesthesiaTab({ caseId }) {
         <div className="grid gap-4 lg:grid-cols-2">
             {/* LEFT: physical exam */}
             <div className="space-y-3 rounded-2xl border bg-white p-4 shadow-sm">
-                <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-800">
+                <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-900">
                     <ClipboardList className="h-4 w-4" />
                     Pre-anaesthetic assessment
                 </h3>
 
-                <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="grid grid-cols-1 gap-3 text-[12px] sm:grid-cols-2">
                     <TextInput label="ASA Grade" value={record.asa_grade} onChange={(v) => handleField('asa_grade', v)} />
                     <TextInput label="Anaesthesia type" value={record.anaesthesia_type} onChange={(v) => handleField('anaesthesia_type', v)} />
                     <TextInput label="Co-morbidities" value={record.comorbidities} onChange={(v) => handleField('comorbidities', v)} />
                     <TextInput label="Allergies" value={record.allergies} onChange={(v) => handleField('allergies', v)} />
                 </div>
 
-                <div className="grid grid-cols-4 gap-3 text-xs">
+                <div className="grid grid-cols-2 gap-3 text-[12px] md:grid-cols-4">
                     <TextInput label="Pulse" value={record.preop_pulse} onChange={(v) => handleField('preop_pulse', v)} />
                     <TextInput label="BP" value={record.preop_bp} onChange={(v) => handleField('preop_bp', v)} />
                     <TextInput label="RR" value={record.preop_rr} onChange={(v) => handleField('preop_rr', v)} />
                     <TextInput label="Temp (°C)" value={record.preop_temp_c} onChange={(v) => handleField('preop_temp_c', v)} />
                 </div>
 
-                <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="grid grid-cols-1 gap-3 text-[12px] sm:grid-cols-2">
                     <TextInput label="CVS" value={record.preop_cvs} onChange={(v) => handleField('preop_cvs', v)} />
                     <TextInput label="RS" value={record.preop_rs} onChange={(v) => handleField('preop_rs', v)} />
                     <TextInput label="CNS" value={record.preop_cns} onChange={(v) => handleField('preop_cns', v)} />
@@ -410,12 +429,12 @@ export default function AnaesthesiaTab({ caseId }) {
 
             {/* RIGHT: airway + risk */}
             <div className="space-y-3 rounded-2xl border bg-white p-4 shadow-sm">
-                <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-800">
+                <h3 className="mb-1 flex items-center gap-2 text-sm font-semibold text-slate-900">
                     <Activity className="h-4 w-4" />
                     Airway & risk
                 </h3>
 
-                <div className="grid grid-cols-2 gap-3 text-xs">
+                <div className="grid grid-cols-1 gap-3 text-[12px] sm:grid-cols-2">
                     <TextInput
                         label="Teeth"
                         placeholder="Intact / Loose"
@@ -441,15 +460,15 @@ export default function AnaesthesiaTab({ caseId }) {
                     />
                 </div>
 
-                <div className="flex items-center gap-2 text-xs">
-                    <label className="inline-flex items-center gap-1">
+                <div className="flex items-center gap-2 text-[12px]">
+                    <label className="inline-flex items-center gap-1.5">
                         <input
                             type="checkbox"
-                            className="h-3 w-3 rounded border-slate-300"
+                            className="h-3.5 w-3.5 rounded border-slate-300"
                             checked={record.difficult_airway_anticipated || false}
                             onChange={() => toggleBool('difficult_airway_anticipated')}
                         />
-                        <span>Difficult airway anticipated</span>
+                        <span className="text-slate-700">Difficult airway anticipated</span>
                     </label>
                 </div>
 
@@ -476,8 +495,8 @@ export default function AnaesthesiaTab({ caseId }) {
         <div className="space-y-4">
             <div className="grid gap-4 lg:grid-cols-3">
                 {/* Induction & intubation */}
-                <div className="space-y-3 rounded-2xl border bg-white p-4 text-xs shadow-sm">
-                    <h3 className="mb-1 text-sm font-semibold text-slate-800">
+                <div className="space-y-3 rounded-2xl border bg-white p-4 text-[12px] shadow-sm">
+                    <h3 className="mb-1 text-sm font-semibold text-slate-900">
                         Induction & intubation
                     </h3>
 
@@ -512,7 +531,7 @@ export default function AnaesthesiaTab({ caseId }) {
                         onChange={() => toggleBool('intubation_done')}
                     />
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <Select
                             label="Route"
                             value={record.intubation_route}
@@ -539,7 +558,7 @@ export default function AnaesthesiaTab({ caseId }) {
                         />
                     </div>
 
-                    <div className="grid grid-cols-2 gap-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <TextInput label="Tube type" value={record.tube_type} onChange={(v) => handleField('tube_type', v)} />
                         <TextInput label="Size" value={record.tube_size} onChange={(v) => handleField('tube_size', v)} />
                         <TextInput label="Fixed at" value={record.tube_fixed_at} onChange={(v) => handleField('tube_fixed_at', v)} />
@@ -570,12 +589,12 @@ export default function AnaesthesiaTab({ caseId }) {
                 </div>
 
                 {/* Airway devices + monitors */}
-                <div className="space-y-3 rounded-2xl border bg-white p-4 text-xs shadow-sm">
-                    <h3 className="mb-1 text-sm font-semibold text-slate-800">
+                <div className="space-y-3 rounded-2xl border bg-white p-4 text-[12px] shadow-sm">
+                    <h3 className="mb-1 text-sm font-semibold text-slate-900">
                         Airway devices & monitors
                     </h3>
 
-                    <div className="mb-2 text-[11px] font-medium text-slate-500">
+                    <div className="mb-2 text-[11px] font-semibold text-slate-600">
                         Airway devices
                     </div>
                     <div className="grid grid-cols-2 gap-1">
@@ -591,7 +610,7 @@ export default function AnaesthesiaTab({ caseId }) {
                         )}
                     </div>
 
-                    <div className="mt-3 text-[11px] font-medium text-slate-500">
+                    <div className="mt-3 text-[11px] font-semibold text-slate-600">
                         Monitors
                     </div>
                     <div className="grid grid-cols-2 gap-1">
@@ -620,8 +639,8 @@ export default function AnaesthesiaTab({ caseId }) {
                 </div>
 
                 {/* Ventilation, position, fluids, block */}
-                <div className="space-y-3 rounded-2xl border bg-white p-4 text-xs shadow-sm">
-                    <h3 className="mb-1 text-sm font-semibold text-slate-800">
+                <div className="space-y-3 rounded-2xl border bg-white p-4 text-[12px] shadow-sm">
+                    <h3 className="mb-1 text-sm font-semibold text-slate-900">
                         Ventilation & block
                     </h3>
 
@@ -631,7 +650,7 @@ export default function AnaesthesiaTab({ caseId }) {
                         onChange={(v) => handleField('ventilation_mode_baseline', v)}
                         options={['', 'Spontaneous', 'Controlled', 'Manual', 'Ventilator']}
                     />
-                    <div className="grid grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                         <TextInput
                             label="Vt (ml)"
                             value={record.ventilator_vt}
@@ -663,7 +682,7 @@ export default function AnaesthesiaTab({ caseId }) {
                         ]}
                     />
 
-                    <div className="mt-2 text-[11px] font-medium text-slate-500">
+                    <div className="mt-2 text-[11px] font-semibold text-slate-600">
                         Position & protection
                     </div>
                     <Select
@@ -690,7 +709,7 @@ export default function AnaesthesiaTab({ caseId }) {
                         />
                     </div>
 
-                    <div className="mt-2 text-[11px] font-medium text-slate-500">
+                    <div className="mt-2 text-[11px] font-semibold text-slate-600">
                         Lines & tourniquet
                     </div>
                     <div className="grid grid-cols-2 gap-1">
@@ -724,7 +743,7 @@ export default function AnaesthesiaTab({ caseId }) {
                         onChange={(v) => handleField('blood_components_plan', v)}
                     />
 
-                    <div className="mt-2 text-[11px] font-medium text-slate-500">
+                    <div className="mt-2 text-[11px] font-semibold text-slate-600">
                         Regional block
                     </div>
                     <Select
@@ -799,8 +818,8 @@ export default function AnaesthesiaTab({ caseId }) {
     )
 
     const renderVitals = () => (
-        <div className="space-y-3 rounded-2xl border bg-white p-4 text-xs shadow-sm">
-            <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-800">
+        <div className="space-y-3 rounded-2xl border bg-white p-4 text-[12px] shadow-sm">
+            <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-900">
                 <Activity className="h-4 w-4" />
                 Intra-op vitals log
             </h3>
@@ -888,9 +907,9 @@ export default function AnaesthesiaTab({ caseId }) {
                     type="button"
                     onClick={handleAddVital}
                     disabled={vitalBusy}
-                    className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-[12px] font-semibold text-white shadow hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
                 >
-                    Add vitals
+                    {vitalBusy ? 'Adding…' : 'Add vitals'}
                 </button>
             </div>
 
@@ -941,7 +960,7 @@ export default function AnaesthesiaTab({ caseId }) {
                                     <Td>
                                         <button
                                             onClick={() => handleDeleteVital(v.id)}
-                                            className="text-xs text-red-500 hover:underline"
+                                            className="text-xs font-semibold text-red-500 hover:underline"
                                         >
                                             Delete
                                         </button>
@@ -956,8 +975,8 @@ export default function AnaesthesiaTab({ caseId }) {
     )
 
     const renderDrugs = () => (
-        <div className="space-y-3 rounded-2xl border bg-white p-4 text-xs shadow-sm">
-            <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-800">
+        <div className="space-y-3 rounded-2xl border bg-white p-4 text-[12px] shadow-sm">
+            <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold text-slate-900">
                 <Syringe className="h-4 w-4" />
                 Anaesthesia drug log
             </h3>
@@ -994,9 +1013,9 @@ export default function AnaesthesiaTab({ caseId }) {
                 type="button"
                 onClick={handleAddDrug}
                 disabled={drugBusy}
-                className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-xs font-semibold text-white shadow hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-[12px] font-semibold text-white shadow hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
             >
-                Add drug
+                {drugBusy ? 'Adding…' : 'Add drug'}
             </button>
 
             <div className="mt-3 overflow-x-auto">
@@ -1029,7 +1048,7 @@ export default function AnaesthesiaTab({ caseId }) {
                                     <Td>
                                         <button
                                             onClick={() => handleDeleteDrug(d.id)}
-                                            className="text-xs text-red-500 hover:underline"
+                                            className="text-xs font-semibold text-red-500 hover:underline"
                                         >
                                             Delete
                                         </button>
@@ -1052,41 +1071,43 @@ export default function AnaesthesiaTab({ caseId }) {
     }
 
     return (
-        <div className="space-y-4">
+        <div className="space-y-4 text-[13px]">
             {showBanner}
 
             {/* Sub-tabs header */}
-            <div className="flex flex-wrap gap-2 rounded-full bg-slate-100 p-1 text-xs">
-                <SubTabButton
-                    active={subTab === 'preop'}
-                    onClick={() => setSubTab('preop')}
-                    icon={ClipboardList}
-                >
-                    Pre-op record
-                </SubTabButton>
-                <SubTabButton
-                    active={subTab === 'intra'}
-                    onClick={() => setSubTab('intra')}
-                    icon={Droplet}
-                >
-                    Intra-op setup
-                </SubTabButton>
-                <SubTabButton
-                    active={subTab === 'vitals'}
-                    onClick={() => setSubTab('vitals')}
-                    icon={Activity}
-                >
-                    Vitals log
-                </SubTabButton>
-                <SubTabButton
-                    active={subTab === 'drugs'}
-                    onClick={() => setSubTab('drugs')}
-                    icon={Syringe}
-                >
-                    Drug log
-                </SubTabButton>
+            <div className="flex flex-wrap items-center gap-2 rounded-full bg-slate-100 p-1 text-[12px]">
+                <div className="flex flex-1 flex-wrap gap-1 overflow-x-auto">
+                    <SubTabButton
+                        active={subTab === 'preop'}
+                        onClick={() => setSubTab('preop')}
+                        icon={ClipboardList}
+                    >
+                        Pre-op record
+                    </SubTabButton>
+                    <SubTabButton
+                        active={subTab === 'intra'}
+                        onClick={() => setSubTab('intra')}
+                        icon={Droplet}
+                    >
+                        Intra-op setup
+                    </SubTabButton>
+                    <SubTabButton
+                        active={subTab === 'vitals'}
+                        onClick={() => setSubTab('vitals')}
+                        icon={Activity}
+                    >
+                        Vitals log
+                    </SubTabButton>
+                    <SubTabButton
+                        active={subTab === 'drugs'}
+                        onClick={() => setSubTab('drugs')}
+                        icon={Syringe}
+                    >
+                        Drug log
+                    </SubTabButton>
+                </div>
 
-                <div className="ml-auto flex items-center text-[11px] text-slate-500">
+                <div className="ml-auto flex items-center text-[11px] font-medium text-slate-500">
                     {recordMeta.id ? 'Record created' : 'No record yet'}
                 </div>
             </div>
@@ -1098,12 +1119,12 @@ export default function AnaesthesiaTab({ caseId }) {
             {subTab === 'drugs' && renderDrugs()}
 
             {/* Save bar */}
-            <div className="sticky bottom-0 mt-4 flex justify-end border-t bg-slate-50/80 px-2 py-3 backdrop-blur">
+            <div className="sticky bottom-0 mt-4 flex justify-end border-t bg-slate-50/90 px-2 py-3 backdrop-blur">
                 <button
                     type="button"
                     onClick={handleSaveRecord}
                     disabled={saving}
-                    className="inline-flex items-center rounded-full bg-slate-900 px-5 py-2 text-xs font-semibold text-white shadow hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="inline-flex items-center rounded-full bg-slate-900 px-5 py-2 text-[13px] font-semibold text-white shadow-md hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
                 >
                     {saving ? 'Saving…' : 'Save anaesthesia record'}
                 </button>
@@ -1120,10 +1141,10 @@ function SubTabButton({ active, onClick, children, icon: Icon }) {
             type="button"
             onClick={onClick}
             className={
-                'inline-flex items-center gap-1 rounded-full px-3 py-1.5 transition ' +
+                'inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition ' +
                 (active
                     ? 'bg-white text-slate-900 shadow-sm'
-                    : 'text-slate-600 hover:bg-white/60')
+                    : 'text-slate-600 hover:bg-white/70')
             }
         >
             {Icon && <Icon className="h-3.5 w-3.5" />}
@@ -1135,9 +1156,9 @@ function SubTabButton({ active, onClick, children, icon: Icon }) {
 function TextInput({ label, value, onChange, placeholder }) {
     return (
         <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-medium text-slate-600">{label}</span>
+            <span className="text-[11px] font-semibold text-slate-600">{label}</span>
             <input
-                className="h-8 rounded-md border border-slate-200 bg-slate-50 px-2 text-xs text-slate-900 outline-none ring-0 focus:border-slate-400"
+                className="h-9 rounded-md border border-slate-200 bg-slate-50 px-3 text-[12px] text-slate-900 outline-none ring-0 transition focus:border-slate-400 focus:bg-white"
                 value={value ?? ''}
                 placeholder={placeholder}
                 onChange={(e) => onChange(e.target.value)}
@@ -1149,9 +1170,9 @@ function TextInput({ label, value, onChange, placeholder }) {
 function Textarea({ label, value, onChange, placeholder }) {
     return (
         <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-medium text-slate-600">{label}</span>
+            <span className="text-[11px] font-semibold text-slate-600">{label}</span>
             <textarea
-                className="min-h-[70px] rounded-md border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-900 outline-none ring-0 focus:border-slate-400"
+                className="min-h-[70px] rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-900 outline-none ring-0 transition focus:border-slate-400 focus:bg-white"
                 value={value ?? ''}
                 placeholder={placeholder}
                 onChange={(e) => onChange(e.target.value)}
@@ -1165,7 +1186,7 @@ function Checkbox({ label, checked, onChange }) {
         <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-700">
             <input
                 type="checkbox"
-                className="h-3 w-3 rounded border-slate-300 text-slate-900 focus:ring-0"
+                className="h-3.5 w-3.5 rounded border-slate-300 text-slate-900 focus:ring-0"
                 checked={!!checked}
                 onChange={onChange}
             />
@@ -1177,14 +1198,14 @@ function Checkbox({ label, checked, onChange }) {
 function Select({ label, value, onChange, options }) {
     return (
         <label className="flex flex-col gap-1">
-            <span className="text-[11px] font-medium text-slate-600">{label}</span>
+            <span className="text-[11px] font-semibold text-slate-600">{label}</span>
             <select
-                className="h-8 rounded-md border border-slate-200 bg-slate-50 px-2 text-xs text-slate-900 outline-none ring-0 focus:border-slate-400"
+                className="h-9 rounded-md border border-slate-200 bg-slate-50 px-3 text-[12px] text-slate-900 outline-none ring-0 transition focus:border-slate-400 focus:bg-white"
                 value={value ?? ''}
                 onChange={(e) => onChange(e.target.value)}
             >
                 {options.map((opt) => (
-                    <option key={opt} value={opt}>
+                    <option key={opt || 'empty'} value={opt}>
                         {opt || '—'}
                     </option>
                 ))}
@@ -1202,5 +1223,9 @@ function Th({ children }) {
 }
 
 function Td({ children }) {
-    return <td className="px-2 py-1 align-top text-[11px] text-slate-700">{children}</td>
+    return (
+        <td className="px-2 py-1 align-top text-[11px] text-slate-700">
+            {children}
+        </td>
+    )
 }

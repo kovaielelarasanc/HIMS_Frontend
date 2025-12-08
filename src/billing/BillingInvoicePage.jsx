@@ -16,6 +16,8 @@ import {
     applyAdvancesToInvoice,
     getBillingMasters,
     fetchInvoicePdf,
+    autoAddIpdBedCharges,
+    autoAddOtCharges,
 } from "../api/billing";
 import { listPatients } from "../api/patients";
 
@@ -78,6 +80,22 @@ export default function BillingInvoicePage({
 
     const [advances, setAdvances] = useState([]);
     const [advLoading, setAdvLoading] = useState(false);
+
+    const [autoAdmissionId, setAutoAdmissionId] = useState("");
+    const [autoOtCaseId, setAutoOtCaseId] = useState("");
+    const [autoBedMode, setAutoBedMode] = useState("mixed"); // daily | hourly | mixed
+    const [autoLoading, setAutoLoading] = useState(false);
+    const [autoBedBootstrapped, setAutoBedBootstrapped] = useState(false);
+
+    // ----- Simple toast helper -----
+    const [toast, setToast] = useState(null); // { type: "success" | "error" | "info", message: string }
+
+    const showToast = (type, message) => {
+        setToast({ type, message });
+        setTimeout(() => {
+            setToast(null);
+        }, 3500);
+    };
 
     const totals = useMemo(() => {
         if (!invoice) return null;
@@ -167,6 +185,7 @@ export default function BillingInvoicePage({
             setConsultantId(data.consultant_id || "");
             setProviderId(data.provider_id || "");
             setRemarks(data.remarks || "");
+            setAutoBedBootstrapped(false); // allow auto-bed bootstrap again on fresh load
         } catch (err) {
             console.error(err);
             alert("Invoice not found");
@@ -216,6 +235,9 @@ export default function BillingInvoicePage({
             await cancelInvoice(invoice.id);
             alert("Invoice cancelled");
             setInvoice(null);
+            setAutoAdmissionId("");
+            setAutoOtCaseId("");
+            setAutoBedBootstrapped(false);
         } catch (err) {
             console.error(err);
             alert("Cancel failed");
@@ -377,6 +399,132 @@ export default function BillingInvoicePage({
         }
     };
 
+    // ----- Auto IPD Bed + OT Charges (button) -----
+
+    const handleAutoIpdBedAndOt = async () => {
+        if (!invoice) {
+            showToast("error", "Create or load an invoice first.");
+            return;
+        }
+
+        if (!autoAdmissionId && !autoOtCaseId) {
+            showToast(
+                "error",
+                "Enter Admission ID and/or OT Case ID for auto-billing."
+            );
+            return;
+        }
+
+        setAutoLoading(true);
+        try {
+            let latestInvoice = invoice;
+
+            // 1️⃣ Auto IPD Bed Charges (optional)
+            if (autoAdmissionId) {
+                const { data } = await autoAddIpdBedCharges(invoice.id, {
+                    admission_id: Number(autoAdmissionId),
+                    mode: autoBedMode || "mixed",
+                    skip_if_already_billed: true,
+                    upto_ts: null, // backend will default to now
+                });
+                latestInvoice = data;
+            }
+
+            // 2️⃣ Auto OT Charges (optional)
+            if (autoOtCaseId) {
+                const { data } = await autoAddOtCharges(invoice.id, {
+                    case_id: Number(autoOtCaseId),
+                });
+                latestInvoice = data;
+            }
+
+            setInvoice(latestInvoice);
+            showToast(
+                "success",
+                "Auto IPD bed and OT charges added successfully."
+            );
+        } catch (err) {
+            console.error("Auto IPD/OT billing failed", err);
+            const msg =
+                err?.response?.data?.detail ||
+                err?.message ||
+                "Unable to auto-add IPD bed / OT charges.";
+            showToast("error", msg);
+        } finally {
+            setAutoLoading(false);
+        }
+    };
+
+    // ----- Auto-fill Admission / OT IDs from invoice context -----
+
+    useEffect(() => {
+        if (!invoice) return;
+
+        if (
+            !autoAdmissionId &&
+            invoice.context_type === "ipd" &&
+            invoice.context_id
+        ) {
+            setAutoAdmissionId(String(invoice.context_id));
+        }
+
+        if (
+            !autoOtCaseId &&
+            invoice.context_type === "ot" &&
+            invoice.context_id
+        ) {
+            setAutoOtCaseId(String(invoice.context_id));
+        }
+    }, [invoice, autoAdmissionId, autoOtCaseId]);
+
+    // ----- Auto-run IPD bed charges on first load when ip_billing + ipd -----
+
+    useEffect(() => {
+        if (!invoice) return;
+        if (autoBedBootstrapped) return;
+
+        if (
+            invoice.billing_type === "ip_billing" &&
+            invoice.context_type === "ipd" &&
+            invoice.context_id
+        ) {
+            // Ensure Admission ID is visible in UI as well
+            if (!autoAdmissionId) {
+                setAutoAdmissionId(String(invoice.context_id));
+            }
+
+            (async () => {
+                try {
+                    setAutoLoading(true);
+                    const { data } = await autoAddIpdBedCharges(invoice.id, {
+                        admission_id: Number(invoice.context_id),
+                        mode: autoBedMode || "mixed",
+                        skip_if_already_billed: true,
+                        upto_ts: null,
+                    });
+                    setInvoice(data);
+                    setAutoBedBootstrapped(true);
+                    showToast(
+                        "success",
+                        "IPD bed charges auto-added from admission."
+                    );
+                } catch (err) {
+                    console.error(
+                        "Auto-bootstrap IPD bed charges failed",
+                        err
+                    );
+                    showToast(
+                        "error",
+                        "Could not auto-add IPD bed charges. You can try again from Auto IPD Bed + OT."
+                    );
+                    setAutoBedBootstrapped(true);
+                } finally {
+                    setAutoLoading(false);
+                }
+            })();
+        }
+    }, [invoice, autoBedBootstrapped, autoBedMode, autoAdmissionId]);
+
     // ----- Print -----
 
     const handlePrint = async () => {
@@ -423,15 +571,22 @@ export default function BillingInvoicePage({
                                         className="w-full text-left px-2 py-1 hover:bg-indigo-50"
                                     >
                                         #{p.id} – {p.first_name} {p.last_name}{" "}
-                                        {p.phone && <span className="text-gray-500">({p.phone})</span>}
+                                        {p.phone && (
+                                            <span className="text-gray-500">
+                                                ({p.phone})
+                                            </span>
+                                        )}
                                     </button>
                                 ))}
                             </div>
                         )}
                         {selectedPatient && (
                             <div className="mt-1 text-[11px] text-gray-600">
-                                Selected: #{selectedPatient.id} – {selectedPatient.first_name}{" "}
-                                {selectedPatient.last_name} {selectedPatient.phone && `(${selectedPatient.phone})`}
+                                Selected: #{selectedPatient.id} –{" "}
+                                {selectedPatient.first_name}{" "}
+                                {selectedPatient.last_name}{" "}
+                                {selectedPatient.phone &&
+                                    `(${selectedPatient.phone})`}
                             </div>
                         )}
                     </div>
@@ -455,11 +610,20 @@ export default function BillingInvoicePage({
                         <label className="block text-xs font-semibold text-gray-700 mt-2 mb-1">
                             Context Type
                         </label>
-                        <input
+                        <select
                             value={contextType}
                             onChange={(e) => setContextType(e.target.value)}
                             className="w-full border rounded-md px-2 py-1 text-sm"
-                        />
+                        >
+                            <option value="">None</option>
+                            <option value="opd">OPD</option>
+                            <option value="ipd">IPD (Admission)</option>
+                            <option value="ot">OT Case</option>
+                            <option value="lab">Lab</option>
+                            <option value="radiology">Radiology</option>
+                            <option value="pharmacy">Pharmacy</option>
+                            <option value="other">Other</option>
+                        </select>
                     </div>
 
                     {/* Invoice load / create */}
@@ -471,7 +635,9 @@ export default function BillingInvoicePage({
                             <div className="flex gap-2">
                                 <input
                                     value={invoiceIdInput}
-                                    onChange={(e) => setInvoiceIdInput(e.target.value)}
+                                    onChange={(e) =>
+                                        setInvoiceIdInput(e.target.value)
+                                    }
                                     className="flex-1 border rounded-md px-2 py-1 text-sm"
                                     placeholder="Enter ID & load"
                                 />
@@ -517,7 +683,9 @@ export default function BillingInvoicePage({
                             </div>
                             <div className="text-gray-600">
                                 Status:{" "}
-                                <span className="font-semibold">{invoice.status}</span>
+                                <span className="font-semibold">
+                                    {invoice.status}
+                                </span>
                             </div>
                             {invoice.invoice_number && (
                                 <div className="text-gray-600">
@@ -530,13 +698,22 @@ export default function BillingInvoicePage({
                             {totals && (
                                 <>
                                     <span className="px-2 py-[2px] rounded-full bg-gray-100">
-                                        Net: <strong>{totals.net.toFixed(2)}</strong>
+                                        Net:{" "}
+                                        <strong>
+                                            {totals.net.toFixed(2)}
+                                        </strong>
                                     </span>
                                     <span className="px-2 py-[2px] rounded-full bg-green-50 text-green-700">
-                                        Paid: <strong>{totals.paid.toFixed(2)}</strong>
+                                        Paid:{" "}
+                                        <strong>
+                                            {totals.paid.toFixed(2)}
+                                        </strong>
                                     </span>
                                     <span className="px-2 py-[2px] rounded-full bg-red-50 text-red-700">
-                                        Balance: <strong>{totals.balance.toFixed(2)}</strong>
+                                        Balance:{" "}
+                                        <strong>
+                                            {totals.balance.toFixed(2)}
+                                        </strong>
                                     </span>
                                 </>
                             )}
@@ -576,7 +753,9 @@ export default function BillingInvoicePage({
                             </label>
                             <select
                                 value={consultantId}
-                                onChange={(e) => setConsultantId(e.target.value)}
+                                onChange={(e) =>
+                                    setConsultantId(e.target.value)
+                                }
                                 className="w-full border rounded-md px-2 py-1 text-sm"
                             >
                                 <option value="">— None —</option>
@@ -593,7 +772,9 @@ export default function BillingInvoicePage({
                             </label>
                             <select
                                 value={providerId}
-                                onChange={(e) => setProviderId(e.target.value)}
+                                onChange={(e) =>
+                                    setProviderId(e.target.value)
+                                }
                                 className="w-full border rounded-md px-2 py-1 text-sm"
                             >
                                 <option value="">— Self / Cash —</option>
@@ -624,23 +805,98 @@ export default function BillingInvoicePage({
                 <div className="grid grid-cols-1 lg:grid-cols-[2fr,1fr] gap-4">
                     {/* Items block */}
                     <div className="bg-white border rounded-lg shadow-sm p-3 space-y-3">
-                        <div className="flex items-center justify-between">
+                        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                             <h2 className="text-sm font-semibold text-gray-800">
                                 Bill Items
                             </h2>
+
+                            {/* ⭐ Auto IPD Bed + OT Controls */}
+                            <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                                <div className="flex items-center gap-1">
+                                    <span className="text-gray-600">
+                                        Admission ID
+                                    </span>
+                                    <input
+                                        type="number"
+                                        value={autoAdmissionId}
+                                        onChange={(e) =>
+                                            setAutoAdmissionId(
+                                                e.target.value
+                                            )
+                                        }
+                                        className="w-20 border rounded-md px-1 py-0.5 text-xs"
+                                        placeholder="IPD"
+                                    />
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <span className="text-gray-600">Mode</span>
+                                    <select
+                                        value={autoBedMode}
+                                        onChange={(e) =>
+                                            setAutoBedMode(e.target.value)
+                                        }
+                                        className="border rounded-md px-1 py-0.5 text-xs"
+                                    >
+                                        <option value="daily">Daily</option>
+                                        <option value="hourly">Hourly</option>
+                                        <option value="mixed">Mixed</option>
+                                    </select>
+                                </div>
+                                <div className="flex items-center gap-1">
+                                    <span className="text-gray-600">
+                                        OT Case ID
+                                    </span>
+                                    <input
+                                        type="number"
+                                        value={autoOtCaseId}
+                                        onChange={(e) =>
+                                            setAutoOtCaseId(e.target.value)
+                                        }
+                                        className="w-20 border rounded-md px-1 py-0.5 text-xs"
+                                        placeholder="OT"
+                                    />
+                                </div>
+                                <button
+                                    type="button"
+                                    onClick={handleAutoIpdBedAndOt}
+                                    disabled={
+                                        autoLoading ||
+                                        invoice.status === "finalized"
+                                    }
+                                    className="px-3 py-1 rounded-md bg-emerald-600 text-white text-[11px] font-semibold hover:bg-emerald-700 disabled:opacity-60"
+                                >
+                                    {autoLoading
+                                        ? "Applying..."
+                                        : "Auto IPD Bed + OT"}
+                                </button>
+                            </div>
                         </div>
 
                         <table className="w-full text-xs border-t">
                             <thead className="bg-gray-50">
                                 <tr>
                                     <th className="px-2 py-1 text-left">#</th>
-                                    <th className="px-2 py-1 text-left">Description</th>
-                                    <th className="px-2 py-1 text-right">Qty</th>
-                                    <th className="px-2 py-1 text-right">Price</th>
-                                    <th className="px-2 py-1 text-right">GST%</th>
-                                    <th className="px-2 py-1 text-right">GST Amt</th>
-                                    <th className="px-2 py-1 text-right">Total</th>
-                                    <th className="px-2 py-1 text-right">Actions</th>
+                                    <th className="px-2 py-1 text-left">
+                                        Description
+                                    </th>
+                                    <th className="px-2 py-1 text-right">
+                                        Qty
+                                    </th>
+                                    <th className="px-2 py-1 text-right">
+                                        Price
+                                    </th>
+                                    <th className="px-2 py-1 text-right">
+                                        GST%
+                                    </th>
+                                    <th className="px-2 py-1 text-right">
+                                        GST Amt
+                                    </th>
+                                    <th className="px-2 py-1 text-right">
+                                        Total
+                                    </th>
+                                    <th className="px-2 py-1 text-right">
+                                        Actions
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -657,10 +913,18 @@ export default function BillingInvoicePage({
                                 {invoice.items.map((it, idx) => (
                                     <tr
                                         key={it.id}
-                                        className={it.is_voided ? "bg-red-50 text-gray-400" : ""}
+                                        className={
+                                            it.is_voided
+                                                ? "bg-red-50 text-gray-400"
+                                                : ""
+                                        }
                                     >
-                                        <td className="px-2 py-1">{idx + 1}</td>
-                                        <td className="px-2 py-1">{it.description}</td>
+                                        <td className="px-2 py-1">
+                                            {idx + 1}
+                                        </td>
+                                        <td className="px-2 py-1">
+                                            {it.description}
+                                        </td>
                                         <td className="px-2 py-1 text-right">
                                             <input
                                                 type="number"
@@ -668,11 +932,18 @@ export default function BillingInvoicePage({
                                                 value={it.quantity}
                                                 onChange={(e) =>
                                                     handleUpdateLine(it, {
-                                                        quantity: Number(e.target.value) || 1,
+                                                        quantity:
+                                                            Number(
+                                                                e.target.value
+                                                            ) || 1,
                                                     })
                                                 }
                                                 className="w-16 border rounded-md px-1 text-right"
-                                                disabled={it.is_voided || invoice.status === "finalized"}
+                                                disabled={
+                                                    it.is_voided ||
+                                                    invoice.status ===
+                                                    "finalized"
+                                                }
                                             />
                                         </td>
                                         <td className="px-2 py-1 text-right">
@@ -682,11 +953,18 @@ export default function BillingInvoicePage({
                                                 value={it.unit_price}
                                                 onChange={(e) =>
                                                     handleUpdateLine(it, {
-                                                        unit_price: Number(e.target.value) || 0,
+                                                        unit_price:
+                                                            Number(
+                                                                e.target.value
+                                                            ) || 0,
                                                     })
                                                 }
                                                 className="w-20 border rounded-md px-1 text-right"
-                                                disabled={it.is_voided || invoice.status === "finalized"}
+                                                disabled={
+                                                    it.is_voided ||
+                                                    invoice.status ===
+                                                    "finalized"
+                                                }
                                             />
                                         </td>
                                         <td className="px-2 py-1 text-right">
@@ -696,31 +974,48 @@ export default function BillingInvoicePage({
                                                 value={it.tax_rate}
                                                 onChange={(e) =>
                                                     handleUpdateLine(it, {
-                                                        tax_rate: Number(e.target.value) || 0,
+                                                        tax_rate:
+                                                            Number(
+                                                                e.target.value
+                                                            ) || 0,
                                                     })
                                                 }
                                                 className="w-16 border rounded-md px-1 text-right"
-                                                disabled={it.is_voided || invoice.status === "finalized"}
+                                                disabled={
+                                                    it.is_voided ||
+                                                    invoice.status ===
+                                                    "finalized"
+                                                }
                                             />
                                         </td>
                                         <td className="px-2 py-1 text-right">
-                                            {Number(it.tax_amount || 0).toFixed(2)}
+                                            {Number(
+                                                it.tax_amount || 0
+                                            ).toFixed(2)}
                                         </td>
                                         <td className="px-2 py-1 text-right">
-                                            {Number(it.line_total || 0).toFixed(2)}
+                                            {Number(
+                                                it.line_total || 0
+                                            ).toFixed(2)}
                                         </td>
                                         <td className="px-2 py-1 text-right">
-                                            {!it.is_voided && invoice.status !== "finalized" && (
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleVoidLine(it)}
-                                                    className="text-[11px] text-red-600 hover:underline"
-                                                >
-                                                    Void
-                                                </button>
-                                            )}
+                                            {!it.is_voided &&
+                                                invoice.status !==
+                                                "finalized" && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() =>
+                                                            handleVoidLine(it)
+                                                        }
+                                                        className="text-[11px] text-red-600 hover:underline"
+                                                    >
+                                                        Void
+                                                    </button>
+                                                )}
                                             {it.is_voided && (
-                                                <span className="text-[11px] text-red-500">Voided</span>
+                                                <span className="text-[11px] text-red-500">
+                                                    Voided
+                                                </span>
                                             )}
                                         </td>
                                     </tr>
@@ -736,7 +1031,9 @@ export default function BillingInvoicePage({
                             <div className="grid grid-cols-1 md:grid-cols-[2fr,0.5fr,0.5fr,0.5fr,auto] gap-2">
                                 <input
                                     value={manualDesc}
-                                    onChange={(e) => setManualDesc(e.target.value)}
+                                    onChange={(e) =>
+                                        setManualDesc(e.target.value)
+                                    }
                                     placeholder="Description (e.g., Dressing charges)"
                                     className="border rounded-md px-2 py-1 text-sm"
                                 />
@@ -744,7 +1041,9 @@ export default function BillingInvoicePage({
                                     type="number"
                                     min="1"
                                     value={manualQty}
-                                    onChange={(e) => setManualQty(e.target.value)}
+                                    onChange={(e) =>
+                                        setManualQty(e.target.value)
+                                    }
                                     placeholder="Qty"
                                     className="border rounded-md px-2 py-1 text-sm"
                                 />
@@ -752,7 +1051,9 @@ export default function BillingInvoicePage({
                                     type="number"
                                     step="0.01"
                                     value={manualPrice}
-                                    onChange={(e) => setManualPrice(e.target.value)}
+                                    onChange={(e) =>
+                                        setManualPrice(e.target.value)
+                                    }
                                     placeholder="Unit Price"
                                     className="border rounded-md px-2 py-1 text-sm"
                                 />
@@ -760,7 +1061,9 @@ export default function BillingInvoicePage({
                                     type="number"
                                     step="0.1"
                                     value={manualTax}
-                                    onChange={(e) => setManualTax(e.target.value)}
+                                    onChange={(e) =>
+                                        setManualTax(e.target.value)
+                                    }
                                     placeholder="GST%"
                                     className="border rounded-md px-2 py-1 text-sm"
                                 />
@@ -782,27 +1085,39 @@ export default function BillingInvoicePage({
                             <div className="grid grid-cols-1 md:grid-cols-[1fr,1fr,2fr,0.7fr,0.7fr,auto] gap-2">
                                 <select
                                     value={serviceType}
-                                    onChange={(e) => setServiceType(e.target.value)}
+                                    onChange={(e) =>
+                                        setServiceType(e.target.value)
+                                    }
                                     className="border rounded-md px-2 py-1 text-sm"
                                 >
                                     <option value="lab">Lab</option>
-                                    <option value="radiology">Radiology</option>
+                                    <option value="radiology">
+                                        Radiology
+                                    </option>
                                     <option value="opd">OPD</option>
                                     <option value="ipd">IPD</option>
-                                    <option value="pharmacy">Pharmacy</option>
+                                    <option value="pharmacy">
+                                        Pharmacy
+                                    </option>
                                     <option value="ot">OT</option>
-                                    <option value="manual">Manual (with ref)</option>
+                                    <option value="manual">
+                                        Manual (with ref)
+                                    </option>
                                     <option value="other">Other</option>
                                 </select>
                                 <input
                                     value={serviceRefId}
-                                    onChange={(e) => setServiceRefId(e.target.value)}
+                                    onChange={(e) =>
+                                        setServiceRefId(e.target.value)
+                                    }
                                     placeholder="Service Ref ID"
                                     className="border rounded-md px-2 py-1 text-sm"
                                 />
                                 <input
                                     value={serviceDesc}
-                                    onChange={(e) => setServiceDesc(e.target.value)}
+                                    onChange={(e) =>
+                                        setServiceDesc(e.target.value)
+                                    }
                                     placeholder="Description (optional)"
                                     className="border rounded-md px-2 py-1 text-sm"
                                 />
@@ -810,7 +1125,9 @@ export default function BillingInvoicePage({
                                     type="number"
                                     step="0.01"
                                     value={servicePrice}
-                                    onChange={(e) => setServicePrice(e.target.value)}
+                                    onChange={(e) =>
+                                        setServicePrice(e.target.value)
+                                    }
                                     placeholder="Price"
                                     className="border rounded-md px-2 py-1 text-sm"
                                 />
@@ -818,7 +1135,9 @@ export default function BillingInvoicePage({
                                     type="number"
                                     step="0.1"
                                     value={serviceTax}
-                                    onChange={(e) => setServiceTax(e.target.value)}
+                                    onChange={(e) =>
+                                        setServiceTax(e.target.value)
+                                    }
                                     placeholder="GST%"
                                     className="border rounded-md px-2 py-1 text-sm"
                                 />
@@ -851,10 +1170,18 @@ export default function BillingInvoicePage({
                         <table className="w-full text-xs border-t">
                             <thead className="bg-gray-50">
                                 <tr>
-                                    <th className="px-2 py-1 text-left">Mode</th>
-                                    <th className="px-2 py-1 text-left">Ref</th>
-                                    <th className="px-2 py-1 text-right">Amount</th>
-                                    <th className="px-2 py-1 text-right">Actions</th>
+                                    <th className="px-2 py-1 text-left">
+                                        Mode
+                                    </th>
+                                    <th className="px-2 py-1 text-left">
+                                        Ref
+                                    </th>
+                                    <th className="px-2 py-1 text-right">
+                                        Amount
+                                    </th>
+                                    <th className="px-2 py-1 text-right">
+                                        Actions
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -870,15 +1197,23 @@ export default function BillingInvoicePage({
                                 )}
                                 {invoice.payments.map((p) => (
                                     <tr key={p.id}>
-                                        <td className="px-2 py-1">{p.mode}</td>
-                                        <td className="px-2 py-1">{p.reference_no || "—"}</td>
+                                        <td className="px-2 py-1">
+                                            {p.mode}
+                                        </td>
+                                        <td className="px-2 py-1">
+                                            {p.reference_no || "—"}
+                                        </td>
                                         <td className="px-2 py-1 text-right">
-                                            {Number(p.amount || 0).toFixed(2)}
+                                            {Number(
+                                                p.amount || 0
+                                            ).toFixed(2)}
                                         </td>
                                         <td className="px-2 py-1 text-right">
                                             <button
                                                 type="button"
-                                                onClick={() => handleDeletePayment(p)}
+                                                onClick={() =>
+                                                    handleDeletePayment(p)
+                                                }
                                                 className="text-[11px] text-red-600 hover:underline"
                                             >
                                                 Delete
@@ -897,7 +1232,9 @@ export default function BillingInvoicePage({
                             <div className="grid grid-cols-1 md:grid-cols-[1fr,1fr,2fr,auto] gap-2">
                                 <select
                                     value={payMode}
-                                    onChange={(e) => setPayMode(e.target.value)}
+                                    onChange={(e) =>
+                                        setPayMode(e.target.value)
+                                    }
                                     className="border rounded-md px-2 py-1 text-sm"
                                 >
                                     {PAYMENT_MODES.map((m) => (
@@ -910,13 +1247,17 @@ export default function BillingInvoicePage({
                                     type="number"
                                     step="0.01"
                                     value={payAmount}
-                                    onChange={(e) => setPayAmount(e.target.value)}
+                                    onChange={(e) =>
+                                        setPayAmount(e.target.value)
+                                    }
                                     placeholder="Amount"
                                     className="border rounded-md px-2 py-1 text-sm"
                                 />
                                 <input
                                     value={payRef}
-                                    onChange={(e) => setPayRef(e.target.value)}
+                                    onChange={(e) =>
+                                        setPayRef(e.target.value)
+                                    }
                                     placeholder="Reference (optional)"
                                     className="border rounded-md px-2 py-1 text-sm"
                                 />
@@ -963,17 +1304,41 @@ export default function BillingInvoicePage({
                                         >
                                             <div>
                                                 <div className="font-semibold">
-                                                    ADV #{a.id} – {a.mode.toUpperCase()}
+                                                    ADV #{a.id} –{" "}
+                                                    {a.mode.toUpperCase()}
                                                 </div>
                                                 <div className="text-gray-600">
-                                                    Amount: {Number(a.amount || 0).toFixed(2)} | Balance:{" "}
-                                                    {Number(a.balance_remaining || 0).toFixed(2)}
+                                                    Amount:{" "}
+                                                    {Number(
+                                                        a.amount || 0
+                                                    ).toFixed(2)}{" "}
+                                                    | Balance:{" "}
+                                                    {Number(
+                                                        a.balance_remaining ||
+                                                        0
+                                                    ).toFixed(2)}
                                                 </div>
                                             </div>
                                         </div>
                                     ))}
                             </div>
                         </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Simple toast */}
+            {toast && (
+                <div className="fixed bottom-4 right-4 z-40">
+                    <div
+                        className={`max-w-xs rounded-lg px-3 py-2 text-xs shadow-lg ${toast.type === "success"
+                                ? "bg-emerald-600 text-white"
+                                : toast.type === "error"
+                                    ? "bg-red-600 text-white"
+                                    : "bg-slate-800 text-white"
+                            }`}
+                    >
+                        {toast.message}
                     </div>
                 </div>
             )}
