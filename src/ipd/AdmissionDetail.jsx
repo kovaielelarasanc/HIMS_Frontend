@@ -13,6 +13,9 @@ import {
 // Common components
 import WardRoomBedPicker from './components/WardRoomBedPicker'
 
+// Quick Orders (NEW)
+import QuickOrders from '../components/QuickOrders'
+
 // Tabs (existing)
 import Nursing from './tabs/Nursing'
 import Vitals from './tabs/Vitals'
@@ -265,6 +268,10 @@ export default function AdmissionDetail() {
         admission.current_bed_id &&
         beds.find((b) => b.id === admission.current_bed_id)
 
+    // try common IP number fields; safe fallback null
+    const ipNumber = admission.ip_number || admission.ipNo || null
+    const bedLabel = currentBed?.code || null
+
     const Header = () => (
         <div className="grid gap-3 rounded-2xl border bg-white p-3 text-xs text-slate-800 md:grid-cols-4 md:p-4">
             <div>
@@ -371,6 +378,16 @@ export default function AdmissionDetail() {
 
             {/* Header cards */}
             <Header />
+
+            {/* 🔹 Quick Orders for this IPD admission */}
+            <QuickOrders
+                patient={patient}
+                contextType="ipd"
+                contextId={admission.id}
+                ipNumber={ipNumber}
+                bedLabel={bedLabel}
+            // currentUser + defaultLocationId are optional; can be wired later
+            />
 
             {/* Tabs */}
             <div className="rounded-2xl border bg-white shadow-sm">

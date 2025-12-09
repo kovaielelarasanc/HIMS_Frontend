@@ -7,7 +7,6 @@ import {
     openOtCaseFromSchedule,
     listOtProcedures,
     closeOtCase,
-    
 } from '../api/ot'
 import { useCan } from '../hooks/useCan'
 import {
@@ -109,9 +108,20 @@ function BedFilterPanel({ selectedBedId, onSelectBed }) {
                 />
                 <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-600">
                     {selectedBedId ? (
-                        <>Showing cases for <span className="font-semibold">Bed #{selectedBedId}</span>.</>
+                        <>
+                            Showing cases for{' '}
+                            <span className="font-semibold">
+                                Bed #{selectedBedId}
+                            </span>.
+                        </>
                     ) : (
-                        <>No specific bed selected – showing <span className="font-semibold">all OT beds</span> for this day.</>
+                        <>
+                            No specific bed selected – showing{' '}
+                            <span className="font-semibold">
+                                all OT beds
+                            </span>{' '}
+                            for this day.
+                        </>
                     )}
                 </div>
             </div>
@@ -247,6 +257,20 @@ function ScheduleTable({
                                     (l) => !l.is_primary,
                                 ).length
 
+                                // 🛏️ Build OT location label from ward / room / bed
+                                const wardName = s.bed?.room?.ward?.name
+                                const roomNumber = s.bed?.room?.number
+                                const bedCode = s.bed?.code
+                                const locationLabel = s.bed_id
+                                    ? [
+                                        wardName && `Ward: ${wardName}`,
+                                        roomNumber && `Room: ${roomNumber}`,
+                                        bedCode && `Bed: ${bedCode}`,
+                                    ]
+                                        .filter(Boolean)
+                                        .join(' • ') || `Bed #${s.bed_id}`
+                                    : 'No bed assigned'
+
                                 return (
                                     <tr
                                         key={s.id}
@@ -260,16 +284,11 @@ function ScheduleTable({
                                                 </span>
                                             </div>
                                         </td>
+
                                         <td className="px-4 py-2 align-top text-xs text-slate-700">
-                                            {s.bed_id ? (
-                                                <div className="font-medium text-slate-800">
-                                                    Bed #{s.bed_id}
-                                                </div>
-                                            ) : (
-                                                <div className="font-medium text-slate-400">
-                                                    No bed assigned
-                                                </div>
-                                            )}
+                                            <div className="font-medium text-slate-800">
+                                                {locationLabel}
+                                            </div>
                                         </td>
 
                                         <td className="px-4 py-2 align-top text-xs text-slate-700">
@@ -293,6 +312,7 @@ function ScheduleTable({
                                                 </div>
                                             )}
                                         </td>
+
                                         <td className="max-w-xs px-4 py-2 align-top text-xs text-slate-700">
                                             <div className="line-clamp-2 font-medium text-slate-900">
                                                 {primaryProcName || '—'}
@@ -310,6 +330,7 @@ function ScheduleTable({
                                                 )}
                                             </div>
                                         </td>
+
                                         <td className="px-4 py-2 align-top text-xs text-slate-700">
                                             <div className="flex items-center gap-1.5">
                                                 <Stethoscope className="h-3.5 w-3.5 text-slate-400" />
@@ -329,14 +350,17 @@ function ScheduleTable({
                                                     </div>
                                                 )}
                                         </td>
+
                                         <td className="px-4 py-2 align-top">
                                             <PriorityBadge
                                                 priority={s.priority}
                                             />
                                         </td>
+
                                         <td className="px-4 py-2 align-top">
                                             <StatusBadge status={s.status} />
                                         </td>
+
                                         <td className="px-4 py-2 align-top">
                                             <div className="flex flex-wrap items-center justify-end gap-1.5">
                                                 {/* Edit schedule */}
@@ -361,7 +385,7 @@ function ScheduleTable({
                                                     {s.case_id ? 'Details' : 'Open Case'}
                                                 </button>
 
-                                                {/* ✅ Mark Success button – only if case exists, not completed, and handler provided */}
+                                                {/* ✅ Mark Success button – only if case exists and not completed */}
                                                 {onMarkSuccess && s.case_id && s.status !== 'completed' && (
                                                     <button
                                                         type="button"
@@ -375,7 +399,6 @@ function ScheduleTable({
                                                 )}
                                             </div>
                                         </td>
-
                                     </tr>
                                 )
                             })}
@@ -414,7 +437,6 @@ function ScheduleModal({
         side: '',
         priority: 'Elective',
         notes: '',
-        // 🔹 NEW: procedure master linkage
         primary_procedure_id: '',
         additional_procedure_ids: [],
     })
@@ -492,7 +514,7 @@ function ScheduleModal({
         if (!form.planned_start_time) return 'Please enter start time'
         if (!form.procedure_name) return 'Please enter procedure name'
         if (!form.surgeon_user_id) return 'Please select surgeon'
-        // bed is not hard-mandatory, but you can enforce if you want:
+        // Optional: enforce bed selection
         // if (!form.bed_id) return 'Please select bed / OT location'
         return null
     }
@@ -532,13 +554,14 @@ function ScheduleModal({
                     (id) => Number(id),
                 ),
             }
-            console.log(payload, "bed no");
-
+            console.log(payload, 'OT schedule payload')
 
             if (isEdit && editingSchedule?.id) {
                 await updateOtSchedule(editingSchedule.id, payload)
+                toast.success?.('OT schedule updated')
             } else {
                 await createOtSchedule(payload)
+                toast.success?.('OT schedule created')
             }
 
             onSaved?.()
@@ -857,7 +880,12 @@ function ProcedurePicker({ primaryId, additionalIds, onChange }) {
             try {
                 setLoading(true)
                 const res = await listOtProcedures({ limit: 500 })
-                setItems(res.data || [])
+                const list = Array.isArray(res?.data?.items)
+                    ? res.data.items
+                    : Array.isArray(res?.data)
+                        ? res.data
+                        : []
+                setItems(list)
             } catch (err) {
                 console.error('Failed to load OT procedures', err)
             } finally {
@@ -986,7 +1014,7 @@ function ProcedurePicker({ primaryId, additionalIds, onChange }) {
 }
 
 // ---------------------------------------------------------------------
-// Page component (now bed-based, name kept same for routing)
+// Page component (bed-based OT scheduler)
 // ---------------------------------------------------------------------
 
 export default function OtTheatreSchedulePage() {
@@ -1015,7 +1043,7 @@ export default function OtTheatreSchedulePage() {
             setError(null)
             const res = await listOtSchedules({
                 date,
-                bedId: selectedBedId || undefined,   // ✅ use bedId, not bed_id
+                bedId: selectedBedId || undefined, // ✅ backend expects bed_id query as "bed_id" or "bedId" depending on API client mapping
             })
             setSchedules(res.data || [])
         } catch (err) {
@@ -1028,7 +1056,7 @@ export default function OtTheatreSchedulePage() {
 
     const handleOpenCase = async (schedule) => {
         try {
-            // If case already exists -> just go to details
+            // If case already exists -> go to case details
             if (schedule.case_id) {
                 navigate(`/ot/cases/${schedule.case_id}`)
                 return
@@ -1038,7 +1066,6 @@ export default function OtTheatreSchedulePage() {
             const res = await openOtCaseFromSchedule(schedule.id)
             const caseId = res?.data?.id
 
-            // Refresh schedule so row shows case_id & status in_progress
             await loadSchedule()
 
             if (caseId) {
@@ -1048,16 +1075,14 @@ export default function OtTheatreSchedulePage() {
             }
         } catch (err) {
             console.error('Failed to open OT case', err)
-            // Optionally: setError('Failed to open OT case')
+            const apiMsg =
+                err?.response?.data?.detail ||
+                err?.message ||
+                'Failed to open OT case'
+            toast.error?.(apiMsg)
         }
     }
 
-    useEffect(() => {
-        if (canViewSchedule) {
-            loadSchedule()
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [date, selectedBedId, canViewSchedule])
     const handleMarkSuccess = async (schedule) => {
         if (!schedule.case_id) {
             toast.error?.('No OT case opened for this schedule yet.')
@@ -1065,14 +1090,9 @@ export default function OtTheatreSchedulePage() {
         }
 
         try {
-            // Backend will:
-            // - validate actual_start_time
-            // - set outcome
-            // - set actual_end_time = now (if not given)
-            // - set schedule.status = completed
             await closeOtCase(schedule.case_id, {
                 outcome: 'Completed',
-                // actual_end_time: new Date().toISOString(), // optional, backend will default to now
+                // actual_end_time: new Date().toISOString(), // optional
             })
 
             toast.success?.('OT case marked as Completed')
@@ -1100,6 +1120,13 @@ export default function OtTheatreSchedulePage() {
         setEditingSchedule(schedule)
         setModalOpen(true)
     }
+
+    useEffect(() => {
+        if (canViewSchedule) {
+            loadSchedule()
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [date, selectedBedId, canViewSchedule])
 
     if (!canViewSchedule) {
         return (

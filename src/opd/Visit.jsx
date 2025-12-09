@@ -1,11 +1,12 @@
 // FILE: src/opd/Visit.jsx
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { toast } from 'sonner'
 import { fetchVisit, updateVisit, createFollowup } from '../api/opd'
+import QuickOrders from '@/components/QuickOrders'
 // import VisitRxTab from './tabs/VisitRxTab'
 
-export default function Visit() {
+export default function Visit({ currentUser }) {
     const { id } = useParams()
     const visitId = Number(id)
     const [loading, setLoading] = useState(true)
@@ -64,7 +65,7 @@ export default function Visit() {
             toast.success('Visit updated')
             await load()
         } catch {
-            // error toast global
+            // error toast handled globally
         } finally {
             setSaving(false)
         }
@@ -106,6 +107,24 @@ export default function Visit() {
         }
     }
 
+    // 🔹 Build a minimal patient object for QuickOrders using VisitOut fields
+    const quickOrdersPatient = useMemo(() => {
+        if (!data) return null
+        return {
+            id: data.patient_id,
+            full_name: data.patient_name,
+            uhid: data.uhid,
+            // gender / age not present in VisitOut yet → QuickOrders will show "— • —"
+        }
+    }, [data])
+
+    // 🔹 Use episode_id as OP number / reference for now
+    const quickOrdersOpNumber = useMemo(() => {
+        if (!data) return undefined
+        // OP Episode code from backend: OP-YYYYMM-XXXX
+        return data.episode_id
+    }, [data])
+
     if (!visitId) {
         return <div className="p-4 text-sm">Invalid visit ID.</div>
     }
@@ -121,6 +140,17 @@ export default function Visit() {
     return (
         <div className="space-y-4 p-4">
             <h1 className="text-xl font-semibold">OPD Visit</h1>
+
+            {/* 🔥 QUICK ORDERS wired to OPD VisitOut */}
+            <QuickOrders
+                patient={quickOrdersPatient}
+                contextType="opd"
+                contextId={visitId}
+                opNumber={quickOrdersOpNumber}
+                currentUser={currentUser}
+                // VisitOut does not have location_id, so leave undefined
+                defaultLocationId={undefined}
+            />
 
             {/* Header */}
             <div className="rounded-2xl border bg-white p-4 space-y-3 text-sm">
@@ -143,7 +173,7 @@ export default function Visit() {
                 </div>
 
                 {data.current_vitals && (
-                    <div className="rounded-xl border bg-slate-50 px-3 py-2 text-[11px] text-slate-700">
+                    <div className="rounded-2xl border bg-slate-50 px-3 py-2 text-[11px] text-slate-700">
                         <div className="font-semibold mb-1">Latest vitals</div>
                         <div className="flex flex-wrap gap-x-4 gap-y-1">
                             {data.current_vitals.height_cm && (
