@@ -1,6 +1,8 @@
-// FILE: frontend/src/layout/Sidebar.jsx (or wherever your Sidebar is)
+import { View } from 'react-native';
+import { Alert } from 'react-native';
+import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState, useRef } from 'react';
 import { NavLink, useLocation } from 'react-router-dom'
-import { useMemo, useEffect, useState } from 'react'
 import { useAuth } from '../store/authStore'
 import { useUI } from '../store/uiStore'
 import { useBranding } from '../branding/BrandingProvider'
@@ -313,6 +315,20 @@ const GROUPS = [
         key: 'LAB_SERVICE MASTER',
         label: 'LAB_SERVICE MASTER',
         to: '/lab/service/masters',
+        icon: KeyRound,
+        reqAny: ['lab.masters.manage'],
+      },
+      {
+        key: 'LAB ANALYAER STAGING',
+        label: 'LAB ANALYAER STAGING',
+        to: '/lis/analyzer-staging',
+        icon: KeyRound,
+        reqAny: ['lab.masters.manage'],
+      },
+      {
+        key: 'LAB_DEVICE MAPING',
+        label: 'LAB_DEVICE MAPING',
+        to: '/lis/device-mapping',
         icon: KeyRound,
         reqAny: ['lab.masters.manage'],
       },
