@@ -1,8 +1,6 @@
 import { View } from 'react-native';
-import { Alert } from 'react-native';
-import { useEffect, useState } from 'react';
 import { useEffect, useMemo, useState, useRef } from 'react';
-import { NavLink, useLocation } from 'react-router-dom'
+import { useEffect, useState } from 'react';
 import { useAuth } from '../store/authStore'
 import { useUI } from '../store/uiStore'
 import { useBranding } from '../branding/BrandingProvider'
@@ -46,10 +44,12 @@ import {
   Activity,
   BarChart2,
   Scissors,
-
+  TestTube2,
   Settings2,
   CalendarDays,
-
+  Layers,
+  Microscope,
+  Cpu
 } from 'lucide-react'
 
 const defaultPrimary = '#2563eb'
@@ -292,11 +292,14 @@ const GROUPS = [
     label: 'Laboratory',
     icon: FlaskConical,
     items: [
+      // ----------------------------------------------------
+      // 1. Lab Orders & Reporting
+      // ----------------------------------------------------
       {
         key: 'lab-orders',
         label: 'Orders & Reporting',
         to: '/lab/orders',
-        icon: FlaskConical,
+        icon: TestTube2, // Modern order/test icon
         reqAny: [
           'lab.orders.view',
           'lab.orders.create',
@@ -304,35 +307,77 @@ const GROUPS = [
           'orders.lab.create',
         ],
       },
+
+     
+
+      // ----------------------------------------------------
+      // 3. Lab Service Master
+      // ----------------------------------------------------
+      {
+        key: 'lab-service-master',
+        label: 'Lab Service Master',
+        to: '/lab/service/masters',
+        icon: Microscope, // Very intuitive for lab tests
+        reqAny: [
+          'lis.masters.services.view',
+          'lis.masters.services.create',
+          'lis.masters.services.update',
+        ],
+      },
+
+      // ----------------------------------------------------
+      // 4. Analyzer Device Mapping
+      // ----------------------------------------------------
+      {
+        key: 'lab-device-mapping',
+        label: 'Analyzer Device Mapping',
+        to: '/lis/device-mapping',
+        icon: Cpu, // Represents machine / analyzer device
+        reqAny: [
+          'lab.devices.view',
+          'lab.devices.manage',
+        ],
+      },
+
+      // ----------------------------------------------------
+      // 5. Analyzer Result Staging
+      // ----------------------------------------------------
+      {
+        key: 'lab-analyzer-staging',
+        label: 'Analyzer Staging',
+        to: '/lis/analyzer-staging',
+        icon: Settings2, // Represents processing / staging
+        reqAny: [
+          'lab.device_results.review',
+          'lab.devices.view',
+        ],
+      },
+
+      // ----------------------------------------------------
+      // 6. Analyzer Logs
+      // ----------------------------------------------------
+      {
+        key: 'lab-device-logs',
+        label: 'Analyzer Logs',
+        to: '/lis/device-logs',
+        icon: History, // Represents logs/history
+        reqAny: [
+          'lab.device_logs.view',
+          'lab.devices.view',
+        ],
+      },
+
+      // ----------------------------------------------------
+      // 7. Lab Master Configurations (Legacy)
+      // ----------------------------------------------------
       {
         key: 'lab-masters',
         label: 'Lab Masters (NABL)',
         to: '/lab/masters',
-        icon: KeyRound,
+        icon: KeyRound, // Perfect for master configuration
         reqAny: ['lab.masters.manage'],
       },
-      {
-        key: 'LAB_SERVICE MASTER',
-        label: 'LAB_SERVICE MASTER',
-        to: '/lab/service/masters',
-        icon: KeyRound,
-        reqAny: ['lab.masters.manage'],
-      },
-      {
-        key: 'LAB ANALYAER STAGING',
-        label: 'LAB ANALYAER STAGING',
-        to: '/lis/analyzer-staging',
-        icon: KeyRound,
-        reqAny: ['lab.masters.manage'],
-      },
-      {
-        key: 'LAB_DEVICE MAPING',
-        label: 'LAB_DEVICE MAPING',
-        to: '/lis/device-mapping',
-        icon: KeyRound,
-        reqAny: ['lab.masters.manage'],
-      },
-    ],
+    ]
   },
 
   // Radiology (RIS)

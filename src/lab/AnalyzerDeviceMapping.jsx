@@ -1,4 +1,3 @@
-
 // FILE: frontend/src/lis/AnalyzerDeviceMapping.jsx
 import { useEffect, useMemo, useState, useCallback } from 'react';
 import API from '../api/client'
@@ -45,8 +44,6 @@ import {
     DialogFooter,
 } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-
-
 
 // Small toast
 function Toast({ kind = 'success', title, message, onClose }) {
@@ -102,12 +99,12 @@ function ActiveToggle({ checked, onChange }) {
             type="button"
             onClick={() => onChange(!checked)}
             className={`relative inline-flex h-6 w-11 items-center rounded-full border transition-colors ${checked
-                ? "bg-emerald-500 border-emerald-500"
-                : "bg-slate-200 border-slate-300"
+                    ? 'bg-emerald-500 border-emerald-500'
+                    : 'bg-slate-200 border-slate-300'
                 }`}
         >
             <span
-                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${checked ? "translate-x-5" : "translate-x-1"
+                className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${checked ? 'translate-x-5' : 'translate-x-1'
                     }`}
             />
         </button>
@@ -147,7 +144,7 @@ function LisTestPicker({ value, onChange }) {
             try {
                 // TODO: adjust to your real test master API
                 // Example: /api/lab/tests?search=...
-                const res = await API.get('/api/lab/tests', {
+                const res = await API.get('/lab/tests', {
                     params: { search: text.trim(), limit: 10 },
                 })
                 setOptions(res.data || [])
@@ -162,7 +159,6 @@ function LisTestPicker({ value, onChange }) {
 
     const selectedLabel = useMemo(() => {
         if (!value) return 'Not mapped'
-        // If you have test in options, show code+name
         const found = options.find((t) => t.id === value)
         if (found) {
             return `${found.code || found.id} – ${found.name || ''}`
@@ -214,7 +210,6 @@ function LisTestPicker({ value, onChange }) {
                     ))}
                 </div>
             )}
-            {/* fallback manual entry if test search API isn't ready */}
             <div className="pt-2 border-t border-dashed border-slate-200 mt-2">
                 <Label className="text-[11px] font-medium text-slate-600">
                     Or manual LIS Test ID
@@ -275,10 +270,12 @@ export default function AnalyzerDeviceMapping() {
             setLoadingDevices(true)
             setError(null)
             try {
-                const res = await API.get('/api/lis/devices')
+                const res = await API.get('/lis/devices')
                 setDevices(res.data || [])
                 if (res.data && res.data.length > 0) {
                     setSelectedDeviceId(res.data[0].id)
+                } else {
+                    setSelectedDeviceId(null)
                 }
             } catch (err) {
                 console.error(err)
@@ -302,7 +299,7 @@ export default function AnalyzerDeviceMapping() {
             setLoadingChannels(true)
             setError(null)
             try {
-                const res = await API.get(`/api/lis/devices/${deviceId}/channels`)
+                const res = await API.get(`/lis/devices/${deviceId}/channels`)
                 setChannels(res.data || [])
             } catch (err) {
                 console.error(err)
@@ -322,6 +319,8 @@ export default function AnalyzerDeviceMapping() {
     useEffect(() => {
         if (selectedDeviceId) {
             loadChannels(selectedDeviceId)
+        } else {
+            setChannels([])
         }
     }, [selectedDeviceId, loadChannels])
 
@@ -351,6 +350,10 @@ export default function AnalyzerDeviceMapping() {
 
     // Open create modal
     const openCreate = () => {
+        if (!selectedDeviceId) {
+            showToast('error', 'No device', 'Please select an analyzer device first.')
+            return
+        }
         setEditingChannel(null)
         setForm({
             external_test_code: '',
@@ -382,8 +385,11 @@ export default function AnalyzerDeviceMapping() {
     }
 
     const handleSave = async () => {
-        if (!selectedDeviceId) return
-        if (!form.external_test_code.trim()) {
+        if (!selectedDeviceId) {
+            showToast('error', 'No device', 'Please select an analyzer device first.')
+            return
+        }
+        if (!form.external_test_code.trim() && !editingChannel) {
             showToast('error', 'Validation', 'External test code is required.')
             return
         }
@@ -391,7 +397,7 @@ export default function AnalyzerDeviceMapping() {
         try {
             if (editingChannel) {
                 // update
-                await API.put(`/api/lis/channels/${editingChannel.id}`, {
+                await API.put(`/lis/channels/${editingChannel.id}`, {
                     external_test_name: form.external_test_name || null,
                     lis_test_id: form.lis_test_id || null,
                     default_unit: form.default_unit || null,
@@ -401,8 +407,8 @@ export default function AnalyzerDeviceMapping() {
                 showToast('success', 'Updated', 'Mapping updated successfully.')
             } else {
                 // create
-                await API.post(`/api/lis/devices/${selectedDeviceId}/channels`, {
-                    device_id: selectedDeviceId, // backend will override from path anyway
+                await API.post(`/lis/devices/${selectedDeviceId}/channels`, {
+                    device_id: selectedDeviceId,
                     external_test_code: form.external_test_code.trim(),
                     external_test_name: form.external_test_name || null,
                     lis_test_id: form.lis_test_id || null,
@@ -430,7 +436,7 @@ export default function AnalyzerDeviceMapping() {
         if (!window.confirm(`Delete mapping ${ch.external_test_code}?`)) return
         setDeletingId(ch.id)
         try {
-            await API.delete(`/api/lis/channels/${ch.id}`)
+            await API.delete(`/lis/channels/${ch.id}`)
             showToast('success', 'Deleted', 'Mapping removed.')
             setChannels((prev) => prev.filter((x) => x.id !== ch.id))
         } catch (err) {
@@ -492,7 +498,7 @@ export default function AnalyzerDeviceMapping() {
                             size="sm"
                             className="gap-1 text-xs font-semibold"
                             onClick={openCreate}
-                            disabled={!selectedDeviceId}
+                            disabled={loadingDevices || devices.length === 0}
                         >
                             <Plus className="w-3.5 h-3.5" />
                             New Mapping
@@ -519,7 +525,10 @@ export default function AnalyzerDeviceMapping() {
                             <div className="flex flex-wrap items-center gap-2 justify-end text-xs">
                                 <Badge variant="outline" className="gap-1 px-2 py-1">
                                     <Beaker className="w-3.5 h-3.5" />
-                                    Device: <span className="font-semibold">{selectedDevice.name}</span>
+                                    Device:{' '}
+                                    <span className="font-semibold">
+                                        {selectedDevice.name}
+                                    </span>
                                 </Badge>
                                 <Badge
                                     variant="outline"
@@ -599,8 +608,8 @@ export default function AnalyzerDeviceMapping() {
                                         variant={activeFilter === f.id ? 'default' : 'outline'}
                                         size="xs"
                                         className={`text-[11px] font-semibold px-2.5 py-1 ${activeFilter === f.id
-                                            ? 'bg-sky-600 hover:bg-sky-700'
-                                            : 'bg-white'
+                                                ? 'bg-sky-600 hover:bg-sky-700'
+                                                : 'bg-white'
                                             }`}
                                         onClick={() => setActiveFilter(f.id)}
                                     >
@@ -980,7 +989,7 @@ export default function AnalyzerDeviceMapping() {
                             </div>
                             <ActiveToggle
                                 checked={form.is_active}
-                                onChange={(v) => handleFormChange("is_active", v)}
+                                onChange={(v) => handleFormChange('is_active', v)}
                             />
                         </div>
                     </div>

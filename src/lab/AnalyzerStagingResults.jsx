@@ -166,7 +166,7 @@ export default function AnalyzerStagingResults() {
       setLoadingDevices(true)
       setError(null)
       try {
-        const res = await API.get('/api/lis/devices')
+        const res = await API.get('/lis/devices')
         setDevices(res.data || [])
         if (res.data && res.data.length > 0) {
           setSelectedDeviceId(res.data[0].id)
@@ -190,7 +190,7 @@ export default function AnalyzerStagingResults() {
       setError(null)
       try {
         const res = await API.get(
-          `/api/lis/devices/${deviceId}/results/staging`,
+          `/lis/devices/${deviceId}/results/staging`,
           {
             params: { limit: 200 },
           }

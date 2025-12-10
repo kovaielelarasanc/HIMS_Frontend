@@ -80,6 +80,8 @@ import OtCaseDetailPage from './ot/OtCaseDetailPage'
 import OtLogsAdmin from './ot/OtLogsAdmin'
 import AnalyzerStagingResults from './lab/AnalyzerStagingResults'
 import AnalyzerDeviceMapping from './lab/AnalyzerDeviceMapping'
+import AnalyzerStatusWidget from './lab/AnalyzerStatusWidget'
+import AnalyzerDeviceLogs from './lab/AnalyzerDeviceLogs'
 
 export default function App() {
     useEffect(() => {
@@ -160,8 +162,9 @@ export default function App() {
                         <Route path="/lab/masters" element={<LabMasters />} />
                         <Route path="/lab/service/masters" element={<LisMasters />} />
                         <Route path="/lab/orders/:id/print" element={<LabReportPrint  />} />
-                        
+
                         <Route path="/lis/analyzer-staging" element={<AnalyzerStagingResults />} />
+                        <Route path="/lis/device-logs" element={<AnalyzerDeviceLogs />} />
                         <Route path="/lis/device-mapping" element={<AnalyzerDeviceMapping />} />
 
 
