@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import {
- 
+
     listOtBloodTransfusions,
     createOtBloodTransfusion,
     updateOtBloodTransfusion,
@@ -12,8 +12,8 @@ import { useCan } from '../../hooks/useCan'
 import {
 
     Droplets,
+    Trash2,
 
-    
 
 } from 'lucide-react'
 

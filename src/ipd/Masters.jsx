@@ -1,6 +1,5 @@
-
 // FILE: src/ipd/Masters.jsx
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react'
 import PermGate from '../components/PermGate'
 import {
     listWards,
@@ -25,7 +24,9 @@ import {
     Loader2,
     Trash2,
     AlertCircle,
+    Filter,
 } from 'lucide-react'
+import { motion } from 'framer-motion'
 
 // ----------------------------------------------
 // CONSTANTS
@@ -47,6 +48,13 @@ const PREDEFINED_ROOM_TYPES = [
     'Emergency / ER',
 ]
 
+// small animation preset
+const fadeIn = {
+    initial: { opacity: 0, y: 6 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: 0.18 },
+}
+
 // ----------------------------------------------
 // ROOT COMPONENT
 // ----------------------------------------------
@@ -54,19 +62,37 @@ const PREDEFINED_ROOM_TYPES = [
 export default function Masters() {
     return (
         <PermGate anyOf={['ipd.masters.manage', 'ipd.packages.manage']}>
-            <div className="min-h-screen bg-slate-50 px-4 py-4 text-black md:px-6 md:py-6 space-y-6">
-                <div className="mx-auto max-w-6xl space-y-1">
-                    <h1 className="text-xl font-semibold tracking-tight text-slate-900">
-                        IPD Masters
-                    </h1>
-                    <p className="text-sm text-slate-600">
-                        Configure wards, rooms, beds and their tariffs. This setup drives
-                        the Admission, Bedboard, Billing and Bed Occupancy workflows for
-                        your hospital.
-                    </p>
-                </div>
+            <div className="min-h-screen bg-slate-50 px-3 py-3 text-black md:px-6 md:py-6">
+                <motion.div
+                    {...fadeIn}
+                    className="mx-auto flex max-w-6xl flex-col gap-2 rounded-2xl border border-slate-200 bg-white/80 px-3 py-3 shadow-sm md:px-4 md:py-4"
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-900 text-slate-50">
+                            <BedDouble className="h-4 w-4" />
+                        </div>
+                        <div className="flex-1">
+                            <h1 className="text-base font-semibold tracking-tight text-slate-900 md:text-lg">
+                                IPD Masters – Wards · Rooms · Beds · Packages
+                            </h1>
+                            <p className="text-[11px] text-slate-600 md:text-xs">
+                                Configure your in-patient structure and tariffs. These
+                                settings drive Admission, Bedboard, Billing and Bed
+                                Occupancy flows.
+                            </p>
+                        </div>
+                        <div className="hidden gap-2 text-[11px] md:flex">
+                            <span className="rounded-full bg-slate-100 px-2 py-1 text-slate-700">
+                                Admin only
+                            </span>
+                            <span className="rounded-full bg-emerald-50 px-2 py-1 text-emerald-700">
+                                Live impact on Billing & IPD
+                            </span>
+                        </div>
+                    </div>
+                </motion.div>
 
-                <div className="mx-auto max-w-6xl space-y-6">
+                <div className="mx-auto mt-4 flex max-w-6xl flex-col gap-5">
                     <WardRoomBed />
                     <BedRates />
                     <Packages />
@@ -87,6 +113,12 @@ function WardRoomBed() {
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
 
+    // small filters for better UX
+    const [bedStateFilter, setBedStateFilter] = useState('all') // all | vacant | occupied | reserved | cleaning
+    const [bedSearch, setBedSearch] = useState('')
+    const [wardSearch, setWardSearch] = useState('')
+    const [roomSearch, setRoomSearch] = useState('')
+
     const load = async () => {
         setLoading(true)
         setError('')
@@ -100,7 +132,10 @@ function WardRoomBed() {
             setRooms(r.data || [])
             setBeds(b.data || [])
         } catch (e) {
-            setError(e?.response?.data?.detail || 'Failed to load ward/room/bed data.')
+            setError(
+                e?.response?.data?.detail ||
+                'Failed to load ward/room/bed data.'
+            )
         } finally {
             setLoading(false)
         }
@@ -120,7 +155,7 @@ function WardRoomBed() {
                         .map((x) => x.trim())
                 )
             ),
-        [rooms]
+        [rooms],
     )
 
     const allRoomTypes = useMemo(
@@ -129,41 +164,89 @@ function WardRoomBed() {
                 new Set([
                     ...PREDEFINED_ROOM_TYPES,
                     ...derivedRoomTypes,
-                ])
+                ]),
             ),
-        [derivedRoomTypes]
+        [derivedRoomTypes],
     )
 
+    // apply filters for beds, wards, rooms (mobile friendly)
+    const filteredWards = useMemo(() => {
+        if (!wardSearch.trim()) return wards
+        const q = wardSearch.toLowerCase()
+        return wards.filter(
+            (w) =>
+                String(w.code || '').toLowerCase().includes(q) ||
+                String(w.name || '').toLowerCase().includes(q) ||
+                String(w.floor || '').toLowerCase().includes(q),
+        )
+    }, [wards, wardSearch])
+
+    const filteredRooms = useMemo(() => {
+        if (!roomSearch.trim()) return rooms
+        const q = roomSearch.toLowerCase()
+        return rooms.filter(
+            (r) =>
+                String(r.number || '').toLowerCase().includes(q) ||
+                String(r.type || '').toLowerCase().includes(q) ||
+                String(r.ward_id || '').toLowerCase().includes(q),
+        )
+    }, [rooms, roomSearch])
+
+    const filteredBeds = useMemo(() => {
+        let res = beds
+        if (bedStateFilter !== 'all') {
+            res = res.filter(
+                (b) =>
+                    String(b.state || '')
+                        .toLowerCase() === bedStateFilter,
+            )
+        }
+        if (bedSearch.trim()) {
+            const q = bedSearch.toLowerCase()
+            res = res.filter(
+                (b) =>
+                    String(b.code || '').toLowerCase().includes(q) ||
+                    String(b.room_id || '').toLowerCase().includes(q),
+            )
+        }
+        return res
+    }, [beds, bedStateFilter, bedSearch])
+
     return (
-        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-5">
-            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                <div className="flex items-center gap-2">
-                    <Building2 className="h-5 w-5 text-slate-500" />
+        <motion.section
+            {...fadeIn}
+            className="space-y-5 rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm"
+        >
+            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div className="flex items-start gap-2">
+                    <div className="mt-0.5 flex h-8 w-8 items-center justify-center rounded-2xl bg-slate-900 text-slate-50">
+                        <Building2 className="h-4 w-4" />
+                    </div>
                     <div>
-                        <h2 className="text-lg font-semibold text-slate-900">
-                            Ward · Room · Bed
+                        <h2 className="text-sm font-semibold text-slate-900 md:text-base">
+                            Wards · Rooms · Beds
                         </h2>
-                        <p className="text-xs text-slate-500">
-                            Define the physical structure of the IPD: wards, room types and
-                            individual beds. Room type drives bed tariffs and reporting.
+                        <p className="text-[11px] text-slate-600 md:text-xs">
+                            Define physical layout of the IPD. Room type drives bed
+                            tariffs, occupancy dashboard and billing logic.
                         </p>
                     </div>
                 </div>
-                <div className="flex flex-wrap gap-1 text-[11px]">
-                    {allRoomTypes.slice(0, 6).map((t) => (
+
+                {/* Quick room-type chips (top-right) */}
+                <div className="flex flex-wrap items-center gap-1 text-[11px]">
+                    {allRoomTypes.slice(0, 5).map((t) => (
                         <RoomTypeChip key={t} type={t} />
                     ))}
-                    {allRoomTypes.length > 6 && (
+                    {allRoomTypes.length > 5 && (
                         <span className="rounded-full bg-slate-100 px-2 py-0.5 text-slate-600">
-                            +{allRoomTypes.length - 6} more types
+                            +{allRoomTypes.length - 5} more
                         </span>
                     )}
                 </div>
             </div>
 
-            {error && (
-                <ErrorBanner message={error} />
-            )}
+            {error && <ErrorBanner message={error} />}
 
             {/* CREATE FORMS */}
             <div className="space-y-3">
@@ -203,7 +286,7 @@ function WardRoomBed() {
 
                 <CreateRow
                     title="New Bed"
-                    description="Add individual beds to rooms. Bed codes should be easy for staff to identify (e.g. GW-101-A)."
+                    description="Add individual beds to rooms. Bed codes should be intuitive (e.g. GW-101-A)."
                     fields={[
                         {
                             name: 'room_id',
@@ -230,11 +313,69 @@ function WardRoomBed() {
                 />
             </div>
 
+            {/* FILTER STRIP FOR LISTS */}
+            <div className="rounded-2xl border border-slate-100 bg-slate-50/70 px-3 py-2 text-[11px] text-slate-700">
+                <div className="flex flex-wrap items-center gap-3">
+                    <div className="inline-flex items-center gap-1 font-medium">
+                        <Filter className="h-3.5 w-3.5" />
+                        Quick filters
+                    </div>
+                    <div className="flex flex-wrap gap-2">
+                        <div className="flex items-center gap-1">
+                            <span className="text-slate-500">Ward:</span>
+                            <input
+                                className="h-7 rounded-full border border-slate-200 bg-white px-2 text-[11px] focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                placeholder="Search code / name…"
+                                value={wardSearch}
+                                onChange={(e) => setWardSearch(e.target.value)}
+                            />
+                        </div>
+                        <div className="flex items-center gap-1">
+                            <span className="text-slate-500">Room:</span>
+                            <input
+                                className="h-7 rounded-full border border-slate-200 bg-white px-2 text-[11px] focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                placeholder="Search number / type…"
+                                value={roomSearch}
+                                onChange={(e) => setRoomSearch(e.target.value)}
+                            />
+                        </div>
+                        <div className="flex flex-wrap items-center gap-1">
+                            <span className="text-slate-500">Beds:</span>
+                            <input
+                                className="h-7 rounded-full border border-slate-200 bg-white px-2 text-[11px] focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                placeholder="Search bed code…"
+                                value={bedSearch}
+                                onChange={(e) => setBedSearch(e.target.value)}
+                            />
+                            <div className="inline-flex rounded-full border border-slate-200 bg-white p-0.5">
+                                {['all', 'vacant', 'occupied', 'reserved'].map(
+                                    (key) => (
+                                        <button
+                                            key={key}
+                                            type="button"
+                                            onClick={() =>
+                                                setBedStateFilter(key)
+                                            }
+                                            className={`px-2.5 py-1 text-[10px] capitalize rounded-full transition ${bedStateFilter === key
+                                                    ? 'bg-slate-900 text-white shadow-sm'
+                                                    : 'text-slate-600 hover:bg-slate-50'
+                                                }`}
+                                        >
+                                            {key}
+                                        </button>
+                                    ),
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             {/* LISTS */}
             <div className="grid gap-6 md:grid-cols-3">
                 <ListCard
                     title="Wards"
-                    items={wards}
+                    items={filteredWards}
                     cols={[
                         ['code', 'Code'],
                         ['name', 'Name'],
@@ -245,35 +386,43 @@ function WardRoomBed() {
 
                 <ListCard
                     title="Rooms"
-                    items={rooms}
+                    items={filteredRooms}
                     cols={[
                         ['ward_id', 'Ward ID'],
                         ['number', 'Room No'],
                         ['type', 'Room Type'],
                     ]}
                     renderValue={(key, val) =>
-                        key === 'type' ? <RoomTypeChip type={val} /> : String(val ?? '—')
+                        key === 'type' ? (
+                            <RoomTypeChip type={val} />
+                        ) : (
+                            String(val ?? '—')
+                        )
                     }
                     onDelete={(id) => deleteRoom(id).then(load)}
                 />
 
                 <ListCard
                     title="Beds"
-                    items={beds}
+                    items={filteredBeds}
                     cols={[
                         ['room_id', 'Room ID'],
                         ['code', 'Bed code'],
                         ['state', 'Status'],
                     ]}
                     renderValue={(key, val) =>
-                        key === 'state' ? <BedStateChip state={val} /> : String(val ?? '—')
+                        key === 'state' ? (
+                            <BedStateChip state={val} />
+                        ) : (
+                            String(val ?? '—')
+                        )
                     }
                     onDelete={(id) => deleteBed(id).then(load)}
                 />
             </div>
 
             {loading && <LoadingBlock />}
-        </section>
+        </motion.section>
     )
 }
 
@@ -336,13 +485,15 @@ function RoomCreateForm({ wards = [], allRoomTypes = [], onCreated }) {
     return (
         <form
             onSubmit={handleSubmit}
-            className="rounded-2xl border border-slate-200 bg-slate-50 p-4 grid gap-3 md:grid-cols-4 text-sm"
+            className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm md:grid-cols-4"
         >
             <div className="md:col-span-4">
-                <div className="text-sm font-medium text-slate-800">New Room</div>
+                <div className="text-sm font-medium text-slate-800">
+                    New Room
+                </div>
                 <p className="mt-0.5 text-[11px] text-slate-500">
-                    Link the room to a ward and assign a room type. Custom room types can
-                    be created on the fly when needed.
+                    Link the room to a ward and assign a room type. You can also
+                    create custom room types for special units.
                 </p>
             </div>
 
@@ -352,7 +503,9 @@ function RoomCreateForm({ wards = [], allRoomTypes = [], onCreated }) {
                 <select
                     className="input rounded-xl"
                     value={form.ward_id}
-                    onChange={(e) => handleChange('ward_id', e.target.value)}
+                    onChange={(e) =>
+                        handleChange('ward_id', e.target.value)
+                    }
                     required
                 >
                     <option value="">Select ward</option>
@@ -371,7 +524,9 @@ function RoomCreateForm({ wards = [], allRoomTypes = [], onCreated }) {
                     className="input rounded-xl"
                     placeholder="e.g. 101"
                     value={form.number}
-                    onChange={(e) => handleChange('number', e.target.value)}
+                    onChange={(e) =>
+                        handleChange('number', e.target.value)
+                    }
                     required
                 />
             </div>
@@ -382,9 +537,13 @@ function RoomCreateForm({ wards = [], allRoomTypes = [], onCreated }) {
                 <select
                     className="input rounded-xl"
                     value={form.typeChoice}
-                    onChange={(e) => handleChange('typeChoice', e.target.value)}
+                    onChange={(e) =>
+                        handleChange('typeChoice', e.target.value)
+                    }
                 >
-                    <option value="">(Optional) Select room type</option>
+                    <option value="">
+                        (Optional) Select room type
+                    </option>
                     {PREDEFINED_ROOM_TYPES.map((t) => (
                         <option key={t} value={t}>
                             {t}
@@ -402,17 +561,18 @@ function RoomCreateForm({ wards = [], allRoomTypes = [], onCreated }) {
 
                 {form.typeChoice === '__custom' && (
                     <input
-                        className="mt-2 input rounded-xl"
+                        className="input mt-2 rounded-xl"
                         placeholder="Enter custom room type (e.g. Chemotherapy Day Care)"
                         value={form.customType}
-                        onChange={(e) => handleChange('customType', e.target.value)}
+                        onChange={(e) =>
+                            handleChange('customType', e.target.value)
+                        }
                     />
                 )}
 
                 <p className="mt-1 text-[11px] text-slate-500">
-                    Standard types include General Ward, Semi-Private, Private, Deluxe,
-                    ICU, NICU, PICU, HDU, Isolation Room and Suite. Use custom type for
-                    special units.
+                    Standard: General, Semi-Private, Private, Deluxe, ICU,
+                    NICU, PICU, HDU, Isolation, Suite, Day Care, etc.
                 </p>
             </div>
 
@@ -425,7 +585,7 @@ function RoomCreateForm({ wards = [], allRoomTypes = [], onCreated }) {
             <div className="md:col-span-4 flex justify-end">
                 <button
                     type="submit"
-                    className="btn min-w-[120px]"
+                    className="btn min-w-[120px] font-semibold"
                     disabled={submitting}
                 >
                     {submitting ? 'Saving…' : 'Save room'}
@@ -445,6 +605,9 @@ function BedRates() {
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
 
+    const [basisFilter, setBasisFilter] = useState('all') // all | daily | hourly
+    const [rateSearch, setRateSearch] = useState('')
+
     const load = async () => {
         setLoading(true)
         setError('')
@@ -456,7 +619,9 @@ function BedRates() {
             setRows(rateResp.data || [])
             setRooms(roomsResp.data || [])
         } catch (e) {
-            setError(e?.response?.data?.detail || 'Failed to load bed rates.')
+            setError(
+                e?.response?.data?.detail || 'Failed to load bed rates.',
+            )
         } finally {
             setLoading(false)
         }
@@ -474,35 +639,106 @@ function BedRates() {
         const fromRates = (rows || [])
             .map((r) => parseRoomType(r.room_type).baseType)
             .filter(Boolean)
-        return Array.from(new Set([...PREDEFINED_ROOM_TYPES, ...fromRooms, ...fromRates]))
+        return Array.from(
+            new Set([
+                ...PREDEFINED_ROOM_TYPES,
+                ...fromRooms,
+                ...fromRates,
+            ]),
+        )
     }, [rooms, rows])
 
+    const filteredRows = useMemo(() => {
+        let res = rows
+        if (basisFilter !== 'all') {
+            res = res.filter((r) => {
+                const parsed = parseRoomType(r.room_type)
+                const b = (parsed.basis || 'Daily').toLowerCase()
+                return b === basisFilter
+            })
+        }
+        if (rateSearch.trim()) {
+            const q = rateSearch.toLowerCase()
+            res = res.filter(
+                (r) =>
+                    String(r.room_type || '')
+                        .toLowerCase()
+                        .includes(q) ||
+                    String(r.daily_rate || '')
+                        .toLowerCase()
+                        .includes(q),
+            )
+        }
+        return res
+    }, [rows, basisFilter, rateSearch])
+
     return (
-        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-5">
+        <motion.section
+            {...fadeIn}
+            className="space-y-5 rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm"
+        >
             <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                 <div className="flex items-center gap-2">
-                    <BedDouble className="h-5 w-5 text-slate-500" />
+                    <div className="flex h-8 w-8 items-center justify-center rounded-2xl bg-slate-900 text-slate-50">
+                        <BedDouble className="h-4 w-4" />
+                    </div>
                     <div>
-                        <h2 className="text-lg font-semibold text-slate-900">
+                        <h2 className="text-sm font-semibold text-slate-900 md:text-base">
                             Bed Rates (Daily & Hourly)
                         </h2>
-                        <p className="text-xs text-slate-500">
-                            Configure bed tariffs for each room type. Support both daily
-                            and hourly tariffs for day care, observation, emergency and
-                            short-stay scenarios.
+                        <p className="text-[11px] text-slate-600 md:text-xs">
+                            Configure bed tariffs for each room type. Supports
+                            daily and hourly tariffs for short-stay and day
+                            care scenarios.
                         </p>
                     </div>
+                </div>
+
+                {/* Filters */}
+                <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                    <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-50 px-2 py-1">
+                        <Filter className="h-3 w-3" />
+                        <span>Tariff basis</span>
+                        <div className="inline-flex rounded-full bg-white p-0.5">
+                            {['all', 'daily', 'hourly'].map((k) => (
+                                <button
+                                    key={k}
+                                    type="button"
+                                    onClick={() =>
+                                        setBasisFilter(k)
+                                    }
+                                    className={`px-2.5 py-1 rounded-full capitalize transition ${basisFilter === k
+                                            ? 'bg-slate-900 text-white shadow-sm'
+                                            : 'text-slate-600 hover:bg-slate-50'
+                                        }`}
+                                >
+                                    {k}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <input
+                        className="h-7 rounded-full border border-slate-200 bg-white px-2 text-[11px] focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                        placeholder="Search room type / tariff…"
+                        value={rateSearch}
+                        onChange={(e) =>
+                            setRateSearch(e.target.value)
+                        }
+                    />
                 </div>
             </div>
 
             {error && <ErrorBanner message={error} />}
 
-            <BedRateCreateForm roomTypeOptions={roomTypeOptions} onCreated={load} />
+            <BedRateCreateForm
+                roomTypeOptions={roomTypeOptions}
+                onCreated={load}
+            />
 
             {/* Bed Rate listing: table on desktop, cards on mobile */}
             <ListCard
                 title="Configured Bed Rates"
-                items={rows}
+                items={filteredRows}
                 cols={[
                     ['room_type', 'Room type'],
                     ['daily_rate', 'Tariff (₹)'],
@@ -515,7 +751,9 @@ function BedRates() {
                         const parsed = parseRoomType(val)
                         return (
                             <div className="flex flex-wrap items-center gap-1">
-                                <RoomTypeChip type={parsed.baseType || val} />
+                                <RoomTypeChip
+                                    type={parsed.baseType || val}
+                                />
                                 <TariffBasisChip basis={parsed.basis} />
                             </div>
                         )
@@ -533,7 +771,7 @@ function BedRates() {
             />
 
             {loading && <LoadingBlock />}
-        </section>
+        </motion.section>
     )
 }
 
@@ -605,23 +843,29 @@ function BedRateCreateForm({ roomTypeOptions = [], onCreated }) {
     return (
         <form
             onSubmit={handleSubmit}
-            className="rounded-2xl border border-slate-200 bg-slate-50 p-4 grid gap-3 md:grid-cols-4 text-sm"
+            className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm md:grid-cols-4"
         >
             <div className="md:col-span-4">
-                <div className="text-sm font-medium text-slate-800">New Bed Rate</div>
+                <div className="text-sm font-medium text-slate-800">
+                    New Bed Rate
+                </div>
                 <p className="mt-0.5 text-[11px] text-slate-500">
-                    Select a room type, choose whether this is a daily or hourly tariff,
-                    and enter the amount and effective dates.
+                    Select room type, choose daily / hourly, and set tariff
+                    with effective dates.
                 </p>
             </div>
 
             {/* Room type dropdown */}
             <div className="space-y-1">
-                <label className="text-xs text-slate-500">Room type</label>
+                <label className="text-xs text-slate-500">
+                    Room type
+                </label>
                 <select
                     className="input rounded-xl"
                     value={form.baseRoomType}
-                    onChange={(e) => handleChange('baseRoomType', e.target.value)}
+                    onChange={(e) =>
+                        handleChange('baseRoomType', e.target.value)
+                    }
                 >
                     <option value="">Select room type…</option>
                     {roomTypeOptions.map((t) => (
@@ -631,19 +875,21 @@ function BedRateCreateForm({ roomTypeOptions = [], onCreated }) {
                     ))}
                 </select>
                 <p className="text-[11px] text-slate-500">
-                    Includes standard types like General Ward, Private, ICU, NICU, PICU,
-                    HDU, Isolation, Suite and Day Care.
+                    Includes standard types – General, Private, ICU, NICU,
+                    HDU, Suite, Day Care, etc.
                 </p>
             </div>
 
             {/* Basis toggle */}
             <div className="space-y-1">
-                <label className="text-xs text-slate-500">Tariff basis</label>
+                <label className="text-xs text-slate-500">
+                    Tariff basis
+                </label>
                 <div className="inline-flex rounded-full border border-slate-200 bg-white p-0.5 text-xs">
                     <button
                         type="button"
                         onClick={() => handleChange('basis', 'daily')}
-                        className={`px-3 py-1.5 rounded-full transition ${form.basis === 'daily'
+                        className={`rounded-full px-3 py-1.5 transition ${form.basis === 'daily'
                                 ? 'bg-slate-900 text-white shadow-sm'
                                 : 'text-slate-600 hover:bg-slate-50'
                             }`}
@@ -653,7 +899,7 @@ function BedRateCreateForm({ roomTypeOptions = [], onCreated }) {
                     <button
                         type="button"
                         onClick={() => handleChange('basis', 'hourly')}
-                        className={`px-3 py-1.5 rounded-full transition ${form.basis === 'hourly'
+                        className={`rounded-full px-3 py-1.5 transition ${form.basis === 'hourly'
                                 ? 'bg-slate-900 text-white shadow-sm'
                                 : 'text-slate-600 hover:bg-slate-50'
                             }`}
@@ -675,34 +921,43 @@ function BedRateCreateForm({ roomTypeOptions = [], onCreated }) {
                     className="input rounded-xl"
                     placeholder="e.g. 2500"
                     value={form.amount}
-                    onChange={(e) => handleChange('amount', e.target.value)}
+                    onChange={(e) =>
+                        handleChange('amount', e.target.value)
+                    }
                 />
                 <p className="text-[11px] text-slate-500">
-                    Base amount charged based on the selected tariff basis.
+                    Base amount charged as per selected basis.
                 </p>
             </div>
 
             {/* Effective from */}
             <div className="space-y-1">
-                <label className="text-xs text-slate-500">Effective from</label>
+                <label className="text-xs text-slate-500">
+                    Effective from
+                </label>
                 <input
                     type="date"
                     className="input rounded-xl"
                     value={form.effective_from}
-                    onChange={(e) => handleChange('effective_from', e.target.value)}
+                    onChange={(e) =>
+                        handleChange('effective_from', e.target.value)
+                    }
                 />
             </div>
 
             {/* Effective to */}
             <div className="space-y-1">
                 <label className="text-xs text-slate-500">
-                    Effective to <span className="text-slate-400">(optional)</span>
+                    Effective to{' '}
+                    <span className="text-slate-400">(optional)</span>
                 </label>
                 <input
                     type="date"
                     className="input rounded-xl"
                     value={form.effective_to}
-                    onChange={(e) => handleChange('effective_to', e.target.value)}
+                    onChange={(e) =>
+                        handleChange('effective_to', e.target.value)
+                    }
                 />
             </div>
 
@@ -715,7 +970,7 @@ function BedRateCreateForm({ roomTypeOptions = [], onCreated }) {
             <div className="md:col-span-4 flex justify-end">
                 <button
                     type="submit"
-                    className="btn min-w-[140px]"
+                    className="btn min-w-[140px] font-semibold"
                     disabled={submitting}
                 >
                     {submitting ? 'Saving…' : 'Save bed rate'}
@@ -745,13 +1000,14 @@ function parseRoomType(raw) {
 }
 
 // ----------------------------------------------
-// PACKAGES (left simple, just UX-polished)
+// PACKAGES ( UX-polished )
 // ----------------------------------------------
 
 function Packages() {
     const [rows, setRows] = useState([])
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')
+    const [search, setSearch] = useState('')
 
     const load = async () => {
         setLoading(true)
@@ -760,7 +1016,9 @@ function Packages() {
             const { data } = await listPackages()
             setRows(data || [])
         } catch (e) {
-            setError(e?.response?.data?.detail || 'Failed to load packages.')
+            setError(
+                e?.response?.data?.detail || 'Failed to load packages.',
+            )
         } finally {
             setLoading(false)
         }
@@ -770,14 +1028,40 @@ function Packages() {
         load()
     }, [])
 
+    const filtered = useMemo(() => {
+        if (!search.trim()) return rows
+        const q = search.toLowerCase()
+        return rows.filter((p) =>
+            String(p.name || '').toLowerCase().includes(q),
+        )
+    }, [rows, search])
+
     return (
-        <section className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-5">
-            <div>
-                <h2 className="text-lg font-semibold text-slate-900">Packages</h2>
-                <p className="text-xs text-slate-500">
-                    Define IPD packages like Normal Delivery, LSCS, Medical Management
-                    with inclusive and exclusive items and package charges.
-                </p>
+        <motion.section
+            {...fadeIn}
+            className="space-y-5 rounded-2xl border border-slate-200 bg-white/90 p-4 shadow-sm"
+        >
+            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                <div>
+                    <h2 className="text-sm font-semibold text-slate-900 md:text-base">
+                        IPD Packages
+                    </h2>
+                    <p className="text-[11px] text-slate-600 md:text-xs">
+                        Define packages such as Normal Delivery, LSCS,
+                        Medical Management, etc., with inclusions and
+                        exclusions.
+                    </p>
+                </div>
+
+                <div className="flex items-center gap-2 text-[11px]">
+                    <Filter className="h-3.5 w-3.5 text-slate-500" />
+                    <input
+                        className="h-7 rounded-full border border-slate-200 bg-white px-2 text-[11px] focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                        placeholder="Search package…"
+                        value={search}
+                        onChange={(e) => setSearch(e.target.value)}
+                    />
+                </div>
             </div>
 
             {error && <ErrorBanner message={error} />}
@@ -786,10 +1070,30 @@ function Packages() {
                 title="New Package"
                 description="Create a new IPD package with overall charges and inclusions/exclusions."
                 fields={[
-                    { name: 'name', label: 'Package name', placeholder: 'e.g. Normal Delivery', required: true },
-                    { name: 'included', label: 'Included', placeholder: 'e.g. bed, nursing, OT, routine labs' },
-                    { name: 'excluded', label: 'Excluded', placeholder: 'e.g. blood, implants, high-value drugs' },
-                    { name: 'charges', label: 'Package charges (₹)', placeholder: 'e.g. 25000', type: 'number' },
+                    {
+                        name: 'name',
+                        label: 'Package name',
+                        placeholder: 'e.g. Normal Delivery',
+                        required: true,
+                    },
+                    {
+                        name: 'included',
+                        label: 'Included',
+                        placeholder:
+                            'e.g. bed, nursing, OT, routine labs',
+                    },
+                    {
+                        name: 'excluded',
+                        label: 'Excluded',
+                        placeholder:
+                            'e.g. blood, implants, high-value drugs',
+                    },
+                    {
+                        name: 'charges',
+                        label: 'Package charges (₹)',
+                        placeholder: 'e.g. 25000',
+                        type: 'number',
+                    },
                 ]}
                 onSubmit={async (f) => {
                     await createPackage(f)
@@ -799,7 +1103,7 @@ function Packages() {
 
             <ListCard
                 title="Package List"
-                items={rows}
+                items={filtered}
                 cols={[
                     ['name', 'Name'],
                     ['charges', 'Charges'],
@@ -810,7 +1114,7 @@ function Packages() {
             />
 
             {loading && <LoadingBlock />}
-        </section>
+        </motion.section>
     )
 }
 
@@ -842,7 +1146,7 @@ function CreateRow({ title, description, fields, onSubmit }) {
         try {
             const payload = { ...f }
             Object.keys(payload).forEach(
-                (k) => payload[k] === '' && delete payload[k]
+                (k) => payload[k] === '' && delete payload[k],
             )
             await onSubmit(payload)
             setF({})
@@ -854,12 +1158,16 @@ function CreateRow({ title, description, fields, onSubmit }) {
     return (
         <form
             onSubmit={submit}
-            className="rounded-2xl border border-slate-200 bg-slate-50 p-4 grid gap-3 md:grid-cols-4 text-sm"
+            className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 text-sm md:grid-cols-4"
         >
             <div className="md:col-span-4 space-y-1">
-                <div className="text-sm font-medium text-slate-800">{title}</div>
+                <div className="text-sm font-medium text-slate-800">
+                    {title}
+                </div>
                 {description && (
-                    <p className="text-[11px] text-slate-500">{description}</p>
+                    <p className="text-[11px] text-slate-500">
+                        {description}
+                    </p>
                 )}
             </div>
             {fields.map((fld) => (
@@ -873,14 +1181,22 @@ function CreateRow({ title, description, fields, onSubmit }) {
                         <select
                             className="input rounded-xl"
                             value={f[fld.name] || ''}
-                            onChange={(e) => handleChange(fld.name, e.target.value)}
+                            onChange={(e) =>
+                                handleChange(
+                                    fld.name,
+                                    e.target.value,
+                                )
+                            }
                             required={fld.required}
                         >
                             <option value="">
                                 {fld.placeholder || 'Select'}
                             </option>
                             {fld.options?.map((o) => (
-                                <option key={o.value} value={o.value}>
+                                <option
+                                    key={o.value}
+                                    value={o.value}
+                                >
                                     {o.label}
                                 </option>
                             ))}
@@ -889,9 +1205,16 @@ function CreateRow({ title, description, fields, onSubmit }) {
                         <input
                             className="input rounded-xl"
                             type={fld.type || 'text'}
-                            placeholder={fld.placeholder || fld.name}
+                            placeholder={
+                                fld.placeholder || fld.name
+                            }
                             value={f[fld.name] || ''}
-                            onChange={(e) => handleChange(fld.name, e.target.value)}
+                            onChange={(e) =>
+                                handleChange(
+                                    fld.name,
+                                    e.target.value,
+                                )
+                            }
                             required={fld.required}
                         />
                     )}
@@ -900,7 +1223,7 @@ function CreateRow({ title, description, fields, onSubmit }) {
             <div className="md:col-span-4 flex justify-end pt-1">
                 <button
                     type="submit"
-                    className="btn min-w-[100px]"
+                    className="btn min-w-[100px] font-semibold"
                     disabled={submitting}
                 >
                     {submitting ? 'Saving…' : 'Save'}
@@ -915,16 +1238,21 @@ function ListCard({ title, items = [], cols = [], onDelete, renderValue }) {
     return (
         <div className="space-y-2">
             <div className="flex items-center justify-between">
-                <h3 className="text-sm font-semibold text-slate-800">{title}</h3>
+                <h3 className="text-sm font-semibold text-slate-800">
+                    {title}
+                </h3>
             </div>
 
             {/* Desktop: table */}
-            <div className="hidden md:block rounded-xl border border-slate-200 overflow-hidden">
+            <div className="hidden overflow-hidden rounded-xl border border-slate-200 md:block">
                 <table className="w-full text-sm">
                     <thead>
                         <tr className="bg-slate-50 text-xs text-slate-500">
                             {cols.map(([k, label]) => (
-                                <th key={k} className="px-3 py-2 text-left font-medium">
+                                <th
+                                    key={k}
+                                    className="px-3 py-2 text-left font-medium"
+                                >
                                     {label || k}
                                 </th>
                             ))}
@@ -933,19 +1261,34 @@ function ListCard({ title, items = [], cols = [], onDelete, renderValue }) {
                     </thead>
                     <tbody>
                         {items.map((it) => (
-                            <tr key={it.id} className="border-t hover:bg-slate-50">
+                            <tr
+                                key={it.id}
+                                className="border-t hover:bg-slate-50"
+                            >
                                 {cols.map(([k]) => (
-                                    <td key={k} className="px-3 py-2 align-middle">
+                                    <td
+                                        key={k}
+                                        className="px-3 py-2 align-middle"
+                                    >
                                         {renderValue
-                                            ? renderValue(k, it[k], it)
-                                            : String(it[k] ?? '—')}
+                                            ? renderValue(
+                                                k,
+                                                it[k],
+                                                it,
+                                            )
+                                            : String(
+                                                it[k] ??
+                                                '—',
+                                            )}
                                     </td>
                                 ))}
                                 <td className="px-3 py-2 text-right">
                                     <button
                                         type="button"
                                         className="inline-flex items-center gap-1 rounded-full bg-rose-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-rose-700"
-                                        onClick={() => onDelete(it.id)}
+                                        onClick={() =>
+                                            onDelete(it.id)
+                                        }
                                     >
                                         <Trash2 className="h-4 w-4" />
                                         Delete
@@ -972,14 +1315,22 @@ function ListCard({ title, items = [], cols = [], onDelete, renderValue }) {
                 {items.map((it) => (
                     <div
                         key={it.id}
-                        className="rounded-xl border border-slate-200 bg-white p-3 shadow-sm space-y-2"
+                        className="space-y-2 rounded-xl border border-slate-200 bg-white p-3 shadow-sm"
                     >
                         {cols.map(([k, label]) => (
                             <div key={k} className="text-xs">
-                                <span className="text-slate-500">{label || k}: </span>
-                                {renderValue
-                                    ? renderValue(k, it[k], it)
-                                    : <span className="text-slate-900">{String(it[k] ?? '—')}</span>}
+                                <span className="text-slate-500">
+                                    {label || k}:{' '}
+                                </span>
+                                {renderValue ? (
+                                    renderValue(k, it[k], it)
+                                ) : (
+                                    <span className="text-slate-900">
+                                        {String(
+                                            it[k] ?? '—',
+                                        )}
+                                    </span>
+                                )}
                             </div>
                         ))}
                         <div className="pt-1">
@@ -1008,7 +1359,7 @@ function ListCard({ title, items = [], cols = [], onDelete, renderValue }) {
 function RoomTypeChip({ type }) {
     if (!type) return null
     return (
-        <span className="inline-flex items-center rounded-full bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-700 border border-sky-200">
+        <span className="inline-flex items-center rounded-full border border-sky-200 bg-sky-50 px-2 py-0.5 text-[11px] font-medium text-sky-700">
             {type}
         </span>
     )
@@ -1018,15 +1369,14 @@ function RoomTypeChip({ type }) {
 function BedStateChip({ state }) {
     if (!state) {
         return (
-            <span className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600 border border-slate-200">
+            <span className="inline-flex items-center rounded-full border border-slate-200 bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">
                 Unknown
             </span>
         )
     }
 
     const s = String(state).toLowerCase()
-    let cls =
-        'bg-slate-100 text-slate-700 border-slate-200'
+    let cls = 'bg-slate-100 text-slate-700 border-slate-200'
     if (s === 'vacant' || s === 'available') {
         cls = 'bg-emerald-50 text-emerald-700 border-emerald-200'
     } else if (s === 'occupied') {
@@ -1063,7 +1413,7 @@ function TariffBasisChip({ basis }) {
 // Loading helper
 function LoadingBlock() {
     return (
-        <div className="flex items-center gap-2 text-xs text-slate-500 pt-1">
+        <div className="flex items-center gap-2 pt-1 text-xs text-slate-500">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading…
         </div>

@@ -6,29 +6,28 @@ import {
     updatePreOpChecklist,
 } from '../../api/ot'
 import { useCan } from '../../hooks/useCan'
-import { ClipboardCheck } from 'lucide-react'
+import { ClipboardCheck, CheckCircle2, AlertCircle } from 'lucide-react'
+import { motion, AnimatePresence } from 'framer-motion'
 
 // ----------------- CONFIG -----------------
 
 const CHECKLIST_ITEMS = [
-    // These are the paper-form rows; some will be mapped to backend fields,
-    // others are only UI for now.
     { key: 'allergy', label: 'Allergy' },
-    { key: 'consent_form_signed', label: 'Consent form signed' },               // -> consent_checked
+    { key: 'consent_form_signed', label: 'Consent form signed' },
     { key: 'written_high_risk_signed', label: 'Written high risk form signed' },
-    { key: 'identity_bands_checked', label: 'Identity bands checked' },        // -> patient_identity_confirmed
-    { key: 'npo', label: 'Nill per mouth (NPO)' },                             // comment <- fasting_status
+    { key: 'identity_bands_checked', label: 'Identity bands checked' },
+    { key: 'npo', label: 'Nill per mouth (NPO)' },
     { key: 'pre_medication_given', label: 'Pre-medication given' },
     { key: 'test_dose_given', label: 'Test dose given' },
     { key: 'bowel_preparation', label: 'Bowel preparation' },
     { key: 'bladder_empty_time', label: 'Bladder empty time' },
     { key: 'serology_results', label: 'Serology results' },
     { key: 'blood_grouping', label: 'Blood grouping' },
-    { key: 'blood_reservation', label: 'Blood reservation' },                  // -> blood_products_arranged
+    { key: 'blood_reservation', label: 'Blood reservation' },
     {
         key: 'patient_files_with_records',
         label: 'Patient IP/OP files, ECG / X-ray with old records',
-    },                                                                         // -> investigations_checked
+    },
     {
         key: 'pre_anaesthetic_evaluation',
         label: 'Pre-anaesthetic evaluation',
@@ -78,14 +77,14 @@ const DEFAULT_FORM = () => ({
     nurse_signature: '',
 })
 
-// --- NEW: hydrate based on your REAL backend structure ----
+// --- hydrate from backend ----
 const hydrateForm = (incoming) => {
     const base = DEFAULT_FORM()
     if (!incoming || typeof incoming !== 'object') return base
 
     const form = { ...base }
 
-    // 1) Use checklist from backend if present (all rows, both columns)
+    // 1) checklist from backend if present
     if (incoming.checklist && typeof incoming.checklist === 'object') {
         form.checklist = {
             ...base.checklist,
@@ -93,7 +92,7 @@ const hydrateForm = (incoming) => {
         }
     }
 
-    // 2) Map summary booleans into checklist (fallback / sync)
+    // 2) summary booleans into checklist
     if ('patient_identity_confirmed' in incoming) {
         form.checklist.identity_bands_checked = {
             ...form.checklist.identity_bands_checked,
@@ -131,7 +130,7 @@ const hydrateForm = (incoming) => {
         }
     }
 
-    // 3) Comments from text fields
+    // 3) comments mapping
     if (incoming.fasting_status) {
         form.checklist.npo = {
             ...form.checklist.npo,
@@ -151,7 +150,7 @@ const hydrateForm = (incoming) => {
         }
     }
 
-    // 4) Investigations / vitals / extras
+    // 4) investigations / vitals / extras
     if (incoming.investigations) {
         form.investigations = {
             ...base.investigations,
@@ -173,7 +172,6 @@ const hydrateForm = (incoming) => {
 
     return form
 }
-
 
 // ----------------- COMPONENT -----------------
 
@@ -197,7 +195,6 @@ function PreopTab({ caseId }) {
             setLoading(true)
             setError(null)
 
-            // IMPORTANT: getPreOpChecklist should return plain JSON (not axios response)
             const rec = await getPreOpChecklist(caseId)
             console.log('[PreOp] loaded record', rec)
 
@@ -207,7 +204,6 @@ function PreopTab({ caseId }) {
                 return
             }
 
-            // For now, backend shape IS the payload
             setRecord(rec)
             setForm(hydrateForm(rec))
         } catch (err) {
@@ -278,18 +274,12 @@ function PreopTab({ caseId }) {
 
         try {
             const payload = {
-                // 🔹 full checklist JSON (all rows, both columns, comments)
                 checklist: form.checklist,
-
-                // 🔹 investigations & vitals
                 investigations: { ...form.investigations },
                 vitals: { ...form.vitals },
-
-                // 🔹 extras
                 shave_completed: form.shave_completed,
                 nurse_signature: form.nurse_signature || null,
 
-                // 🔹 summary flags (kept for reporting / filters)
                 patient_identity_confirmed:
                     !!form.checklist.identity_bands_checked.handover,
                 consent_checked:
@@ -309,7 +299,7 @@ function PreopTab({ caseId }) {
                 notes:
                     form.checklist.sterile_preparation_done.comments || null,
 
-                completed: false, // you can wire this to a "Mark completed" toggle later
+                completed: false,
             }
 
             if (record) {
@@ -331,126 +321,167 @@ function PreopTab({ caseId }) {
         }
     }
 
-
-
-
     const lastStamp =
         record?.completed_at || record?.updated_at || record?.created_at
 
-    // ===== JSX below unchanged (your nice UI) =====
+    // ----------------- UI (Card based, mobile friendly) -----------------
     return (
         <form
             onSubmit={handleSubmit}
-            className="space-y-4 rounded-2xl border bg-white px-4 py-3"
+            className="space-y-4 rounded-2xl border border-slate-200 bg-white/90 px-3 py-3 shadow-sm md:px-4 md:py-4"
         >
-            <div className="flex items-center justify-between gap-2">
+            {/* Header */}
+            <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex flex-wrap items-center justify-between gap-2"
+            >
                 <div className="flex items-center gap-2 text-sky-800">
-                    <ClipboardCheck className="h-4 w-4" />
-                    <span className="text-sm font-semibold">
-                        Pre-operative checklist
-                    </span>
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-50 text-sky-700">
+                        <ClipboardCheck className="h-4 w-4" />
+                    </div>
+                    <div className="flex flex-col">
+                        <span className="text-sm font-semibold md:text-base">
+                            Pre-operative checklist
+                        </span>
+                        <span className="text-[11px] text-slate-500">
+                            Aligns with OT pre-op safety form (handover & receiving).
+                        </span>
+                    </div>
                 </div>
                 {lastStamp && (
-                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-700">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
                         Last saved: {new Date(lastStamp).toLocaleString()}
                     </span>
                 )}
-            </div>
+            </motion.div>
 
+            {/* Loading state */}
             {loading && (
-                <div className="text-xs text-slate-500">
-                    Loading pre-op data...
+                <div className="space-y-2">
+                    <div className="h-10 w-full animate-pulse rounded-xl bg-slate-100" />
+                    <div className="h-10 w-full animate-pulse rounded-xl bg-slate-100" />
+                    <div className="h-10 w-full animate-pulse rounded-xl bg-slate-100" />
                 </div>
             )}
 
+            {/* Error */}
             {error && (
-                <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
-                    {error}
+                <div className="flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                    <AlertCircle className="mt-0.5 h-3.5 w-3.5" />
+                    <span>{error}</span>
                 </div>
             )}
 
-            {/* TABLE */}
-            <div className="overflow-x-auto rounded-xl border border-slate-200">
-                <table className="min-w-full text-xs">
-                    <thead className="bg-slate-50 text-[11px] font-semibold uppercase text-slate-600">
-                        <tr>
-                            <th className="px-3 py-2 text-left">Item</th>
-                            <th className="px-3 py-2 text-center">
-                                Handing over nurse
-                            </th>
-                            <th className="px-3 py-2 text-center">
-                                Receiving nurse
-                            </th>
-                            <th className="px-3 py-2 text-left">Comments</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {CHECKLIST_ITEMS.map((item, idx) => {
-                            const row = form.checklist[item.key]
-                            const zebra =
-                                idx % 2 === 0 ? 'bg-white' : 'bg-slate-50/60'
-                            return (
-                                <tr key={item.key} className={zebra}>
-                                    <td className="px-3 py-1.5 text-slate-800">
-                                        {item.label}
-                                    </td>
-                                    <td className="px-3 py-1.5 text-center">
-                                        <input
-                                            type="checkbox"
-                                            className="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-                                            checked={!!row.handover}
-                                            disabled={!canEdit}
-                                            onChange={(e) =>
-                                                handleChecklistChange(
-                                                    item.key,
-                                                    'handover',
-                                                    e.target.checked,
-                                                )
-                                            }
-                                        />
-                                    </td>
-                                    <td className="px-3 py-1.5 text-center">
-                                        <input
-                                            type="checkbox"
-                                            className="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-                                            checked={!!row.receiving}
-                                            disabled={!canEdit}
-                                            onChange={(e) =>
-                                                handleChecklistChange(
-                                                    item.key,
-                                                    'receiving',
-                                                    e.target.checked,
-                                                )
-                                            }
-                                        />
-                                    </td>
-                                    <td className="px-3 py-1.5">
-                                        <input
-                                            type="text"
-                                            className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                                            placeholder="Comments / remarks"
-                                            value={row.comments || ''}
-                                            disabled={!canEdit}
-                                            onChange={(e) =>
-                                                handleChecklistChange(
-                                                    item.key,
-                                                    'comments',
-                                                    e.target.value,
-                                                )
-                                            }
-                                        />
-                                    </td>
-                                </tr>
-                            )
-                        })}
-                    </tbody>
-                </table>
+            {/* Checklist cards */}
+            <div className="space-y-2">
+                <div className="flex items-center justify-between text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                    <span>Checklist items</span>
+                    <span className="hidden gap-4 md:flex">
+                        <span>Handover</span>
+                        <span>Receiving</span>
+                    </span>
+                </div>
+
+                <AnimatePresence initial={false}>
+                    {CHECKLIST_ITEMS.map((item, idx) => {
+                        const row = form.checklist[item.key]
+                        const isChecked = row.handover || row.receiving
+                        return (
+                            <motion.div
+                                key={item.key}
+                                initial={{ opacity: 0, y: 6 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -6 }}
+                                transition={{ duration: 0.16, delay: idx * 0.01 }}
+                                className={`rounded-2xl border px-3 py-2.5 text-xs md:px-3.5 md:py-3 ${isChecked
+                                        ? 'border-sky-200 bg-sky-50/80'
+                                        : 'border-slate-200 bg-slate-50/60'
+                                    }`}
+                            >
+                                {/* Item + toggles */}
+                                <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                                    <div className="flex-1">
+                                        <div className="text-[13px] font-semibold text-slate-900">
+                                            {item.label}
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-wrap items-center gap-3 text-[11px] md:gap-4">
+                                        {/* Handover */}
+                                        <label className="inline-flex items-center gap-1.5">
+                                            <input
+                                                type="checkbox"
+                                                className="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                                                checked={!!row.handover}
+                                                disabled={!canEdit}
+                                                onChange={(e) =>
+                                                    handleChecklistChange(
+                                                        item.key,
+                                                        'handover',
+                                                        e.target.checked,
+                                                    )
+                                                }
+                                            />
+                                            <span className="font-medium text-slate-700">
+                                                Handover
+                                            </span>
+                                        </label>
+
+                                        {/* Receiving */}
+                                        <label className="inline-flex items-center gap-1.5">
+                                            <input
+                                                type="checkbox"
+                                                className="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
+                                                checked={!!row.receiving}
+                                                disabled={!canEdit}
+                                                onChange={(e) =>
+                                                    handleChecklistChange(
+                                                        item.key,
+                                                        'receiving',
+                                                        e.target.checked,
+                                                    )
+                                                }
+                                            />
+                                            <span className="font-medium text-slate-700">
+                                                Receiving
+                                            </span>
+                                        </label>
+                                    </div>
+                                </div>
+
+                                {/* Comments */}
+                                <div className="mt-2">
+                                    <input
+                                        type="text"
+                                        className="w-full rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] text-slate-800 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                        placeholder="Comments / remarks"
+                                        value={row.comments || ''}
+                                        disabled={!canEdit}
+                                        onChange={(e) =>
+                                            handleChecklistChange(
+                                                item.key,
+                                                'comments',
+                                                e.target.value,
+                                            )
+                                        }
+                                    />
+                                </div>
+                            </motion.div>
+                        )
+                    })}
+                </AnimatePresence>
             </div>
 
-            {/* Investigations & Vitals */}
+            {/* Investigations & Vitals – cards */}
             <div className="grid gap-4 md:grid-cols-2">
-                {/* investigations */}
-                <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                {/* Investigations */}
+                <motion.div
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50/80 p-3"
+                >
                     <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">
                         Investigations
                     </div>
@@ -469,7 +500,7 @@ function PreopTab({ caseId }) {
                             </span>
                             <input
                                 type="text"
-                                className="flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                className="flex-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                 value={form.investigations[key]}
                                 disabled={!canEdit}
                                 onChange={(e) =>
@@ -481,10 +512,14 @@ function PreopTab({ caseId }) {
                             />
                         </div>
                     ))}
-                </div>
+                </motion.div>
 
-                {/* vitals */}
-                <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/60 p-3">
+                {/* Vitals */}
+                <motion.div
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50/80 p-3"
+                >
                     <div className="text-xs font-semibold uppercase tracking-wide text-slate-600">
                         Vitals
                     </div>
@@ -503,7 +538,7 @@ function PreopTab({ caseId }) {
                             </span>
                             <input
                                 type="text"
-                                className="flex-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                className="flex-1 rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                 value={form.vitals[key]}
                                 disabled={!canEdit}
                                 onChange={(e) =>
@@ -512,16 +547,21 @@ function PreopTab({ caseId }) {
                             />
                         </div>
                     ))}
-                </div>
+                </motion.div>
             </div>
 
             {/* Shave + Signature */}
             <div className="grid gap-4 md:grid-cols-2">
-                <div className="space-y-2">
-                    <div className="text-xs font-medium text-slate-700">
+                {/* Shave */}
+                <motion.div
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50/80 p-3"
+                >
+                    <div className="text-xs font-semibold text-slate-700">
                         Shave completed
                     </div>
-                    <div className="flex gap-3 text-xs">
+                    <div className="flex gap-4 text-xs">
                         <label className="inline-flex items-center gap-1.5">
                             <input
                                 type="radio"
@@ -554,18 +594,22 @@ function PreopTab({ caseId }) {
                         </label>
                     </div>
                     <p className="text-[11px] text-slate-500">
-                        (Body diagram marking can be handled in PDF / print
-                        layout.)
+                        (Body diagram marking can be handled at PDF / print level.)
                     </p>
-                </div>
+                </motion.div>
 
-                <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-700">
+                {/* Signature */}
+                <motion.div
+                    initial={{ opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="space-y-2 rounded-2xl border border-slate-200 bg-slate-50/80 p-3"
+                >
+                    <label className="text-xs font-semibold text-slate-700">
                         Signature with name (nurse)
                     </label>
                     <input
                         type="text"
-                        className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                        className="w-full rounded-xl border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                         placeholder="Name & signature"
                         value={form.nurse_signature}
                         disabled={!canEdit}
@@ -576,15 +620,16 @@ function PreopTab({ caseId }) {
                             }))
                         }
                     />
-                </div>
+                </motion.div>
             </div>
 
+            {/* Save button */}
             {canEdit && (
-                <div className="flex justify-end">
+                <div className="flex justify-end pt-1">
                     <button
                         type="submit"
                         disabled={saving}
-                        className="inline-flex items-center gap-1.5 rounded-xl border border-sky-600 bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-700 disabled:opacity-60"
+                        className="inline-flex items-center justify-center gap-1.5 rounded-full border border-sky-600 bg-sky-600 px-3.5 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-sky-700 disabled:opacity-60"
                     >
                         {saving && (
                             <span className="h-3 w-3 animate-spin rounded-full border-[2px] border-white border-b-transparent" />

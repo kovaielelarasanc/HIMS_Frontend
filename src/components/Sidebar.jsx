@@ -1,6 +1,9 @@
-import { View } from 'react-native';
+// <<<<<<< Updated upstream
+// import { View } from 'react-native';
+// =======
+// >>>>>>> Stashed changes
 import { useEffect, useMemo, useState, useRef } from 'react';
-import { useEffect, useState } from 'react';
+// import { useEffect, useState } from 'react';
 import { useAuth } from '../store/authStore'
 import { useUI } from '../store/uiStore'
 import { useBranding } from '../branding/BrandingProvider'

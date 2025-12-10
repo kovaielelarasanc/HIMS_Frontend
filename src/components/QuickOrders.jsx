@@ -51,6 +51,7 @@ import {
     listRadiologyOrdersForContext,
     listPharmacyPrescriptionsForContext,
     listOtSchedulesForContext,
+    
 } from '../api/quickOrders'
 
 // ---- Core APIs for Lab & Radiology ----
@@ -62,6 +63,11 @@ import { searchPharmacyItems } from '../api/pharmacy'
 
 // OT procedures master
 import { listOtProcedures } from '../api/ot'
+
+// 🔁 Reusable pickers for OT
+import DoctorPicker from '../opd/components/DoctorPicker'
+import WardRoomBedPicker from '../components/pickers/BedPicker'
+
 
 const fadeIn = {
     initial: { opacity: 0, y: 4 },
@@ -105,6 +111,34 @@ function fmtDT(v) {
     } catch {
         return String(v)
     }
+}
+function extractApiError(err, fallback = 'Something went wrong') {
+    const detail = err?.response?.data?.detail
+
+    if (typeof detail === 'string') return detail
+
+    if (detail && !Array.isArray(detail) && typeof detail === 'object') {
+        if (detail.msg) return detail.msg
+        try {
+            return JSON.stringify(detail)
+        } catch {
+            return fallback
+        }
+    }
+
+    if (Array.isArray(detail)) {
+        const msgs = detail.map((d) => d?.msg).filter(Boolean)
+        if (msgs.length) return msgs.join(', ')
+        try {
+            return JSON.stringify(detail)
+        } catch {
+            return fallback
+        }
+    }
+
+    if (err?.message) return err.message
+
+    return fallback
 }
 
 // ------------------------------------------------------
@@ -183,16 +217,31 @@ function QuickOrders({
     const [otDate, setOtDate] = useState('')
     const [otStart, setOtStart] = useState('')
     const [otEnd, setOtEnd] = useState('')
+
+    // Procedure search
     const [otProcedureQuery, setOtProcedureQuery] = useState('')
     const [otProcedureOptions, setOtProcedureOptions] = useState([])
     const [otProcedureSearching, setOtProcedureSearching] = useState(false)
     const [showOtDropdown, setShowOtDropdown] = useState(false)
     const [otSelectedProcedure, setOtSelectedProcedure] = useState(null)
 
+    // Priority, side, notes
     const [otPriority, setOtPriority] = useState('Elective')
-    const [otSide, setOtSide] = useState('') // 🔹 from OtTheatreSchedulePage
+    const [otSide, setOtSide] = useState('')
     const [otNote, setOtNote] = useState('')
+
+    // Links to other masters
+    const [otPrimaryProcedureId, setOtPrimaryProcedureId] = useState(null)
+    // If you want extra procedures in QuickOrders (optional)
+    const [otAdditionalProcedureIds, setOtAdditionalProcedureIds] = useState([])
+
+    // Bed & doctors
+    const [otBedId, setOtBedId] = useState(null)
+    const [otSurgeonId, setOtSurgeonId] = useState(currentUser?.id || null)
+    const [otAnaesthetistId, setOtAnaesthetistId] = useState(null)
+
     const [otSubmitting, setOtSubmitting] = useState(false)
+
 
     // ------------- Order details sheet -------------
     const [detailsOpen, setDetailsOpen] = useState(false)
@@ -297,21 +346,21 @@ function QuickOrders({
             return
         }
         let cancelled = false
-        ;(async () => {
-            try {
-                setLabSearching(true)
-                const { data } = await listLabTests({ q: labQuery.trim() })
-                if (cancelled) return
-                const items = Array.isArray(data) ? data : (data?.items || [])
-                setLabOptions(items)
-                setShowLabDropdown(true)
-            } catch (err) {
-                console.error(err)
-                toast.error('Failed to fetch lab tests.')
-            } finally {
-                if (!cancelled) setLabSearching(false)
-            }
-        })()
+            ; (async () => {
+                try {
+                    setLabSearching(true)
+                    const { data } = await listLabTests({ q: labQuery.trim() })
+                    if (cancelled) return
+                    const items = Array.isArray(data) ? data : (data?.items || [])
+                    setLabOptions(items)
+                    setShowLabDropdown(true)
+                } catch (err) {
+                    console.error(err)
+                    toast.error('Failed to fetch lab tests.')
+                } finally {
+                    if (!cancelled) setLabSearching(false)
+                }
+            })()
         return () => {
             cancelled = true
         }
@@ -380,21 +429,21 @@ function QuickOrders({
             return
         }
         let cancelled = false
-        ;(async () => {
-            try {
-                setRisSearching(true)
-                const { data } = await listRisTests({ q: risQuery.trim() })
-                if (cancelled) return
-                const items = Array.isArray(data) ? data : (data?.items || [])
-                setRisOptions(items)
-                setShowRisDropdown(true)
-            } catch (err) {
-                console.error(err)
-                toast.error('Failed to fetch radiology tests.')
-            } finally {
-                if (!cancelled) setRisSearching(false)
-            }
-        })()
+            ; (async () => {
+                try {
+                    setRisSearching(true)
+                    const { data } = await listRisTests({ q: risQuery.trim() })
+                    if (cancelled) return
+                    const items = Array.isArray(data) ? data : (data?.items || [])
+                    setRisOptions(items)
+                    setShowRisDropdown(true)
+                } catch (err) {
+                    console.error(err)
+                    toast.error('Failed to fetch radiology tests.')
+                } finally {
+                    if (!cancelled) setRisSearching(false)
+                }
+            })()
         return () => { cancelled = true }
     }, [risQuery])
 
@@ -465,25 +514,25 @@ function QuickOrders({
             return
         }
         let cancelled = false
-        ;(async () => {
-            try {
-                setRxSearching(true)
-                const res = await searchPharmacyItems({
-                    q: rxQuery.trim(),
-                    type: 'drug',
-                    limit: 20,
-                })
-                if (cancelled) return
-                const items = Array.isArray(res?.data) ? res.data : []
-                setRxOptions(items)
-                setShowRxDropdown(true)
-            } catch (err) {
-                console.error(err)
-                toast.error('Failed to search medicines from inventory.')
-            } finally {
-                if (!cancelled) setRxSearching(false)
-            }
-        })()
+            ; (async () => {
+                try {
+                    setRxSearching(true)
+                    const res = await searchPharmacyItems({
+                        q: rxQuery.trim(),
+                        type: 'drug',
+                        limit: 20,
+                    })
+                    if (cancelled) return
+                    const items = Array.isArray(res?.data) ? res.data : []
+                    setRxOptions(items)
+                    setShowRxDropdown(true)
+                } catch (err) {
+                    console.error(err)
+                    toast.error('Failed to search medicines from inventory.')
+                } finally {
+                    if (!cancelled) setRxSearching(false)
+                }
+            })()
         return () => {
             cancelled = true
         }
@@ -577,27 +626,27 @@ function QuickOrders({
             return
         }
         let cancelled = false
-        ;(async () => {
-            try {
-                setOtProcedureSearching(true)
-                const res = await listOtProcedures({
-                    search: otProcedureQuery.trim(),
-                    isActive: true,
-                    limit: 20,
-                })
-                if (cancelled) return
-                const items = Array.isArray(res?.data?.items)
-                    ? res.data.items
-                    : (Array.isArray(res?.data) ? res.data : [])
-                setOtProcedureOptions(items)
-                setShowOtDropdown(true)
-            } catch (err) {
-                console.error(err)
-                toast.error('Failed to fetch OT procedures.')
-            } finally {
-                if (!cancelled) setOtProcedureSearching(false)
-            }
-        })()
+            ; (async () => {
+                try {
+                    setOtProcedureSearching(true)
+                    const res = await listOtProcedures({
+                        search: otProcedureQuery.trim(),
+                        isActive: true,
+                        limit: 20,
+                    })
+                    if (cancelled) return
+                    const items = Array.isArray(res?.data?.items)
+                        ? res.data.items
+                        : (Array.isArray(res?.data) ? res.data : [])
+                    setOtProcedureOptions(items)
+                    setShowOtDropdown(true)
+                } catch (err) {
+                    console.error(err)
+                    toast.error('Failed to fetch OT procedures.')
+                } finally {
+                    if (!cancelled) setOtProcedureSearching(false)
+                }
+            })()
         return () => {
             cancelled = true
         }
@@ -605,64 +654,96 @@ function QuickOrders({
 
     function handleSelectOtProcedure(p) {
         setOtSelectedProcedure(p)
+        setOtPrimaryProcedureId(p.id || null)
         setOtProcedureQuery(p.name || p.procedure_name || '')
         setShowOtDropdown(false)
     }
+
 
     async function handleSubmitOt() {
         if (ctx !== 'ipd') {
             toast.warning('OT booking via quick orders is only for IPD.')
             return
         }
+
         if (!otDate || !otStart) {
-            toast.warning('Select OT date and start time.')
+            toast.warning('Please select OT date and start time.')
             return
         }
+
         if (!patient?.id || !contextId) {
             toast.error('Missing patient or admission for OT schedule.')
             return
         }
 
+        const surgeonId = otSurgeonId || currentUser?.id
+        if (!surgeonId) {
+            toast.error('Please select a surgeon for this OT booking.')
+            return
+        }
+
+        const procedureName =
+            otSelectedProcedure
+                ? (otSelectedProcedure.name || otSelectedProcedure.procedure_name)
+                : otProcedureQuery?.trim()
+
+        if (!procedureName) {
+            toast.error('Please enter a procedure name.')
+            return
+        }
+
         setOtSubmitting(true)
+
         try {
             await createOtScheduleFromContext({
                 patientId: patient.id,
                 contextType: ctx,
                 admissionId: contextId,
-                surgeonUserId: orderingUserId,
-                anaesthetistUserId: null,
+
+                bedId: otBedId,
+                surgeonUserId: surgeonId,
+                anaesthetistUserId: otAnaesthetistId,
+
                 date: otDate,
                 plannedStartTime: otStart,
                 plannedEndTime: otEnd || null,
+
                 priority: otPriority,
-                side: otSide || null, // 🔹 aligned with OtTheatreSchedulePage
-                procedure: otSelectedProcedure
-                    ? {
-                        id: otSelectedProcedure.id,
-                        name: otSelectedProcedure.name || otSelectedProcedure.procedure_name,
-                    }
-                    : otProcedureQuery
-                        ? { id: null, name: otProcedureQuery.trim() }
-                        : null,
+                side: otSide || null,
+
+                procedureName,
+                primaryProcedureId: otSelectedProcedure?.id || null,
+                additionalProcedureIds: [],
+
                 notes: otNote,
             })
 
             toast.success('OT schedule created.')
+
+            // reset OT form (keep surgeon default if you like)
             setOtDate('')
             setOtStart('')
             setOtEnd('')
+            setOtBedId(null)
             setOtProcedureQuery('')
             setOtSelectedProcedure(null)
-            setOtNote('')
             setOtSide('')
-            loadSummary()
+            setOtPriority('Elective')
+            setOtAnaesthetistId(null)
+            setOtNote('')
+
+            loadSummary?.()
         } catch (err) {
-            console.error(err)
-            toast.error('Failed to create OT schedule.')
+            console.error('Failed to create OT schedule', err)
+            const msg = extractApiError(err, 'Failed to create OT schedule.')
+            toast.error(msg)
         } finally {
             setOtSubmitting(false)
         }
     }
+
+
+
 
     // ------------------------------------------------------
     // Render
@@ -828,11 +909,10 @@ function QuickOrders({
                                                                 type="button"
                                                                 size="sm"
                                                                 variant={labPriority === p ? 'default' : 'outline'}
-                                                                className={`flex-1 h-8 text-xs font-semibold ${
-                                                                    labPriority === p
-                                                                        ? 'bg-sky-600 hover:bg-sky-700 text-white'
-                                                                        : 'border-slate-300 text-slate-700'
-                                                                }`}
+                                                                className={`flex-1 h-8 text-xs font-semibold ${labPriority === p
+                                                                    ? 'bg-sky-600 hover:bg-sky-700 text-white'
+                                                                    : 'border-slate-300 text-slate-700'
+                                                                    }`}
                                                                 onClick={() => setLabPriority(p)}
                                                             >
                                                                 {p === 'routine'
@@ -976,11 +1056,10 @@ function QuickOrders({
                                                                 type="button"
                                                                 size="sm"
                                                                 variant={risPriority === p ? 'default' : 'outline'}
-                                                                className={`flex-1 h-8 text-xs font-semibold ${
-                                                                    risPriority === p
-                                                                        ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
-                                                                        : 'border-slate-300 text-slate-700'
-                                                                }`}
+                                                                className={`flex-1 h-8 text-xs font-semibold ${risPriority === p
+                                                                    ? 'bg-indigo-600 hover:bg-indigo-700 text-white'
+                                                                    : 'border-slate-300 text-slate-700'
+                                                                    }`}
                                                                 onClick={() => setRisPriority(p)}
                                                             >
                                                                 {p === 'routine'
@@ -1259,17 +1338,17 @@ function QuickOrders({
                                             </div>
                                         </div>
                                     </TabsContent>
-
-                                    {/* ---------- OT TAB ---------- */}
+                                    {/* Ot tab */}
                                     <TabsContent value="ot" className="mt-3">
                                         <div className="space-y-3">
+                                            {/* Row 1: Date & time */}
                                             <div className="grid sm:grid-cols-3 gap-3">
                                                 <div className="space-y-1.5">
                                                     <label className="text-xs font-medium text-slate-600">
-                                                        OT Date
+                                                        OT Date <span className="text-rose-500">*</span>
                                                     </label>
                                                     <Input
-                                        type="date"
+                                                        type="date"
                                                         value={otDate}
                                                         onChange={e => setOtDate(e.target.value)}
                                                         className="h-9 text-xs"
@@ -1277,7 +1356,7 @@ function QuickOrders({
                                                 </div>
                                                 <div className="space-y-1.5">
                                                     <label className="text-xs font-medium text-slate-600">
-                                                        Start time
+                                                        Start time <span className="text-rose-500">*</span>
                                                     </label>
                                                     <Input
                                                         type="time"
@@ -1299,9 +1378,24 @@ function QuickOrders({
                                                 </div>
                                             </div>
 
+                                            {/* Row 2: Bed (OT location) */}
+                                            <div className="space-y-1.5">
+                                                <label className="text-xs font-medium text-slate-600">
+                                                    OT Location / Bed
+                                                </label>
+                                                <WardRoomBedPicker
+                                                    value={otBedId ? Number(otBedId) : null}
+                                                    onChange={bedId => setOtBedId(bedId || null)}
+                                                />
+                                                <p className="text-[11px] text-slate-500">
+                                                    Uses the same Ward → Room → Bed mapping as main OT Schedule page.
+                                                </p>
+                                            </div>
+
+                                            {/* Row 3: Procedure (master + free text) */}
                                             <div className="space-y-1.5 relative">
                                                 <label className="text-xs font-medium text-slate-600">
-                                                    Procedure (from OT Masters or free text)
+                                                    Procedure (from OT Master or free text)
                                                 </label>
                                                 <div className="relative">
                                                     <Search className="h-3.5 w-3.5 text-slate-400 absolute left-2 top-2.5" />
@@ -1348,8 +1442,12 @@ function QuickOrders({
                                                                 ))}
                                                         </div>
                                                     )}
+                                                <p className="text-[11px] text-slate-500">
+                                                    If you just type and don&apos;t pick from list, it will save as free-text procedure name.
+                                                </p>
                                             </div>
 
+                                            {/* Row 4: Side + Priority */}
                                             <div className="grid sm:grid-cols-2 gap-3">
                                                 <div className="space-y-1.5">
                                                     <label className="text-xs font-medium text-slate-600">
@@ -1373,17 +1471,16 @@ function QuickOrders({
                                                         Priority
                                                     </label>
                                                     <div className="flex gap-1.5">
-                                                        {['Elective', 'Urgent', 'Emergency'].map(p => (
+                                                        {['Elective', 'Emergency'].map(p => (
                                                             <Button
                                                                 key={p}
                                                                 type="button"
                                                                 size="sm"
                                                                 variant={otPriority === p ? 'default' : 'outline'}
-                                                                className={`flex-1 h-8 text-xs font-semibold ${
-                                                                    otPriority === p
-                                                                        ? 'bg-amber-600 hover:bg-amber-700 text-white'
-                                                                        : 'border-slate-300 text-slate-700'
-                                                                }`}
+                                                                className={`flex-1 h-8 text-xs font-semibold ${otPriority === p
+                                                                    ? 'bg-amber-600 hover:bg-amber-700 text-white'
+                                                                    : 'border-slate-300 text-slate-700'
+                                                                    }`}
                                                                 onClick={() => setOtPriority(p)}
                                                             >
                                                                 {p}
@@ -1393,6 +1490,21 @@ function QuickOrders({
                                                 </div>
                                             </div>
 
+                                            {/* Row 5: Surgeon & Anaesthetist */}
+                                            <div className="grid sm:grid-cols-2 gap-3">
+                                                <DoctorPicker
+                                                    label="Surgeon"
+                                                    value={otSurgeonId ? Number(otSurgeonId) : null}
+                                                    onChange={id => setOtSurgeonId(id || null)}
+                                                />
+                                                <DoctorPicker
+                                                    label="Anaesthetist"
+                                                    value={otAnaesthetistId ? Number(otAnaesthetistId) : null}
+                                                    onChange={id => setOtAnaesthetistId(id || null)}
+                                                />
+                                            </div>
+
+                                            {/* Row 6: Notes */}
                                             <div className="space-y-1.5">
                                                 <label className="text-xs font-medium text-slate-600">
                                                     Notes / anaesthesia plan (optional)
@@ -1418,6 +1530,7 @@ function QuickOrders({
                                             </div>
                                         </div>
                                     </TabsContent>
+
 
                                 </Tabs>
                             </div>

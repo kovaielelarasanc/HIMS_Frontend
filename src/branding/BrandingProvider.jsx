@@ -9,8 +9,9 @@ const BrandingContext = createContext({
   loading: true,
 })
 
-// API base from env (e.g. http://localhost:8000/api or https://api.nutryah.com/api)
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
+// const API_BASE from env (e.g. http://localhost:8000/api or https://api.nutryah.com/api)
+// const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
+const API_BASE = import.meta.env.VITE_API_URL || 'https://api.nutryah.com/api'
 // -> strip trailing "/api" to get backend root (where /media is served)
 const BACKEND_ROOT = API_BASE.replace(/\/api\/?$/, '')
 

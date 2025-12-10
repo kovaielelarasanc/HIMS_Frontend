@@ -1,4 +1,4 @@
-// frontend/src/opd/Queue.jsx
+// FILE: frontend/src/opd/Queue.jsx
 import { useEffect, useMemo, useState, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
@@ -26,7 +26,11 @@ import {
     RefreshCcw,
     Stethoscope,
     User,
+    Filter,
+    Search,
+    Users,
 } from 'lucide-react'
+import { motion } from 'framer-motion'
 
 const todayStr = () => new Date().toISOString().slice(0, 10)
 
@@ -89,6 +93,12 @@ function computeWaitingLabel(row, forDate) {
     }
 }
 
+const fadeIn = {
+    initial: { opacity: 0, y: 6 },
+    animate: { opacity: 1, y: 0 },
+    transition: { duration: 0.18 },
+}
+
 export default function Queue() {
     const { user } = useAuth() || {}
 
@@ -97,6 +107,7 @@ export default function Queue() {
     const [rows, setRows] = useState([])
     const [loading, setLoading] = useState(false)
     const [statusFilter, setStatusFilter] = useState('active') // active | all | each status
+    const [searchTerm, setSearchTerm] = useState('') // patient name / UHID / phone
 
     const navigate = useNavigate()
 
@@ -139,7 +150,10 @@ export default function Queue() {
 
     const changeStatus = async (row, status, options = {}) => {
         try {
-            const { data } = await updateAppointmentStatus(row.appointment_id, status)
+            const { data } = await updateAppointmentStatus(
+                row.appointment_id,
+                status,
+            )
             toast.success(`Status updated to ${data.status.toUpperCase()}`)
             if (options.goToVisit && data.visit_id) {
                 navigate(`/opd/visit/${data.visit_id}`)
@@ -172,7 +186,7 @@ export default function Queue() {
         return base
     }, [rows])
 
-    const filteredRows = useMemo(() => {
+    const filteredByStatus = useMemo(() => {
         if (statusFilter === 'all') return rows
         if (statusFilter === 'active') {
             return rows.filter((r) =>
@@ -182,47 +196,121 @@ export default function Queue() {
         return rows.filter((r) => r.status === statusFilter)
     }, [rows, statusFilter])
 
+    const filteredRows = useMemo(() => {
+        const list = filteredByStatus
+        if (!searchTerm.trim()) return list
+        const q = searchTerm.toLowerCase()
+        return list.filter((r) => {
+            const name = r.patient?.name || ''
+            const uhid = r.patient?.uhid || ''
+            const phone = r.patient?.phone || ''
+            return (
+                name.toLowerCase().includes(q) ||
+                String(uhid).toLowerCase().includes(q) ||
+                String(phone).toLowerCase().includes(q)
+            )
+        })
+    }, [filteredByStatus, searchTerm])
+
+    const activeCount =
+        stats.booked + stats.checked_in + stats.in_progress
+
     return (
-        <div className="min-h-[calc(100vh-5rem)] bg-slate-50 px-4 py-6 md:px-6">
-            <div className="mx-auto max-w-5xl space-y-6">
+        <div className="min-h-[calc(100vh-4rem)] bg-slate-50 px-3 py-3 md:px-6 md:py-6">
+            <motion.div
+                {...fadeIn}
+                className="mx-auto flex max-w-5xl flex-col gap-2 rounded-2xl border border-slate-200 bg-white/90 px-3 py-3 shadow-sm md:px-4 md:py-4"
+            >
                 {/* Header */}
-                <div className="flex items-start justify-between gap-3">
+                <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                     <div>
                         <div className="flex items-center gap-2">
-                            <span className="relative flex h-2 w-2">
+                            <span className="relative flex h-2.5 w-2.5">
                                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-500 opacity-75" />
-                                <span className="relative inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                                <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-500" />
                             </span>
-                            <p className="text-xs font-medium uppercase tracking-[0.2em] text-emerald-700">
+                            <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-emerald-700">
                                 Live OPD Queue
                             </p>
                         </div>
-                        <h1 className="mt-1 text-2xl font-semibold text-slate-900">
+                        <h1 className="mt-1 text-lg font-semibold text-slate-900 md:text-2xl">
                             OPD Queue Management
                         </h1>
-                        <p className="mt-1 text-sm text-slate-500">
-                            Track today&apos;s appointments, check-in patients, and start / complete
-                            visits in real-time.
+                        <p className="mt-1 text-xs text-slate-500 md:text-sm">
+                            Track today&apos;s appointments, check-in patients and
+                            start / complete visits in real-time.
                         </p>
                     </div>
 
-                    <div className="hidden text-right text-xs text-slate-500 md:block">
-                        <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1">
+                    <div className="flex items-end justify-between gap-3 md:flex-col md:items-end md:text-right">
+                        <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-slate-900 px-3 py-1 text-[11px] text-slate-50">
                             <Activity className="h-3 w-3" />
                             <span>Doctor OPD</span>
                         </div>
-                        <div className="mt-1 flex items-center justify-end gap-1">
-                            <CalendarDays className="h-3 w-3" />
+                        <div className="flex items-center gap-1 text-[11px] text-slate-500">
+                            <CalendarDays className="h-3.5 w-3.5" />
                             <span>{prettyDate(date)}</span>
                         </div>
                     </div>
                 </div>
 
-                {/* Filters + doctor/date */}
-                <Card className="border-slate-200 shadow-sm rounded-3xl">
+                {/* Summary strip */}
+                <div className="mt-2 grid gap-2 text-[11px] md:grid-cols-4">
+                    <div className="flex items-center justify-between rounded-2xl border border-slate-100 bg-slate-900 px-3 py-2 text-slate-50 md:col-span-2">
+                        <div className="flex items-center gap-2">
+                            <Users className="h-4 w-4" />
+                            <div>
+                                <div className="text-[11px] uppercase tracking-wide text-slate-200/80">
+                                    Total appointments
+                                </div>
+                                <div className="text-sm font-semibold">
+                                    {stats.total}
+                                </div>
+                            </div>
+                        </div>
+                        <div className="text-right">
+                            <div className="text-[10px] text-slate-200/80">
+                                Active (booked / checked-in / in progress)
+                            </div>
+                            <div className="text-sm font-semibold text-emerald-300">
+                                {activeCount}
+                            </div>
+                        </div>
+                    </div>
+                    <SummaryBadge
+                        label="Booked"
+                        value={stats.booked}
+                        tone="slate"
+                    />
+                    <SummaryBadge
+                        label="Checked-in"
+                        value={stats.checked_in}
+                        tone="blue"
+                    />
+                    <SummaryBadge
+                        label="In progress"
+                        value={stats.in_progress}
+                        tone="amber"
+                    />
+                    <SummaryBadge
+                        label="Completed"
+                        value={stats.completed}
+                        tone="emerald"
+                    />
+                    <SummaryBadge
+                        label="No-show"
+                        value={stats.no_show}
+                        tone="rose"
+                    />
+                </div>
+            </motion.div>
+
+            <div className="mx-auto mt-4 max-w-5xl">
+                <Card className="rounded-3xl border-slate-200 bg-white/95 shadow-sm">
                     <CardHeader className="border-b border-slate-100 pb-4">
                         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
-                            <div className="grid w-full gap-3 md:grid-cols-[2fr,1.2fr] md:items-end">
+                            {/* Doctor + Date */}
+                            <div className="grid w-full gap-3 md:grid-cols-[2fr,1.1fr] md:items-end">
                                 <div>
                                     <DoctorPicker
                                         value={doctorId}
@@ -244,89 +332,67 @@ export default function Queue() {
                                         type="date"
                                         value={date}
                                         onChange={(e) => setDate(e.target.value)}
-                                        className="h-9"
+                                        className="h-9 rounded-xl border-slate-200"
                                     />
                                 </div>
                             </div>
 
-                            <div className="flex items-center gap-2 md:w-auto">
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="outline"
-                                    className="gap-1"
-                                    onClick={load}
-                                    disabled={loading || !hasSelection}
-                                >
-                                    <RefreshCcw className="h-3 w-3" />
-                                    Refresh
-                                </Button>
+                            {/* Refresh + search */}
+                            <div className="flex w-full flex-col gap-2 md:w-auto md:items-end">
+                                <div className="flex w-full items-center gap-2 md:w-auto">
+                                    <div className="flex flex-1 items-center rounded-full border border-slate-200 bg-slate-50 px-2 text-[11px] md:w-56">
+                                        <Search className="mr-1 h-3.5 w-3.5 text-slate-400" />
+                                        <input
+                                            className="h-7 flex-1 bg-transparent text-[11px] text-slate-800 outline-none placeholder:text-slate-400"
+                                            placeholder="Search name / UHID / phone…"
+                                            value={searchTerm}
+                                            onChange={(e) =>
+                                                setSearchTerm(e.target.value)
+                                            }
+                                        />
+                                    </div>
+                                    <Button
+                                        type="button"
+                                        size="sm"
+                                        variant="outline"
+                                        className="gap-1 rounded-full border-slate-300"
+                                        onClick={load}
+                                        disabled={loading || !hasSelection}
+                                    >
+                                        <RefreshCcw className="h-3 w-3" />
+                                        <span className="text-[11px]">
+                                            Refresh
+                                        </span>
+                                    </Button>
+                                </div>
                             </div>
                         </div>
 
-                        {/* Quick stats */}
-                        <div className="mt-4 flex flex-wrap gap-2 text-xs">
-                            <Badge
-                                variant="outline"
-                                className="flex items-center gap-1 rounded-full border-slate-200 bg-slate-50"
-                            >
-                                <Clock className="h-3 w-3" />
-                                <span>Total</span>
-                                <span className="font-semibold">{stats.total}</span>
-                            </Badge>
-                            <Badge
-                                variant="outline"
-                                className="rounded-full border-slate-200 bg-slate-50"
-                            >
-                                Booked: {stats.booked}
-                            </Badge>
-                            <Badge
-                                variant="outline"
-                                className="rounded-full border-slate-200 bg-blue-50 text-blue-700"
-                            >
-                                Checked-in: {stats.checked_in}
-                            </Badge>
-                            <Badge
-                                variant="outline"
-                                className="rounded-full border-slate-200 bg-amber-50 text-amber-700"
-                            >
-                                In progress: {stats.in_progress}
-                            </Badge>
-                            <Badge
-                                variant="outline"
-                                className="rounded-full border-slate-200 bg-emerald-50 text-emerald-700"
-                            >
-                                Completed: {stats.completed}
-                            </Badge>
-                            <Badge
-                                variant="outline"
-                                className="rounded-full border-slate-200 bg-rose-50 text-rose-700"
-                            >
-                                No-show: {stats.no_show}
-                            </Badge>
-                        </div>
-                    </CardHeader>
-
-                    <CardContent className="pt-4">
                         {/* Status filter pills */}
-                        <div className="mb-3 flex flex-wrap gap-1.5 text-xs">
+                        <div className="mt-4 flex flex-wrap gap-1.5 text-xs">
                             {[
-                                { key: 'active', label: 'Active (Booked / Checked-in / In progress)' },
+                                {
+                                    key: 'active',
+                                    label: 'Active (Booked / Checked-in / In progress)',
+                                },
                                 { key: 'all', label: 'All' },
                                 { key: 'booked', label: 'Booked' },
                                 { key: 'checked_in', label: 'Checked-in' },
                                 { key: 'in_progress', label: 'In progress' },
                                 { key: 'completed', label: 'Completed' },
                                 { key: 'no_show', label: 'No-show' },
+                                { key: 'cancelled', label: 'Cancelled' },
                             ].map((opt) => (
                                 <button
                                     key={opt.key}
                                     type="button"
-                                    onClick={() => setStatusFilter(opt.key)}
+                                    onClick={() =>
+                                        setStatusFilter(opt.key)
+                                    }
                                     className={[
-                                        'rounded-full border px-3 py-1 transition text-[11px]',
+                                        'rounded-full border px-3 py-1 text-[11px] transition',
                                         statusFilter === opt.key
-                                            ? 'border-slate-900 bg-slate-900 text-white'
+                                            ? 'border-slate-900 bg-slate-900 text-white shadow-sm'
                                             : 'border-slate-200 bg-slate-50 text-slate-600 hover:bg-white',
                                     ].join(' ')}
                                 >
@@ -334,8 +400,10 @@ export default function Queue() {
                                 </button>
                             ))}
                         </div>
+                    </CardHeader>
 
-                        {/* Content */}
+                    <CardContent className="pt-4">
+                        {/* Empty doctor/date selection */}
                         {!hasSelection && (
                             <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-slate-500">
                                 <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100">
@@ -345,12 +413,14 @@ export default function Queue() {
                                     Select doctor & date to view queue
                                 </div>
                                 <p className="max-w-md text-xs text-slate-500">
-                                    Choose a consultant and date above to see the live OPD queue, update
-                                    statuses, and open visits.
+                                    Choose a consultant and date above to see
+                                    the live OPD queue, update statuses and
+                                    open visits.
                                 </p>
                             </div>
                         )}
 
+                        {/* Loading skeletons */}
                         {hasSelection && loading && (
                             <div className="space-y-3 py-4">
                                 {[1, 2, 3].map((i) => (
@@ -363,157 +433,265 @@ export default function Queue() {
                                             <Skeleton className="h-3 w-64" />
                                         </div>
                                         <div className="flex gap-2">
-                                            <Skeleton className="h-7 w-16" />
-                                            <Skeleton className="h-7 w-20" />
+                                            <Skeleton className="h-7 w-16 rounded-full" />
+                                            <Skeleton className="h-7 w-20 rounded-full" />
                                         </div>
                                     </div>
                                 ))}
                             </div>
                         )}
 
-                        {hasSelection && !loading && filteredRows.length === 0 && (
-                            <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-slate-500">
-                                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100">
-                                    <Clock className="h-5 w-5 text-slate-500" />
+                        {/* No rows */}
+                        {hasSelection &&
+                            !loading &&
+                            filteredRows.length === 0 && (
+                                <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-slate-500">
+                                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-slate-100">
+                                        <Clock className="h-5 w-5 text-slate-500" />
+                                    </div>
+                                    <div className="font-medium text-slate-700">
+                                        No appointments for this doctor / date
+                                    </div>
+                                    <p className="max-w-md text-xs text-slate-500">
+                                        Try changing the status filter above,
+                                        clearing the search, or pick a
+                                        different date to see previous or
+                                        upcoming OPD queues.
+                                    </p>
                                 </div>
-                                <div className="font-medium text-slate-700">
-                                    No appointments for this doctor / date
-                                </div>
-                                <p className="max-w-md text-xs text-slate-500">
-                                    Try changing the status filter above or pick a different date to see
-                                    previous or upcoming OPD queues.
-                                </p>
-                            </div>
-                        )}
+                            )}
 
-                        {hasSelection && !loading && filteredRows.length > 0 && (
-                            <div className="space-y-2 pt-1 text-sm">
-                                {filteredRows.map((row) => {
-                                    const badgeCls =
-                                        statusBadgeClass[row.status] || 'bg-slate-100 text-slate-700'
-                                    const waitingLabel = computeWaitingLabel(row, date)
+                        {/* Queue list */}
+                        {hasSelection &&
+                            !loading &&
+                            filteredRows.length > 0 && (
+                                <div className="space-y-2 pt-1 text-sm">
+                                    {filteredRows.map((row) => {
+                                        const badgeCls =
+                                            statusBadgeClass[row.status] ||
+                                            'bg-slate-100 text-slate-700'
+                                        const waitingLabel = computeWaitingLabel(
+                                            row,
+                                            date,
+                                        )
 
-                                    return (
-                                        <div
-                                            key={row.appointment_id}
-                                            className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm md:flex-row md:items-center md:justify-between"
-                                        >
-                                            {/* left */}
-                                            <div className="space-y-1">
-                                                <div className="flex flex-wrap items-center gap-1.5">
-                                                    <span className="text-xs font-semibold text-slate-900">
-                                                        {row.time}
-                                                    </span>
-                                                    <span className="mx-0.5 text-slate-400">•</span>
-                                                    <span className="flex items-center gap-1 text-sm font-medium text-slate-900">
-                                                        <User className="h-3.5 w-3.5 text-slate-500" />
-                                                        {row.patient?.name}
-                                                    </span>
-                                                    <span className="mx-0.5 text-slate-400">•</span>
-                                                    <span className="text-[11px] text-slate-500">
-                                                        UHID {row.patient?.uhid} · {row.patient?.phone}
-                                                    </span>
-                                                </div>
-
-                                                <div className="flex flex-wrap items-center gap-1 text-[11px] text-slate-500">
-                                                    <span>Status:</span>
-                                                    <Badge
-                                                        className={`border-none px-2 py-0.5 text-[11px] font-semibold uppercase ${badgeCls}`}
-                                                    >
-                                                        {statusLabel[row.status] || row.status}
-                                                    </Badge>
-                                                    <span className="mx-1 text-slate-300">•</span>
-                                                    <span>
-                                                        Purpose:{' '}
-                                                        <span className="font-medium text-slate-700">
-                                                            {row.visit_purpose || 'Consultation'}
+                                        return (
+                                            <motion.div
+                                                key={
+                                                    row.appointment_id
+                                                }
+                                                initial={{
+                                                    opacity: 0,
+                                                    y: 4,
+                                                }}
+                                                animate={{
+                                                    opacity: 1,
+                                                    y: 0,
+                                                }}
+                                                transition={{
+                                                    duration: 0.12,
+                                                }}
+                                                className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm md:flex-row md:items-center md:justify-between"
+                                            >
+                                                {/* left: patient + info */}
+                                                <div className="space-y-1">
+                                                    <div className="flex flex-wrap items-center gap-1.5">
+                                                        <span className="rounded-full bg-slate-900 px-2 py-0.5 text-[10px] font-semibold text-slate-50">
+                                                            {row.time}
                                                         </span>
-                                                    </span>
-                                                    <span className="mx-1 text-slate-300">•</span>
-                                                    <span className="inline-flex items-center gap-1">
-                                                        <HeartPulse className="h-3 w-3" />
-                                                        Vitals:{' '}
-                                                        <span className="font-medium">
-                                                            {row.has_vitals ? 'Yes' : 'No'}
+                                                        <span className="mx-0.5 text-slate-400">
+                                                            •
                                                         </span>
-                                                    </span>
-                                                    {waitingLabel && (
-                                                        <>
-                                                            <span className="mx-1 text-slate-300">•</span>
-                                                            <span className="inline-flex items-center gap-1">
-                                                                <Clock className="h-3 w-3" />
-                                                                Waiting:{' '}
-                                                                <span className="font-medium">
-                                                                    {waitingLabel}
-                                                                </span>
-                                                            </span>
-                                                        </>
-                                                    )}
-                                                </div>
-                                            </div>
+                                                        <span className="flex items-center gap-1 text-sm font-semibold text-slate-900">
+                                                            <User className="h-3.5 w-3.5 text-slate-500" />
+                                                            {row.patient
+                                                                ?.name ||
+                                                                '—'}
+                                                        </span>
+                                                        <span className="mx-0.5 text-slate-400">
+                                                            •
+                                                        </span>
+                                                        <span className="text-[11px] text-slate-500">
+                                                            UHID{' '}
+                                                            {row.patient
+                                                                ?.uhid ||
+                                                                '—'}{' '}
+                                                            ·{' '}
+                                                            {row.patient
+                                                                ?.phone ||
+                                                                '—'}
+                                                        </span>
+                                                    </div>
 
-                                            {/* right actions */}
-                                            <div className="flex flex-wrap items-center justify-end gap-2 text-xs">
-                                                {row.status === 'booked' && (
-                                                    <>
-                                                        <Button
-                                                            size="sm"
-                                                            onClick={() => changeStatus(row, 'checked_in')}
+                                                    <div className="flex flex-wrap items-center gap-1 text-[11px] text-slate-500">
+                                                        <span>
+                                                            Status:
+                                                        </span>
+                                                        <Badge
+                                                            className={`border-none px-2 py-0.5 text-[11px] font-semibold uppercase ${badgeCls}`}
                                                         >
-                                                            Check-in
-                                                        </Button>
+                                                            {statusLabel[
+                                                                row.status
+                                                            ] ||
+                                                                row.status}
+                                                        </Badge>
+                                                        <span className="mx-1 text-slate-300">
+                                                            •
+                                                        </span>
+                                                        <span>
+                                                            Purpose:{' '}
+                                                            <span className="font-medium text-slate-700">
+                                                                {row.visit_purpose ||
+                                                                    'Consultation'}
+                                                            </span>
+                                                        </span>
+                                                        <span className="mx-1 text-slate-300">
+                                                            •
+                                                        </span>
+                                                        <span className="inline-flex items-center gap-1">
+                                                            <HeartPulse className="h-3 w-3" />
+                                                            Vitals:{' '}
+                                                            <span className="font-medium">
+                                                                {row.has_vitals
+                                                                    ? 'Yes'
+                                                                    : 'No'}
+                                                            </span>
+                                                        </span>
+                                                        {waitingLabel && (
+                                                            <>
+                                                                <span className="mx-1 text-slate-300">
+                                                                    •
+                                                                </span>
+                                                                <span className="inline-flex items-center gap-1">
+                                                                    <Clock className="h-3 w-3" />
+                                                                    Waiting:{' '}
+                                                                    <span className="font-medium">
+                                                                        {
+                                                                            waitingLabel
+                                                                        }
+                                                                    </span>
+                                                                </span>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                {/* right: actions */}
+                                                <div className="flex flex-wrap items-center justify-end gap-2 text-xs">
+                                                    {row.status ===
+                                                        'booked' && (
+                                                            <>
+                                                                <Button
+                                                                    size="sm"
+                                                                    className="rounded-full px-3 font-semibold"
+                                                                    onClick={() =>
+                                                                        changeStatus(
+                                                                            row,
+                                                                            'checked_in',
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    Check-in
+                                                                </Button>
+                                                                <Button
+                                                                    size="sm"
+                                                                    variant="outline"
+                                                                    className="rounded-full px-3 font-semibold"
+                                                                    onClick={() =>
+                                                                        changeStatus(
+                                                                            row,
+                                                                            'no_show',
+                                                                        )
+                                                                    }
+                                                                >
+                                                                    Mark
+                                                                    No-show
+                                                                </Button>
+                                                            </>
+                                                        )}
+
+                                                    {row.status ===
+                                                        'checked_in' && (
+                                                            <Button
+                                                                size="sm"
+                                                                className="rounded-full px-3 font-semibold"
+                                                                onClick={() =>
+                                                                    changeStatus(
+                                                                        row,
+                                                                        'in_progress',
+                                                                        {
+                                                                            goToVisit:
+                                                                                true,
+                                                                        },
+                                                                    )
+                                                                }
+                                                            >
+                                                                Start Visit
+                                                            </Button>
+                                                        )}
+
+                                                    {row.status ===
+                                                        'in_progress' && (
+                                                            <Button
+                                                                size="sm"
+                                                                className="rounded-full px-3 font-semibold"
+                                                                onClick={() =>
+                                                                    changeStatus(
+                                                                        row,
+                                                                        'completed',
+                                                                    )
+                                                                }
+                                                            >
+                                                                Complete
+                                                                Visit
+                                                            </Button>
+                                                        )}
+
+                                                    {row.visit_id && (
                                                         <Button
                                                             size="sm"
                                                             variant="outline"
-                                                            onClick={() => changeStatus(row, 'no_show')}
+                                                            className="rounded-full px-3 font-semibold"
+                                                            onClick={() =>
+                                                                navigate(
+                                                                    `/opd/visit/${row.visit_id}`,
+                                                                )
+                                                            }
                                                         >
-                                                            Mark No-show
+                                                            Open Visit
                                                         </Button>
-                                                    </>
-                                                )}
-
-                                                {row.status === 'checked_in' && (
-                                                    <Button
-                                                        size="sm"
-                                                        onClick={() =>
-                                                            changeStatus(row, 'in_progress', {
-                                                                goToVisit: true,
-                                                            })
-                                                        }
-                                                    >
-                                                        Start Visit
-                                                    </Button>
-                                                )}
-
-                                                {row.status === 'in_progress' && (
-                                                    <Button
-                                                        size="sm"
-                                                        onClick={() => changeStatus(row, 'completed')}
-                                                    >
-                                                        Complete Visit
-                                                    </Button>
-                                                )}
-
-                                                {row.visit_id && (
-                                                    <Button
-                                                        size="sm"
-                                                        variant="outline"
-                                                        onClick={() =>
-                                                            navigate(`/opd/visit/${row.visit_id}`)
-                                                        }
-                                                    >
-                                                        Open Visit
-                                                    </Button>
-                                                )}
-                                            </div>
-                                        </div>
-                                    )
-                                })}
-                            </div>
-                        )}
+                                                    )}
+                                                </div>
+                                            </motion.div>
+                                        )
+                                    })}
+                                </div>
+                            )}
                     </CardContent>
                 </Card>
             </div>
+        </div>
+    )
+}
+
+/**
+ * Small summary pill component
+ */
+function SummaryBadge({ label, value, tone = 'slate' }) {
+    const toneMap = {
+        slate: 'bg-slate-50 text-slate-800 border-slate-200',
+        blue: 'bg-blue-50 text-blue-800 border-blue-200',
+        amber: 'bg-amber-50 text-amber-800 border-amber-200',
+        emerald: 'bg-emerald-50 text-emerald-800 border-emerald-200',
+        rose: 'bg-rose-50 text-rose-800 border-rose-200',
+    }
+    const cls = toneMap[tone] || toneMap.slate
+    return (
+        <div
+            className={`flex items-center justify-between rounded-2xl border px-3 py-2 text-[11px] ${cls}`}
+        >
+            <span>{label}</span>
+            <span className="text-sm font-semibold">{value}</span>
         </div>
     )
 }

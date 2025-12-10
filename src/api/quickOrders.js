@@ -272,85 +272,100 @@ export async function listPharmacyPrescriptionsForContext({
  * OT: schedule FROM CONTEXT (IPD only, uses OT procedures master)
  * ========================================================== */
 
-export async function createOtScheduleFromContext({
+export function createOtScheduleFromContext({
     patientId,
-    contextType,
-    admissionId,
-    surgeonUserId,
-    anaesthetistUserId,
-    date,
-    plannedStartTime,
-    plannedEndTime,
-    priority,
-    procedure,   // { id?, name? }
+    contextType,        // 'opd' | 'ipd'
+    admissionId,        // only for IPD
+    bedId,              // optional
+    surgeonUserId,      // required by backend
+    anaesthetistUserId, // optional
+    date,               // 'YYYY-MM-DD'
+    plannedStartTime,   // 'HH:MM'
+    plannedEndTime,     // 'HH:MM' or null
+    priority,           // 'Elective' | 'Emergency'
+    side,               // 'Right' | 'Left' | ...
+    procedureName,      // free-text
+    primaryProcedureId, // optional
+    additionalProcedureIds = [],
     notes,
 }) {
     const ctx = normalizeCtx(contextType)
-    if (ctx !== 'ipd') {
-        throw new Error('OT scheduling from Quick Orders is only for IPD')
-    }
-    if (!patientId || !admissionId || !date || !plannedStartTime) {
-        throw new Error('Missing patient / admission / date / start time for OT schedule')
-    }
 
-    let procedureId = procedure?.id ?? null
-    let procedureName = procedure?.name?.trim() || null
-
-    // Try to resolve procedure name to master
-    if (!procedureId && procedureName) {
-        try {
-            const res = await listOtProcedures({
-                search: procedureName,
-                isActive: true,
-                limit: 1,
-            })
-            const data = res?.data
-            const row = Array.isArray(data) ? data[0] : data?.items?.[0]
-            if (row) {
-                procedureId = row.id
-                procedureName = row.name
-            }
-        } catch (err) {
-            console.error('OT procedure master lookup failed for', procedureName, err)
-        }
+    // 🔒 Frontend validation to avoid 422 from Pydantic
+    if (!date || !plannedStartTime) {
+        throw new Error('OT date and start time are required')
     }
 
+    if (!surgeonUserId) {
+        // because in your schema: surgeon_user_id: int (required)
+        throw new Error('Surgeon is required for OT schedule')
+    }
+
+    const procName = (procedureName || '').trim()
+    if (!procName) {
+        // because procedure_name: str (required)
+        throw new Error('Procedure name is required for OT schedule')
+    }
+
+    // 🔒 Normalize types for Pydantic (no empty strings!)
     const payload = {
-        patient_id: patientId,
-        admission_id: admissionId,
-        date,
-        planned_start_time: plannedStartTime,
-        planned_end_time: plannedEndTime || null,
+        date, // 'YYYY-MM-DD'
+
+        planned_start_time: plannedStartTime,        // 'HH:MM'
+        planned_end_time: plannedEndTime || null,   // null if empty
+
+        patient_id: patientId ? Number(patientId) : null,
+        admission_id:
+            ctx === 'ipd' && admissionId
+                ? Number(admissionId)
+                : null,
+
+        bed_id: bedId ? Number(bedId) : null,
+
+        surgeon_user_id: Number(surgeonUserId),
+        anaesthetist_user_id: anaesthetistUserId
+            ? Number(anaesthetistUserId)
+            : null,
+
+        procedure_name: procName,
+        side: side || null,
+
         priority: priority || 'Elective',
-        surgeon_user_id: surgeonUserId || null,
-        anaesthetist_user_id: anaesthetistUserId || null,
         notes: notes || null,
-        procedure_id: procedureId,
-        procedure_name: procedureName,
+
+        primary_procedure_id: primaryProcedureId
+            ? Number(primaryProcedureId)
+            : null,
+
+        additional_procedure_ids: Array.isArray(additionalProcedureIds)
+            ? additionalProcedureIds.map((id) => Number(id))
+            : [],
     }
 
-    const res = await createOtSchedule(payload)
-    return res.data
+    // ✅ reuse your existing OT client
+    return createOtSchedule(payload)
 }
 
+/**
+ * List OT schedules for a patient/context, used in QuickOrders summary
+ */
 export async function listOtSchedulesForContext({
     patientId,
-    admissionId,
+    contextType,
+    contextId,
     limit = 10,
 }) {
     if (!patientId) return []
 
-    const res = await listOtSchedules({
-        patientId,
-        // admissionId also goes as query param via toParams -> admission_id
-        admissionId,
-    })
+    const ctx = normalizeCtx(contextType)
 
-    const data = res?.data
-    const rows = Array.isArray(data) ? data : data?.items || []
+    // Backend supports patient_id filter
+    const res = await listOtSchedules({ patient_id: patientId })
+    const rows = Array.isArray(res?.data) ? res.data : []
 
-    const filtered = rows.filter((o) => {
-        if (admissionId && o.admission_id && o.admission_id !== admissionId) {
+    const filtered = rows.filter((s) => {
+        // For IPD, keep only schedules for same admission
+        if (ctx === 'ipd' && contextId && s.admission_id && s.admission_id !== contextId) {
             return false
         }
         return true
@@ -358,3 +373,4 @@ export async function listOtSchedulesForContext({
 
     return filtered.slice(0, limit)
 }
+

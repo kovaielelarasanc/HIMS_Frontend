@@ -34,7 +34,7 @@ const TABS = [
     { id: 'blood', label: 'Blood & Fluids' },
     { id: 'notes', label: 'Operation Notes' },
     { id: 'pacu', label: 'PACU / Recovery' },
-    { id: 'logs', label: 'Audit Log' },
+    // { id: 'logs', label: 'Audit Log' },
 ]
 
 // --------- small helpers for clean display ----------
@@ -621,7 +621,7 @@ export default function OtCaseDetailPage() {
                             <OperationNotesTab caseId={caseId} />
                         )}
                         {tab === 'pacu' && <PacuTab caseId={caseId} />}
-                        {tab === 'logs' && <OtLogsAdmin caseId={caseId} />}
+                        {/* {tab === 'logs' && <OtLogsAdmin caseId={caseId} />} */}
                     </div>
                 )}
             </div>
