@@ -1,9 +1,4 @@
-// <<<<<<< Updated upstream
-// import { View } from 'react-native';
-// =======
-// >>>>>>> Stashed changes
 import { useEffect, useMemo, useState, useRef } from 'react';
-// import { useEffect, useState } from 'react';
 import { useAuth } from '../store/authStore'
 import { useUI } from '../store/uiStore'
 import { useBranding } from '../branding/BrandingProvider'
@@ -52,8 +47,12 @@ import {
   CalendarDays,
   Layers,
   Microscope,
-  Cpu
+  Cpu,
+  BookOpenText,
+  Wallet
 } from 'lucide-react'
+import { NavLink, useLocation } from 'react-router-dom';
+
 
 const defaultPrimary = '#2563eb'
 const makeActiveBg = (primary) => {
@@ -122,25 +121,55 @@ const GROUPS = [
         ],
       },
       {
-        key: 'pharmacy-barcode',
+        key: 'pharmacy-barcode-lookup',
         label: 'Barcode / QR Lookup',
-        to: '/inventory/barcode-lookup',
+        to: '/pharmacy/inventory/barcode-lookup',
         icon: Scan,
         reqAny: ['pharmacy.inventory.stock.view'],
       },
       {
-        key: 'pharmacy RX',
+        key: 'pharmacy-rx',
         label: 'Pharmacy RX',
         to: '/pharmacy/rx',
         icon: NotebookPen,
         reqAny: ['pharmacy.inventory.stock.view'],
       },
       {
-        key: 'pharmacy dispense',
+        key: 'pharmacy-dispense',
         label: 'Pharmacy Dispense',
         to: '/pharmacy/dispense',
         icon: ShoppingCart,
         reqAny: ['pharmacy.inventory.stock.view'],
+      },
+
+      // ✅ Accounts (Supplier)
+      {
+        key: 'pharmacy-supplier-ledger',
+        label: 'Supplier Ledger',
+        to: '/pharmacy/accounts/supplier-ledger',
+        icon: BookOpenText,
+        reqAny: ['pharmacy.accounts.supplier_ledger.view', 'pharmacy.accounts.supplier_ledger.manage', 'pharmacy.accounts.supplier_ledger.export'],
+      },
+      {
+        key: 'pharmacy-supplier-monthly-summary',
+        label: 'Monthly Summary',
+        to: '/pharmacy/accounts/supplier-monthly-summary',
+        icon: CalendarDays,
+        reqAny: ['pharmacy.accounts.supplier_ledger.view', 'pharmacy.accounts.supplier_ledger.manage', 'pharmacy.accounts.supplier_ledger.export'],
+      },
+      {
+        key: 'pharmacy-supplier-payments',
+        label: 'Supplier Payments',
+        to: '/pharmacy/accounts/supplier-payments',
+        icon: Wallet,
+        reqAny: ['pharmacy.accounts.supplier_ledger.view', 'pharmacy.accounts.supplier_ledger.manage', 'pharmacy.accounts.supplier_ledger.export'],
+      },
+      {
+        key: 'pharmacy-supplier-statement',
+        label: 'Supplier Statement',
+        to: '/pharmacy/accounts/supplier-statement',
+        icon: FileText,
+        reqAny: ['pharmacy.accounts.supplier_ledger.view', 'pharmacy.accounts.supplier_ledger.manage', 'pharmacy.accounts.supplier_ledger.export'],
       },
     ],
   },
@@ -311,7 +340,7 @@ const GROUPS = [
         ],
       },
 
-     
+
 
       // ----------------------------------------------------
       // 3. Lab Service Master
