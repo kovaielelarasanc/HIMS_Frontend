@@ -36,6 +36,7 @@ import {
     updateInventoryLocation,
     createSupplier,
     updateSupplier,
+    getGrn
 } from '../api/inventory'
 
 
@@ -48,6 +49,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
 import {
     Tabs,
     TabsList,
@@ -133,7 +135,7 @@ export default function InventoryPharmacy() {
     const [maxStock, setMaxStock] = useState([])
     const [stockLoading, setStockLoading] = useState(false)
 
-
+    const [postReason, setPostReason] = useState({})
     // PO, GRN, Returns, Txns
     const [purchaseOrders, setPurchaseOrders] = useState([])
     const [poLoading, setPoLoading] = useState(false)
@@ -175,8 +177,19 @@ export default function InventoryPharmacy() {
     const [grnForm, setGrnForm] = useState({
         supplier_id: '',
         location_id: '',
+        po_id: '',
+
+        received_date: new Date().toISOString().slice(0, 10),
+
         invoice_number: '',
         invoice_date: '',
+
+        supplier_invoice_amount: '',
+        freight_amount: '',
+        other_charges: '',
+        round_off: '',
+        difference_reason: '',
+
         notes: '',
     })
     const [grnLines, setGrnLines] = useState([])
@@ -189,13 +202,101 @@ export default function InventoryPharmacy() {
         reason: '',
     })
     const [returnLines, setReturnLines] = useState([])
-
+    const [postModal, setPostModal] = useState({
+        open: false,
+        grn: null,
+        reason: '',
+        posting: false,
+    })
     // location & supplier master dialogs
     const [locationDialogOpen, setLocationDialogOpen] = useState(false)
     const [editLocation, setEditLocation] = useState(null)
 
     const [supplierDialogOpen, setSupplierDialogOpen] = useState(false)
     const [editSupplier, setEditSupplier] = useState(null)
+
+    const [grnQuery, setGrnQuery] = useState('')
+    const [grnStatus, setGrnStatus] = useState('ALL')
+
+    const n = (v) => {
+        if (v === '' || v === null || v === undefined) return 0
+        const x = Number(v)
+        return Number.isFinite(x) ? x : 0
+    }
+
+    const s = (v) => (v == null ? '' : String(v))
+
+    const d = (v) => (v ? String(v) : null) // date or null
+
+    const filteredGrns = useMemo(() => {
+        const q = (grnQuery || '').toLowerCase().trim()
+        return (grns || []).filter((g) => {
+            const okStatus = grnStatus === 'ALL' ? true : (String(g.status || 'DRAFT') === grnStatus)
+            if (!okStatus) return false
+            if (!q) return true
+            const hay = [
+                g.grn_number,
+                g.invoice_number,
+                g.supplier?.name,
+                g.location?.name,
+            ]
+                .filter(Boolean)
+                .join(' ')
+                .toLowerCase()
+            return hay.includes(q)
+        })
+    }, [grns, grnQuery, grnStatus])
+
+
+    const [grnView, setGrnView] = useState({
+        open: false,
+        loading: false,
+        data: null,
+    })
+
+    async function openGrnPreview(grn) {
+        const id = grn?.id
+        if (!id) return
+
+        setGrnView({ open: true, loading: true, data: null })
+        try {
+            const res = await getGrn(id)
+            setGrnView({ open: true, loading: false, data: res?.data || null })
+        } catch (e) {
+            setGrnView({ open: false, loading: false, data: null })
+            console.log('GET GRN error:', {
+                status: e?.response?.status,
+                data: e?.response?.data,
+                url: e?.config?.url,
+            })
+
+            toast.error('Failed to load GRN', {
+                description: e?.response?.data?.detail || `HTTP ${e?.response?.status || ''}` || 'Please try again.',
+            })
+        }
+    }
+
+
+    const hasMismatch = (grn) => {
+        const diff = Number(grn?.amount_difference || 0)
+        return Math.abs(diff) >= 0.01
+    }
+
+    const onClickPost = (grn) => {
+        if (!grn?.id) return
+
+        if (hasMismatch(grn)) {
+            setPostModal({
+                open: true,
+                grn,
+                reason: grn?.difference_reason || '',
+                posting: false,
+            })
+        } else {
+            handlePostGrn(grn.id, '') // no reason needed
+        }
+    }
+
     const handleCopyBarcode = (value) => {
         if (!value) return
         if (!navigator.clipboard) {
@@ -303,6 +404,9 @@ export default function InventoryPharmacy() {
         setGrnLoading(true)
         try {
             const res = await listGrns({})
+            console.log("==============================");
+            console.log(JSON.stringify(res.data));
+            console.log("==============================");
             setGrns(res.data || [])
         } catch (err) {
             console.error(err)
@@ -694,69 +798,127 @@ export default function InventoryPharmacy() {
 
     async function handleCreateGrn(e) {
         e.preventDefault()
-        if (!grnForm.supplier_id || !grnForm.location_id || grnLines.length === 0) {
-            toast.error('Supplier, location and at least one line are required')
+
+        if (!grnForm.supplier_id || !grnForm.location_id) {
+            toast.error('Supplier and location are required')
+            return
+        }
+
+        const lines = (grnLines || [])
+            .filter((l) => l.item_id && l.batch_no && n(l.quantity) > 0)
+            .map((l) => ({
+                item_id: Number(l.item_id),
+                po_item_id: l.po_item_id ? Number(l.po_item_id) : null,
+
+                batch_no: s(l.batch_no).trim(),
+                expiry_date: d(l.expiry_date),
+
+                quantity: n(l.quantity),
+                free_quantity: n(l.free_quantity),
+
+                unit_cost: n(l.unit_cost),
+                mrp: n(l.mrp),
+
+                discount_percent: n(l.discount_percent),
+                discount_amount: n(l.discount_amount),
+
+                tax_percent: n(l.tax_percent),
+                cgst_percent: n(l.cgst_percent),
+                sgst_percent: n(l.sgst_percent),
+                igst_percent: n(l.igst_percent),
+
+                scheme: s(l.scheme),
+                remarks: s(l.remarks),
+            }))
+
+        if (lines.length === 0) {
+            toast.error('Add at least one valid GRN line (item + batch + qty > 0)')
             return
         }
 
         const payload = {
-            po_id: null,
+            po_id: grnForm.po_id ? Number(grnForm.po_id) : null,
             supplier_id: Number(grnForm.supplier_id),
             location_id: Number(grnForm.location_id),
-            received_date: new Date().toISOString().slice(0, 10),
-            invoice_number: grnForm.invoice_number || '',
-            invoice_date: grnForm.invoice_date || null,
-            notes: grnForm.notes || '',
-            items: grnLines
-                .filter(l => l.item_id && l.batch_no)
-                .map(l => ({
-                    item_id: Number(l.item_id),
-                    po_item_id: l.po_item_id ? Number(l.po_item_id) : null,
-                    batch_no: l.batch_no,
-                    expiry_date: l.expiry_date || null,
-                    quantity: Number(l.quantity || 0),
-                    free_quantity: Number(l.free_quantity || 0),
-                    unit_cost: Number(l.unit_cost || 0),
-                    tax_percent: Number(l.tax_percent || 0),
-                    mrp: Number(l.mrp || 0),
-                })),
-        }
 
-        if (payload.items.length === 0) {
-            toast.error('Add at least one valid GRN line')
-            return
+            received_date: grnForm.received_date || new Date().toISOString().slice(0, 10),
+
+            invoice_number: s(grnForm.invoice_number),
+            invoice_date: d(grnForm.invoice_date),
+
+            supplier_invoice_amount: n(grnForm.supplier_invoice_amount),
+            freight_amount: n(grnForm.freight_amount),
+            other_charges: n(grnForm.other_charges),
+            round_off: n(grnForm.round_off),
+
+            difference_reason: s(grnForm.difference_reason),
+            notes: s(grnForm.notes),
+
+            items: lines,
         }
 
         try {
+            console.log("GRN payload =>", JSON.stringify(payload, null, 2))
             await createGrn(payload)
+
             toast.success('GRN created in DRAFT')
             setGrnSheetOpen(false)
             setGrnLines([])
+
             setGrnForm({
                 supplier_id: '',
                 location_id: '',
+                po_id: '',
+                received_date: new Date().toISOString().slice(0, 10),
                 invoice_number: '',
                 invoice_date: '',
+                supplier_invoice_amount: '',
+                freight_amount: '',
+                other_charges: '',
+                round_off: '',
+                difference_reason: '',
                 notes: '',
             })
+
             loadGrns()
             loadStock()
         } catch (err) {
+            toast.error('Failed to create GRN', {
+                description: err?.response?.data?.detail || err.message || 'Try again',
+            })
             console.error(err)
         }
     }
 
+
     async function handlePostGrn(id) {
+        const tId = `post-grn-${id}`
+        toast.loading('Posting GRN…', { id: tId })
+        console.log(id, "svbjsvjhsbvjhsvjbsjbv");
         try {
-            await postGrn(id)
-            toast.success('GRN posted & stock updated')
-            loadGrns()
-            loadStock()
-            loadPurchaseOrders()
+            const resGRN = await postGrn(id, {}) // try first
+            console.log(resGRN, "566552225555");
+            toast.success('GRN posted & stock updated', { id: tId })
+            await Promise.all([loadGrns(), loadStock(), loadPurchaseOrders()])
         } catch (err) {
-            console.error(err)
+            const detail = err?.response?.data?.detail || ''
+            if (detail.includes('Provide difference_reason')) {
+                // ask reason (prompt quick version)
+                const reason = window.prompt('Invoice mismatch. Enter reason to post GRN:')
+                if (reason && reason.trim()) {
+                    await postGrn(id, { difference_reason: reason.trim() })
+                    toast.success('GRN posted & stock updated', { id: tId })
+                    await Promise.all([loadGrns(), loadStock(), loadPurchaseOrders()])
+                    return
+                }
+            }
+            console.log(err, "kfjgjsgvg");
+            toast.error('Failed to post GRN', { id: tId, description: detail || 'Please try again.' })
+            throw err
         }
     }
+
+
 
     // -------- returns --------
     function addReturnLine() {
@@ -1969,10 +2131,10 @@ export default function InventoryPharmacy() {
                 </TabsContent>
 
                 {/* GRN TAB */}
-                <TabsContent value="grn">
+                <TabsContent value="grn" className="space-y-4">
                     <Card className="rounded-3xl border-slate-200 shadow-sm">
-                        <CardHeader className="flex flex-row items-center justify-between gap-3">
-                            <div>
+                        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="space-y-1">
                                 <CardTitle className="text-sm font-semibold text-slate-900 flex items-center gap-2">
                                     Goods Receipt Notes
                                     <Badge variant="outline" className="text-xs">
@@ -1980,108 +2142,280 @@ export default function InventoryPharmacy() {
                                     </Badge>
                                 </CardTitle>
                                 <p className="text-xs text-slate-500">
-                                    Post GRNs to create batches and update stock (GRN → Stock
-                                    transactions).
+                                    Create GRN in DRAFT, then <span className="font-medium">Post</span> to create batches & update stock.
                                 </p>
                             </div>
-                            <Button
-                                size="sm"
-                                className="gap-1"
-                                onClick={() => setGrnSheetOpen(true)}
-                            >
-                                <Plus className="w-3 h-3" />
-                                New GRN
-                            </Button>
+
+                            <div className="flex items-center gap-2">
+                                <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-9"
+                                    onClick={() => {
+                                        // optional quick refresh if you have a loader function
+                                        // loadGrns?.()
+                                    }}
+                                >
+                                    Refresh
+                                </Button>
+
+                                <Button
+                                    size="sm"
+                                    className="h-9 gap-1"
+                                    onClick={() => setGrnSheetOpen(true)}
+                                >
+                                    <Plus className="w-4 h-4" />
+                                    New GRN
+                                </Button>
+                            </div>
                         </CardHeader>
-                        <CardContent>
-                            <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white">
-                                <div className="grid grid-cols-[1.1fr,1.2fr,1.2fr,0.9fr,0.9fr] px-3 py-2 text-xs font-semibold text-slate-500 bg-slate-50">
-                                    <span>GRN number</span>
+
+                        <CardContent className="space-y-3">
+                            {/* Toolbar */}
+                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                                <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                                    <div className="w-full sm:w-72">
+                                        <Input
+                                            placeholder="Search GRN / supplier / invoice..."
+                                            value={grnQuery}
+                                            onChange={(e) => setGrnQuery(e.target.value)}
+                                            className="h-9 bg-white"
+                                        />
+                                    </div>
+
+                                    <div className="w-full sm:w-44">
+                                        <Select value={grnStatus} onValueChange={setGrnStatus}>
+                                            <SelectTrigger className="h-9 bg-white">
+                                                <SelectValue placeholder="All statuses" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="ALL">All</SelectItem>
+                                                <SelectItem value="DRAFT">Draft</SelectItem>
+                                                <SelectItem value="POSTED">Posted</SelectItem>
+                                                <SelectItem value="CANCELLED">Cancelled</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+
+                                <div className="text-xs text-slate-500">
+                                    {grnLoading ? 'Loading…' : `${filteredGrns.length} result(s)`}
+                                </div>
+                            </div>
+
+                            {/* Desktop table */}
+                            <div className="hidden md:block border border-slate-200 rounded-2xl overflow-hidden bg-white">
+                                <div className="grid grid-cols-[1.2fr,1.1fr,1.2fr,0.9fr,0.9fr,0.9fr] px-3 py-2 text-xs font-semibold text-slate-500 bg-slate-50">
+                                    <span>GRN</span>
                                     <span>Supplier</span>
-                                    <span>Location / invoice</span>
+                                    <span>Location / Invoice</span>
+                                    <span>Amounts</span>
                                     <span>Status</span>
                                     <span className="text-right">Actions</span>
                                 </div>
-                                <div className="max-h-[440px] overflow-auto divide-y divide-slate-100">
+
+                                <div className="max-h-[480px] overflow-auto divide-y divide-slate-100">
                                     {grnLoading ? (
                                         <div className="p-3 space-y-2">
-                                            <Skeleton className="h-7 w-full" />
-                                            <Skeleton className="h-7 w-full" />
-                                            <Skeleton className="h-7 w-full" />
+                                            <Skeleton className="h-8 w-full" />
+                                            <Skeleton className="h-8 w-full" />
+                                            <Skeleton className="h-8 w-full" />
                                         </div>
-                                    ) : grns.length === 0 ? (
-                                        <div className="p-4 text-sm text-slate-500">
-                                            No GRNs created yet.
-                                        </div>
+                                    ) : filteredGrns.length === 0 ? (
+                                        <div className="p-4 text-sm text-slate-500">No GRNs found.</div>
                                     ) : (
-                                        grns.map(grn => (
-                                            <div
-                                                key={grn.id}
-                                                className="grid grid-cols-[1.1fr,1.2fr,1.2fr,0.9fr,0.9fr] items-center px-3 py-2 text-xs"
-                                            >
-                                                <div>
-                                                    <p className="font-medium text-slate-900">
-                                                        {grn.grn_number}
-                                                    </p>
-                                                    <p className="text-slate-500">
-                                                        Received: {formatDate(grn.received_date)}
-                                                    </p>
+                                        filteredGrns.map((grn) => {
+                                            const diff = Number(grn.amount_difference || 0)
+                                            const hasMismatch = Math.abs(diff) >= 0.01 && Number(grn.supplier_invoice_amount || 0) > 0
+
+                                            return (
+                                                <div
+                                                    key={grn.id}
+                                                    className="grid grid-cols-[1.2fr,1.1fr,1.2fr,0.9fr,0.9fr,0.9fr] items-center px-3 py-2 text-xs hover:bg-slate-50"
+                                                >
+                                                    <div>
+                                                        <p className="font-medium text-slate-900">{grn.grn_number || `GRN-${String(grn.id).padStart(6, '0')}`}</p>
+                                                        <p className="text-slate-500">
+                                                            Received: {formatDate(grn.received_date)}
+                                                        </p>
+                                                    </div>
+
+                                                    <div>
+                                                        <p className="text-slate-900">{grn.supplier?.name || '—'}</p>
+                                                        <p className="text-slate-500 text-[11px]">
+                                                            {grn.supplier?.phone || grn.supplier?.email || '—'}
+                                                        </p>
+                                                    </div>
+
+                                                    <div>
+                                                        <p className="text-slate-900">{grn.location?.name || '—'}</p>
+                                                        <p className="text-slate-500 text-[11px]">
+                                                            Inv: {grn.invoice_number || '—'} {grn.invoice_date ? `• ${formatDate(grn.invoice_date)}` : ''}
+                                                        </p>
+                                                    </div>
+
+                                                    <div>
+                                                        <p className="text-slate-900">
+                                                            Inv: ₹{Number(grn.supplier_invoice_amount || 0).toFixed(2)}
+                                                        </p>
+                                                        <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                                                            <span>Calc: ₹{Number(grn.calculated_grn_amount || 0).toFixed(2)}</span>
+                                                            {hasMismatch && (
+                                                                <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-800 border-amber-200">
+                                                                    Diff ₹{diff.toFixed(2)}
+                                                                </Badge>
+                                                            )}
+                                                        </div>
+                                                    </div>
+
+                                                    <div>
+                                                        <Badge
+                                                            variant="outline"
+                                                            className={[
+                                                                'text-[10px] capitalize',
+                                                                grn.status === 'POSTED' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : '',
+                                                                grn.status === 'CANCELLED' ? 'bg-rose-50 border-rose-200 text-rose-800' : '',
+                                                                grn.status === 'DRAFT' ? 'bg-slate-50 border-slate-200 text-slate-700' : '',
+                                                            ].join(' ')}
+                                                        >
+                                                            {(grn.status || 'DRAFT').toLowerCase()}
+                                                        </Badge>
+                                                    </div>
+
+                                                    <div className="flex items-center justify-end gap-2">
+                                                        <Button
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-8 w-8"
+                                                            onClick={() => openGrnPreview?.(grn)} // optional hook
+                                                            title="View"
+                                                        >
+                                                            <ClipboardList className="w-4 h-4" />
+                                                        </Button>
+
+                                                        {grn.status === 'DRAFT' && (
+                                                            <Button
+                                                                variant="outline"
+                                                                size="sm"
+                                                                className="h-8 px-3 text-[11px]"
+                                                                onClick={() => onClickPost(grn)}
+                                                            >
+                                                                Post GRN
+                                                            </Button>
+                                                        )}
+                                                    </div>
                                                 </div>
-                                                <div>
-                                                    <p className="text-slate-900">
-                                                        {grn.supplier?.name}
-                                                    </p>
-                                                    <p className="text-slate-500 text-[11px]">
-                                                        {grn.supplier?.phone ||
-                                                            grn.supplier?.email ||
-                                                            '—'}
-                                                    </p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-slate-900">
-                                                        {grn.location?.name}
-                                                    </p>
-                                                    <p className="text-slate-500 text-[11px]">
-                                                        Inv: {grn.invoice_number || '—'}{' '}
-                                                        {grn.invoice_date &&
-                                                            `• ${formatDate(grn.invoice_date)}`}
-                                                    </p>
-                                                </div>
-                                                <div>
+                                            )
+                                        })
+                                    )}
+                                </div>
+                            </div>
+
+                            {/* Mobile cards */}
+                            <div className="md:hidden space-y-2">
+                                {grnLoading ? (
+                                    <div className="space-y-2">
+                                        <Skeleton className="h-24 w-full rounded-2xl" />
+                                        <Skeleton className="h-24 w-full rounded-2xl" />
+                                    </div>
+                                ) : filteredGrns.length === 0 ? (
+                                    <div className="p-4 text-sm text-slate-500 rounded-2xl border border-slate-200 bg-white">
+                                        No GRNs found.
+                                    </div>
+                                ) : (
+                                    filteredGrns.map((grn) => {
+                                        const diff = Number(grn.amount_difference || 0)
+                                        const hasMismatch = Math.abs(diff) >= 0.01 && Number(grn.supplier_invoice_amount || 0) > 0
+
+                                        return (
+                                            <div key={grn.id} className="rounded-2xl border border-slate-200 bg-white p-3">
+                                                <div className="flex items-start justify-between gap-2">
+                                                    <div>
+                                                        <div className="font-semibold text-slate-900 text-sm">
+                                                            {grn.grn_number || `GRN-${String(grn.id).padStart(6, '0')}`}
+                                                        </div>
+                                                        <div className="text-xs text-slate-500">
+                                                            {formatDate(grn.received_date)} • {grn.location?.name || '—'}
+                                                        </div>
+                                                    </div>
                                                     <Badge
                                                         variant="outline"
-                                                        className="text-[10px] capitalize"
+                                                        className={[
+                                                            'text-[10px] capitalize',
+                                                            grn.status === 'POSTED' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : '',
+                                                            grn.status === 'CANCELLED' ? 'bg-rose-50 border-rose-200 text-rose-800' : '',
+                                                            grn.status === 'DRAFT' ? 'bg-slate-50 border-slate-200 text-slate-700' : '',
+                                                        ].join(' ')}
                                                     >
-                                                        {grn.status.toLowerCase()}
+                                                        {(grn.status || 'DRAFT').toLowerCase()}
                                                     </Badge>
                                                 </div>
-                                                <div className="flex items-center justify-end gap-2">
+
+                                                <div className="mt-2 text-xs">
+                                                    <div className="text-slate-700">
+                                                        <span className="text-slate-500">Supplier:</span>{' '}
+                                                        {grn.supplier?.name || '—'}
+                                                    </div>
+                                                    <div className="text-slate-700">
+                                                        <span className="text-slate-500">Invoice:</span>{' '}
+                                                        {grn.invoice_number || '—'} {grn.invoice_date ? `• ${formatDate(grn.invoice_date)}` : ''}
+                                                    </div>
+                                                    <div className="mt-1 text-slate-700 flex items-center gap-2">
+                                                        <span>
+                                                            <span className="text-slate-500">Inv:</span> ₹{Number(grn.supplier_invoice_amount || 0).toFixed(2)}
+                                                        </span>
+                                                        <span>
+                                                            <span className="text-slate-500">Calc:</span> ₹{Number(grn.calculated_grn_amount || 0).toFixed(2)}
+                                                        </span>
+                                                        {hasMismatch && (
+                                                            <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-800 border-amber-200">
+                                                                Diff ₹{diff.toFixed(2)}
+                                                            </Badge>
+                                                        )}
+                                                    </div>
+                                                </div>
+
+                                                <div className="mt-3 flex justify-end gap-2">
                                                     <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-7 w-7"
+                                                        variant="outline"
+                                                        size="sm"
+                                                        className="h-8"
+                                                        onClick={() => openGrnPreview?.(grn)}
                                                     >
-                                                        <ClipboardList className="w-3 h-3" />
+                                                        View
                                                     </Button>
                                                     {grn.status === 'DRAFT' && (
-                                                        <Button
-                                                            variant="outline"
-                                                            size="sm"
-                                                            className="h-7 px-2 text-[11px]"
-                                                            onClick={() => handlePostGrn(grn.id)}
-                                                        >
-                                                            Post GRN
-                                                        </Button>
+                                                        <div className="flex items-center justify-end gap-2">
+                                                            {Number(grn.amount_difference || 0) !== 0 && (
+                                                                <Input
+                                                                    className="h-8 w-56 text-xs bg-white"
+                                                                    placeholder="Difference reason (required)"
+                                                                    value={postReason[grn.id] || ''}
+                                                                    onChange={(e) =>
+                                                                        setPostReason((s) => ({ ...s, [grn.id]: e.target.value }))
+                                                                    }
+                                                                />
+                                                            )}
+
+                                                            <Button
+                                                                size="sm"
+                                                                className="h-8"
+                                                                onClick={() => handlePostGrn(grn.id, postReason[grn.id] || '')}
+                                                            >
+                                                                Post
+                                                            </Button>
+                                                        </div>
                                                     )}
                                                 </div>
                                             </div>
-                                        ))
-                                    )}
-                                </div>
+                                        )
+                                    })
+                                )}
                             </div>
                         </CardContent>
                     </Card>
                 </TabsContent>
+
 
                 {/* RETURNS TAB */}
                 <TabsContent value="returns">
@@ -2978,221 +3312,511 @@ export default function InventoryPharmacy() {
 
             {/* GRN sheet */}
             <Sheet open={grnSheetOpen} onOpenChange={setGrnSheetOpen}>
-                <SheetContent className="w-full sm:max-w-xl overflow-y-auto">
+                <SheetContent className="w-full sm:max-w-3xl overflow-y-auto">
                     <SheetHeader className="mb-4">
-                        <SheetTitle className="text-base font-semibold">
-                            New GRN (DRAFT)
-                        </SheetTitle>
+                        <SheetTitle className="text-base font-semibold">New GRN (DRAFT)</SheetTitle>
                         <SheetDescription className="text-xs">
-                            Capture invoice details, batch numbers, and quantities. Post later
-                            to update stock.
+                            Capture supplier invoice + batches. Post later to update stock.
                         </SheetDescription>
                     </SheetHeader>
-                    <form onSubmit={handleCreateGrn} className="space-y-4 pb-6">
-                        <div className="grid gap-3 sm:grid-cols-2">
-                            <div className="space-y-1.5">
-                                <Label>Supplier</Label>
-                                <Select
-                                    value={grnForm.supplier_id}
-                                    onValueChange={val =>
-                                        setGrnForm(f => ({ ...f, supplier_id: val }))
-                                    }
-                                >
-                                    <SelectTrigger className="bg-white">
-                                        <SelectValue placeholder="Select supplier" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {suppliers.map(s => (
-                                            <SelectItem key={s.id} value={String(s.id)}>
-                                                {s.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Location</Label>
-                                <Select
-                                    value={grnForm.location_id}
-                                    onValueChange={val =>
-                                        setGrnForm(f => ({ ...f, location_id: val }))
-                                    }
-                                >
-                                    <SelectTrigger className="bg-white">
-                                        <SelectValue placeholder="Select location" />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        {locations.map(l => (
-                                            <SelectItem key={l.id} value={String(l.id)}>
-                                                {l.name}
-                                            </SelectItem>
-                                        ))}
-                                    </SelectContent>
-                                </Select>
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Invoice number</Label>
-                                <Input
-                                    value={grnForm.invoice_number}
-                                    onChange={e =>
-                                        setGrnForm(f => ({
-                                            ...f,
-                                            invoice_number: e.target.value,
-                                        }))
-                                    }
-                                />
-                            </div>
-                            <div className="space-y-1.5">
-                                <Label>Invoice date</Label>
-                                <Input
-                                    type="date"
-                                    value={grnForm.invoice_date}
-                                    onChange={e =>
-                                        setGrnForm(f => ({
-                                            ...f,
-                                            invoice_date: e.target.value,
-                                        }))
-                                    }
-                                />
-                            </div>
-                            <div className="sm:col-span-2 space-y-1.5">
-                                <Label>Notes</Label>
-                                <Input
-                                    value={grnForm.notes}
-                                    onChange={e =>
-                                        setGrnForm(f => ({
-                                            ...f,
-                                            notes: e.target.value,
-                                        }))
-                                    }
-                                />
-                            </div>
-                        </div>
 
-                        <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                                <Label>Line items</Label>
-                                <Button
-                                    type="button"
-                                    size="sm"
-                                    variant="outline"
-                                    className="gap-1"
-                                    onClick={addGrnLine}
-                                >
-                                    <Plus className="w-3 h-3" />
-                                    Add line
-                                </Button>
-                            </div>
-                            {grnLines.length === 0 ? (
-                                <p className="text-xs text-slate-500">
-                                    No lines yet. Click “Add line” to add received batches.
-                                </p>
-                            ) : (
-                                <div className="space-y-2 max-h-[260px] overflow-auto pr-1">
-                                    {grnLines.map((ln, idx) => (
-                                        <div
-                                            key={idx}
-                                            className="grid gap-2 rounded-xl border border-slate-200 p-2 sm:grid-cols-[1.6fr,1fr,0.8fr,0.8fr,0.8fr,0.4fr]"
-                                        >
+                    {/* ---------- helpers inside component scope ---------- */}
+                    {/*
+      Place these helper functions at top of your component if not already:
+      const n = (v) => (v === '' || v == null ? 0 : (Number.isFinite(Number(v)) ? Number(v) : 0))
+      const money = (x) => (Math.round((n(x)+Number.EPSILON)*100)/100).toFixed(2)
+    */}
+
+                    {/* ---------- totals (client side) ---------- */}
+                    {(() => {
+                        const n = (v) => (v === '' || v == null ? 0 : (Number.isFinite(Number(v)) ? Number(v) : 0))
+                        const money = (x) => (Math.round((n(x) + Number.EPSILON) * 100) / 100).toFixed(2)
+
+                        const subtotal = grnLines.reduce((s, ln) => s + n(ln.quantity) * n(ln.unit_cost), 0)
+
+                        const discount = grnLines.reduce((s, ln) => {
+                            const gross = n(ln.quantity) * n(ln.unit_cost)
+                            const discAmt = n(ln.discount_amount)
+                            const discPct = n(ln.discount_percent)
+                            return s + (discAmt > 0 ? discAmt : (discPct > 0 ? (gross * discPct) / 100 : 0))
+                        }, 0)
+
+                        const taxable = Math.max(0, subtotal - discount)
+
+                        const tax = grnLines.reduce((s, ln) => {
+                            const gross = n(ln.quantity) * n(ln.unit_cost)
+                            const discAmt = n(ln.discount_amount)
+                            const discPct = n(ln.discount_percent)
+                            const disc = discAmt > 0 ? discAmt : (discPct > 0 ? (gross * discPct) / 100 : 0)
+                            const base = Math.max(0, gross - disc)
+
+                            const cgstP = n(ln.cgst_percent)
+                            const sgstP = n(ln.sgst_percent)
+                            const igstP = n(ln.igst_percent)
+                            const tp = n(ln.tax_percent)
+
+                            const splitP = cgstP + sgstP + igstP
+                            if (splitP > 0) return s + (base * splitP) / 100
+                            if (tp > 0) return s + (base * tp) / 100
+                            return s
+                        }, 0)
+
+                        const extras = n(grnForm.freight_amount) + n(grnForm.other_charges) + n(grnForm.round_off)
+                        const calculated = taxable + tax + extras
+                        const invoice = n(grnForm.supplier_invoice_amount)
+                        const diff = invoice - calculated
+                        const mismatch = invoice > 0 && Math.abs(diff) >= 0.01
+
+                        return (
+                            <form
+                                onSubmit={(e) => {
+                                    // enforce mismatch reason on submit (safe client-side)
+                                    if (mismatch && !String(grnForm.difference_reason || '').trim()) {
+                                        e.preventDefault()
+                                        toast.error('Difference Reason required', {
+                                            description: 'Invoice amount and calculated amount do not match.',
+                                        })
+                                        return
+                                    }
+                                    handleCreateGrn(e)
+                                }}
+                                className="space-y-5 pb-8"
+                            >
+                                {/* ---------------- Header: Supplier + Invoice ---------------- */}
+                                <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-3">
+                                    <div className="grid gap-3 sm:grid-cols-2">
+                                        <div className="space-y-1.5">
+                                            <Label>Supplier</Label>
                                             <Select
-                                                value={ln.item_id ? String(ln.item_id) : ''}
-                                                onValueChange={val =>
-                                                    updateGrnLine(idx, 'item_id', val)
-                                                }
+                                                value={grnForm.supplier_id}
+                                                onValueChange={(val) => setGrnForm((f) => ({ ...f, supplier_id: val }))}
                                             >
-                                                <SelectTrigger className="bg-white h-8">
-                                                    <SelectValue placeholder="Item" />
+                                                <SelectTrigger className="bg-white">
+                                                    <SelectValue placeholder="Select supplier" />
                                                 </SelectTrigger>
                                                 <SelectContent>
-                                                    {items.map(it => (
-                                                        <SelectItem key={it.id} value={String(it.id)}>
-                                                            {it.name}
+                                                    {suppliers.map((s) => (
+                                                        <SelectItem key={s.id} value={String(s.id)}>
+                                                            {s.name}
                                                         </SelectItem>
                                                     ))}
                                                 </SelectContent>
                                             </Select>
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <Label>Location</Label>
+                                            <Select
+                                                value={grnForm.location_id}
+                                                onValueChange={(val) => setGrnForm((f) => ({ ...f, location_id: val }))}
+                                            >
+                                                <SelectTrigger className="bg-white">
+                                                    <SelectValue placeholder="Select location" />
+                                                </SelectTrigger>
+                                                <SelectContent>
+                                                    {locations.map((l) => (
+                                                        <SelectItem key={l.id} value={String(l.id)}>
+                                                            {l.code ? `${l.code} — ${l.name}` : l.name}
+                                                        </SelectItem>
+                                                    ))}
+                                                </SelectContent>
+                                            </Select>
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <Label>Invoice Number</Label>
                                             <Input
-                                                className="h-8"
-                                                placeholder="Batch no."
-                                                value={ln.batch_no}
-                                                onChange={e =>
-                                                    updateGrnLine(
-                                                        idx,
-                                                        'batch_no',
-                                                        e.target.value
-                                                    )
-                                                }
+                                                className="bg-white"
+                                                value={grnForm.invoice_number}
+                                                onChange={(e) => setGrnForm((f) => ({ ...f, invoice_number: e.target.value }))}
+                                                placeholder="Supplier bill no"
                                             />
+                                        </div>
+
+                                        <div className="space-y-1.5">
+                                            <Label>Invoice Date</Label>
                                             <Input
                                                 type="date"
-                                                className="h-8"
-                                                value={ln.expiry_date}
-                                                onChange={e =>
-                                                    updateGrnLine(
-                                                        idx,
-                                                        'expiry_date',
-                                                        e.target.value
-                                                    )
-                                                }
+                                                className="bg-white"
+                                                value={grnForm.invoice_date}
+                                                onChange={(e) => setGrnForm((f) => ({ ...f, invoice_date: e.target.value }))}
                                             />
-                                            <Input
-                                                type="number"
-                                                min="0"
-                                                step="0.01"
-                                                className="h-8"
-                                                placeholder="Qty"
-                                                value={ln.quantity}
-                                                onChange={e =>
-                                                    updateGrnLine(
-                                                        idx,
-                                                        'quantity',
-                                                        e.target.value
-                                                    )
-                                                }
-                                            />
-                                            <Input
-                                                type="number"
-                                                min="0"
-                                                step="0.01"
-                                                className="h-8"
-                                                placeholder="Rate"
-                                                value={ln.unit_cost}
-                                                onChange={e =>
-                                                    updateGrnLine(
-                                                        idx,
-                                                        'unit_cost',
-                                                        e.target.value
-                                                    )
-                                                }
-                                            />
-                                            <Button
-                                                type="button"
-                                                variant="ghost"
-                                                size="icon"
-                                                className="h-8 w-8"
-                                                onClick={() => removeGrnLine(idx)}
-                                            >
-                                                ✕
-                                            </Button>
                                         </div>
-                                    ))}
-                                </div>
-                            )}
-                        </div>
 
-                        <div className="flex justify-between pt-2">
-                            <Button
-                                type="button"
-                                variant="outline"
-                                onClick={() => setGrnSheetOpen(false)}
-                            >
-                                Cancel
-                            </Button>
-                            <Button type="submit">Create GRN (DRAFT)</Button>
-                        </div>
-                    </form>
+                                        <div className="space-y-1.5">
+                                            <Label>Supplier Invoice Amount (Net)</Label>
+                                            <Input
+                                                type="number"
+                                                step="0.01"
+                                                min="0"
+                                                className="bg-white"
+                                                value={grnForm.supplier_invoice_amount}
+                                                onChange={(e) =>
+                                                    setGrnForm((f) => ({ ...f, supplier_invoice_amount: e.target.value }))
+                                                }
+                                                placeholder="0.00"
+                                            />
+                                        </div>
+
+                                        <div className="grid gap-2 sm:grid-cols-3">
+                                            <div className="space-y-1.5">
+                                                <Label>Freight</Label>
+                                                <Input
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    className="bg-white"
+                                                    value={grnForm.freight_amount}
+                                                    onChange={(e) => setGrnForm((f) => ({ ...f, freight_amount: e.target.value }))}
+                                                    placeholder="0.00"
+                                                />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>Other Charges</Label>
+                                                <Input
+                                                    type="number"
+                                                    step="0.01"
+                                                    min="0"
+                                                    className="bg-white"
+                                                    value={grnForm.other_charges}
+                                                    onChange={(e) => setGrnForm((f) => ({ ...f, other_charges: e.target.value }))}
+                                                    placeholder="0.00"
+                                                />
+                                            </div>
+                                            <div className="space-y-1.5">
+                                                <Label>Round Off</Label>
+                                                <Input
+                                                    type="number"
+                                                    step="0.01"
+                                                    className="bg-white"
+                                                    value={grnForm.round_off}
+                                                    onChange={(e) => setGrnForm((f) => ({ ...f, round_off: e.target.value }))}
+                                                    placeholder="0.00"
+                                                />
+                                            </div>
+                                        </div>
+
+                                        <div className="sm:col-span-2 space-y-1.5">
+                                            <Label>Notes</Label>
+                                            <Input
+                                                className="bg-white"
+                                                value={grnForm.notes}
+                                                onChange={(e) => setGrnForm((f) => ({ ...f, notes: e.target.value }))}
+                                                placeholder="Optional"
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* ---------------- Line items ---------------- */}
+                                <div className="space-y-2">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <Label className="text-sm">Line items</Label>
+                                            <p className="text-xs text-slate-500">
+                                                Add batch-wise lines. Free qty is included in stock on POST.
+                                            </p>
+                                        </div>
+                                        <Button type="button" size="sm" variant="outline" className="gap-1" onClick={addGrnLine}>
+                                            <Plus className="w-3 h-3" />
+                                            Add line
+                                        </Button>
+                                    </div>
+
+                                    {grnLines.length === 0 ? (
+                                        <p className="text-xs text-slate-500">
+                                            No lines yet. Click “Add line” to add received batches.
+                                        </p>
+                                    ) : (
+                                        <div className="space-y-2 max-h-[360px] overflow-auto pr-1">
+                                            {grnLines.map((ln, idx) => (
+                                                <div key={idx} className="rounded-2xl border border-slate-200 bg-white p-3">
+                                                    <div className="flex items-center justify-between mb-2">
+                                                        <div className="text-xs font-medium text-slate-600">Line #{idx + 1}</div>
+                                                        <Button
+                                                            type="button"
+                                                            variant="ghost"
+                                                            size="icon"
+                                                            className="h-8 w-8"
+                                                            onClick={() => removeGrnLine(idx)}
+                                                            title="Remove line"
+                                                        >
+                                                            ✕
+                                                        </Button>
+                                                    </div>
+
+                                                    {/* Responsive grid: mobile stacks nicely */}
+                                                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-6">
+                                                        <div className="lg:col-span-2">
+                                                            <Label className="text-xs">Item</Label>
+                                                            <Select
+                                                                value={ln.item_id ? String(ln.item_id) : ''}
+                                                                onValueChange={(val) => updateGrnLine(idx, 'item_id', val)}
+                                                            >
+                                                                <SelectTrigger className="bg-white h-9">
+                                                                    <SelectValue placeholder="Select item" />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    {items.map((it) => (
+                                                                        <SelectItem key={it.id} value={String(it.id)}>
+                                                                            {it.code ? `${it.code} — ${it.name}` : it.name}
+                                                                        </SelectItem>
+                                                                    ))}
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </div>
+
+                                                        <div>
+                                                            <Label className="text-xs">Batch No</Label>
+                                                            <Input
+                                                                className="h-9"
+                                                                placeholder="Batch"
+                                                                value={ln.batch_no}
+                                                                onChange={(e) => updateGrnLine(idx, 'batch_no', e.target.value)}
+                                                            />
+                                                        </div>
+
+                                                        <div>
+                                                            <Label className="text-xs">Expiry</Label>
+                                                            <Input
+                                                                type="date"
+                                                                className="h-9"
+                                                                value={ln.expiry_date}
+                                                                onChange={(e) => updateGrnLine(idx, 'expiry_date', e.target.value)}
+                                                            />
+                                                        </div>
+
+                                                        <div>
+                                                            <Label className="text-xs">Qty</Label>
+                                                            <Input
+                                                                type="number"
+                                                                min="0"
+                                                                step="0.01"
+                                                                className="h-9"
+                                                                placeholder="Qty"
+                                                                value={ln.quantity}
+                                                                onChange={(e) => updateGrnLine(idx, 'quantity', e.target.value)}
+                                                            />
+                                                        </div>
+
+                                                        <div>
+                                                            <Label className="text-xs">Free</Label>
+                                                            <Input
+                                                                type="number"
+                                                                min="0"
+                                                                step="0.01"
+                                                                className="h-9"
+                                                                placeholder="Free"
+                                                                value={ln.free_quantity || ''}
+                                                                onChange={(e) => updateGrnLine(idx, 'free_quantity', e.target.value)}
+                                                            />
+                                                        </div>
+
+                                                        <div>
+                                                            <Label className="text-xs">Unit Cost</Label>
+                                                            <Input
+                                                                type="number"
+                                                                min="0"
+                                                                step="0.01"
+                                                                className="h-9"
+                                                                placeholder="Rate"
+                                                                value={ln.unit_cost}
+                                                                onChange={(e) => updateGrnLine(idx, 'unit_cost', e.target.value)}
+                                                            />
+                                                        </div>
+
+                                                        <div>
+                                                            <Label className="text-xs">MRP</Label>
+                                                            <Input
+                                                                type="number"
+                                                                min="0"
+                                                                step="0.01"
+                                                                className="h-9"
+                                                                placeholder="MRP"
+                                                                value={ln.mrp || ''}
+                                                                onChange={(e) => updateGrnLine(idx, 'mrp', e.target.value)}
+                                                            />
+                                                        </div>
+
+                                                        <div>
+                                                            <Label className="text-xs">Disc %</Label>
+                                                            <Input
+                                                                type="number"
+                                                                min="0"
+                                                                step="0.01"
+                                                                className="h-9"
+                                                                placeholder="0"
+                                                                value={ln.discount_percent || ''}
+                                                                onChange={(e) => updateGrnLine(idx, 'discount_percent', e.target.value)}
+                                                            />
+                                                        </div>
+
+                                                        <div>
+                                                            <Label className="text-xs">Disc Amt</Label>
+                                                            <Input
+                                                                type="number"
+                                                                min="0"
+                                                                step="0.01"
+                                                                className="h-9"
+                                                                placeholder="0.00"
+                                                                value={ln.discount_amount || ''}
+                                                                onChange={(e) => updateGrnLine(idx, 'discount_amount', e.target.value)}
+                                                            />
+                                                        </div>
+
+                                                        <div>
+                                                            <Label className="text-xs">CGST %</Label>
+                                                            <Input
+                                                                type="number"
+                                                                min="0"
+                                                                step="0.01"
+                                                                className="h-9"
+                                                                value={ln.cgst_percent || ''}
+                                                                onChange={(e) => updateGrnLine(idx, 'cgst_percent', e.target.value)}
+                                                            />
+                                                        </div>
+
+                                                        <div>
+                                                            <Label className="text-xs">SGST %</Label>
+                                                            <Input
+                                                                type="number"
+                                                                min="0"
+                                                                step="0.01"
+                                                                className="h-9"
+                                                                value={ln.sgst_percent || ''}
+                                                                onChange={(e) => updateGrnLine(idx, 'sgst_percent', e.target.value)}
+                                                            />
+                                                        </div>
+
+                                                        <div>
+                                                            <Label className="text-xs">IGST %</Label>
+                                                            <Input
+                                                                type="number"
+                                                                min="0"
+                                                                step="0.01"
+                                                                className="h-9"
+                                                                value={ln.igst_percent || ''}
+                                                                onChange={(e) => updateGrnLine(idx, 'igst_percent', e.target.value)}
+                                                            />
+                                                        </div>
+
+                                                        <div>
+                                                            <Label className="text-xs">Tax % (Fallback)</Label>
+                                                            <Input
+                                                                type="number"
+                                                                min="0"
+                                                                step="0.01"
+                                                                className="h-9"
+                                                                value={ln.tax_percent || ''}
+                                                                onChange={(e) => updateGrnLine(idx, 'tax_percent', e.target.value)}
+                                                                placeholder="0"
+                                                            />
+                                                        </div>
+
+                                                        <div className="lg:col-span-2">
+                                                            <Label className="text-xs">Scheme</Label>
+                                                            <Input
+                                                                className="h-9"
+                                                                value={ln.scheme || ''}
+                                                                onChange={(e) => updateGrnLine(idx, 'scheme', e.target.value)}
+                                                                placeholder="ex: 10+1"
+                                                            />
+                                                        </div>
+
+                                                        <div className="lg:col-span-4">
+                                                            <Label className="text-xs">Remarks</Label>
+                                                            <Input
+                                                                className="h-9"
+                                                                value={ln.remarks || ''}
+                                                                onChange={(e) => updateGrnLine(idx, 'remarks', e.target.value)}
+                                                                placeholder="Optional"
+                                                            />
+                                                        </div>
+                                                    </div>
+
+                                                    {/* line preview */}
+                                                    <div className="mt-2 text-xs text-slate-600">
+                                                        Line total (est.):{' '}
+                                                        <span className="font-medium text-slate-900">
+                                                            {money(
+                                                                Math.max(
+                                                                    0,
+                                                                    n(ln.quantity) * n(ln.unit_cost) -
+                                                                    (n(ln.discount_amount) > 0
+                                                                        ? n(ln.discount_amount)
+                                                                        : ((n(ln.quantity) * n(ln.unit_cost)) * n(ln.discount_percent)) / 100)
+                                                                )
+                                                            )}
+                                                        </span>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* ---------------- Totals & mismatch ---------------- */}
+                                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm">
+                                    <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                                        <div><span className="text-slate-500">Subtotal:</span> {money(subtotal)}</div>
+                                        <div><span className="text-slate-500">Discount:</span> {money(discount)}</div>
+                                        <div><span className="text-slate-500">Tax (est.):</span> {money(tax)}</div>
+                                        <div><span className="text-slate-500">Extras:</span> {money(extras)}</div>
+                                    </div>
+
+                                    <div className="mt-2 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
+                                        <div className="font-medium">
+                                            Calculated GRN Amount: {money(calculated)}
+                                        </div>
+                                        <div className="text-slate-600">
+                                            Supplier Invoice: {money(invoice)}
+                                        </div>
+                                    </div>
+
+                                    {mismatch && (
+                                        <div className="mt-2 rounded-xl bg-amber-100 p-2 text-amber-900 text-xs flex gap-2">
+                                            <AlertTriangle className="h-4 w-4 mt-0.5" />
+                                            <div>
+                                                <div className="font-medium">
+                                                    Difference: {money(diff)} (Invoice − Calculated)
+                                                </div>
+                                                <div className="opacity-80">
+                                                    Please enter a reason before creating GRN.
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {mismatch && (
+                                        <div className="mt-3 space-y-1.5">
+                                            <Label>Difference Reason (Required)</Label>
+                                            <Input
+                                                className="bg-white"
+                                                value={grnForm.difference_reason || ''}
+                                                onChange={(e) =>
+                                                    setGrnForm((f) => ({ ...f, difference_reason: e.target.value }))
+                                                }
+                                                placeholder="Rounding / short supply / damaged / manual…"
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* ---------------- Footer actions ---------------- */}
+                                <div className="flex justify-between pt-1">
+                                    <Button type="button" variant="outline" onClick={() => setGrnSheetOpen(false)}>
+                                        Cancel
+                                    </Button>
+                                    <Button type="submit">
+                                        Create GRN (DRAFT)
+                                    </Button>
+                                </div>
+                            </form>
+                        )
+                    })()}
                 </SheetContent>
             </Sheet>
+
 
             {/* Return sheet */}
             <Sheet open={returnSheetOpen} onOpenChange={setReturnSheetOpen}>
@@ -3407,6 +4031,186 @@ export default function InventoryPharmacy() {
                     </form>
                 </SheetContent>
             </Sheet>
+            <Dialog
+                open={postModal.open}
+                onOpenChange={(v) => {
+                    if (!v) setPostModal({ open: false, grn: null, reason: '', posting: false })
+                }}
+            >
+                <DialogContent className="sm:max-w-lg rounded-2xl">
+                    <DialogHeader>
+                        <DialogTitle>Invoice mismatch — reason required</DialogTitle>
+                    </DialogHeader>
+
+                    <div className="space-y-2 text-sm">
+                        <div className="rounded-xl border bg-slate-50 p-3">
+                            <div className="flex items-center justify-between">
+                                <span className="text-slate-500">GRN</span>
+                                <span className="font-medium">{postModal.grn?.grn_number || `#${postModal.grn?.id}`}</span>
+                            </div>
+                            <div className="mt-1 flex items-center justify-between">
+                                <span className="text-slate-500">Difference</span>
+                                <span className="font-semibold text-amber-700">
+                                    ₹{Number(postModal.grn?.amount_difference || 0).toFixed(2)}
+                                </span>
+                            </div>
+                        </div>
+
+                        <div className="space-y-1">
+                            <Label>Difference Reason</Label>
+                            <Textarea
+                                value={postModal.reason}
+                                onChange={(e) => setPostModal((s) => ({ ...s, reason: e.target.value }))}
+                                placeholder="Rounding / short supply / damaged / manual adjustment…"
+                                className="min-h-[90px]"
+                            />
+                            <p className="text-xs text-slate-500">
+                                This will be saved into GRN and used for audit.
+                            </p>
+                        </div>
+                    </div>
+
+                    <DialogFooter className="gap-2">
+                        <Button
+                            variant="outline"
+                            onClick={() => setPostModal({ open: false, grn: null, reason: '', posting: false })}
+                            disabled={postModal.posting}
+                        >
+                            Cancel
+                        </Button>
+
+                        <Button
+                            disabled={postModal.posting || !postModal.reason.trim()}
+                            onClick={async () => {
+                                const grnId = postModal.grn?.id
+                                if (!grnId) return
+
+                                setPostModal((s) => ({ ...s, posting: true }))
+                                try {
+                                    await handlePostGrn(grnId, postModal.reason.trim())
+                                    setPostModal({ open: false, grn: null, reason: '', posting: false })
+                                } finally {
+                                    setPostModal((s) => ({ ...s, posting: false }))
+                                }
+                            }}
+                        >
+                            {postModal.posting ? 'Posting…' : 'Post GRN'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+            <Dialog
+                open={grnView.open}
+                onOpenChange={(v) => {
+                    if (!v) setGrnView({ open: false, loading: false, data: null })
+                }}
+            >
+                <DialogContent className="sm:max-w-3xl rounded-2xl">
+                    <DialogHeader>
+                        <DialogTitle className="flex items-center justify-between">
+                            <span>GRN Details</span>
+                        </DialogTitle>
+                    </DialogHeader>
+
+                    {grnView.loading ? (
+                        <div className="space-y-2">
+                            <Skeleton className="h-6 w-1/2" />
+                            <Skeleton className="h-24 w-full" />
+                            <Skeleton className="h-24 w-full" />
+                        </div>
+                    ) : !grnView.data ? (
+                        <div className="text-sm text-slate-500">No data.</div>
+                    ) : (
+                        <div className="space-y-4">
+                            {/* Header info */}
+                            <div className="rounded-xl border bg-slate-50 p-3 text-sm">
+                                <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+                                    <div>
+                                        <div className="text-xs text-slate-500">GRN</div>
+                                        <div className="font-semibold">{grnView.data.grn_number}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-xs text-slate-500">Status</div>
+                                        <Badge variant="outline" className="capitalize">
+                                            {(grnView.data.status || 'DRAFT').toLowerCase()}
+                                        </Badge>
+                                    </div>
+                                    <div>
+                                        <div className="text-xs text-slate-500">Supplier</div>
+                                        <div className="font-medium">{grnView.data.supplier?.name || '—'}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-xs text-slate-500">Location</div>
+                                        <div className="font-medium">{grnView.data.location?.name || '—'}</div>
+                                    </div>
+                                    <div className="lg:col-span-2">
+                                        <div className="text-xs text-slate-500">Invoice</div>
+                                        <div className="font-medium">
+                                            {grnView.data.invoice_number || '—'}
+                                            {grnView.data.invoice_date ? ` • ${formatDate(grnView.data.invoice_date)}` : ''}
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <div className="text-xs text-slate-500">Received</div>
+                                        <div className="font-medium">{formatDate(grnView.data.received_date)}</div>
+                                    </div>
+                                    <div>
+                                        <div className="text-xs text-slate-500">Notes</div>
+                                        <div className="font-medium line-clamp-1">{grnView.data.notes || '—'}</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Items */}
+                            <div className="border rounded-xl overflow-hidden">
+                                <div className="grid grid-cols-[1.4fr,0.9fr,0.8fr,0.7fr,0.9fr] bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-500">
+                                    <span>Item</span>
+                                    <span>Batch</span>
+                                    <span>Expiry</span>
+                                    <span className="text-right">Qty</span>
+                                    <span className="text-right">Line total</span>
+                                </div>
+
+                                <div className="max-h-[320px] overflow-auto divide-y">
+                                    {(grnView.data.items || []).map((it) => (
+                                        <div
+                                            key={it.id}
+                                            className="grid grid-cols-[1.4fr,0.9fr,0.8fr,0.7fr,0.9fr] px-3 py-2 text-xs"
+                                        >
+                                            <div className="text-slate-900">
+                                                {it.item?.name || `Item#${it.item_id}`}
+                                            </div>
+                                            <div className="text-slate-700">{it.batch_no}</div>
+                                            <div className="text-slate-700">
+                                                {it.expiry_date ? formatDate(it.expiry_date) : '—'}
+                                            </div>
+                                            <div className="text-right text-slate-900">
+                                                {Number(it.quantity || 0).toFixed(2)}
+                                                {Number(it.free_quantity || 0) > 0 ? (
+                                                    <span className="text-[11px] text-slate-500"> + {Number(it.free_quantity).toFixed(2)} free</span>
+                                                ) : null}
+                                            </div>
+                                            <div className="text-right text-slate-900">
+                                                ₹{Number(it.line_total || 0).toFixed(2)}
+                                            </div>
+                                        </div>
+                                    ))}
+                                    {(grnView.data.items || []).length === 0 && (
+                                        <div className="p-4 text-sm text-slate-500">No items.</div>
+                                    )}
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    <DialogFooter className="gap-2">
+                        <Button variant="outline" onClick={() => setGrnView({ open: false, loading: false, data: null })}>
+                            Close
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
         </motion.div>
     )
 }

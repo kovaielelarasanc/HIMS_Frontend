@@ -130,10 +130,9 @@ export function getGrn(id) {
     return API.get(`/inventory/grn/${id}`)
 }
 
-export function postGrn(id) {
-    return API.post(`/inventory/grn/${id}/post`)
+export function postGrn(id, body = {}) {
+    return API.post(`/inventory/grn/${id}/post`, body) // ✅ send {} at least
 }
-
 // ---------- Returns ----------
 export function createReturnNote(payload) {
     return API.post('/inventory/returns', payload)
@@ -151,6 +150,8 @@ export function postReturnNote(id) {
     return API.post(`/inventory/returns/${id}/post`)
 }
 
+
+
 // ---------- Dispense ----------
 export function dispenseStock(payload) {
     return API.post('/inventory/dispense', payload)
@@ -164,14 +165,14 @@ export function getItemByQr(qrNumber) {
     return API.get(`/inventory/items/by-qr/${encodeURIComponent(qrNumber)}`)
 }
 export function findItemByBarcode(barcodeNumber) {
-  return API.get('/inventory/items/by-qr-number', {
-    params: { qr_number: barcodeNumber },
-  })
+    return API.get('/inventory/items/by-qr-number', {
+        params: { qr_number: barcodeNumber },
+    })
 }
 
 // Get BARCODE PNG (path kept as /qr but returns 1D barcode now)
 export function getItemBarcodePng(itemId) {
-  return API.get(`/inventory/items/${itemId}/qr`, {
-    responseType: 'blob',
-  })
+    return API.get(`/inventory/items/${itemId}/qr`, {
+        responseType: 'blob',
+    })
 }

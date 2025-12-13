@@ -82,6 +82,10 @@ import AnalyzerStagingResults from './lab/AnalyzerStagingResults'
 import AnalyzerDeviceMapping from './lab/AnalyzerDeviceMapping'
 import AnalyzerStatusWidget from './lab/AnalyzerStatusWidget'
 import AnalyzerDeviceLogs from './lab/AnalyzerDeviceLogs'
+import SupplierLedger from './pharmacy/accounts/SupplierLedger'
+import SupplierMonthlySummary from './pharmacy/accounts/SupplierMonthlySummary'
+import SupplierPaymentAdvanced from './pharmacy/accounts/SupplierPaymentAdvanced'
+import SupplierPayments from './pharmacy/accounts/SupplierPayments'
 
 export default function App() {
     useEffect(() => {
@@ -161,7 +165,7 @@ export default function App() {
                         <Route path="/lab/orders/:id" element={<LabOrderDetail />} />
                         <Route path="/lab/masters" element={<LabMasters />} />
                         <Route path="/lab/service/masters" element={<LisMasters />} />
-                        <Route path="/lab/orders/:id/print" element={<LabReportPrint  />} />
+                        <Route path="/lab/orders/:id/print" element={<LabReportPrint />} />
 
                         <Route path="/lis/analyzer-staging" element={<AnalyzerStagingResults />} />
                         <Route path="/lis/device-logs" element={<AnalyzerDeviceLogs />} />
@@ -220,7 +224,7 @@ export default function App() {
                             element={<MedicineQrLookup />}
                         />
                         <Route
-                            path="/inventory/barcode-lookup"
+                            path="/pharmacy/inventory/barcode-lookup"
                             element={<BarcodeLookup />}
                         />
 
@@ -241,6 +245,10 @@ export default function App() {
                             element={<PharmacyCounterOrder />}
                         />
                         <Route path="/ot/phramacy" element={<OtConsumableOrder />} />
+                        <Route path="/pharmacy/accounts/supplier-ledger" element={<SupplierLedger />} />
+                        <Route path="/pharmacy/accounts/supplier-monthly-summary" element={<SupplierMonthlySummary />} />
+                        <Route path="/pharmacy/accounts/supplier-payments" element={<SupplierPaymentAdvanced />} />
+                        <Route path="/pharmacy/accounts/supplier-statement" element={<SupplierPayments />} />
                     </Route>
                 </Route>
 

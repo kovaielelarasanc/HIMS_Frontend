@@ -133,8 +133,8 @@ const TABS = [
     { key: 'io', label: 'Intake/Output', el: IntakeOutput, writePerm: 'ipd.nursing' },
     { key: 'handover', label: 'Shift Handover', el: ShiftHandover, writePerm: 'ipd.nursing' },
 
-    { key: 'rounds', label: 'Doctor Rounds', el: DoctorRounds, writePerm: 'ipd.doctor' },
-    { key: 'progress', label: 'Progress Notes', el: ProgressNotes, writePerm: 'ipd.doctor' },
+    // { key: 'rounds', label: 'Doctor Rounds', el: DoctorRounds, writePerm: 'ipd.doctor' },
+    // { key: 'progress', label: 'Progress Notes', el: ProgressNotes, writePerm: 'ipd.doctor' },
 
     // NEW CLINICAL CONTENT
     { key: 'assessments', label: 'Assessments', el: AssessmentsTab, writePerm: 'ipd.nursing' },
