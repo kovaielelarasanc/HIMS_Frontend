@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 import { toast } from 'sonner'
 import { Badge } from '@/components/ui/badge'
 import { Copy, ScanLine } from 'lucide-react'
-
+import { Switch } from '@/components/ui/switch'
 // FILE: src/pages/InventoryPharmacy.jsx
 import {
     listInventoryLocations,
@@ -12,8 +12,8 @@ import {
     listInventoryItems,
     createInventoryItem,
     updateInventoryItem,
-    downloadItemsSampleCsv,
-    bulkUploadItemsCsv,
+    // downloadItemsSampleCsv,
+    // bulkUploadItemsCsv,
     getStockSummary,
     getExpiryAlerts,
     getExpiredAlerts,       // NEW
@@ -36,7 +36,10 @@ import {
     updateInventoryLocation,
     createSupplier,
     updateSupplier,
-    getGrn
+    getGrn,
+    downloadItemsTemplate,
+    previewItemsUpload,
+    commitItemsUpload
 } from '../api/inventory'
 
 
@@ -96,8 +99,13 @@ import {
     Mail,
     Plus,
     Activity,
-    ShieldAlert,            // NEW
+    ShieldAlert,
+    Info          // NEW
 } from 'lucide-react'
+
+import ItemsBulkUploadDialog from './ItemsBulkUploadDialog'
+import PurchaseOrdersTab from './PurchaseOrdersTab'
+import GrnTab from './GrnTab'
 
 
 // -------- helpers --------
@@ -110,9 +118,10 @@ function formatDate(iso) {
     }
 }
 
-function formatNumber(v) {
-    if (v == null) return '0'
-    return Number(v).toLocaleString(undefined, { maximumFractionDigits: 2 })
+const formatNumber = (v) => {
+    const n = Number(v)
+    if (!Number.isFinite(n)) return '0'
+    return n.toLocaleString('en-IN', { maximumFractionDigits: 2 })
 }
 
 // -------- main --------
@@ -124,6 +133,7 @@ export default function InventoryPharmacy() {
     const [suppliers, setSuppliers] = useState([])
     const [items, setItems] = useState([])
     const [itemsLoading, setItemsLoading] = useState(false)
+    const [bulkDialogOpen, setBulkDialogOpen] = useState(false)
 
     // stock & alerts
     // stock & alerts
@@ -151,7 +161,13 @@ export default function InventoryPharmacy() {
     const [activeLocationId, setActiveLocationId] = useState('ALL')
     const [itemSearch, setItemSearch] = useState('')
     const [stockView, setStockView] = useState('saleable')          // NEW
+    const [uploadFile, setUploadFile] = useState(null)
+    const [uploadPreview, setUploadPreview] = useState(null)
+    const [previewLoading, setPreviewLoading] = useState(false)
+    const [commitLoading, setCommitLoading] = useState(false)
 
+    const [strictMode, setStrictMode] = useState(true)
+    const [updateBlanks, setUpdateBlanks] = useState(false)
 
     // dialogs / sheets
     const [itemDialogOpen, setItemDialogOpen] = useState(false)
@@ -218,6 +234,71 @@ export default function InventoryPharmacy() {
     const [grnQuery, setGrnQuery] = useState('')
     const [grnStatus, setGrnStatus] = useState('ALL')
 
+
+    // ✅ Preview
+    async function handlePreviewUpload(e) {
+        e.preventDefault()
+
+        const file = uploadFile
+        if (!file) {
+            toast.error('Please choose a file (CSV / Excel)')
+            return
+        }
+
+        setPreviewLoading(true)
+        try {
+            const res = await previewItemsUpload(file)
+            setUploadPreview(res.data)
+
+            const errs = res.data?.errors || []
+            if (errs.length) {
+                toast.warning(`Found ${errs.length} issue(s). Fix and re-upload or use Non-strict commit.`)
+            } else {
+                toast.success('Preview looks good ✅')
+            }
+        } catch (err) {
+            console.error(err)
+            setUploadPreview(null)
+        } finally {
+            setPreviewLoading(false)
+        }
+    }
+
+    // ✅ Commit
+    async function handleCommitUpload() {
+        const file = uploadFile
+        if (!file) return toast.error('Choose a file first')
+        if (!uploadPreview) return toast.error('Preview first')
+
+        setCommitLoading(true)
+        try {
+            const res = await commitItemsUpload(file, {
+                strict: strictMode,
+                updateBlanks,
+            })
+
+            toast.success(`Imported ✅ Created: ${res.data.created}, Updated: ${res.data.updated}`)
+            setCsvDialogOpen(false)
+            setUploadFile(null)
+            setUploadPreview(null)
+
+            loadItems()
+            loadStock()
+        } catch (err) {
+            console.error(err)
+
+            // strict mode returns 422 with detail as array of errors
+            const detail = err?.response?.data?.detail
+            if (Array.isArray(detail)) {
+                setUploadPreview((p) => ({ ...(p || {}), errors: detail }))
+                toast.error(`Fix ${detail.length} error(s) and re-upload`)
+            }
+        } finally {
+            setCommitLoading(false)
+        }
+    }
+
+
     const n = (v) => {
         if (v === '' || v === null || v === undefined) return 0
         const x = Number(v)
@@ -253,6 +334,22 @@ export default function InventoryPharmacy() {
         loading: false,
         data: null,
     })
+
+    async function handleDownloadTemplate(format) {
+        try {
+            const res = await downloadItemsTemplate(format)
+            const blob = res.data
+            const url = window.URL.createObjectURL(blob)
+            const a = document.createElement('a')
+            a.href = url
+            a.download = format === 'xlsx' ? 'items_template.xlsx' : 'items_template.csv'
+            document.body.appendChild(a)
+            a.click()
+            a.remove()
+            window.URL.revokeObjectURL(url)
+            toast.success(`${format.toUpperCase()} template downloaded`)
+        } catch { }
+    }
 
     async function openGrnPreview(grn) {
         const id = grn?.id
@@ -624,40 +721,40 @@ export default function InventoryPharmacy() {
     }
 
     // -------- CSV --------
-    async function handleDownloadSampleCsv() {
-        try {
-            const res = await downloadItemsSampleCsv()
-            const blob = new Blob([res.data], { type: 'text/csv' })
-            const url = URL.createObjectURL(blob)
-            const a = document.createElement('a')
-            a.href = url
-            a.download = 'pharmacy_items_sample.csv'
-            a.click()
-            URL.revokeObjectURL(url)
-        } catch (err) {
-            console.error(err)
-        }
-    }
+    // async function handleDownloadSampleCsv() {
+    //     try {
+    //         const res = await downloadItemsSampleCsv()
+    //         const blob = new Blob([res.data], { type: 'text/csv' })
+    //         const url = URL.createObjectURL(blob)
+    //         const a = document.createElement('a')
+    //         a.href = url
+    //         a.download = 'pharmacy_items_sample.csv'
+    //         a.click()
+    //         URL.revokeObjectURL(url)
+    //     } catch (err) {
+    //         console.error(err)
+    //     }
+    // }
 
-    async function handleUploadCsv(e) {
-        e.preventDefault()
-        const file = e.target.file?.files?.[0]
-        if (!file) {
-            toast.error('Please choose a CSV file')
-            return
-        }
-        try {
-            const res = await bulkUploadItemsCsv(file)
-            toast.success(
-                `Items uploaded – created: ${res.data.created}, updated: ${res.data.updated}`
-            )
-            setCsvDialogOpen(false)
-            loadItems()
-            loadStock()
-        } catch (err) {
-            console.error(err)
-        }
-    }
+    // async function handleUploadCsv(e) {
+    //     e.preventDefault()
+    //     const file = e.target.file?.files?.[0]
+    //     if (!file) {
+    //         toast.error('Please choose a CSV file')
+    //         return
+    //     }
+    //     try {
+    //         const res = await bulkUploadItemsCsv(file)
+    //         toast.success(
+    //             `Items uploaded – created: ${res.data.created}, updated: ${res.data.updated}`
+    //         )
+    //         setCsvDialogOpen(false)
+    //         loadItems()
+    //         loadStock()
+    //     } catch (err) {
+    //         console.error(err)
+    //     }
+    // }
 
     // -------- PO --------
     function addPoLine() {
@@ -1412,67 +1509,76 @@ export default function InventoryPharmacy() {
                     </div>
                 </TabsContent>
 
-                {/* ITEMS TAB */}
                 <TabsContent value="items">
                     <Card className="rounded-3xl border-slate-200 shadow-sm">
-                        <CardHeader className="flex flex-row items-center justify-between gap-3">
+                        <CardHeader className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                             <div>
                                 <CardTitle className="text-sm font-semibold text-slate-900 flex items-center gap-2">
                                     Pharmacy items
-                                    <Badge variant="outline" className="text-xs">
-                                        {items.length}
-                                    </Badge>
+                                    <Badge variant="outline" className="text-xs">{items.length}</Badge>
                                 </CardTitle>
-                                <p className="text-xs text-slate-500">
-                                    Medicines & consumables master — supports manual and CSV bulk
-                                    upload.
+
+                                <p className="text-xs text-slate-500 flex items-center gap-2 mt-1">
+                                    Medicines & consumables master (defaults only for prefill).
+                                    <span className="inline-flex items-center gap-1 text-slate-600">
+                                        <Info className="h-3 w-3" />
+                                        Billing uses <b>Batch MRP from GRN</b>.
+                                    </span>
                                 </p>
                             </div>
+
                             <div className="flex flex-wrap gap-2">
                                 <Button
                                     variant="outline"
                                     size="sm"
-                                    className="gap-1"
-                                    onClick={() => setCsvDialogOpen(true)}
+                                    className="gap-1 rounded-2xl"
+                                    onClick={() => setBulkDialogOpen(true)}
                                 >
                                     <Upload className="w-3 h-3" />
-                                    CSV upload
+                                    Upload (CSV/Excel)
                                 </Button>
+
                                 <Button
                                     variant="outline"
                                     size="sm"
-                                    className="gap-1"
-                                    onClick={handleDownloadSampleCsv}
+                                    className="gap-1 rounded-2xl"
+                                    onClick={() => handleDownloadTemplate('csv')}
                                 >
                                     <Download className="w-3 h-3" />
-                                    Sample CSV
+                                    Template CSV
                                 </Button>
+
                                 <Button
+                                    variant="outline"
                                     size="sm"
-                                    className="gap-1"
-                                    onClick={openNewItemDialog}
+                                    className="gap-1 rounded-2xl"
+                                    onClick={() => handleDownloadTemplate('xlsx')}
                                 >
+                                    <Download className="w-3 h-3" />
+                                    Template Excel
+                                </Button>
+
+                                <Button size="sm" className="gap-1 rounded-2xl" onClick={openNewItemDialog}>
                                     <Plus className="w-3 h-3" />
                                     New item
                                 </Button>
                             </div>
                         </CardHeader>
+
                         <CardContent className="space-y-3">
                             <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                                 <div className="flex items-center gap-2 w-full sm:w-auto">
                                     <Input
                                         placeholder="Search by name / code / generic..."
-                                        className="w-full sm:w-80 bg-white"
+                                        className="w-full sm:w-80 bg-white rounded-2xl"
                                         value={itemSearch}
-                                        onChange={e => setItemSearch(e.target.value)}
-                                        onKeyDown={e => {
-                                            if (e.key === 'Enter') loadItems()
-                                        }}
+                                        onChange={(e) => setItemSearch(e.target.value)}
+                                        onKeyDown={(e) => e.key === 'Enter' && loadItems()}
                                     />
                                     <Button
                                         variant="outline"
                                         size="icon"
-                                        className="rounded-full"
+                                        className="rounded-2xl"
                                         onClick={loadItems}
                                     >
                                         <Filter className="w-4 h-4" />
@@ -1480,14 +1586,16 @@ export default function InventoryPharmacy() {
                                 </div>
                             </div>
 
-                            <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white">
+                            {/* Desktop table */}
+                            <div className="hidden md:block border border-slate-200 rounded-2xl overflow-hidden bg-white">
                                 <div className="grid grid-cols-[2fr,1.2fr,1fr,1fr,0.6fr] px-3 py-2 text-xs font-semibold text-slate-500 bg-slate-50">
                                     <span>Name / code</span>
                                     <span>Generic / form</span>
-                                    <span>Default price / MRP</span>
+                                    <span>Defaults (prefill)</span>
                                     <span>Reorder / Max</span>
                                     <span className="text-right">Actions</span>
                                 </div>
+
                                 <div className="max-h-[420px] overflow-auto divide-y divide-slate-100">
                                     {itemsLoading ? (
                                         <div className="p-3 space-y-2">
@@ -1497,73 +1605,50 @@ export default function InventoryPharmacy() {
                                         </div>
                                     ) : items.length === 0 ? (
                                         <div className="p-4 text-sm text-slate-500">
-                                            No items found. Use “New item” or CSV upload to add
-                                            catalogue.
+                                            No items found. Use “New item” or Upload to add catalogue.
                                         </div>
                                     ) : (
-                                        items.map(it => (
+                                        items.map((it) => (
                                             <div
                                                 key={it.id}
                                                 className="grid grid-cols-[2fr,1.2fr,1fr,1fr,0.6fr] items-center px-3 py-2 text-xs"
                                             >
                                                 <div>
-                                                    <div className="font-medium text-slate-900">
-                                                        {it.name}
-                                                    </div>
+                                                    <div className="font-medium text-slate-900">{it.name}</div>
                                                     <div className="text-slate-500 flex flex-wrap items-center gap-1">
                                                         <span>{it.code}</span>
-                                                        {it.is_consumable && (
-                                                            <Badge
-                                                                variant="outline"
-                                                                className="text-[10px]"
-                                                            >
-                                                                Consumable
-                                                            </Badge>
-                                                        )}
-                                                        {it.lasa_flag && (
-                                                            <Badge
-                                                                variant="outline"
-                                                                className="text-[10px] border-rose-300 text-rose-600"
-                                                            >
-                                                                LASA
-                                                            </Badge>
-                                                        )}
+                                                        {it.is_consumable && <Badge variant="outline" className="text-[10px]">Consumable</Badge>}
+                                                        {it.lasa_flag && <Badge variant="outline" className="text-[10px] border-rose-300 text-rose-600">LASA</Badge>}
                                                     </div>
                                                 </div>
+
                                                 <div>
-                                                    <div className="text-slate-700">
-                                                        {it.generic_name || '—'}
-                                                    </div>
+                                                    <div className="text-slate-700">{it.generic_name || '—'}</div>
                                                     <div className="text-slate-500">
-                                                        {it.form || '—'}{' '}
-                                                        {it.strength && `• ${it.strength}`}
+                                                        {it.form || '—'} {it.strength && `• ${it.strength}`}
                                                     </div>
                                                 </div>
+
                                                 <div>
-                                                    <div className="text-slate-700">
-                                                        Price: ₹{formatNumber(it.default_price)}
-                                                    </div>
+                                                    <div className="text-slate-700">Price: ₹{formatNumber(it.default_price)}</div>
                                                     <div className="text-slate-500">
-                                                        MRP: ₹{formatNumber(it.default_mrp)} • Tax:{' '}
-                                                        {formatNumber(it.default_tax_percent)}%
+                                                        MRP: ₹{formatNumber(it.default_mrp)} • Tax: {formatNumber(it.default_tax_percent)}%
                                                     </div>
                                                 </div>
+
                                                 <div>
-                                                    <div className="text-slate-700">
-                                                        Reorder: {formatNumber(it.reorder_level)}
-                                                    </div>
-                                                    <div className="text-slate-500">
-                                                        Max: {formatNumber(it.max_level)}
-                                                    </div>
+                                                    <div className="text-slate-700">Reorder: {formatNumber(it.reorder_level)}</div>
+                                                    <div className="text-slate-500">Max: {formatNumber(it.max_level)}</div>
                                                 </div>
+
                                                 <div className="flex items-center justify-end gap-2">
                                                     <Button
                                                         variant="ghost"
                                                         size="icon"
-                                                        className="h-7 w-7"
+                                                        className="h-8 w-8 rounded-2xl"
                                                         onClick={() => openEditItemDialog(it)}
                                                     >
-                                                        <Eye className="w-3 h-3" />
+                                                        <Eye className="w-4 h-4" />
                                                     </Button>
                                                 </div>
                                             </div>
@@ -1571,6 +1656,57 @@ export default function InventoryPharmacy() {
                                     )}
                                 </div>
                             </div>
+
+                            {/* Mobile cards */}
+                            <div className="md:hidden space-y-2">
+                                {itemsLoading ? (
+                                    <div className="p-3 space-y-2">
+                                        <Skeleton className="h-16 w-full rounded-2xl" />
+                                        <Skeleton className="h-16 w-full rounded-2xl" />
+                                    </div>
+                                ) : items.length === 0 ? (
+                                    <div className="p-4 text-sm text-slate-500 border rounded-2xl bg-white">
+                                        No items found. Use “New item” or Upload to add catalogue.
+                                    </div>
+                                ) : (
+                                    items.map((it) => (
+                                        <div key={it.id} className="rounded-2xl border bg-white p-3 flex items-start justify-between gap-3">
+                                            <div className="min-w-0">
+                                                <div className="font-semibold text-slate-900 truncate">{it.name}</div>
+                                                <div className="text-xs text-slate-500">{it.code}</div>
+
+                                                <div className="text-xs text-slate-700 mt-2">
+                                                    ₹{formatNumber(it.default_price)} • MRP ₹{formatNumber(it.default_mrp)} • {formatNumber(it.default_tax_percent)}% GST
+                                                </div>
+                                                <div className="text-[11px] text-slate-500 mt-1">
+                                                    Reorder {formatNumber(it.reorder_level)} • Max {formatNumber(it.max_level)}
+                                                </div>
+
+                                                <div className="flex flex-wrap gap-1 mt-2">
+                                                    {it.is_consumable && <Badge variant="outline" className="text-[10px]">Consumable</Badge>}
+                                                    {it.lasa_flag && <Badge variant="outline" className="text-[10px] border-rose-300 text-rose-600">LASA</Badge>}
+                                                </div>
+                                            </div>
+
+                                            <Button
+                                                variant="outline"
+                                                size="icon"
+                                                className="rounded-2xl"
+                                                onClick={() => openEditItemDialog(it)}
+                                            >
+                                                <Eye className="h-4 w-4" />
+                                            </Button>
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+
+                            {/* ✅ Bulk Upload Dialog */}
+                            <ItemsBulkUploadDialog
+                                open={bulkDialogOpen}
+                                onOpenChange={setBulkDialogOpen}
+                                onImported={() => loadItems()}
+                            />
                         </CardContent>
                     </Card>
                 </TabsContent>
@@ -1970,450 +2106,13 @@ export default function InventoryPharmacy() {
                     </Card>
                 </TabsContent>
 
-                {/* PURCHASE ORDERS TAB */}
                 <TabsContent value="po">
-                    <Card className="rounded-3xl border-slate-200 shadow-sm">
-                        <CardHeader className="flex flex-row items-center justify-between gap-3">
-                            <div>
-                                <CardTitle className="text-sm font-semibold text-slate-900 flex items-center gap-2">
-                                    Purchase orders
-                                    <Badge variant="outline" className="text-xs">
-                                        {purchaseOrders.length}
-                                    </Badge>
-                                </CardTitle>
-                                <p className="text-xs text-slate-500">
-                                    Create POs, print PDF, mark sent, and track status.
-                                </p>
-                            </div>
-                            <Button
-                                size="sm"
-                                className="gap-1"
-                                onClick={() => setPoSheetOpen(true)}
-                            >
-                                <Plus className="w-3 h-3" />
-                                New PO
-                            </Button>
-                        </CardHeader>
-                        <CardContent>
-                            <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white">
-                                <div className="grid grid-cols-[1.1fr,1.2fr,1.2fr,0.9fr,0.9fr] px-3 py-2 text-xs font-semibold text-slate-500 bg-slate-50">
-                                    <span>PO number</span>
-                                    <span>Supplier</span>
-                                    <span>Location / dates</span>
-                                    <span>Status</span>
-                                    <span className="text-right">Actions</span>
-                                </div>
-                                <div className="max-h-[440px] overflow-auto divide-y divide-slate-100">
-                                    {poLoading ? (
-                                        <div className="p-3 space-y-2">
-                                            <Skeleton className="h-7 w-full" />
-                                            <Skeleton className="h-7 w-full" />
-                                            <Skeleton className="h-7 w-full" />
-                                        </div>
-                                    ) : purchaseOrders.length === 0 ? (
-                                        <div className="p-4 text-sm text-slate-500">
-                                            No purchase orders created yet.
-                                        </div>
-                                    ) : (
-                                        purchaseOrders.map(po => (
-                                            <div
-                                                key={po.id}
-                                                className="grid grid-cols-[1.1fr,1.2fr,1.2fr,0.9fr,0.9fr] items-center px-3 py-2 text-xs"
-                                            >
-                                                <div>
-                                                    <p className="font-medium text-slate-900">
-                                                        {po.po_number}
-                                                    </p>
-                                                    <p className="text-slate-500">
-                                                        Created: {formatDate(po.order_date)}
-                                                    </p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-slate-900">
-                                                        {po.supplier?.name}
-                                                    </p>
-                                                    <p className="text-slate-500 text-[11px]">
-                                                        {po.supplier?.phone ||
-                                                            po.supplier?.email ||
-                                                            '—'}
-                                                    </p>
-                                                </div>
-                                                <div>
-                                                    <p className="text-slate-900">
-                                                        {po.location?.name}
-                                                    </p>
-                                                    <p className="text-slate-500 text-[11px]">
-                                                        Exp:{' '}
-                                                        {po.expected_date
-                                                            ? formatDate(po.expected_date)
-                                                            : '—'}
-                                                    </p>
-                                                </div>
-                                                <div>
-                                                    <Badge
-                                                        variant="outline"
-                                                        className="text-[10px] capitalize"
-                                                    >
-                                                        {po.status.toLowerCase()}
-                                                    </Badge>
-                                                </div>
-                                                <div className="flex items-center justify-end gap-2">
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-7 w-7"
-                                                        onClick={() => handlePrintPo(po.id)}
-                                                    >
-                                                        <Printer className="w-3 h-3" />
-                                                    </Button>
-                                                    <Button
-                                                        variant="ghost"
-                                                        size="icon"
-                                                        className="h-7 w-7"
-                                                        onClick={() =>
-                                                            setPoEmailDialog({
-                                                                open: true,
-                                                                poId: po.id,
-                                                                email: po.email_sent_to || '',
-                                                            })
-                                                        }
-                                                    >
-                                                        <Mail className="w-3 h-3" />
-                                                    </Button>
-                                                    {po.status === 'DRAFT' ||
-                                                        po.status === 'SENT' ? (
-                                                        <Select
-                                                            defaultValue={po.status}
-                                                            onValueChange={val =>
-                                                                handleChangePoStatus(po.id, val)
-                                                            }
-                                                        >
-                                                            <SelectTrigger className="h-7 w-24 text-[11px] bg-white">
-                                                                <SelectValue />
-                                                            </SelectTrigger>
-                                                            <SelectContent>
-                                                                <SelectItem value="DRAFT">
-                                                                    DRAFT
-                                                                </SelectItem>
-                                                                <SelectItem value="SENT">
-                                                                    SENT
-                                                                </SelectItem>
-                                                                <SelectItem value="PARTIALLY_RECEIVED">
-                                                                    PARTIAL
-                                                                </SelectItem>
-                                                                <SelectItem value="COMPLETED">
-                                                                    COMPLETED
-                                                                </SelectItem>
-                                                                <SelectItem value="CANCELLED">
-                                                                    CANCELLED
-                                                                </SelectItem>
-                                                                <SelectItem value="CLOSED">
-                                                                    CLOSED
-                                                                </SelectItem>
-                                                            </SelectContent>
-                                                        </Select>
-                                                    ) : (
-                                                        <Badge
-                                                            variant="outline"
-                                                            className="text-[10px] capitalize"
-                                                        >
-                                                            {po.status.toLowerCase()}
-                                                        </Badge>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        ))
-                                    )}
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
+                    <PurchaseOrdersTab />
                 </TabsContent>
 
                 {/* GRN TAB */}
                 <TabsContent value="grn" className="space-y-4">
-                    <Card className="rounded-3xl border-slate-200 shadow-sm">
-                        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                            <div className="space-y-1">
-                                <CardTitle className="text-sm font-semibold text-slate-900 flex items-center gap-2">
-                                    Goods Receipt Notes
-                                    <Badge variant="outline" className="text-xs">
-                                        {grns.length}
-                                    </Badge>
-                                </CardTitle>
-                                <p className="text-xs text-slate-500">
-                                    Create GRN in DRAFT, then <span className="font-medium">Post</span> to create batches & update stock.
-                                </p>
-                            </div>
-
-                            <div className="flex items-center gap-2">
-                                <Button
-                                    size="sm"
-                                    variant="outline"
-                                    className="h-9"
-                                    onClick={() => {
-                                        // optional quick refresh if you have a loader function
-                                        // loadGrns?.()
-                                    }}
-                                >
-                                    Refresh
-                                </Button>
-
-                                <Button
-                                    size="sm"
-                                    className="h-9 gap-1"
-                                    onClick={() => setGrnSheetOpen(true)}
-                                >
-                                    <Plus className="w-4 h-4" />
-                                    New GRN
-                                </Button>
-                            </div>
-                        </CardHeader>
-
-                        <CardContent className="space-y-3">
-                            {/* Toolbar */}
-                            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-                                    <div className="w-full sm:w-72">
-                                        <Input
-                                            placeholder="Search GRN / supplier / invoice..."
-                                            value={grnQuery}
-                                            onChange={(e) => setGrnQuery(e.target.value)}
-                                            className="h-9 bg-white"
-                                        />
-                                    </div>
-
-                                    <div className="w-full sm:w-44">
-                                        <Select value={grnStatus} onValueChange={setGrnStatus}>
-                                            <SelectTrigger className="h-9 bg-white">
-                                                <SelectValue placeholder="All statuses" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                <SelectItem value="ALL">All</SelectItem>
-                                                <SelectItem value="DRAFT">Draft</SelectItem>
-                                                <SelectItem value="POSTED">Posted</SelectItem>
-                                                <SelectItem value="CANCELLED">Cancelled</SelectItem>
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                </div>
-
-                                <div className="text-xs text-slate-500">
-                                    {grnLoading ? 'Loading…' : `${filteredGrns.length} result(s)`}
-                                </div>
-                            </div>
-
-                            {/* Desktop table */}
-                            <div className="hidden md:block border border-slate-200 rounded-2xl overflow-hidden bg-white">
-                                <div className="grid grid-cols-[1.2fr,1.1fr,1.2fr,0.9fr,0.9fr,0.9fr] px-3 py-2 text-xs font-semibold text-slate-500 bg-slate-50">
-                                    <span>GRN</span>
-                                    <span>Supplier</span>
-                                    <span>Location / Invoice</span>
-                                    <span>Amounts</span>
-                                    <span>Status</span>
-                                    <span className="text-right">Actions</span>
-                                </div>
-
-                                <div className="max-h-[480px] overflow-auto divide-y divide-slate-100">
-                                    {grnLoading ? (
-                                        <div className="p-3 space-y-2">
-                                            <Skeleton className="h-8 w-full" />
-                                            <Skeleton className="h-8 w-full" />
-                                            <Skeleton className="h-8 w-full" />
-                                        </div>
-                                    ) : filteredGrns.length === 0 ? (
-                                        <div className="p-4 text-sm text-slate-500">No GRNs found.</div>
-                                    ) : (
-                                        filteredGrns.map((grn) => {
-                                            const diff = Number(grn.amount_difference || 0)
-                                            const hasMismatch = Math.abs(diff) >= 0.01 && Number(grn.supplier_invoice_amount || 0) > 0
-
-                                            return (
-                                                <div
-                                                    key={grn.id}
-                                                    className="grid grid-cols-[1.2fr,1.1fr,1.2fr,0.9fr,0.9fr,0.9fr] items-center px-3 py-2 text-xs hover:bg-slate-50"
-                                                >
-                                                    <div>
-                                                        <p className="font-medium text-slate-900">{grn.grn_number || `GRN-${String(grn.id).padStart(6, '0')}`}</p>
-                                                        <p className="text-slate-500">
-                                                            Received: {formatDate(grn.received_date)}
-                                                        </p>
-                                                    </div>
-
-                                                    <div>
-                                                        <p className="text-slate-900">{grn.supplier?.name || '—'}</p>
-                                                        <p className="text-slate-500 text-[11px]">
-                                                            {grn.supplier?.phone || grn.supplier?.email || '—'}
-                                                        </p>
-                                                    </div>
-
-                                                    <div>
-                                                        <p className="text-slate-900">{grn.location?.name || '—'}</p>
-                                                        <p className="text-slate-500 text-[11px]">
-                                                            Inv: {grn.invoice_number || '—'} {grn.invoice_date ? `• ${formatDate(grn.invoice_date)}` : ''}
-                                                        </p>
-                                                    </div>
-
-                                                    <div>
-                                                        <p className="text-slate-900">
-                                                            Inv: ₹{Number(grn.supplier_invoice_amount || 0).toFixed(2)}
-                                                        </p>
-                                                        <div className="flex items-center gap-2 text-[11px] text-slate-500">
-                                                            <span>Calc: ₹{Number(grn.calculated_grn_amount || 0).toFixed(2)}</span>
-                                                            {hasMismatch && (
-                                                                <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-800 border-amber-200">
-                                                                    Diff ₹{diff.toFixed(2)}
-                                                                </Badge>
-                                                            )}
-                                                        </div>
-                                                    </div>
-
-                                                    <div>
-                                                        <Badge
-                                                            variant="outline"
-                                                            className={[
-                                                                'text-[10px] capitalize',
-                                                                grn.status === 'POSTED' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : '',
-                                                                grn.status === 'CANCELLED' ? 'bg-rose-50 border-rose-200 text-rose-800' : '',
-                                                                grn.status === 'DRAFT' ? 'bg-slate-50 border-slate-200 text-slate-700' : '',
-                                                            ].join(' ')}
-                                                        >
-                                                            {(grn.status || 'DRAFT').toLowerCase()}
-                                                        </Badge>
-                                                    </div>
-
-                                                    <div className="flex items-center justify-end gap-2">
-                                                        <Button
-                                                            variant="ghost"
-                                                            size="icon"
-                                                            className="h-8 w-8"
-                                                            onClick={() => openGrnPreview?.(grn)} // optional hook
-                                                            title="View"
-                                                        >
-                                                            <ClipboardList className="w-4 h-4" />
-                                                        </Button>
-
-                                                        {grn.status === 'DRAFT' && (
-                                                            <Button
-                                                                variant="outline"
-                                                                size="sm"
-                                                                className="h-8 px-3 text-[11px]"
-                                                                onClick={() => onClickPost(grn)}
-                                                            >
-                                                                Post GRN
-                                                            </Button>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            )
-                                        })
-                                    )}
-                                </div>
-                            </div>
-
-                            {/* Mobile cards */}
-                            <div className="md:hidden space-y-2">
-                                {grnLoading ? (
-                                    <div className="space-y-2">
-                                        <Skeleton className="h-24 w-full rounded-2xl" />
-                                        <Skeleton className="h-24 w-full rounded-2xl" />
-                                    </div>
-                                ) : filteredGrns.length === 0 ? (
-                                    <div className="p-4 text-sm text-slate-500 rounded-2xl border border-slate-200 bg-white">
-                                        No GRNs found.
-                                    </div>
-                                ) : (
-                                    filteredGrns.map((grn) => {
-                                        const diff = Number(grn.amount_difference || 0)
-                                        const hasMismatch = Math.abs(diff) >= 0.01 && Number(grn.supplier_invoice_amount || 0) > 0
-
-                                        return (
-                                            <div key={grn.id} className="rounded-2xl border border-slate-200 bg-white p-3">
-                                                <div className="flex items-start justify-between gap-2">
-                                                    <div>
-                                                        <div className="font-semibold text-slate-900 text-sm">
-                                                            {grn.grn_number || `GRN-${String(grn.id).padStart(6, '0')}`}
-                                                        </div>
-                                                        <div className="text-xs text-slate-500">
-                                                            {formatDate(grn.received_date)} • {grn.location?.name || '—'}
-                                                        </div>
-                                                    </div>
-                                                    <Badge
-                                                        variant="outline"
-                                                        className={[
-                                                            'text-[10px] capitalize',
-                                                            grn.status === 'POSTED' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : '',
-                                                            grn.status === 'CANCELLED' ? 'bg-rose-50 border-rose-200 text-rose-800' : '',
-                                                            grn.status === 'DRAFT' ? 'bg-slate-50 border-slate-200 text-slate-700' : '',
-                                                        ].join(' ')}
-                                                    >
-                                                        {(grn.status || 'DRAFT').toLowerCase()}
-                                                    </Badge>
-                                                </div>
-
-                                                <div className="mt-2 text-xs">
-                                                    <div className="text-slate-700">
-                                                        <span className="text-slate-500">Supplier:</span>{' '}
-                                                        {grn.supplier?.name || '—'}
-                                                    </div>
-                                                    <div className="text-slate-700">
-                                                        <span className="text-slate-500">Invoice:</span>{' '}
-                                                        {grn.invoice_number || '—'} {grn.invoice_date ? `• ${formatDate(grn.invoice_date)}` : ''}
-                                                    </div>
-                                                    <div className="mt-1 text-slate-700 flex items-center gap-2">
-                                                        <span>
-                                                            <span className="text-slate-500">Inv:</span> ₹{Number(grn.supplier_invoice_amount || 0).toFixed(2)}
-                                                        </span>
-                                                        <span>
-                                                            <span className="text-slate-500">Calc:</span> ₹{Number(grn.calculated_grn_amount || 0).toFixed(2)}
-                                                        </span>
-                                                        {hasMismatch && (
-                                                            <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-800 border-amber-200">
-                                                                Diff ₹{diff.toFixed(2)}
-                                                            </Badge>
-                                                        )}
-                                                    </div>
-                                                </div>
-
-                                                <div className="mt-3 flex justify-end gap-2">
-                                                    <Button
-                                                        variant="outline"
-                                                        size="sm"
-                                                        className="h-8"
-                                                        onClick={() => openGrnPreview?.(grn)}
-                                                    >
-                                                        View
-                                                    </Button>
-                                                    {grn.status === 'DRAFT' && (
-                                                        <div className="flex items-center justify-end gap-2">
-                                                            {Number(grn.amount_difference || 0) !== 0 && (
-                                                                <Input
-                                                                    className="h-8 w-56 text-xs bg-white"
-                                                                    placeholder="Difference reason (required)"
-                                                                    value={postReason[grn.id] || ''}
-                                                                    onChange={(e) =>
-                                                                        setPostReason((s) => ({ ...s, [grn.id]: e.target.value }))
-                                                                    }
-                                                                />
-                                                            )}
-
-                                                            <Button
-                                                                size="sm"
-                                                                className="h-8"
-                                                                onClick={() => handlePostGrn(grn.id, postReason[grn.id] || '')}
-                                                            >
-                                                                Post
-                                                            </Button>
-                                                        </div>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        )
-                                    })
-                                )}
-                            </div>
-                        </CardContent>
-                    </Card>
+                    <GrnTab />
                 </TabsContent>
 
 
@@ -2875,32 +2574,112 @@ export default function InventoryPharmacy() {
                             then upload here. Existing codes will be updated.
                         </DialogDescription>
                     </DialogHeader>
-                    <form onSubmit={handleUploadCsv} className="space-y-4">
+                    <form onSubmit={handlePreviewUpload} className="space-y-4">
                         <div className="space-y-1.5">
-                            <Label htmlFor="file">CSV file</Label>
+                            <Label htmlFor="file">Upload file</Label>
                             <Input
                                 id="file"
                                 name="file"
                                 type="file"
-                                accept=".csv"
+                                accept=".csv,.tsv,.txt,.xlsx"
                                 required
                                 className="bg-white"
+                                onChange={(e) => {
+                                    const f = e.target.files?.[0] || null
+                                    setUploadFile(f)
+                                    setUploadPreview(null) // reset old preview
+                                }}
                             />
+                            <p className="text-xs text-slate-500">
+                                Supports CSV / Excel (.xlsx). Recommended: download template and fill.
+                            </p>
                         </div>
+
+                        {/* Strict + Overwrite toggles (optional) */}
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between rounded-2xl border bg-slate-50 p-3">
+                            <div className="flex items-center justify-between gap-3">
+                                <div>
+                                    <div className="text-sm font-medium text-slate-900">Strict mode</div>
+                                    <div className="text-xs text-slate-500">Block commit if any row has error (recommended).</div>
+                                </div>
+                                <Switch checked={strictMode} onCheckedChange={setStrictMode} />
+                            </div>
+
+                            <div className="flex items-center justify-between gap-3">
+                                <div>
+                                    <div className="text-sm font-medium text-slate-900">Overwrite blanks</div>
+                                    <div className="text-xs text-slate-500">If blank in file, overwrite existing value.</div>
+                                </div>
+                                <Switch checked={updateBlanks} onCheckedChange={setUpdateBlanks} />
+                            </div>
+                        </div>
+
+                        {/* Preview summary */}
+                        {uploadPreview ? (
+                            <div className="rounded-2xl border bg-white p-3 space-y-2">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <Badge variant="outline" className="text-xs">Total: {uploadPreview.total_rows ?? 0}</Badge>
+                                    <Badge variant="outline" className="text-xs">Valid: {uploadPreview.valid_rows ?? 0}</Badge>
+                                    {(uploadPreview.errors?.length || 0) > 0 ? (
+                                        <Badge className="text-xs bg-rose-600">Errors: {uploadPreview.errors.length}</Badge>
+                                    ) : (
+                                        <Badge className="text-xs bg-emerald-600">No errors</Badge>
+                                    )}
+                                </div>
+
+                                {(uploadPreview.errors?.length || 0) > 0 ? (
+                                    <div className="max-h-44 overflow-auto rounded-xl border bg-slate-50">
+                                        <div className="divide-y">
+                                            {uploadPreview.errors.slice(0, 50).map((er, idx) => (
+                                                <div key={idx} className="p-2 text-xs">
+                                                    <div className="font-semibold text-slate-900">
+                                                        Row {er.row} {er.code ? `• ${er.code}` : ''} {er.column ? `• ${er.column}` : ''}
+                                                    </div>
+                                                    <div className="text-slate-600 mt-1">{er.message}</div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="text-xs text-slate-600">
+                                        Preview OK ✅ You can commit import now.
+                                    </div>
+                                )}
+                            </div>
+                        ) : null}
+
                         <DialogFooter className="flex justify-between">
                             <Button
                                 type="button"
                                 variant="outline"
-                                onClick={() => setCsvDialogOpen(false)}
+                                onClick={() => {
+                                    setCsvDialogOpen(false)
+                                    setUploadFile(null)
+                                    setUploadPreview(null)
+                                }}
+                                disabled={previewLoading || commitLoading}
                             >
                                 Cancel
                             </Button>
-                            <Button type="submit" className="gap-1">
-                                <Upload className="w-3 h-3" />
-                                Upload CSV
-                            </Button>
+
+                            <div className="flex gap-2">
+                                <Button type="submit" variant="outline" className="gap-1" disabled={!uploadFile || previewLoading || commitLoading}>
+                                    <Upload className="w-3 h-3" />
+                                    {previewLoading ? 'Previewing…' : 'Preview'}
+                                </Button>
+
+                                <Button
+                                    type="button"
+                                    className="gap-1"
+                                    onClick={handleCommitUpload}
+                                    disabled={!uploadFile || !uploadPreview || (strictMode && (uploadPreview.errors?.length || 0) > 0) || commitLoading}
+                                >
+                                    {commitLoading ? 'Importing…' : 'Commit Import'}
+                                </Button>
+                            </div>
                         </DialogFooter>
                     </form>
+
                 </DialogContent>
             </Dialog>
 
@@ -3320,14 +3099,7 @@ export default function InventoryPharmacy() {
                         </SheetDescription>
                     </SheetHeader>
 
-                    {/* ---------- helpers inside component scope ---------- */}
-                    {/*
-      Place these helper functions at top of your component if not already:
-      const n = (v) => (v === '' || v == null ? 0 : (Number.isFinite(Number(v)) ? Number(v) : 0))
-      const money = (x) => (Math.round((n(x)+Number.EPSILON)*100)/100).toFixed(2)
-    */}
 
-                    {/* ---------- totals (client side) ---------- */}
                     {(() => {
                         const n = (v) => (v === '' || v == null ? 0 : (Number.isFinite(Number(v)) ? Number(v) : 0))
                         const money = (x) => (Math.round((n(x) + Number.EPSILON) * 100) / 100).toFixed(2)
@@ -3382,7 +3154,7 @@ export default function InventoryPharmacy() {
                                 }}
                                 className="space-y-5 pb-8"
                             >
-                                {/* ---------------- Header: Supplier + Invoice ---------------- */}
+
                                 <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-3">
                                     <div className="grid gap-3 sm:grid-cols-2">
                                         <div className="space-y-1.5">
@@ -3508,7 +3280,7 @@ export default function InventoryPharmacy() {
                                     </div>
                                 </div>
 
-                                {/* ---------------- Line items ---------------- */}
+
                                 <div className="space-y-2">
                                     <div className="flex items-center justify-between">
                                         <div>
@@ -3755,7 +3527,7 @@ export default function InventoryPharmacy() {
                                     )}
                                 </div>
 
-                                {/* ---------------- Totals & mismatch ---------------- */}
+
                                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3 text-sm">
                                     <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
                                         <div><span className="text-slate-500">Subtotal:</span> {money(subtotal)}</div>

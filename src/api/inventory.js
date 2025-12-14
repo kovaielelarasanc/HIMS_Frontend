@@ -27,7 +27,6 @@ export function createSupplier(payload) {
 export function updateSupplier(id, payload) {
     return API.put(`/inventory/suppliers/${id}`, payload)
 }
-
 // ---------- Items ----------
 export function listInventoryItems(params = {}) {
     return API.get('/inventory/items', { params })
@@ -41,19 +40,33 @@ export function updateInventoryItem(id, payload) {
     return API.put(`/inventory/items/${id}`, payload)
 }
 
-export function downloadItemsSampleCsv() {
-    return API.get('/inventory/items/sample-csv', {
+// ✅ NEW: templates (CSV/XLSX)
+export function downloadItemsTemplate(format = 'csv') {
+    return API.get('/inventory/items/bulk-upload/template', {
+        params: { format }, // csv | xlsx
         responseType: 'blob',
     })
 }
 
-export function bulkUploadItemsCsv(file) {
+// ✅ NEW: preview (CSV/XLSX/TSV)
+export function previewItemsUpload(file) {
     const formData = new FormData()
     formData.append('file', file)
-    return API.post('/inventory/items/bulk-upload', formData, {
+    return API.post('/inventory/items/bulk-upload/preview', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
     })
 }
+
+// ✅ NEW: commit (strict by default)
+export function commitItemsUpload(file, { updateBlanks = false, strict = true } = {}) {
+    const formData = new FormData()
+    formData.append('file', file)
+    return API.post('/inventory/items/bulk-upload/commit', formData, {
+        params: { update_blanks: updateBlanks, strict },
+        headers: { 'Content-Type': 'multipart/form-data' },
+    })
+}
+
 
 // ---------- Stock & Alerts ----------
 export function getStockSummary(params = {}) {
@@ -99,6 +112,7 @@ export function updatePurchaseOrder(id, payload) {
     return API.put(`/inventory/purchase-orders/${id}`, payload)
 }
 
+// your backend supports /status with params: {status}
 export function changePurchaseOrderStatus(id, status) {
     return API.post(`/inventory/purchase-orders/${id}/status`, null, {
         params: { status },
@@ -117,22 +131,48 @@ export function markPoSent(id, emailTo) {
     })
 }
 
-// ---------- GRN ----------
+// Helpers used in PO sheet
+// export function listSuppliers(params = {}) {
+//     return API.get('/inventory/suppliers', { params })
+// }
+export function listLocations(params = {}) {
+    return API.get('/inventory/locations', { params })
+}
+// export function listInventoryItems(params = {}) {
+//     return API.get('/inventory/items', { params })
+// }
+
+/// ---------- GRN ----------
 export function createGrn(payload) {
-    return API.post('/inventory/grn', payload)
-}
-
-export function listGrns(params = {}) {
-    return API.get('/inventory/grn', { params })
-}
-
-export function getGrn(id) {
+    return API.post("/inventory/grn", payload)
+  }
+  export function listGrns(params = {}) {
+    return API.get("/inventory/grn", { params })
+  }
+  export function getGrn(id) {
     return API.get(`/inventory/grn/${id}`)
-}
-
-export function postGrn(id, body = {}) {
-    return API.post(`/inventory/grn/${id}/post`, body) // ✅ send {} at least
-}
+  }
+  export function updateGrn(id, payload) {
+    return API.put(`/inventory/grn/${id}`, payload)
+  }
+  export function postGrn(id, body = {}) {
+    return API.post(`/inventory/grn/${id}/post`, body)
+  }
+  
+  // ---------- PO (for GRN autofill) ----------
+  export function listPendingPos(params = {}) {
+    return API.get("/inventory/purchase-orders/pending", { params })
+  }
+//   export function getPurchaseOrder(poId) {
+//     return API.get(`/inventory/purchase-orders/${poId}`)
+//   }
+  
+  // ✅ NEW: use backend pending-items (ordered - received)
+  export function getPoPendingItems(poId) {
+    return API.get(`/inventory/purchase-orders/${poId}/pending-items`)
+  }
+  
+  
 // ---------- Returns ----------
 export function createReturnNote(payload) {
     return API.post('/inventory/returns', payload)
