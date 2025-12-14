@@ -2,6 +2,9 @@
 import { useState, useEffect, useCallback, useMemo } from 'react'
 import API from '../api/client'
 import { useCan } from '../hooks/useCan'
+import { useBranding } from '../branding/BrandingProvider'
+import { toast } from 'sonner'
+
 import {
     Building2,
     ShieldCheck,
@@ -14,8 +17,21 @@ import {
     Users,
     CreditCard,
     Shield,
+    ChevronRight,
+    MoreHorizontal,
 } from 'lucide-react'
-import { toast } from 'sonner'
+
+import {
+    DropdownMenu,
+    DropdownMenuTrigger,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu'
+
+const safeHex = (v) => typeof v === 'string' && v.startsWith('#') && v.length === 7
+const alphaHex = (hex, a = '1A') => (safeHex(hex) ? `${hex}${a}` : undefined)
+const cx = (...a) => a.filter(Boolean).join(' ')
 
 const PAYER_TYPES = [
     { value: 'insurance', label: 'Insurance' },
@@ -23,183 +39,399 @@ const PAYER_TYPES = [
     { value: 'govt', label: 'Govt Scheme' },
     { value: 'other', label: 'Other' },
 ]
-// Small chip used for filters
-function FilterChip({ label, active, onClick }) {
+
+/* -------------------------
+   Apple UI Primitives
+------------------------- */
+const UI = {
+    page: 'bg-slate-50 min-h-full',
+    container: 'mx-auto w-full max-w-6xl px-3 sm:px-5 py-4',
+    card:
+        'rounded-3xl border border-black/10 bg-white/85 backdrop-blur shadow-[0_1px_2px_rgba(0,0,0,0.06)]',
+    insetCard:
+        'rounded-3xl border border-black/10 bg-white/90 backdrop-blur shadow-[0_1px_2px_rgba(0,0,0,0.05)]',
+    subtle: 'rounded-3xl border border-black/10 bg-black/[0.02]',
+    label: 'text-[11px] font-semibold text-slate-600',
+    input:
+        'w-full rounded-2xl border border-black/10 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-black/20 focus:ring-2 focus:ring-black/10',
+    inputSm:
+        'w-full rounded-2xl border border-black/10 bg-white px-3 py-2 text-[13px] text-slate-900 outline-none focus:border-black/20 focus:ring-2 focus:ring-black/10',
+    textarea:
+        'w-full rounded-2xl border border-black/10 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-black/20 focus:ring-2 focus:ring-black/10 min-h-[90px]',
+    btn:
+        'inline-flex items-center justify-center gap-2 rounded-2xl px-3 py-2 text-sm font-semibold transition active:scale-[0.99]',
+    btnOutline:
+        'inline-flex items-center justify-center gap-2 rounded-2xl px-3 py-2 text-sm font-semibold border border-black/10 bg-white hover:bg-black/[0.03] transition active:scale-[0.99]',
+    badge:
+        'inline-flex items-center rounded-full border border-black/10 bg-black/[0.03] px-2 py-0.5 text-[11px] font-semibold text-slate-700',
+}
+
+/** Apple segmented control */
+function Segmented({ value, onChange, options, primary = '#2563eb', className = '' }) {
     return (
-        <button
-            type="button"
-            onClick={onClick}
-            className={[
-                "inline-flex items-center rounded-full px-3 py-1 text-xs sm:text-sm transition-all",
-                active
-                    ? "bg-blue-600 text-white shadow-sm"
-                    : "bg-slate-100 text-slate-600 hover:bg-slate-200"
-            ].join(" ")}
+        <div
+            className={cx(
+                'inline-flex items-center rounded-2xl border border-black/10 bg-black/[0.03] p-1',
+                className
+            )}
         >
-            {label}
-        </button>
+            {options.map((o) => {
+                const active = value === o.value
+                return (
+                    <button
+                        key={o.value}
+                        type="button"
+                        onClick={() => onChange(o.value)}
+                        className={cx(
+                            'h-9 px-3 rounded-xl text-[12px] font-semibold tracking-tight transition',
+                            active
+                                ? 'bg-white text-slate-900 border border-black/10 shadow-[0_1px_2px_rgba(0,0,0,0.08)]'
+                                : 'text-slate-600 hover:text-slate-800 hover:bg-white/60'
+                        )}
+                        style={
+                            active
+                                ? { borderColor: alphaHex(primary, '22') || 'rgba(0,0,0,0.1)' }
+                                : undefined
+                        }
+                    >
+                        <span className="inline-flex items-center gap-2">
+                            {o.icon ? <o.icon className="h-4 w-4 opacity-80" /> : null}
+                            {o.label}
+                        </span>
+                    </button>
+                )
+            })}
+        </div>
     )
 }
 
-// Modal wrapper: bottom sheet on mobile, centered on desktop
-function ResponsiveModal({ title, subtitle, onClose, children }) {
+/** Apple mini segmented */
+function MiniSegmented({ value, onChange, options, primary = '#2563eb' }) {
     return (
-        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/40 backdrop-blur-sm p-0 sm:p-4">
-            <div className="w-full max-w-xl max-h-[90vh] overflow-y-auto
-                            rounded-t-3xl sm:rounded-2xl bg-white shadow-2xl
-                            px-4 py-4 sm:px-5 sm:py-5
-                            transform transition-transform duration-200 ease-out translate-y-0">
-                {/* Header */}
-                <div className="mb-4 flex items-center justify-between gap-2">
-                    <div>
-                        <h3 className="text-base sm:text-lg font-semibold text-slate-900">
+        <div className="inline-flex items-center rounded-2xl border border-black/10 bg-black/[0.03] p-1">
+            {options.map((o) => {
+                const active = value === o.value
+                return (
+                    <button
+                        key={o.value}
+                        type="button"
+                        onClick={() => onChange(o.value)}
+                        className={cx(
+                            'h-8 px-3 rounded-xl text-[12px] font-semibold transition',
+                            active
+                                ? 'bg-white text-slate-900 border border-black/10 shadow-[0_1px_2px_rgba(0,0,0,0.08)]'
+                                : 'text-slate-600 hover:text-slate-800 hover:bg-white/60'
+                        )}
+                        style={
+                            active
+                                ? { borderColor: alphaHex(primary, '22') || 'rgba(0,0,0,0.1)' }
+                                : undefined
+                        }
+                    >
+                        {o.label}
+                    </button>
+                )
+            })}
+        </div>
+    )
+}
+
+/** Apple search input */
+function AppleSearch({ value, onChange, placeholder = 'Search…', className = '' }) {
+    return (
+        <div className={cx('relative w-full', className)}>
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                placeholder={placeholder}
+                className={cx(UI.inputSm, 'pl-9 pr-9 bg-white/90')}
+            />
+            {!!value && (
+                <button
+                    type="button"
+                    onClick={() => onChange('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-black/[0.04]"
+                    title="Clear"
+                >
+                    <X className="h-4 w-4 text-slate-500" />
+                </button>
+            )}
+        </div>
+    )
+}
+
+/** Apple modal: bottom sheet on mobile, centered on desktop */
+function AppleModal({ title, subtitle, onClose, children }) {
+    return (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/35 backdrop-blur-sm p-0 sm:p-4">
+            <div className="w-full max-w-xl max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl border border-black/10 bg-white/90 backdrop-blur-xl shadow-[0_20px_60px_rgba(0,0,0,0.22)] px-4 py-4 sm:px-5 sm:py-5">
+                <div className="mb-4 flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                        <h3 className="text-[16px] sm:text-[18px] font-semibold text-slate-900 tracking-tight">
                             {title}
                         </h3>
-                        {subtitle && (
-                            <p className="mt-1 text-xs sm:text-sm text-slate-500">
+                        {subtitle ? (
+                            <p className="mt-1 text-[12px] sm:text-[13px] text-slate-500 leading-relaxed">
                                 {subtitle}
                             </p>
-                        )}
+                        ) : null}
                     </div>
                     <button
                         onClick={onClose}
                         type="button"
-                        className="rounded-full p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-700"
+                        className="rounded-full p-2 text-slate-500 hover:bg-black/[0.04] hover:text-slate-700"
+                        title="Close"
                     >
                         <X className="h-4 w-4" />
                     </button>
                 </div>
-
                 {children}
             </div>
         </div>
     )
 }
 
+function EmptyState({ title, subtitle }) {
+    return (
+        <div className="rounded-3xl border border-black/10 bg-white/80 p-6 text-center text-slate-600">
+            <div className="mx-auto h-12 w-12 rounded-3xl bg-black/[0.04] grid place-items-center">
+                <Users className="h-6 w-6 text-slate-400" />
+            </div>
+            <div className="mt-3 font-semibold text-slate-900">{title}</div>
+            <div className="mt-1 text-[12px] text-slate-500">{subtitle}</div>
+        </div>
+    )
+}
+
+/* -------------------------
+   Apple macOS List (no tables)
+------------------------- */
+function AppleListShell({ title, right, children }) {
+    return (
+        <div className="overflow-hidden rounded-3xl border border-black/10 bg-white/85 backdrop-blur">
+            {(title || right) && (
+                <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-black/10 bg-white/80 backdrop-blur">
+                    <div className="text-[12px] font-semibold text-slate-700 tracking-tight">{title}</div>
+                    <div className="flex items-center gap-2">{right}</div>
+                </div>
+            )}
+            <div className="divide-y divide-black/5">{children}</div>
+        </div>
+    )
+}
+
+function RowPill({ dotClass, label, className = '' }) {
+    return (
+        <span className={cx('inline-flex items-center gap-2 rounded-full border px-2 py-0.5 text-[11px] font-semibold', className)}>
+            <span className={cx('h-1.5 w-1.5 rounded-full', dotClass)} />
+            {label}
+        </span>
+    )
+}
+
+function CodeBadge({ code }) {
+    if (!code) return null
+    return (
+        <span className="rounded-full bg-black/[0.04] border border-black/10 px-2 py-0.5 text-[11px] font-mono text-slate-700">
+            {code}
+        </span>
+    )
+}
+
+function RowActions({ canManage, onEdit, onDeactivate, deactivateLabel = 'Deactivate' }) {
+    if (!canManage) return null
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <button
+                    type="button"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-black/[0.04] text-slate-600"
+                    title="Actions"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <MoreHorizontal className="h-4.5 w-4.5" />
+                </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="rounded-2xl">
+                <DropdownMenuItem
+                    onSelect={(e) => {
+                        e.preventDefault()
+                        onEdit?.()
+                    }}
+                    className="cursor-pointer"
+                >
+                    <Pencil className="h-4 w-4 mr-2" />
+                    Edit
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                    onSelect={(e) => {
+                        e.preventDefault()
+                        onDeactivate?.()
+                    }}
+                    className="cursor-pointer text-rose-700 focus:text-rose-700"
+                >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    {deactivateLabel}
+                </DropdownMenuItem>
+            </DropdownMenuContent>
+        </DropdownMenu>
+    )
+}
+
+function AppleListRow({
+    title,
+    subtitle,
+    metaLeft,
+    metaRight,
+    canClick,
+    onClick,
+    canManage,
+    onEdit,
+    onDeactivate,
+}) {
+    return (
+        <div
+            role={canClick ? 'button' : undefined}
+            tabIndex={canClick ? 0 : -1}
+            onClick={canClick ? onClick : undefined}
+            onKeyDown={(e) => {
+                if (!canClick) return
+                if (e.key === 'Enter' || e.key === ' ') onClick?.()
+            }}
+            className={cx(
+                'group px-4 py-3 transition',
+                canClick ? 'cursor-pointer hover:bg-black/[0.02]' : 'cursor-default'
+            )}
+        >
+            <div className="flex items-start gap-3">
+                <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <div className="text-[14px] sm:text-[15px] font-semibold text-slate-900 truncate">
+                            {title}
+                        </div>
+                        {subtitle}
+                    </div>
+
+                    {(metaLeft || metaRight) && (
+                        <div className="mt-1 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 sm:gap-3">
+                            <div className="text-[12px] text-slate-600 min-w-0">{metaLeft}</div>
+                            <div className="text-[12px] text-slate-500 flex items-center gap-2 justify-start sm:justify-end">
+                                {metaRight}
+                            </div>
+                        </div>
+                    )}
+                </div>
+
+                <div className="flex items-center gap-1">
+                    <RowActions
+                        canManage={canManage}
+                        onEdit={onEdit}
+                        onDeactivate={onDeactivate}
+                    />
+                    <ChevronRight className="h-5 w-5 text-slate-300 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition" />
+                </div>
+            </div>
+        </div>
+    )
+}
+
+/* -------------------------
+   PAGE
+------------------------- */
 export default function PatientMasters() {
+    const { branding } = useBranding() || {}
+    const primary = branding?.primary_color || '#2563eb'
+
     const [tab, setTab] = useState('payers')
+
     const canMastersView = useCan('patients.masters.view')
     const canPatientsView = useCan('patients.view')
     const canView = canMastersView || canPatientsView
 
     if (!canView) {
         return (
-            <div className="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 text-sm text-amber-800 shadow-sm">
+            <div className="rounded-3xl border border-amber-200 bg-amber-50/80 p-4 text-sm text-amber-800 shadow-sm">
                 You do not have permission to view patient masters.
             </div>
         )
     }
 
+    const tabs = [
+        { value: 'types', label: 'Patient Types', icon: Users },
+        { value: 'payers', label: 'Payers', icon: Building2 },
+        { value: 'tpas', label: 'TPAs', icon: Shield },
+        { value: 'plans', label: 'Credit Plans', icon: CreditCard },
+    ]
+
     return (
-        <div className="space-y-4">
-            {/* Top hero – teal style like sample login */}
-            <div className="rounded-3xl bg-gradient-to-b from-teal-700 to-teal-600 text-white p-5 pb-6 shadow-sm">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div>
-                        <div className="text-xl sm:text-2xl font-semibold">Hello!</div>
-                        <div className="mt-1 text-sm sm:text-base text-teal-50">
-                            Welcome to <span className="font-semibold">Patient Masters</span>
+        <div className={UI.page}>
+            <div className={UI.container}>
+                {/* Header */}
+                <div className={cx(UI.card, 'p-5')}>
+                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                        <div className="min-w-0">
+                            <div
+                                className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[12px] font-semibold border"
+                                style={{
+                                    backgroundColor: alphaHex(primary, '12') || '#eff6ff',
+                                    borderColor: alphaHex(primary, '22') || '#bfdbfe',
+                                    color: primary,
+                                }}
+                            >
+                                <ShieldCheck className="h-4 w-4" />
+                                Patient Masters
+                            </div>
+
+                            <div className="mt-2 text-[22px] sm:text-[26px] font-semibold tracking-tight text-slate-900">
+                                Registration & Billing Masters
+                            </div>
+
+                            <p className="mt-1 max-w-2xl text-[13px] text-slate-600 leading-relaxed">
+                                Configure patient types, payers, TPAs & credit plans used across OPD/IPD
+                                registration, authorization and billing workflows.
+                            </p>
+
+                            <div className="mt-3 flex flex-wrap gap-2">
+                                <span className={UI.badge}>
+                                    <span className="mr-2 h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                                    OPD/IPD ready
+                                </span>
+                                <span className={UI.badge}>
+                                    <ShieldCheck className="h-3.5 w-3.5 mr-1.5 opacity-80" />
+                                    NABH aligned
+                                </span>
+                            </div>
                         </div>
-                        <p className="mt-2 max-w-xl text-xs sm:text-sm text-teal-50/90">
-                            Configure patient types, payers, TPAs & credit plans that drive
-                            registration and billing workflows.
-                        </p>
-                    </div>
-                    <div className="flex gap-2 text-[11px] sm:text-xs justify-start sm:justify-end">
-                        <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-3 py-1">
-                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-                            IPD / OPD ready
-                        </span>
-                        <span className="inline-flex items-center gap-1 rounded-full bg-white/10 px-3 py-1">
-                            <ShieldCheck className="h-3 w-3" />
-                            NABH aligned
-                        </span>
+
+                        <div className="flex items-start md:justify-end">
+                            <div className="w-full overflow-x-auto no-scrollbar">
+                                <Segmented value={tab} onChange={setTab} options={tabs} primary={primary} />
+                            </div>
+                        </div>
                     </div>
                 </div>
 
-                {/* Desktop tab chips */}
-                <div className="mt-4 hidden sm:flex gap-2">
-                    <MastersTabButton
-                        label="Patient Types"
-                        icon={Users}
-                        active={tab === 'types'}
-                        onClick={() => setTab('types')}
-                    />
-                    <MastersTabButton
-                        label="Payers"
-                        icon={Building2}
-                        active={tab === 'payers'}
-                        onClick={() => setTab('payers')}
-                    />
-                    <MastersTabButton
-                        label="TPAs"
-                        icon={Shield}
-                        active={tab === 'tpas'}
-                        onClick={() => setTab('tpas')}
-                    />
-                    <MastersTabButton
-                        label="Credit Plans"
-                        icon={CreditCard}
-                        active={tab === 'plans'}
-                        onClick={() => setTab('plans')}
-                    />
+                {/* Content */}
+                <div className={cx(UI.insetCard, 'mt-4 p-3 sm:p-4')}>
+                    {tab === 'types' && <PatientTypesTab primary={primary} />}
+                    {tab === 'payers' && <PayersTab primary={primary} />}
+                    {tab === 'tpas' && <TpasTab primary={primary} />}
+                    {tab === 'plans' && <CreditPlansTab primary={primary} />}
                 </div>
-            </div>
-
-            {/* Mobile sticky dropdown for tabs */}
-            <div className="sm:hidden sticky top-0 z-20 -mt-3 -mx-3 mb-2 bg-slate-50/95 backdrop-blur px-3 pt-3 pb-2">
-                <label className="block text-xs font-medium text-slate-600 mb-1">
-                    Section
-                </label>
-                <select
-                    value={tab}
-                    onChange={(e) => setTab(e.target.value)}
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm outline-none focus:border-teal-500 focus:ring-2 focus:ring-teal-100"
-                >
-                    <option value="types">Patient Types</option>
-                    <option value="payers">Payers</option>
-                    <option value="tpas">TPAs</option>
-                    <option value="plans">Credit Plans</option>
-                </select>
-            </div>
-
-            {/* Active tab body */}
-            <div className="rounded-3xl border border-slate-100 bg-white/95 p-3 sm:p-4 shadow-sm">
-                {tab === 'types' && <PatientTypesTab />}
-                {tab === 'payers' && <PayersTab />}
-                {tab === 'tpas' && <TpasTab />}
-                {tab === 'plans' && <CreditPlansTab />}
             </div>
         </div>
-    )
-}
-
-
-function MastersTabButton({ label, active, onClick, icon: Icon }) {
-    return (
-        <button
-            onClick={onClick}
-            className={[
-                'inline-flex items-center gap-1 rounded-full px-3 py-1.5 transition-all duration-150',
-                'border text-xs sm:text-[13px]',
-                active
-                    ? 'border-blue-600 bg-blue-600 text-white shadow-sm'
-                    : 'border-slate-200 bg-white text-slate-600 hover:border-blue-200 hover:bg-blue-50',
-            ].join(' ')}
-        >
-            {Icon && <Icon className="h-3.5 w-3.5" />}
-            <span>{label}</span>
-        </button>
     )
 }
 
 /* ---------------------------------------------------
    PATIENT TYPES TAB
 --------------------------------------------------- */
-
-function PatientTypesTab() {
+function PatientTypesTab({ primary }) {
     const canView = useCan('patients.view') || useCan('patients.masters.view')
     const canManage = useCan('patients.update') || useCan('patients.masters.manage')
+
     const [statusFilter, setStatusFilter] = useState('all')
     const [items, setItems] = useState([])
     const [loading, setLoading] = useState(false)
@@ -214,9 +446,7 @@ function PatientTypesTab() {
         setLoading(true)
         setErr('')
         try {
-            const { data } = await API.get('/patient-types', {
-                params: { include_inactive: true },
-            })
+            const { data } = await API.get('/patient-types', { params: { include_inactive: true } })
             setItems(data || [])
         } catch (e) {
             const msg = e?.response?.data?.detail || 'Failed to load patient types'
@@ -233,12 +463,8 @@ function PatientTypesTab() {
 
     const filtered = useMemo(() => {
         let data = [...items]
-
-        if (statusFilter === 'active') {
-            data = data.filter((t) => t.is_active)
-        } else if (statusFilter === 'inactive') {
-            data = data.filter((t) => !t.is_active)
-        }
+        if (statusFilter === 'active') data = data.filter((t) => t.is_active)
+        if (statusFilter === 'inactive') data = data.filter((t) => !t.is_active)
 
         if (!q) return data
         const ql = q.toLowerCase()
@@ -250,267 +476,148 @@ function PatientTypesTab() {
         )
     }, [items, q, statusFilter])
 
-
     const openCreate = () => {
         setEditing(null)
         setModalOpen(true)
     }
-
     const openEdit = (item) => {
         if (!canManage) return
         setEditing(item)
         setModalOpen(true)
     }
-
     const onSaved = (mode) => {
         setModalOpen(false)
         setEditing(null)
         load()
-        toast.success(
-            mode === 'update' ? 'Patient type updated successfully' : 'Patient type created successfully'
-        )
+        toast.success(mode === 'update' ? 'Patient type updated' : 'Patient type created')
     }
-
     const onDeleted = () => {
         load()
-        toast.success('Patient type deactivated successfully')
+        toast.success('Patient type deactivated')
+    }
+
+    const quickDeactivate = async (item) => {
+        if (!canManage) return
+        if (!window.confirm('Deactivate this patient type?')) return
+        try {
+            await API.delete(`/patient-types/${item.id}`)
+            onDeleted()
+        } catch (e) {
+            toast.error(e?.response?.data?.detail || 'Failed to deactivate patient type')
+        }
     }
 
     return (
         <div className="space-y-4">
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs sm:text-sm">
-                <span className="text-[11px] sm:text-xs text-slate-500 mr-1">
-                    Status:
-                </span>
-                <FilterChip
-                    label="All"
-                    active={statusFilter === 'all'}
-                    onClick={() => setStatusFilter('all')}
-                />
-                <FilterChip
-                    label="Active"
-                    active={statusFilter === 'active'}
-                    onClick={() => setStatusFilter('active')}
-                />
-                <FilterChip
-                    label="Inactive"
-                    active={statusFilter === 'inactive'}
-                    onClick={() => setStatusFilter('inactive')}
-                />
-            </div>
-            {/* Top bar */}
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-start gap-2 text-xs text-slate-600 sm:text-sm">
-                    <ShieldCheck className="mt-0.5 h-4 w-4 text-blue-600" />
-                    <span>
-                        Define patient visit types like{' '}
-                        <span className="font-medium text-slate-800">
-                            Emergency, OPD, IPD, Health Checkup
-                        </span>{' '}
-                        used in registration & triage.
-                    </span>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                    <div className="relative">
-                        <input
-                            value={q}
-                            onChange={(e) => setQ(e.target.value)}
-                            placeholder="Search code, name, description…"
-                            className="w-60 max-w-full rounded-2xl border border-slate-200 bg-slate-50 px-8 py-1.5 text-xs text-slate-800 outline-none ring-0 transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
-                        />
-                        <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
-                    </div>
-                    {canManage && (
-                        <button
-                            onClick={openCreate}
-                            className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700 hover:shadow-md active:scale-95 sm:text-sm"
+            <div className={cx(UI.subtle, 'p-3')}>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                        <div className="flex items-start gap-2">
+                            <ShieldCheck className="mt-0.5 h-4 w-4" style={{ color: primary }} />
+                            <div className="text-[13px] text-slate-600 leading-relaxed">
+                                Define visit types like <span className="font-semibold text-slate-900">Emergency, OPD, IPD</span> used in registration & triage.
+                            </div>
+                        </div>
 
-                        >
-                            <Plus className="h-4 w-4" />
-                            New Patient Type
-                        </button>
-                    )}
+                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                            <span className={UI.badge}>
+                                Total: <span className="ml-1 tabular-nums">{items.length}</span>
+                            </span>
+                            <span className={UI.badge}>
+                                Showing: <span className="ml-1 tabular-nums">{filtered.length}</span>
+                            </span>
+                        </div>
+                    </div>
+
+                    <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                        <AppleSearch value={q} onChange={setQ} placeholder="Search code, name, description…" className="sm:w-[320px]" />
+                        {canManage && (
+                            <button
+                                onClick={openCreate}
+                                className={cx(UI.btn, 'text-white shadow-sm')}
+                                style={{ backgroundColor: primary }}
+                            >
+                                <Plus className="h-4 w-4" />
+                                New Type
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span className={UI.label}>Status</span>
+                    <MiniSegmented
+                        value={statusFilter}
+                        onChange={setStatusFilter}
+                        primary={primary}
+                        options={[
+                            { value: 'all', label: 'All' },
+                            { value: 'active', label: 'Active' },
+                            { value: 'inactive', label: 'Inactive' },
+                        ]}
+                    />
                 </div>
             </div>
 
             {err && (
-                <div className="rounded-xl border border-rose-200 bg-rose-50/80 p-3 text-xs text-rose-700 sm:text-sm">
+                <div className="rounded-3xl border border-rose-200 bg-rose-50/80 p-3 text-[13px] text-rose-700">
                     {err}
                 </div>
             )}
 
-            {/* Mobile cards (stacked layout) */}
-            <div className="grid gap-3 sm:hidden">
-                {loading && (
-                    <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-center text-xs text-slate-500 shadow-sm">
-                        Loading patient types…
-                    </div>
-                )}
-                {!loading &&
-                    filtered.map((t) => (
-                        <div
+            {loading && <div className={cx(UI.card, 'p-4 text-center text-slate-500')}>Loading…</div>}
+
+            {!loading && filtered.length === 0 && (
+                <EmptyState
+                    title="No patient types"
+                    subtitle={canManage ? 'Create a new patient type to get started.' : 'No data found.'}
+                />
+            )}
+
+            {!loading && filtered.length > 0 && (
+                <AppleListShell
+                    title="Patient Types"
+                    right={<span className={UI.badge}>macOS list</span>}
+                >
+                    {filtered.map((t) => (
+                        <AppleListRow
                             key={t.id}
-                            className="group rounded-2xl border border-slate-100 bg-white p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-                        >
-                            <div className="flex items-start justify-between gap-3">
-                                <div className="space-y-1">
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <span className="text-sm font-semibold text-slate-900">
-                                            {t.name}
-                                        </span>
-                                        {t.code && (
-                                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-mono text-slate-600">
-                                                {t.code}
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className="flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                                        <span
-                                            className={[
-                                                'inline-flex items-center rounded-full border px-2 py-0.5',
-                                                t.is_active
-                                                    ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
-                                                    : 'border-slate-200 bg-slate-100 text-slate-500',
-                                            ].join(' ')}
-                                        >
-                                            <span
-                                                className={[
-                                                    'mr-1 h-1.5 w-1.5 rounded-full',
-                                                    t.is_active
-                                                        ? 'bg-emerald-500'
-                                                        : 'bg-slate-400',
-                                                ].join(' ')}
-                                            />
-                                            {t.is_active ? 'Active' : 'Inactive'}
-                                        </span>
-                                        <span className="text-[11px] text-slate-400">
-                                            Sort: {t.sort_order ?? 0}
-                                        </span>
-                                    </div>
-                                </div>
-                                {canManage && (
-                                    <button
-                                        onClick={() => openEdit(t)}
-                                        className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-50"
-
-                                    >
-                                        <Pencil className="h-3.5 w-3.5" />
-                                        Edit
-                                    </button>
-                                )}
-                            </div>
-                            {t.description && (
-                                <div className="mt-2 text-[11px] text-slate-600">
-                                    {t.description}
-                                </div>
-                            )}
-                        </div>
+                            title={t.name}
+                            subtitle={<CodeBadge code={t.code} />}
+                            metaLeft={
+                                t.description ? (
+                                    <span className="line-clamp-1">{t.description}</span>
+                                ) : (
+                                    <span className="text-slate-400">No description</span>
+                                )
+                            }
+                            metaRight={
+                                <>
+                                    <RowPill
+                                        dotClass={t.is_active ? 'bg-emerald-500' : 'bg-slate-400'}
+                                        label={t.is_active ? 'Active' : 'Inactive'}
+                                        className={
+                                            t.is_active
+                                                ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                                : 'border-black/10 bg-black/[0.03] text-slate-600'
+                                        }
+                                    />
+                                    <span className="text-slate-400">Sort: {t.sort_order ?? 0}</span>
+                                </>
+                            }
+                            canClick={!!canManage}
+                            onClick={() => openEdit(t)}
+                            canManage={!!canManage}
+                            onEdit={() => openEdit(t)}
+                            onDeactivate={() => quickDeactivate(t)}
+                        />
                     ))}
-                {!loading && filtered.length === 0 && (
-                    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-xs text-slate-500">
-                        No patient types found. {canManage && 'Click “New Patient Type” to add one.'}
-                    </div>
-                )}
-            </div>
-
-            {/* Tablet / Desktop table (data-first layout) */}
-            <div className="hidden overflow-x-auto rounded-2xl border border-slate-100 bg-white sm:block">
-                <table className="min-w-full text-sm">
-                    <thead className="bg-slate-50/80">
-                        <tr className="text-left text-[11px] font-medium uppercase tracking-wide text-slate-500">
-                            <th className="p-2">#</th>
-                            <th className="p-2">Code</th>
-                            <th className="p-2">Name</th>
-                            <th className="p-2">Description</th>
-                            <th className="p-2">Sort</th>
-                            <th className="p-2">Status</th>
-                            <th className="p-2 text-right">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {loading && (
-                            <tr>
-                                <td
-                                    colSpan={7}
-                                    className="p-4 text-center text-xs text-slate-500 sm:text-sm"
-                                >
-                                    Loading patient types…
-                                </td>
-                            </tr>
-                        )}
-                        {!loading &&
-                            filtered.map((t, idx) => (
-                                <tr
-                                    key={t.id}
-                                    className={[
-                                        'border-t border-slate-100 text-xs transition',
-                                        t.is_active ? 'bg-white' : 'bg-slate-50/70 text-slate-400',
-                                        'hover:bg-slate-50',
-                                    ].join(' ')}
-                                >
-                                    <td className="p-2 text-slate-600">{idx + 1}</td>
-                                    <td className="p-2 font-mono text-[11px] text-slate-700">
-                                        {t.code}
-                                    </td>
-                                    <td className="p-2 text-slate-900">{t.name}</td>
-                                    <td className="p-2 max-w-xs">
-                                        <div className="line-clamp-2 text-[11px] text-slate-600">
-                                            {t.description || '—'}
-                                        </div>
-                                    </td>
-                                    <td className="p-2 text-slate-700">
-                                        {t.sort_order ?? 0}
-                                    </td>
-                                    <td className="p-2">
-                                        <span
-                                            className={[
-                                                'inline-flex items-center rounded-full border px-2 py-0.5 text-[11px]',
-                                                t.is_active
-                                                    ? 'border-emerald-100 bg-emerald-50 text-emerald-700'
-                                                    : 'border-slate-200 bg-slate-100 text-slate-500',
-                                            ].join(' ')}
-                                        >
-                                            <span
-                                                className={[
-                                                    'mr-1 h-1.5 w-1.5 rounded-full',
-                                                    t.is_active
-                                                        ? 'bg-emerald-500'
-                                                        : 'bg-slate-400',
-                                                ].join(' ')}
-                                            />
-                                            {t.is_active ? 'Active' : 'Inactive'}
-                                        </span>
-                                    </td>
-                                    <td className="p-2 text-right">
-                                        {canManage && (
-                                            <button
-                                                onClick={() => openEdit(t)}
-                                                className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-[11px] font-semibold text-slate-700 transition hover:bg-slate-50"
-
-                                            >
-                                                <Pencil className="h-3.5 w-3.5" />
-                                                Edit
-                                            </button>
-                                        )}
-                                    </td>
-                                </tr>
-                            ))}
-                        {!loading && filtered.length === 0 && (
-                            <tr>
-                                <td
-                                    colSpan={7}
-                                    className="p-6 text-center text-xs text-slate-500 sm:text-sm"
-                                >
-                                    No patient types found.
-                                </td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
-            </div>
+                </AppleListShell>
+            )}
 
             {modalOpen && (
                 <PatientTypeModal
+                    primary={primary}
                     existing={editing}
                     onClose={() => {
                         setModalOpen(false)
@@ -524,8 +631,9 @@ function PatientTypesTab() {
     )
 }
 
-function PatientTypeModal({ existing, onClose, onSaved, onDeleted }) {
+function PatientTypeModal({ existing, onClose, onSaved, onDeleted, primary }) {
     const canManage = useCan('patients.update') || useCan('patients.masters.manage')
+
     const [form, setForm] = useState(() => ({
         code: existing?.code || '',
         name: existing?.name || '',
@@ -542,16 +650,13 @@ function PatientTypeModal({ existing, onClose, onSaved, onDeleted }) {
         setSaving(true)
         setErr('')
         try {
-            const payload = {
-                ...form,
-                sort_order: Number(form.sort_order) || 0,
-            }
+            const payload = { ...form, sort_order: Number(form.sort_order) || 0 }
             if (existing) {
                 await API.put(`/patient-types/${existing.id}`, payload)
-                onSaved && onSaved('update')
+                onSaved?.('update')
             } else {
                 await API.post('/patient-types', payload)
-                onSaved && onSaved('create')
+                onSaved?.('create')
             }
         } catch (e) {
             const msg = e?.response?.data?.detail || 'Failed to save patient type'
@@ -569,8 +674,8 @@ function PatientTypeModal({ existing, onClose, onSaved, onDeleted }) {
         setErr('')
         try {
             await API.delete(`/patient-types/${existing.id}`)
-            onDeleted && onDeleted()
-            onClose && onClose()
+            onDeleted?.()
+            onClose?.()
         } catch (e) {
             const msg = e?.response?.data?.detail || 'Failed to deactivate patient type'
             setErr(msg)
@@ -581,152 +686,115 @@ function PatientTypeModal({ existing, onClose, onSaved, onDeleted }) {
     }
 
     return (
-
-        <ResponsiveModal
+        <AppleModal
             title={existing ? 'Edit Patient Type' : 'New Patient Type'}
-            subtitle="Define master types like Emergency, OPD, IPD, Health Checkup, etc."
+            subtitle="Define master types like Emergency, OPD, IPD, Health Checkup…"
             onClose={onClose}
         >
             {err && (
-                <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50/80 p-3 text-xs sm:text-sm text-rose-700">
+                <div className="mb-3 rounded-3xl border border-rose-200 bg-rose-50/80 p-3 text-[13px] text-rose-700">
                     {err}
                 </div>
             )}
 
-            <form onSubmit={save} className="space-y-3 text-sm">
-                <div className="grid gap-3 md:grid-cols-2">
+            <form onSubmit={save} className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
                     <div>
-                        <label className="mb-1 block text-xs font-medium text-slate-800">
-                            Code
-                        </label>
+                        <label className={UI.label}>Code</label>
                         <input
-                            className="input text-slate-800"
+                            className={UI.input}
                             value={form.code}
-                            onChange={(e) =>
-                                setForm({
-                                    ...form,
-                                    code: e.target.value.toUpperCase(),
-                                })
-                            }
+                            onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
                             required
                         />
-                        <p className="mt-1 text-[11px] text-slate-400">
-                            Example: EMERGENCY, OPD, IPD, HC
-                        </p>
+                        <p className="mt-1 text-[11px] text-slate-400">Example: EMERGENCY, OPD, IPD, HC</p>
                     </div>
                     <div>
-                        <label className="mb-1 block text-xs font-medium text-slate-800">
-                            Name
-                        </label>
+                        <label className={UI.label}>Name</label>
                         <input
-                            className="input text-slate-800"
+                            className={UI.input}
                             value={form.name}
-                            onChange={(e) =>
-                                setForm({ ...form, name: e.target.value })
-                            }
+                            onChange={(e) => setForm({ ...form, name: e.target.value })}
                             required
                         />
                     </div>
                 </div>
 
                 <div>
-                    <label className="mb-1 block text-xs font-medium text-slate-800">
-                        Description (optional)
-                    </label>
+                    <label className={UI.label}>Description</label>
                     <textarea
-                        className="input min-h-[80px] text-slate-800"
+                        className={UI.textarea}
                         value={form.description}
-                        onChange={(e) =>
-                            setForm({ ...form, description: e.target.value })
-                        }
+                        onChange={(e) => setForm({ ...form, description: e.target.value })}
                     />
                 </div>
 
-                <div className="grid items-center gap-3 md:grid-cols-2">
+                <div className="grid gap-3 sm:grid-cols-2 items-end">
                     <div>
-                        <label className="mb-1 block text-xs font-medium text-slate-800">
-                            Sort Order
-                        </label>
+                        <label className={UI.label}>Sort Order</label>
                         <input
-                            className="input text-slate-800"
+                            className={UI.input}
                             type="number"
                             value={form.sort_order}
-                            onChange={(e) =>
-                                setForm({
-                                    ...form,
-                                    sort_order: e.target.value,
-                                })
-                            }
+                            onChange={(e) => setForm({ ...form, sort_order: e.target.value })}
                         />
-                        <p className="mt-1 text-[11px] text-slate-400">
-                            Lower number shows earlier in dropdowns.
-                        </p>
+                        <p className="mt-1 text-[11px] text-slate-400">Lower number shows earlier in dropdowns.</p>
                     </div>
-                    <div className="mt-2 flex items-center gap-2 md:mt-7">
+
+                    <div className="flex items-center gap-2 sm:justify-end">
                         <input
                             id="pt-active"
                             type="checkbox"
-                            className="h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                            className="h-4 w-4 rounded border-slate-300"
                             checked={form.is_active}
-                            onChange={(e) =>
-                                setForm({ ...form, is_active: e.target.checked })
-                            }
+                            onChange={(e) => setForm({ ...form, is_active: e.target.checked })}
                         />
-                        <label
-                            htmlFor="pt-active"
-                            className="text-xs font-medium text-slate-800"
-                        >
+                        <label htmlFor="pt-active" className="text-[13px] font-semibold text-slate-800">
                             Active
                         </label>
                     </div>
                 </div>
 
                 <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                    {existing && (
+                    {existing ? (
                         <button
                             type="button"
                             onClick={remove}
-                            className="inline-flex items-center gap-2 rounded-full border border-rose-200 px-3 py-1.5 text-xs font-medium text-rose-700 hover:bg-rose-50"
+                            className="inline-flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100/60"
                         >
-                            <Trash2 className="h-3.5 w-3.5" />
+                            <Trash2 className="h-4 w-4" />
                             Deactivate
                         </button>
+                    ) : (
+                        <div />
                     )}
+
                     <div className="ml-auto flex gap-2">
-                        <button
-                            type="button"
-                            onClick={onClose}
-                            className="rounded-full border border-slate-200 px-4 py-1.5 text-xs text-slate-700 hover:bg-slate-50"
-                        >
+                        <button type="button" onClick={onClose} className={cx(UI.btnOutline, 'h-10')}>
                             Cancel
                         </button>
                         <button
-                            className="btn rounded-full px-4 py-1.5 text-xs"
                             disabled={saving || !canManage}
+                            className={cx(UI.btn, 'h-10 text-white shadow-sm')}
+                            style={{ backgroundColor: primary }}
                         >
                             {saving ? 'Saving…' : 'Save'}
                         </button>
                     </div>
                 </div>
             </form>
-        </ResponsiveModal>
-
-
+        </AppleModal>
     )
 }
 
 /* ---------------------------------------------------
-   PAYERS TAB
+   PAYERS TAB (List rows + action menu)
 --------------------------------------------------- */
-
-function PayersTab() {
+function PayersTab({ primary }) {
     const canView = useCan('patients.masters.view')
-    const canMastersView = useCan('patients.masters.view')
-    const canPatientsView = useCan('patients.masters.manage')
-    const canManage = canMastersView || canPatientsView
-    const [payerTypeFilter, setPayerTypeFilter] = useState('all') // all | insurance | corporate | govt | other
+    const canManage = useCan('patients.masters.manage')
 
-
+    const [payerTypeFilter, setPayerTypeFilter] = useState('all')
     const [items, setItems] = useState([])
     const [loading, setLoading] = useState(false)
     const [err, setErr] = useState('')
@@ -757,11 +825,7 @@ function PayersTab() {
 
     const filtered = useMemo(() => {
         let data = [...items]
-
-        if (payerTypeFilter !== 'all') {
-            data = data.filter((p) => p.payer_type === payerTypeFilter)
-        }
-
+        if (payerTypeFilter !== 'all') data = data.filter((p) => p.payer_type === payerTypeFilter)
         if (!q) return data
         const ql = q.toLowerCase()
         return data.filter(
@@ -772,264 +836,136 @@ function PayersTab() {
         )
     }, [items, q, payerTypeFilter])
 
-
     const openCreate = () => {
         setEditing(null)
         setModalOpen(true)
     }
-
     const openEdit = (item) => {
         if (!canManage) return
         setEditing(item)
         setModalOpen(true)
     }
-
     const onSaved = (mode) => {
         setModalOpen(false)
         setEditing(null)
         load()
-        toast.success(
-            mode === 'update' ? 'Payer updated successfully' : 'Payer created successfully'
-        )
+        toast.success(mode === 'update' ? 'Payer updated' : 'Payer created')
     }
-
     const onDeleted = () => {
         load()
-        toast.success('Payer deactivated successfully')
+        toast.success('Payer deactivated')
+    }
+
+    const quickDeactivate = async (item) => {
+        if (!canManage) return
+        if (!window.confirm('Deactivate this payer?')) return
+        try {
+            await API.delete(`/patient-masters/payers/${item.id}`)
+            onDeleted()
+        } catch (e) {
+            toast.error(e?.response?.data?.detail || 'Failed to deactivate payer')
+        }
     }
 
     return (
         <div className="space-y-4">
-            <div className="mt-2 flex flex-wrap items-center gap-2 text-xs sm:text-sm">
-                <span className="text-[11px] sm:text-xs text-slate-500 mr-1">
-                    Payer type:
-                </span>
-                <FilterChip
-                    label="All"
-                    active={payerTypeFilter === 'all'}
-                    onClick={() => setPayerTypeFilter('all')}
-                />
-                {PAYER_TYPES.map((t) => (
-                    <FilterChip
-                        key={t.value}
-                        label={t.label}
-                        active={payerTypeFilter === t.value}
-                        onClick={() => setPayerTypeFilter(t.value)}
-                    />
-                ))}
-            </div>
-
-            {/* Top bar */}
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-start gap-2 text-xs text-slate-600 sm:text-sm">
-                    <ShieldCheck className="mt-0.5 h-4 w-4 text-blue-600" />
-                    <span>
-                        Payers used for{' '}
-                        <span className="font-medium text-slate-800">
-                            insurance, corporate and government schemes
-                        </span>{' '}
-                        in OPD/IPD billing.
-                    </span>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                    <div className="relative">
-                        <input
-                            value={q}
-                            onChange={(e) => setQ(e.target.value)}
-                            placeholder="Search code, name, type…"
-                            className="w-52 max-w-full rounded-2xl border border-slate-200 bg-slate-50 px-8 py-1.5 text-xs text-slate-800 outline-none ring-0 transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
-                        />
-                        <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <div className={cx(UI.subtle, 'p-3')}>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-start gap-2">
+                        <ShieldCheck className="mt-0.5 h-4 w-4" style={{ color: primary }} />
+                        <div className="text-[13px] text-slate-600 leading-relaxed">
+                            Payers used for <span className="font-semibold text-slate-900">insurance / corporate / government schemes</span> in OPD/IPD billing.
+                        </div>
                     </div>
-                    {canManage && (
-                        <button
-                            onClick={openCreate}
-                            className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-blue-700 hover:shadow-md active:scale-95 sm:text-sm"
-                        >
-                            <Plus className="h-4 w-4" />
-                            New Payer
-                        </button>
-                    )}
+
+                    <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                        <AppleSearch value={q} onChange={setQ} placeholder="Search code, name, type…" className="sm:w-[320px]" />
+                        {canManage && (
+                            <button
+                                onClick={openCreate}
+                                className={cx(UI.btn, 'text-white shadow-sm')}
+                                style={{ backgroundColor: primary }}
+                            >
+                                <Plus className="h-4 w-4" />
+                                New Payer
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                <div className="mt-3 flex flex-wrap items-center gap-2">
+                    <span className={UI.label}>Payer type</span>
+                    <MiniSegmented
+                        value={payerTypeFilter}
+                        onChange={setPayerTypeFilter}
+                        primary={primary}
+                        options={[
+                            { value: 'all', label: 'All' },
+                            ...PAYER_TYPES.map((t) => ({ value: t.value, label: t.label })),
+                        ]}
+                    />
+                    <div className="ml-auto flex gap-2">
+                        <span className={UI.badge}>
+                            Total: <span className="ml-1 tabular-nums">{items.length}</span>
+                        </span>
+                        <span className={UI.badge}>
+                            Showing: <span className="ml-1 tabular-nums">{filtered.length}</span>
+                        </span>
+                    </div>
                 </div>
             </div>
 
             {err && (
-                <div className="rounded-xl border border-rose-200 bg-rose-50/80 p-3 text-xs text-rose-700 sm:text-sm">
+                <div className="rounded-3xl border border-rose-200 bg-rose-50/80 p-3 text-[13px] text-rose-700">
                     {err}
                 </div>
             )}
 
-            {/* Mobile cards */}
-            <div className="grid gap-3 sm:hidden">
-                {loading && (
-                    <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-center text-xs text-slate-500 shadow-sm">
-                        Loading payers…
-                    </div>
-                )}
-                {!loading &&
-                    filtered.map((p) => (
-                        <div
+            {loading && <div className={cx(UI.card, 'p-4 text-center text-slate-500')}>Loading…</div>}
+
+            {!loading && filtered.length === 0 && (
+                <EmptyState title="No payers" subtitle={canManage ? 'Create a new payer to get started.' : 'No data found.'} />
+            )}
+
+            {!loading && filtered.length > 0 && (
+                <AppleListShell title="Payers" right={<span className={UI.badge}>macOS list</span>}>
+                    {filtered.map((p) => (
+                        <AppleListRow
                             key={p.id}
-                            className="group rounded-2xl border border-slate-100 bg-white p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-                        >
-                            <div className="flex items-start justify-between gap-3">
-                                <div>
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <span className="text-sm font-semibold text-slate-900">
-                                            {p.name}
-                                        </span>
-                                        {p.code && (
-                                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-mono text-slate-600">
-                                                {p.code}
-                                            </span>
-                                        )}
+                            title={p.name}
+                            subtitle={<CodeBadge code={p.code} />}
+                            metaLeft={
+                                <div className="flex flex-col gap-0.5 min-w-0">
+                                    <div className="capitalize">
+                                        Type: <span className="font-semibold text-slate-800">{p.payer_type || '—'}</span>
                                     </div>
-                                    <div className="mt-1 text-[11px] capitalize text-slate-500">
-                                        {p.payer_type || '—'}
+                                    <div className="text-slate-500 line-clamp-1">
+                                        {p.contact_person ? `Contact: ${p.contact_person}` : 'No contact person'}
+                                    </div>
+                                    <div className="text-slate-500 line-clamp-1">
+                                        {p.phone || p.email ? `${p.phone || '—'} • ${p.email || '—'}` : 'No phone/email'}
                                     </div>
                                 </div>
-                                {canManage && (
-                                    <button
-                                        onClick={() => openEdit(p)}
-                                        className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-[13px] font-bold text-slate-700 transition hover:bg-slate-50"
-
-                                    >
-                                        <Pencil className="h-3.5 w-3.5" />
-                                        Edit
-                                    </button>
-                                )}
-                            </div>
-                            <div className="mt-2 space-y-1 text-[11px] text-slate-600">
-                                {p.contact_person && (
-                                    <div>
-                                        <span className="font-medium text-slate-700">
-                                            Contact:
-                                        </span>{' '}
-                                        {p.contact_person}
-                                    </div>
-                                )}
-                                {p.phone && (
-                                    <div>
-                                        <span className="font-medium text-slate-700">
-                                            Phone:
-                                        </span>{' '}
-                                        {p.phone}
-                                    </div>
-                                )}
-                                {p.email && (
-                                    <div>
-                                        <span className="font-medium text-slate-700">
-                                            Email:
-                                        </span>{' '}
-                                        {p.email}
-                                    </div>
-                                )}
-                                {p.address && (
-                                    <div className="line-clamp-2">
-                                        <span className="font-medium text-slate-700">
-                                            Address:
-                                        </span>{' '}
-                                        {p.address}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
+                            }
+                            metaRight={<span className="text-slate-400 line-clamp-1">{p.address || '—'}</span>}
+                            canClick={!!canManage}
+                            onClick={() => openEdit(p)}
+                            canManage={!!canManage}
+                            onEdit={() => openEdit(p)}
+                            onDeactivate={() => quickDeactivate(p)}
+                        />
                     ))}
-                {!loading && filtered.length === 0 && (
-                    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-xs text-slate-500">
-                        No payers found.
-                    </div>
-                )}
-            </div>
-
-            {/* Desktop table */}
-            <div className="hidden overflow-x-auto rounded-2xl border border-slate-100 bg-white sm:block">
-                <table className="min-w-full text-sm">
-                    <thead className="bg-slate-50/80">
-                        <tr className="text-left text-[11px] font-medium uppercase tracking-wide text-slate-500">
-                            <th className="p-2">#</th>
-                            <th className="p-2">Code</th>
-                            <th className="p-2">Name</th>
-                            <th className="p-2">Type</th>
-                            <th className="p-2">Contact</th>
-                            <th className="p-2">Phone / Email</th>
-                            <th className="p-2">Address</th>
-                            <th className="p-2 text-right">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {loading && (
-                            <tr>
-                                <td
-                                    colSpan={8}
-                                    className="p-4 text-center text-xs text-slate-500 sm:text-sm"
-                                >
-                                    Loading payers…
-                                </td>
-                            </tr>
-                        )}
-                        {!loading &&
-                            filtered.map((p, idx) => (
-                                <tr
-                                    key={p.id}
-                                    className="border-t border-slate-100 text-xs text-slate-800 transition hover:bg-slate-50"
-                                >
-                                    <td className="p-2">{idx + 1}</td>
-                                    <td className="p-2 font-mono text-[11px] text-slate-700">
-                                        {p.code}
-                                    </td>
-                                    <td className="p-2">{p.name}</td>
-                                    <td className="p-2 capitalize text-slate-700">
-                                        {p.payer_type || '—'}
-                                    </td>
-                                    <td className="p-2 text-slate-700">
-                                        {p.contact_person || '—'}
-                                    </td>
-                                    <td className="p-2">
-                                        <div>{p.phone || '—'}</div>
-                                        <div className="text-[11px] text-slate-500">
-                                            {p.email || '—'}
-                                        </div>
-                                    </td>
-                                    <td className="p-2 max-w-xs">
-                                        <div className="line-clamp-2 text-[11px] text-slate-600">
-                                            {p.address || '—'}
-                                        </div>
-                                    </td>
-                                    <td className="p-2 text-right">
-                                        {canManage && (
-                                            <button
-                                                onClick={() => openEdit(p)}
-                                                className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-[11px] text-slate-700 transition hover:bg-slate-50"
-                                            >
-                                                <Pencil className="h-3.5 w-3.5" />
-                                                Edit
-                                            </button>
-                                        )}
-                                    </td>
-                                </tr>
-                            ))}
-                        {!loading && filtered.length === 0 && (
-                            <tr>
-                                <td
-                                    colSpan={8}
-                                    className="p-6 text-center text-xs text-slate-500 sm:text-sm"
-                                >
-                                    No payers found.
-                                </td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
-            </div>
+                </AppleListShell>
+            )}
 
             {modalOpen && (
                 <PayerModal
+                    primary={primary}
+                    existing={editing}
                     onClose={() => {
                         setModalOpen(false)
                         setEditing(null)
                     }}
-                    existing={editing}
                     onSaved={onSaved}
                     onDeleted={onDeleted}
                 />
@@ -1038,7 +974,7 @@ function PayersTab() {
     )
 }
 
-function PayerModal({ existing, onClose, onSaved, onDeleted }) {
+function PayerModal({ existing, onClose, onSaved, onDeleted, primary }) {
     const canManage = useCan('patients.masters.manage')
     const [form, setForm] = useState(() => ({
         code: existing?.code || '',
@@ -1060,10 +996,10 @@ function PayerModal({ existing, onClose, onSaved, onDeleted }) {
         try {
             if (existing) {
                 await API.put(`/patient-masters/payers/${existing.id}`, form)
-                onSaved && onSaved('update')
+                onSaved?.('update')
             } else {
                 await API.post('/patient-masters/payers', form)
-                onSaved && onSaved('create')
+                onSaved?.('create')
             }
         } catch (e) {
             const msg = e?.response?.data?.detail || 'Failed to save payer'
@@ -1081,8 +1017,8 @@ function PayerModal({ existing, onClose, onSaved, onDeleted }) {
         setErr('')
         try {
             await API.delete(`/patient-masters/payers/${existing.id}`)
-            onDeleted && onDeleted()
-            onClose && onClose()
+            onDeleted?.()
+            onClose?.()
         } catch (e) {
             const msg = e?.response?.data?.detail || 'Failed to deactivate payer'
             setErr(msg)
@@ -1093,170 +1029,125 @@ function PayerModal({ existing, onClose, onSaved, onDeleted }) {
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-3 sm:p-4">
-            <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl sm:p-5">
-                <div className="mb-4 flex items-center justify-between gap-2">
-                    <div>
-                        <h3 className="text-base font-semibold text-slate-900 sm:text-lg">
-                            {existing ? 'Edit Payer' : 'New Payer'}
-                        </h3>
-                        <p className="mt-1 text-[11px] text-slate-500 sm:text-xs">
-                            Master record used for credit / insurance patients.
-                        </p>
-                    </div>
-                    <button
-                        onClick={onClose}
-                        type="button"
-                        className="rounded-full p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
-                    >
-                        <X className="h-4 w-4" />
-                    </button>
+        <AppleModal
+            title={existing ? 'Edit Payer' : 'New Payer'}
+            subtitle="Master record used for credit / insurance patients."
+            onClose={onClose}
+        >
+            {err && (
+                <div className="mb-3 rounded-3xl border border-rose-200 bg-rose-50/80 p-3 text-[13px] text-rose-700">
+                    {err}
                 </div>
+            )}
 
-                {err && (
-                    <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50/80 p-3 text-xs text-rose-700 sm:text-sm">
-                        {err}
-                    </div>
-                )}
-
-                <form onSubmit={save} className="space-y-3 text-xs sm:text-sm">
-                    <div className="grid gap-3 md:grid-cols-2">
-                        <div>
-                            <label className="mb-1 block text-[11px] font-medium text-slate-800">
-                                Code
-                            </label>
-                            <input
-                                className="input text-slate-800"
-                                value={form.code}
-                                onChange={(e) =>
-                                    setForm({ ...form, code: e.target.value.toUpperCase() })
-                                }
-                                required
-                            />
-                        </div>
-                        <div>
-                            <label className="mb-1 block text-[11px] font-medium text-slate-800">
-                                Name
-                            </label>
-                            <input
-                                className="input text-slate-800"
-                                value={form.name}
-                                onChange={(e) => setForm({ ...form, name: e.target.value })}
-                                required
-                            />
-                        </div>
-                    </div>
-
-                    <div className="grid gap-3 md:grid-cols-3">
-                        <div>
-                            <label className="mb-1 block text-[11px] font-medium text-slate-800">
-                                Type
-                            </label>
-                            <select
-                                className="input text-slate-800"
-                                value={form.payer_type}
-                                onChange={(e) =>
-                                    setForm({ ...form, payer_type: e.target.value })
-                                }
-                            >
-                                {PAYER_TYPES.map((t) => (
-                                    <option key={t.value} value={t.value}>
-                                        {t.label}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                        <div className="md:col-span-2">
-                            <label className="mb-1 block text-[11px] font-medium text-slate-800">
-                                Contact Person
-                            </label>
-                            <input
-                                className="input text-slate-800"
-                                value={form.contact_person}
-                                onChange={(e) =>
-                                    setForm({ ...form, contact_person: e.target.value })
-                                }
-                            />
-                        </div>
-                    </div>
-
-                    <div className="grid gap-3 md:grid-cols-2">
-                        <div>
-                            <label className="mb-1 block text-[11px] font-medium text-slate-800">
-                                Phone
-                            </label>
-                            <input
-                                className="input text-slate-800"
-                                value={form.phone}
-                                onChange={(e) =>
-                                    setForm({ ...form, phone: e.target.value })
-                                }
-                            />
-                        </div>
-                        <div>
-                            <label className="mb-1 block text-[11px] font-medium text-slate-800">
-                                Email
-                            </label>
-                            <input
-                                className="input text-slate-800"
-                                type="email"
-                                value={form.email}
-                                onChange={(e) =>
-                                    setForm({ ...form, email: e.target.value })
-                                }
-                            />
-                        </div>
-                    </div>
-
+            <form onSubmit={save} className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
                     <div>
-                        <label className="mb-1 block text-[11px] font-medium text-slate-800">
-                            Address
-                        </label>
-                        <textarea
-                            className="input min-h-[80px] text-slate-800"
-                            value={form.address}
-                            onChange={(e) => setForm({ ...form, address: e.target.value })}
+                        <label className={UI.label}>Code</label>
+                        <input
+                            className={UI.input}
+                            value={form.code}
+                            onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
+                            required
                         />
                     </div>
-
-                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                        {existing && (
-                            <button
-                                type="button"
-                                onClick={remove}
-                                className="inline-flex items-center gap-2 rounded-full border border-rose-200 px-3 py-1.5 text-[11px] font-medium text-rose-700 transition hover:bg-rose-50"
-                            >
-                                <Trash2 className="h-3.5 w-3.5" />
-                                Deactivate
-                            </button>
-                        )}
-                        <div className="ml-auto flex gap-2">
-                            <button
-                                type="button"
-                                onClick={onClose}
-                                className="rounded-full border border-slate-200 px-4 py-1.5 text-[11px] text-slate-700 transition hover:bg-slate-50"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                className="btn rounded-full px-4 py-1.5 text-[11px]"
-                                disabled={saving || !canManage}
-                            >
-                                {saving ? 'Saving…' : 'Save'}
-                            </button>
-                        </div>
+                    <div>
+                        <label className={UI.label}>Name</label>
+                        <input
+                            className={UI.input}
+                            value={form.name}
+                            onChange={(e) => setForm({ ...form, name: e.target.value })}
+                            required
+                        />
                     </div>
-                </form>
-            </div>
-        </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-3">
+                    <div>
+                        <label className={UI.label}>Type</label>
+                        <select
+                            className={UI.input}
+                            value={form.payer_type}
+                            onChange={(e) => setForm({ ...form, payer_type: e.target.value })}
+                        >
+                            {PAYER_TYPES.map((t) => (
+                                <option key={t.value} value={t.value}>
+                                    {t.label}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                    <div className="sm:col-span-2">
+                        <label className={UI.label}>Contact Person</label>
+                        <input
+                            className={UI.input}
+                            value={form.contact_person}
+                            onChange={(e) => setForm({ ...form, contact_person: e.target.value })}
+                        />
+                    </div>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                        <label className={UI.label}>Phone</label>
+                        <input className={UI.input} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                    </div>
+                    <div>
+                        <label className={UI.label}>Email</label>
+                        <input
+                            className={UI.input}
+                            type="email"
+                            value={form.email}
+                            onChange={(e) => setForm({ ...form, email: e.target.value })}
+                        />
+                    </div>
+                </div>
+
+                <div>
+                    <label className={UI.label}>Address</label>
+                    <textarea
+                        className={UI.textarea}
+                        value={form.address}
+                        onChange={(e) => setForm({ ...form, address: e.target.value })}
+                    />
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                    {existing ? (
+                        <button
+                            type="button"
+                            onClick={remove}
+                            className="inline-flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100/60"
+                        >
+                            <Trash2 className="h-4 w-4" />
+                            Deactivate
+                        </button>
+                    ) : (
+                        <div />
+                    )}
+
+                    <div className="ml-auto flex gap-2">
+                        <button type="button" onClick={onClose} className={cx(UI.btnOutline, 'h-10')}>
+                            Cancel
+                        </button>
+                        <button
+                            className={cx(UI.btn, 'h-10 text-white shadow-sm')}
+                            style={{ backgroundColor: primary }}
+                            disabled={saving || !canManage}
+                        >
+                            {saving ? 'Saving…' : 'Save'}
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </AppleModal>
     )
 }
 
 /* ---------------------------------------------------
-   TPAs TAB
+   TPAs TAB (List rows + action menu)
 --------------------------------------------------- */
-
-function TpasTab() {
+function TpasTab({ primary }) {
     const canView = useCan('patients.masters.view')
     const canManage = useCan('patients.masters.manage')
 
@@ -1315,7 +1206,6 @@ function TpasTab() {
         setEditing(null)
         setModalOpen(true)
     }
-
     const openEdit = (item) => {
         if (!canManage) return
         setEditing(item)
@@ -1326,209 +1216,113 @@ function TpasTab() {
         setModalOpen(false)
         setEditing(null)
         load()
-        toast.success(
-            mode === 'update' ? 'TPA updated successfully' : 'TPA created successfully'
-        )
+        toast.success(mode === 'update' ? 'TPA updated' : 'TPA created')
     }
-
     const onDeleted = () => {
         load()
-        toast.success('TPA deactivated successfully')
+        toast.success('TPA deactivated')
+    }
+
+    const quickDeactivate = async (item) => {
+        if (!canManage) return
+        if (!window.confirm('Deactivate this TPA?')) return
+        try {
+            await API.delete(`/patient-masters/tpas/${item.id}`)
+            onDeleted()
+        } catch (e) {
+            toast.error(e?.response?.data?.detail || 'Failed to deactivate TPA')
+        }
     }
 
     return (
         <div className="space-y-4">
-            {/* Top bar */}
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-start gap-2 text-xs text-slate-600 sm:text-sm">
-                    <Shield className="mt-0.5 h-4 w-4 text-blue-600" />
-                    <span>Third-party administrators (TPAs) linked to payers.</span>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                    <div className="relative">
-                        <input
-                            value={q}
-                            onChange={(e) => setQ(e.target.value)}
-                            placeholder="Search code, name, payer…"
-                            className="w-52 max-w-full rounded-2xl border border-slate-200 bg-slate-50 px-8 py-1.5 text-xs text-slate-800 outline-none ring-0 transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
-                        />
-                        <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <div className={cx(UI.subtle, 'p-3')}>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-start gap-2">
+                        <Shield className="mt-0.5 h-4 w-4" style={{ color: primary }} />
+                        <div className="text-[13px] text-slate-600 leading-relaxed">
+                            Third-party administrators (TPAs) linked to payers.
+                        </div>
                     </div>
-                    {canManage && (
-                        <button
-                            onClick={openCreate}
-                            className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-blue-700 hover:shadow-md active:scale-95 sm:text-sm"
-                        >
-                            <Plus className="h-4 w-4" />
-                            New TPA
-                        </button>
-                    )}
+
+                    <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                        <AppleSearch value={q} onChange={setQ} placeholder="Search code, name, payer…" className="sm:w-[320px]" />
+                        {canManage && (
+                            <button
+                                onClick={openCreate}
+                                className={cx(UI.btn, 'text-white shadow-sm')}
+                                style={{ backgroundColor: primary }}
+                            >
+                                <Plus className="h-4 w-4" />
+                                New TPA
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                <div className="mt-3 flex items-center justify-end gap-2">
+                    <span className={UI.badge}>
+                        Total: <span className="ml-1 tabular-nums">{items.length}</span>
+                    </span>
+                    <span className={UI.badge}>
+                        Showing: <span className="ml-1 tabular-nums">{filtered.length}</span>
+                    </span>
                 </div>
             </div>
 
             {err && (
-                <div className="rounded-xl border border-rose-200 bg-rose-50/80 p-3 text-xs text-rose-700 sm:text-sm">
+                <div className="rounded-3xl border border-rose-200 bg-rose-50/80 p-3 text-[13px] text-rose-700">
                     {err}
                 </div>
             )}
 
-            {/* Mobile cards */}
-            <div className="grid gap-3 sm:hidden">
-                {loading && (
-                    <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-center text-xs text-slate-500 shadow-sm">
-                        Loading TPAs…
-                    </div>
-                )}
-                {!loading &&
-                    filtered.map((t) => (
-                        <div
+            {loading && <div className={cx(UI.card, 'p-4 text-center text-slate-500')}>Loading…</div>}
+
+            {!loading && filtered.length === 0 && <EmptyState title="No TPAs" subtitle="No data found." />}
+
+            {!loading && filtered.length > 0 && (
+                <AppleListShell title="TPAs" right={<span className={UI.badge}>macOS list</span>}>
+                    {filtered.map((t) => (
+                        <AppleListRow
                             key={t.id}
-                            className="group rounded-2xl border border-slate-100 bg-white p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-                        >
-                            <div className="flex items-start justify-between gap-3">
-                                <div>
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <span className="text-sm font-semibold text-slate-900">
-                                            {t.name}
+                            title={t.name}
+                            subtitle={<CodeBadge code={t.code} />}
+                            metaLeft={
+                                <div className="flex flex-col gap-0.5">
+                                    <div>
+                                        Payer:{' '}
+                                        <span className="font-semibold text-slate-800">
+                                            {payerMap[t.payer_id]?.name || '—'}
                                         </span>
-                                        {t.code && (
-                                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-mono text-slate-600">
-                                                {t.code}
-                                            </span>
-                                        )}
                                     </div>
-                                    <div className="mt-1 text-[11px] text-slate-500">
-                                        Payer: {payerMap[t.payer_id]?.name || '—'}
+                                    <div className="text-slate-500 line-clamp-1">
+                                        {t.contact_person ? `Contact: ${t.contact_person}` : 'No contact person'}
+                                    </div>
+                                    <div className="text-slate-500 line-clamp-1">
+                                        {t.phone || t.email ? `${t.phone || '—'} • ${t.email || '—'}` : 'No phone/email'}
                                     </div>
                                 </div>
-                                {canManage && (
-                                    <button
-                                        onClick={() => openEdit(t)}
-                                        className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50"
-                                    >
-                                        <Pencil className="h-3.5 w-3.5" />
-                                        Edit
-                                    </button>
-                                )}
-                            </div>
-                            <div className="mt-2 space-y-1 text-[11px] text-slate-600">
-                                {t.contact_person && (
-                                    <div>
-                                        <span className="font-medium text-slate-700">
-                                            Contact:
-                                        </span>{' '}
-                                        {t.contact_person}
-                                    </div>
-                                )}
-                                {t.phone && (
-                                    <div>
-                                        <span className="font-medium text-slate-700">
-                                            Phone:
-                                        </span>{' '}
-                                        {t.phone}
-                                    </div>
-                                )}
-                                {t.email && (
-                                    <div>
-                                        <span className="font-medium text-slate-700">
-                                            Email:
-                                        </span>{' '}
-                                        {t.email}
-                                    </div>
-                                )}
-                            </div>
-                        </div>
+                            }
+                            metaRight={<span className="text-slate-400">—</span>}
+                            canClick={!!canManage}
+                            onClick={() => openEdit(t)}
+                            canManage={!!canManage}
+                            onEdit={() => openEdit(t)}
+                            onDeactivate={() => quickDeactivate(t)}
+                        />
                     ))}
-                {!loading && filtered.length === 0 && (
-                    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-xs text-slate-500">
-                        No TPAs found.
-                    </div>
-                )}
-            </div>
-
-            {/* Desktop table */}
-            <div className="hidden overflow-x-auto rounded-2xl border border-slate-100 bg-white sm:block">
-                <table className="min-w-full text-sm">
-                    <thead className="bg-slate-50/80">
-                        <tr className="text-left text-[11px] font-medium uppercase tracking-wide text-slate-500">
-                            <th className="p-2">#</th>
-                            <th className="p-2">Code</th>
-                            <th className="p-2">Name</th>
-                            <th className="p-2">Payer</th>
-                            <th className="p-2">Contact</th>
-                            <th className="p-2">Phone / Email</th>
-                            <th className="p-2 text-right">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {loading && (
-                            <tr>
-                                <td
-                                    colSpan={7}
-                                    className="p-4 text-center text-xs text-slate-500 sm:text-sm"
-                                >
-                                    Loading TPAs…
-                                </td>
-                            </tr>
-                        )}
-                        {!loading &&
-                            filtered.map((t, idx) => (
-                                <tr
-                                    key={t.id}
-                                    className="border-t border-slate-100 text-xs text-slate-800 transition hover:bg-slate-50"
-                                >
-                                    <td className="p-2 text-slate-800">{idx + 1}</td>
-                                    <td className="p-2 font-mono text-[11px] text-slate-700">
-                                        {t.code}
-                                    </td>
-                                    <td className="p-2 text-slate-900">{t.name}</td>
-                                    <td className="p-2 text-slate-800">
-                                        {payerMap[t.payer_id]?.name || '—'}
-                                    </td>
-                                    <td className="p-2 text-slate-800">
-                                        {t.contact_person || '—'}
-                                    </td>
-                                    <td className="p-2 text-slate-800">
-                                        <div>{t.phone || '—'}</div>
-                                        <div className="text-[11px] text-slate-500">
-                                            {t.email || '—'}
-                                        </div>
-                                    </td>
-                                    <td className="p-2 text-right">
-                                        {canManage && (
-                                            <button
-                                                onClick={() => openEdit(t)}
-                                                className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-[11px] text-slate-700 transition hover:bg-slate-50"
-                                            >
-                                                <Pencil className="h-3.5 w-3.5" />
-                                                Edit
-                                            </button>
-                                        )}
-                                    </td>
-                                </tr>
-                            ))}
-                        {!loading && filtered.length === 0 && (
-                            <tr>
-                                <td
-                                    colSpan={7}
-                                    className="p-6 text-center text-xs text-slate-500 sm:text-sm"
-                                >
-                                    No TPAs found.
-                                </td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
-            </div>
+                </AppleListShell>
+            )}
 
             {modalOpen && (
                 <TpaModal
+                    primary={primary}
                     existing={editing}
+                    payers={payers}
                     onClose={() => {
                         setModalOpen(false)
                         setEditing(null)
                     }}
-                    payers={payers}
                     onSaved={onSaved}
                     onDeleted={onDeleted}
                 />
@@ -1537,7 +1331,7 @@ function TpasTab() {
     )
 }
 
-function TpaModal({ existing, payers, onClose, onSaved, onDeleted }) {
+function TpaModal({ existing, payers, onClose, onSaved, onDeleted, primary }) {
     const canManage = useCan('patients.masters.manage')
     const [form, setForm] = useState(() => ({
         code: existing?.code || '',
@@ -1556,16 +1350,13 @@ function TpaModal({ existing, payers, onClose, onSaved, onDeleted }) {
         setSaving(true)
         setErr('')
         try {
-            const payload = {
-                ...form,
-                payer_id: form.payer_id ? Number(form.payer_id) : null,
-            }
+            const payload = { ...form, payer_id: form.payer_id ? Number(form.payer_id) : null }
             if (existing) {
                 await API.put(`/patient-masters/tpas/${existing.id}`, payload)
-                onSaved && onSaved('update')
+                onSaved?.('update')
             } else {
                 await API.post('/patient-masters/tpas', payload)
-                onSaved && onSaved('create')
+                onSaved?.('create')
             }
         } catch (e) {
             const msg = e?.response?.data?.detail || 'Failed to save TPA'
@@ -1583,8 +1374,8 @@ function TpaModal({ existing, payers, onClose, onSaved, onDeleted }) {
         setErr('')
         try {
             await API.delete(`/patient-masters/tpas/${existing.id}`)
-            onDeleted && onDeleted()
-            onClose && onClose()
+            onDeleted?.()
+            onClose?.()
         } catch (e) {
             const msg = e?.response?.data?.detail || 'Failed to deactivate TPA'
             setErr(msg)
@@ -1595,162 +1386,95 @@ function TpaModal({ existing, payers, onClose, onSaved, onDeleted }) {
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-3 sm:p-4">
-            <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl sm:p-5">
-                <div className="mb-4 flex items-center justify-between gap-2">
-                    <div>
-                        <h3 className="text-base font-semibold text-slate-900 sm:text-lg">
-                            {existing ? 'Edit TPA' : 'New TPA'}
-                        </h3>
-                        <p className="mt-1 text-[11px] text-slate-500 sm:text-xs">
-                            Third-party administrator master, mapped to payer.
-                        </p>
-                    </div>
-                    <button
-                        onClick={onClose}
-                        type="button"
-                        className="rounded-full p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
-                    >
-                        <X className="h-4 w-4" />
-                    </button>
+        <AppleModal title={existing ? 'Edit TPA' : 'New TPA'} subtitle="Third-party administrator master, mapped to payer." onClose={onClose}>
+            {err && (
+                <div className="mb-3 rounded-3xl border border-rose-200 bg-rose-50/80 p-3 text-[13px] text-rose-700">
+                    {err}
                 </div>
+            )}
 
-                {err && (
-                    <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50/80 p-3 text-xs text-rose-700 sm:text-sm">
-                        {err}
-                    </div>
-                )}
-
-                <form onSubmit={save} className="space-y-3 text-xs sm:text-sm">
-                    <div className="grid gap-3 md:grid-cols-2">
-                        <div>
-                            <label className="mb-1 block text-[11px] font-medium text-slate-800">
-                                Code
-                            </label>
-                            <input
-                                className="input text-slate-800"
-                                value={form.code}
-                                onChange={(e) =>
-                                    setForm({ ...form, code: e.target.value.toUpperCase() })
-                                }
-                                required
-                            />
-                        </div>
-                        <div>
-                            <label className="mb-1 block text-[11px] font-medium text-slate-800">
-                                Name
-                            </label>
-                            <input
-                                className="input text-slate-800"
-                                value={form.name}
-                                onChange={(e) =>
-                                    setForm({ ...form, name: e.target.value })
-                                }
-                                required
-                            />
-                        </div>
-                    </div>
-
+            <form onSubmit={save} className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
                     <div>
-                        <label className="mb-1 block text-[11px] font-medium text-slate-800">
-                            Payer
-                        </label>
-                        <select
-                            className="input text-slate-800"
-                            value={form.payer_id || ''}
-                            onChange={(e) =>
-                                setForm({ ...form, payer_id: e.target.value || '' })
-                            }
-                            required
-                        >
-                            <option value="">Select payer…</option>
-                            {payers.map((p) => (
-                                <option key={p.id} value={p.id}>
-                                    {p.name}
-                                </option>
-                            ))}
-                        </select>
-                    </div>
-
-                    <div className="grid gap-3 md:grid-cols-2">
-                        <div>
-                            <label className="mb-1 block text-[11px] font-medium text-slate-800">
-                                Contact Person
-                            </label>
-                            <input
-                                className="input text-slate-800"
-                                value={form.contact_person}
-                                onChange={(e) =>
-                                    setForm({ ...form, contact_person: e.target.value })
-                                }
-                            />
-                        </div>
-                        <div>
-                            <label className="mb-1 block text-[11px] font-medium text-slate-800">
-                                Phone
-                            </label>
-                            <input
-                                className="input text-slate-800"
-                                value={form.phone}
-                                onChange={(e) =>
-                                    setForm({ ...form, phone: e.target.value })
-                                }
-                            />
-                        </div>
-                    </div>
-
-                    <div>
-                        <label className="mb-1 block text-[11px] font-medium text-slate-800">
-                            Email
-                        </label>
+                        <label className={UI.label}>Code</label>
                         <input
-                            className="input text-slate-800"
-                            type="email"
-                            value={form.email}
-                            onChange={(e) =>
-                                setForm({ ...form, email: e.target.value })
-                            }
+                            className={UI.input}
+                            value={form.code}
+                            onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })}
+                            required
                         />
                     </div>
-
-                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                        {existing && (
-                            <button
-                                type="button"
-                                onClick={remove}
-                                className="inline-flex items-center gap-2 rounded-full border border-rose-200 px-3 py-1.5 text-[11px] font-medium text-rose-700 transition hover:bg-rose-50"
-                            >
-                                <Trash2 className="h-3.5 w-3.5" />
-                                Deactivate
-                            </button>
-                        )}
-                        <div className="ml-auto flex gap-2">
-                            <button
-                                type="button"
-                                onClick={onClose}
-                                className="rounded-full border border-slate-200 px-4 py-1.5 text-[11px] text-slate-700 transition hover:bg-slate-50"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                className="btn rounded-full px-4 py-1.5 text-[11px]"
-                                disabled={saving || !canManage}
-                            >
-                                {saving ? 'Saving…' : 'Save'}
-                            </button>
-                        </div>
+                    <div>
+                        <label className={UI.label}>Name</label>
+                        <input className={UI.input} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
                     </div>
-                </form>
-            </div>
-        </div>
+                </div>
+
+                <div>
+                    <label className={UI.label}>Payer</label>
+                    <select
+                        className={UI.input}
+                        value={form.payer_id || ''}
+                        onChange={(e) => setForm({ ...form, payer_id: e.target.value || '' })}
+                        required
+                    >
+                        <option value="">Select payer…</option>
+                        {payers.map((p) => (
+                            <option key={p.id} value={p.id}>
+                                {p.name}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+
+                <div className="grid gap-3 sm:grid-cols-2">
+                    <div>
+                        <label className={UI.label}>Contact Person</label>
+                        <input className={UI.input} value={form.contact_person} onChange={(e) => setForm({ ...form, contact_person: e.target.value })} />
+                    </div>
+                    <div>
+                        <label className={UI.label}>Phone</label>
+                        <input className={UI.input} value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} />
+                    </div>
+                </div>
+
+                <div>
+                    <label className={UI.label}>Email</label>
+                    <input className={UI.input} type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} />
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                    {existing ? (
+                        <button
+                            type="button"
+                            onClick={remove}
+                            className="inline-flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100/60"
+                        >
+                            <Trash2 className="h-4 w-4" />
+                            Deactivate
+                        </button>
+                    ) : (
+                        <div />
+                    )}
+
+                    <div className="ml-auto flex gap-2">
+                        <button type="button" onClick={onClose} className={cx(UI.btnOutline, 'h-10')}>
+                            Cancel
+                        </button>
+                        <button className={cx(UI.btn, 'h-10 text-white shadow-sm')} style={{ backgroundColor: primary }} disabled={saving || !canManage}>
+                            {saving ? 'Saving…' : 'Save'}
+                        </button>
+                    </div>
+                </div>
+            </form>
+        </AppleModal>
     )
 }
 
 /* ---------------------------------------------------
-   CREDIT PLANS TAB
+   CREDIT PLANS TAB (List rows + action menu)
 --------------------------------------------------- */
-
-function CreditPlansTab() {
+function CreditPlansTab({ primary }) {
     const canView = useCan('patients.masters.view')
     const canManage = useCan('patients.masters.manage')
 
@@ -1819,7 +1543,6 @@ function CreditPlansTab() {
         setEditing(null)
         setModalOpen(true)
     }
-
     const openEdit = (item) => {
         if (!canManage) return
         setEditing(item)
@@ -1830,188 +1553,108 @@ function CreditPlansTab() {
         setModalOpen(false)
         setEditing(null)
         load()
-        toast.success(
-            mode === 'update'
-                ? 'Credit plan updated successfully'
-                : 'Credit plan created successfully'
-        )
+        toast.success(mode === 'update' ? 'Credit plan updated' : 'Credit plan created')
     }
-
     const onDeleted = () => {
         load()
-        toast.success('Credit plan deactivated successfully')
+        toast.success('Credit plan deactivated')
+    }
+
+    const quickDeactivate = async (item) => {
+        if (!canManage) return
+        if (!window.confirm('Deactivate this credit plan?')) return
+        try {
+            await API.delete(`/patient-masters/credit-plans/${item.id}`)
+            onDeleted()
+        } catch (e) {
+            toast.error(e?.response?.data?.detail || 'Failed to deactivate credit plan')
+        }
     }
 
     return (
         <div className="space-y-4">
-            {/* Top bar */}
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-start gap-2 text-xs text-slate-600 sm:text-sm">
-                    <Layers className="mt-0.5 h-4 w-4 text-blue-600" />
-                    <span>
-                        Credit / insurance plans used for IPD/OPD billing & authorization.
-                    </span>
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                    <div className="relative">
-                        <input
-                            value={q}
-                            onChange={(e) => setQ(e.target.value)}
-                            placeholder="Search code, name, payer, TPA…"
-                            className="w-60 max-w-full rounded-2xl border border-slate-200 bg-slate-50 px-8 py-1.5 text-xs text-slate-800 outline-none ring-0 transition focus:border-blue-500 focus:bg-white focus:ring-2 focus:ring-blue-100"
-                        />
-                        <Search className="pointer-events-none absolute left-2 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <div className={cx(UI.subtle, 'p-3')}>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="flex items-start gap-2">
+                        <Layers className="mt-0.5 h-4 w-4" style={{ color: primary }} />
+                        <div className="text-[13px] text-slate-600 leading-relaxed">
+                            Credit / insurance plans used for IPD/OPD billing & authorization.
+                        </div>
                     </div>
-                    {canManage && (
-                        <button
-                            onClick={openCreate}
-                            className="inline-flex items-center gap-2 rounded-full bg-blue-600 px-3 py-1.5 text-xs font-medium text-white shadow-sm transition hover:bg-blue-700 hover:shadow-md active:scale-95 sm:text-sm"
-                        >
-                            <Plus className="h-4 w-4" />
-                            New Plan
-                        </button>
-                    )}
+
+                    <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                        <AppleSearch value={q} onChange={setQ} placeholder="Search code, name, payer, TPA…" className="sm:w-[320px]" />
+                        {canManage && (
+                            <button onClick={openCreate} className={cx(UI.btn, 'text-white shadow-sm')} style={{ backgroundColor: primary }}>
+                                <Plus className="h-4 w-4" />
+                                New Plan
+                            </button>
+                        )}
+                    </div>
+                </div>
+
+                <div className="mt-3 flex items-center justify-end gap-2">
+                    <span className={UI.badge}>
+                        Total: <span className="ml-1 tabular-nums">{items.length}</span>
+                    </span>
+                    <span className={UI.badge}>
+                        Showing: <span className="ml-1 tabular-nums">{filtered.length}</span>
+                    </span>
                 </div>
             </div>
 
             {err && (
-                <div className="rounded-xl border border-rose-200 bg-rose-50/80 p-3 text-xs text-rose-700 sm:text-sm">
+                <div className="rounded-3xl border border-rose-200 bg-rose-50/80 p-3 text-[13px] text-rose-700">
                     {err}
                 </div>
             )}
 
-            {/* Mobile cards */}
-            <div className="grid gap-3 sm:hidden">
-                {loading && (
-                    <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-center text-xs text-slate-500 shadow-sm">
-                        Loading credit plans…
-                    </div>
-                )}
-                {!loading &&
-                    filtered.map((cp) => (
-                        <div
-                            key={cp.id}
-                            className="group rounded-2xl border border-slate-100 bg-white p-3 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md"
-                        >
-                            <div className="flex items-start justify-between gap-3">
-                                <div>
-                                    <div className="flex flex-wrap items-center gap-2">
-                                        <span className="text-sm font-semibold text-slate-900">
-                                            {cp.name}
-                                        </span>
-                                        {cp.code && (
-                                            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[11px] font-mono text-slate-600">
-                                                {cp.code}
-                                            </span>
-                                        )}
-                                    </div>
-                                    <div className="mt-1 text-[11px] text-slate-500">
-                                        Payer: {payerMap[cp.payer_id]?.name || '—'}
-                                    </div>
-                                    <div className="mt-0.5 text-[11px] text-slate-500">
-                                        TPA: {tpaMap[cp.tpa_id]?.name || '—'}
-                                    </div>
-                                </div>
-                                {canManage && (
-                                    <button
-                                        onClick={() => openEdit(cp)}
-                                        className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-[11px] text-slate-700 hover:bg-slate-50"
-                                    >
-                                        <Pencil className="h-3.5 w-3.5" />
-                                        Edit
-                                    </button>
-                                )}
-                            </div>
-                            {cp.description && (
-                                <div className="mt-2 text-[11px] text-slate-600">
-                                    {cp.description}
-                                </div>
-                            )}
-                        </div>
-                    ))}
-                {!loading && filtered.length === 0 && (
-                    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-4 text-center text-xs text-slate-500">
-                        No credit plans found.
-                    </div>
-                )}
-            </div>
+            {loading && <div className={cx(UI.card, 'p-4 text-center text-slate-500')}>Loading…</div>}
 
-            {/* Desktop table */}
-            <div className="hidden overflow-x-auto rounded-2xl border border-slate-100 bg-white sm:block">
-                <table className="min-w-full text-sm">
-                    <thead className="bg-slate-50/80">
-                        <tr className="text-left text-[11px] font-medium uppercase tracking-wide text-slate-500">
-                            <th className="p-2">#</th>
-                            <th className="p-2">Code</th>
-                            <th className="p-2">Name</th>
-                            <th className="p-2">Payer</th>
-                            <th className="p-2">TPA</th>
-                            <th className="p-2">Description</th>
-                            <th className="p-2 text-right">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {loading && (
-                            <tr>
-                                <td
-                                    colSpan={7}
-                                    className="p-4 text-center text-xs text-slate-500 sm:text-sm"
-                                >
-                                    Loading credit plans…
-                                </td>
-                            </tr>
-                        )}
-                        {!loading &&
-                            filtered.map((cp, idx) => (
-                                <tr
-                                    key={cp.id}
-                                    className="border-t border-slate-100 text-xs text-slate-800 transition hover:bg-slate-50"
-                                >
-                                    <td className="p-2">{idx + 1}</td>
-                                    <td className="p-2 font-mono text-[11px] text-slate-700">
-                                        {cp.code}
-                                    </td>
-                                    <td className="p-2">{cp.name}</td>
-                                    <td className="p-2">
-                                        {payerMap[cp.payer_id]?.name || '—'}
-                                    </td>
-                                    <td className="p-2">
-                                        {tpaMap[cp.tpa_id]?.name || '—'}
-                                    </td>
-                                    <td className="p-2 max-w-xs">
-                                        <div className="line-clamp-2 text-[11px] text-slate-600">
-                                            {cp.description || '—'}
-                                        </div>
-                                    </td>
-                                    <td className="p-2 text-right">
-                                        {canManage && (
-                                            <button
-                                                onClick={() => openEdit(cp)}
-                                                className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-2 py-1 text-[11px] text-slate-700 transition hover:bg-slate-50"
-                                            >
-                                                <Pencil className="h-3.5 w-3.5" />
-                                                Edit
-                                            </button>
-                                        )}
-                                    </td>
-                                </tr>
-                            ))}
-                        {!loading && filtered.length === 0 && (
-                            <tr>
-                                <td
-                                    colSpan={7}
-                                    className="p-6 text-center text-xs text-slate-500 sm:text-sm"
-                                >
-                                    No credit plans found.
-                                </td>
-                            </tr>
-                        )}
-                    </tbody>
-                </table>
-            </div>
+            {!loading && filtered.length === 0 && <EmptyState title="No credit plans" subtitle="No data found." />}
+
+            {!loading && filtered.length > 0 && (
+                <AppleListShell title="Credit Plans" right={<span className={UI.badge}>macOS list</span>}>
+                    {filtered.map((cp) => (
+                        <AppleListRow
+                            key={cp.id}
+                            title={cp.name}
+                            subtitle={<CodeBadge code={cp.code} />}
+                            metaLeft={
+                                <div className="flex flex-col gap-0.5">
+                                    <div>
+                                        Payer:{' '}
+                                        <span className="font-semibold text-slate-800">
+                                            {payerMap[cp.payer_id]?.name || '—'}
+                                        </span>
+                                    </div>
+                                    <div className="text-slate-500">
+                                        TPA:{' '}
+                                        <span className="font-semibold text-slate-700">
+                                            {tpaMap[cp.tpa_id]?.name || '—'}
+                                        </span>
+                                    </div>
+                                    {cp.description ? (
+                                        <div className="text-slate-500 line-clamp-1">{cp.description}</div>
+                                    ) : (
+                                        <div className="text-slate-400">No notes</div>
+                                    )}
+                                </div>
+                            }
+                            metaRight={<span className="text-slate-400">—</span>}
+                            canClick={!!canManage}
+                            onClick={() => openEdit(cp)}
+                            canManage={!!canManage}
+                            onEdit={() => openEdit(cp)}
+                            onDeactivate={() => quickDeactivate(cp)}
+                        />
+                    ))}
+                </AppleListShell>
+            )}
 
             {modalOpen && (
                 <CreditPlanModal
+                    primary={primary}
                     existing={editing}
                     payers={payers}
                     tpas={tpas}
@@ -2027,7 +1670,7 @@ function CreditPlansTab() {
     )
 }
 
-function CreditPlanModal({ existing, payers, tpas, onClose, onSaved, onDeleted }) {
+function CreditPlanModal({ existing, payers, tpas, onClose, onSaved, onDeleted, primary }) {
     const canManage = useCan('patients.masters.manage')
     const [form, setForm] = useState(() => ({
         code: existing?.code || '',
@@ -2052,10 +1695,10 @@ function CreditPlanModal({ existing, payers, tpas, onClose, onSaved, onDeleted }
             }
             if (existing) {
                 await API.put(`/patient-masters/credit-plans/${existing.id}`, payload)
-                onSaved && onSaved('update')
+                onSaved?.('update')
             } else {
                 await API.post('/patient-masters/credit-plans', payload)
-                onSaved && onSaved('create')
+                onSaved?.('create')
             }
         } catch (e) {
             const msg = e?.response?.data?.detail || 'Failed to save credit plan'
@@ -2073,8 +1716,8 @@ function CreditPlanModal({ existing, payers, tpas, onClose, onSaved, onDeleted }
         setErr('')
         try {
             await API.delete(`/patient-masters/credit-plans/${existing.id}`)
-            onDeleted && onDeleted()
-            onClose && onClose()
+            onDeleted?.()
+            onClose?.()
         } catch (e) {
             const msg = e?.response?.data?.detail || 'Failed to deactivate credit plan'
             setErr(msg)
@@ -2085,146 +1728,79 @@ function CreditPlanModal({ existing, payers, tpas, onClose, onSaved, onDeleted }
     }
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-3 sm:p-4">
-            <div className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-4 shadow-2xl sm:p-5">
-                <div className="mb-4 flex items-center justify-between gap-2">
+        <AppleModal title={existing ? 'Edit Credit Plan' : 'New Credit Plan'} subtitle="Map plan to payer & optional TPA for billing workflows." onClose={onClose}>
+            {err && (
+                <div className="mb-3 rounded-3xl border border-rose-200 bg-rose-50/80 p-3 text-[13px] text-rose-700">
+                    {err}
+                </div>
+            )}
+
+            <form onSubmit={save} className="space-y-3">
+                <div className="grid gap-3 sm:grid-cols-2">
                     <div>
-                        <h3 className="text-base font-semibold text-slate-900 sm:text-lg">
-                            {existing ? 'Edit Credit Plan' : 'New Credit Plan'}
-                        </h3>
-                        <p className="mt-1 text-[11px] text-slate-500 sm:text-xs">
-                            Map plan to payer & optional TPA for billing workflows.
-                        </p>
+                        <label className={UI.label}>Code</label>
+                        <input className={UI.input} value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} required />
                     </div>
-                    <button
-                        onClick={onClose}
-                        type="button"
-                        className="rounded-full p-2 text-slate-500 transition hover:bg-slate-100 hover:text-slate-700"
-                    >
-                        <X className="h-4 w-4" />
-                    </button>
+                    <div>
+                        <label className={UI.label}>Name</label>
+                        <input className={UI.input} value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required />
+                    </div>
                 </div>
 
-                {err && (
-                    <div className="mb-3 rounded-xl border border-rose-200 bg-rose-50/80 p-3 text-xs text-rose-700 sm:text-sm">
-                        {err}
-                    </div>
-                )}
-
-                <form onSubmit={save} className="space-y-3 text-xs sm:text-sm">
-                    <div className="grid gap-3 md:grid-cols-2">
-                        <div>
-                            <label className="mb-1 block text-[11px] font-medium text-slate-800">
-                                Code
-                            </label>
-                            <input
-                                className="input text-slate-800"
-                                value={form.code}
-                                onChange={(e) =>
-                                    setForm({ ...form, code: e.target.value.toUpperCase() })
-                                }
-                                required
-                            />
-                        </div>
-                        <div>
-                            <label className="mb-1 block text-[11px] font-medium text-slate-800">
-                                Name
-                            </label>
-                            <input
-                                className="input text-slate-800"
-                                value={form.name}
-                                onChange={(e) =>
-                                    setForm({ ...form, name: e.target.value })
-                                }
-                                required
-                            />
-                        </div>
-                    </div>
-
-                    <div className="grid gap-3 md:grid-cols-2">
-                        <div>
-                            <label className="mb-1 block text-[11px] font-medium text-slate-800">
-                                Payer
-                            </label>
-                            <select
-                                className="input text-slate-800"
-                                value={form.payer_id || ''}
-                                onChange={(e) =>
-                                    setForm({ ...form, payer_id: e.target.value || '' })
-                                }
-                                required
-                            >
-                                <option value="">Select payer…</option>
-                                {payers.map((p) => (
-                                    <option key={p.id} value={p.id}>
-                                        {p.name}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="mb-1 block text-[11px] font-medium text-slate-800">
-                                TPA (optional)
-                            </label>
-                            <select
-                                className="input text-slate-800"
-                                value={form.tpa_id || ''}
-                                onChange={(e) =>
-                                    setForm({ ...form, tpa_id: e.target.value || '' })
-                                }
-                            >
-                                <option value="">No TPA</option>
-                                {tpas.map((t) => (
-                                    <option key={t.id} value={t.id}>
-                                        {t.name}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                    </div>
-
+                <div className="grid gap-3 sm:grid-cols-2">
                     <div>
-                        <label className="mb-1 block text-[11px] font-medium text-slate-800">
-                            Description / Notes
-                        </label>
-                        <textarea
-                            className="input min-h-[80px] text-slate-800"
-                            value={form.description}
-                            onChange={(e) =>
-                                setForm({ ...form, description: e.target.value })
-                            }
-                        />
+                        <label className={UI.label}>Payer</label>
+                        <select className={UI.input} value={form.payer_id || ''} onChange={(e) => setForm({ ...form, payer_id: e.target.value || '' })} required>
+                            <option value="">Select payer…</option>
+                            {payers.map((p) => (
+                                <option key={p.id} value={p.id}>
+                                    {p.name}
+                                </option>
+                            ))}
+                        </select>
                     </div>
+                    <div>
+                        <label className={UI.label}>TPA (optional)</label>
+                        <select className={UI.input} value={form.tpa_id || ''} onChange={(e) => setForm({ ...form, tpa_id: e.target.value || '' })}>
+                            <option value="">No TPA</option>
+                            {tpas.map((t) => (
+                                <option key={t.id} value={t.id}>
+                                    {t.name}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+                </div>
 
-                    <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-                        {existing && (
-                            <button
-                                type="button"
-                                onClick={remove}
-                                className="inline-flex items-center gap-2 rounded-full border border-rose-200 px-3 py-1.5 text-[11px] font-medium text-rose-700 transition hover:bg-rose-50"
-                            >
-                                <Trash2 className="h-3.5 w-3.5" />
-                                Deactivate
-                            </button>
-                        )}
-                        <div className="ml-auto flex gap-2">
-                            <button
-                                type="button"
-                                onClick={onClose}
-                                className="rounded-full border border-slate-200 px-4 py-1.5 text-[11px] text-slate-700 transition hover:bg-slate-50"
-                            >
-                                Cancel
-                            </button>
-                            <button
-                                className="btn rounded-full px-4 py-1.5 text-[11px]"
-                                disabled={saving || !canManage}
-                            >
-                                {saving ? 'Saving…' : 'Save'}
-                            </button>
-                        </div>
+                <div>
+                    <label className={UI.label}>Description / Notes</label>
+                    <textarea className={UI.textarea} value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+                </div>
+
+                <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                    {existing ? (
+                        <button
+                            type="button"
+                            onClick={remove}
+                            className="inline-flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100/60"
+                        >
+                            <Trash2 className="h-4 w-4" />
+                            Deactivate
+                        </button>
+                    ) : (
+                        <div />
+                    )}
+
+                    <div className="ml-auto flex gap-2">
+                        <button type="button" onClick={onClose} className={cx(UI.btnOutline, 'h-10')}>
+                            Cancel
+                        </button>
+                        <button className={cx(UI.btn, 'h-10 text-white shadow-sm')} style={{ backgroundColor: primary }} disabled={saving || !canManage}>
+                            {saving ? 'Saving…' : 'Save'}
+                        </button>
                     </div>
-                </form>
-            </div>
-        </div>
+                </div>
+            </form>
+        </AppleModal>
     )
 }

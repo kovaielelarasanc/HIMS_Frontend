@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { getOtCase } from '../api/ot'
 import { useCan } from '../hooks/useCan'
+import { useAuth } from '../store/authStore'
 import {
     ArrowLeft,
     Stethoscope,
@@ -126,12 +127,29 @@ function buildAgeSex(patient) {
     if (sex) return sex
     return null
 }
-
 export default function OtCaseDetailPage() {
     const { caseId } = useParams()
     const navigate = useNavigate()
 
-    const canView = useCan('ot.cases.view')
+    const { user, perms: allPerms } = useAuth() || {}
+
+    // 👀 DEBUG – see what permissions this user actually has
+    console.log(
+        'OT Case page user=',
+        user?.full_name,
+        'perms=',
+        allPerms,
+    )
+
+    // ✅ Allow view if user has ANY of these related OT/IPD perms
+    const canView =
+        useCan('ot.cases.view') ||
+        useCan('ot.cases.update') ||
+        useCan('ot.cases.create') ||
+        useCan('ot.schedule.view') ||
+        useCan('ot.schedules.view') ||
+        useCan('ipd.view')
+
 
     const [tab, setTab] = useState('preop')
     const [caseData, setCaseData] = useState(null)
@@ -578,8 +596,8 @@ export default function OtCaseDetailPage() {
                             type="button"
                             onClick={() => setTab(t.id)}
                             className={`relative px-3 py-1.5 text-xs font-medium transition-colors ${active
-                                    ? 'text-sky-700'
-                                    : 'text-slate-500 hover:text-slate-800'
+                                ? 'text-sky-700'
+                                : 'text-slate-500 hover:text-slate-800'
                                 }`}
                         >
                             {t.label}

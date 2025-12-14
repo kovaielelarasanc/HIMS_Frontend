@@ -1,10 +1,9 @@
 // FILE: src/api/billing.js
 import API from "./client";
 
-// -------- Invoices --------
+// ---------------- Invoices ----------------
 
 export function createInvoice(payload) {
-    // payload: { patient_id, context_type?, context_id?, billing_type?, provider_id?, consultant_id?, visit_no?, remarks? }
     return API.post("/billing/invoices", payload);
 }
 
@@ -13,12 +12,10 @@ export function getInvoice(id) {
 }
 
 export function listInvoices(params = {}) {
-    // params: patient_id?, billing_type?, status?, from_date?, to_date?
     return API.get("/billing/invoices", { params });
 }
 
 export function updateInvoice(id, payload) {
-    // loosely typed; backend accepts dict body
     return API.put(`/billing/invoices/${id}`, payload);
 }
 
@@ -30,66 +27,74 @@ export function cancelInvoice(id) {
     return API.post(`/billing/invoices/${id}/cancel`);
 }
 
-// -------- Items --------
+// ---------------- Items ----------------
 
 export function addManualItem(invoiceId, payload) {
-    // payload: { description, quantity, unit_price, tax_rate?, discount_percent?, discount_amount? }
     return API.post(`/billing/invoices/${invoiceId}/items/manual`, payload);
 }
 
 export function addServiceItem(invoiceId, payload) {
-    // payload: { service_type, service_ref_id, description?, quantity?, unit_price?, tax_rate?, discount_percent?, discount_amount? }
     return API.post(`/billing/invoices/${invoiceId}/items/service`, payload);
 }
 
 export function updateInvoiceItem(invoiceId, itemId, payload) {
-    // payload: { quantity?, unit_price?, tax_rate?, discount_percent?, discount_amount?, description? }
     return API.put(`/billing/invoices/${invoiceId}/items/${itemId}`, payload);
 }
 
 export function voidInvoiceItem(invoiceId, itemId, payload) {
-    // payload: { reason? }
     return API.post(`/billing/invoices/${invoiceId}/items/${itemId}/void`, payload);
 }
 
-export function fetchUnbilledServices(invoiceId) {
-    return API.get(`/billing/invoices/${invoiceId}/unbilled`);
-}
-
-export function bulkAddFromUnbilled(invoiceId, payload) {
-    // payload: { uids?: string[] }
-    return API.post(`/billing/invoices/${invoiceId}/unbilled/bulk-add`, payload);
-}
-// ⭐ NEW: Auto IPD Bed Charges
-export function autoAddIpdBedCharges(invoiceId, payload) {
-    // payload: { admission_id, mode: "daily" | "hourly" | "mixed", skip_if_already_billed?: boolean, upto_ts?: string | null }
-    return API.post(
-        `/billing/invoices/${invoiceId}/items/ipd-bed-auto`,
-        payload
-    );
-}
-
-// ⭐ NEW: Auto OT Charges
-export function autoAddOtCharges(invoiceId, payload) {
-    // payload: { case_id: number }
-    return API.post(
-        `/billing/invoices/${invoiceId}/items/ot-auto`,
-        payload
-    );
-}
 // Aliases used by InvoiceDetail.jsx
 export { updateInvoiceItem as updateItem };
 export { voidInvoiceItem as voidItem };
 
-// -------- Payments --------
+// ---------------- Unbilled ----------------
+
+async function getOrPost(url, body = {}) {
+    try {
+        return await API.get(url);
+    } catch (err) {
+        const status = err?.response?.status;
+        if (status === 405) {
+            return API.post(url, body);
+        }
+        throw err;
+    }
+}
+
+export function fetchUnbilledServices(invoiceId) {
+    return getOrPost(`/billing/invoices/${invoiceId}/unbilled`);
+}
+
+export async function bulkAddFromUnbilled(invoiceId, payload) {
+    try {
+        return await API.post(`/billing/invoices/${invoiceId}/unbilled/bulk-add`, payload);
+    } catch (err) {
+        if (err?.response?.status === 404 || err?.response?.status === 405) {
+            return API.post(`/billing/invoices/${invoiceId}/unbilled/bulk_add`, payload);
+        }
+        throw err;
+    }
+}
+
+// ---------------- Auto Charges ----------------
+
+export function autoAddIpdBedCharges(invoiceId, payload) {
+    return API.post(`/billing/invoices/${invoiceId}/items/ipd-bed-auto`, payload);
+}
+
+export function autoAddOtCharges(invoiceId, payload) {
+    return API.post(`/billing/invoices/${invoiceId}/items/ot-auto`, payload);
+}
+
+// ---------------- Payments ----------------
 
 export function addPayment(invoiceId, payload) {
-    // payload: { amount, mode, reference_no?, notes? }
     return API.post(`/billing/invoices/${invoiceId}/payments`, payload);
 }
 
 export function addPaymentsBulk(invoiceId, payments) {
-    // payments: { payments: [ { amount, mode, reference_no?, notes? }, ... ] }
     return API.post(`/billing/invoices/${invoiceId}/payments/bulk`, payments);
 }
 
@@ -97,8 +102,7 @@ export function deletePayment(invoiceId, paymentId) {
     return API.delete(`/billing/invoices/${invoiceId}/payments/${paymentId}`);
 }
 
-// Helper for refund management (front-end only)
-// NOTE: by default we send NEGATIVE amount for refunds.
+// Refund helper (frontend-only): sends NEGATIVE amount
 export function addRefund(invoiceId, payload) {
     const baseAmount = Number(payload.amount || 0);
     const negativeAmount = -Math.abs(baseAmount);
@@ -110,56 +114,83 @@ export function addRefund(invoiceId, payload) {
     });
 }
 
-// -------- Advances --------
+// ---------------- Masters ----------------
 
+export function getBillingMasters() {
+    return API.get("/billing/masters");
+}
+
+// ---------------- Patient billing summary ----------------
+
+export function getPatientBillingSummary(patientId) {
+    return getOrPost(`/billing/patients/${patientId}/summary`);
+}
+
+// ---------------- Print ----------------
+
+export function fetchInvoicePdf(invoiceId) {
+    return API.get(`/billing/invoices/${invoiceId}/print`, { responseType: "blob" });
+}
+
+export function fetchPatientSummaryPdf(patientId) {
+    return API.get(`/billing/patients/${patientId}/print-summary`, { responseType: "blob" });
+}
+
+// ---------------- Advances / Deposits (Wallet) ----------------
+
+// Create wallet top-up
 export function createAdvance(payload) {
-    // payload: { patient_id, amount, mode, reference_no?, remarks? }
+    // payload: { patient_id, amount, mode, reference_no?, remarks?, context_type?, context_id? }
     return API.post("/billing/advances", payload);
 }
 
+// (Optional) admin pages
 export function listAdvances(params = {}) {
     // params: patient_id?, only_with_balance?
     return API.get("/billing/advances", { params });
 }
 
+export function getAdvance(id) {
+    return API.get(`/billing/advances/${id}`);
+}
+
+export function updateAdvance(id, payload) {
+    return API.put(`/billing/advances/${id}`, payload);
+}
+
+export function voidAdvance(id, payload) {
+    return API.post(`/billing/advances/${id}/void`, payload);
+}
+
+// Patient wallet entries + summary
+export function listPatientAdvances(patientId) {
+    return API.get(`/billing/advances/patient/${patientId}`);
+}
+
+export function getPatientAdvanceSummary(patientId) {
+    return API.get(`/billing/advances/patient/${patientId}/summary`);
+}
+
+// Apply wallet amount to invoice
+export function applyAdvanceWalletToInvoice(invoiceId, payload) {
+    // payload: { amount }
+    return API.post(`/billing/advances/apply/${invoiceId}`, payload);
+}
+
+// Existing invoice->advance adjustment APIs (keep if your backend has them)
+export function listInvoiceAdvanceAdjustments(invoiceId) {
+    return API.get(`/billing/invoices/${invoiceId}/advance-adjustments`);
+}
+
+export function removeInvoiceAdvanceAdjustment(invoiceId, adjustmentId) {
+    return API.delete(`/billing/invoices/${invoiceId}/advance-adjustments/${adjustmentId}`);
+}
+
+// If your backend still supports these old endpoints, keep them (optional)
 export function applyAdvancesToInvoice(invoiceId, payload = {}) {
-    // payload: { advance_ids?: number[] } (optional)
     return API.post(`/billing/invoices/${invoiceId}/apply-advances`, payload);
 }
 
-// -------- Masters --------
-
-export function getBillingMasters() {
-    /**
-     * Backend is expected to return something like:
-     * {
-     *   doctors: [...],
-     *   credit_providers: [...],   // from CreditProvider model
-     *   packages: [...],           // optional: from IpdPackage
-     *   payers: [...],             // optional
-     *   tpas: [...],               // optional
-     *   credit_plans: [...]        // optional
-     * }
-     */
-    return API.get("/billing/masters");
-}
-
-// -------- Patient billing summary --------
-
-export function getPatientBillingSummary(patientId) {
-    return API.get(`/billing/patients/${patientId}/summary`);
-}
-
-// -------- Print helpers (PDF / HTML fallback) --------
-
-export function fetchInvoicePdf(invoiceId) {
-    return API.get(`/billing/invoices/${invoiceId}/print`, {
-        responseType: "blob",
-    });
-}
-
-export function fetchPatientSummaryPdf(patientId) {
-    return API.get(`/billing/patients/${patientId}/print-summary`, {
-        responseType: "blob",
-    });
+export function applyAdvanceToInvoice(invoiceId, payload = {}) {
+    return API.post(`/billing/invoices/${invoiceId}/apply-advance`, payload);
 }

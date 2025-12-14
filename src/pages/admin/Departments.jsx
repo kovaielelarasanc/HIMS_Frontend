@@ -3,23 +3,33 @@ import { useEffect, useState, useCallback, useMemo } from 'react'
 import { motion } from 'framer-motion'
 import API from '../../api/client'
 import { useModulePerms } from '../../utils/perm'
-import { Building2, Search, Plus } from 'lucide-react'
 
 import {
-    Card,
-    CardHeader,
-    CardTitle,
-    CardContent,
-} from '@/components/ui/card'
+    Building2,
+    Search,
+    Plus,
+    X,
+    MoreHorizontal,
+    Pencil,
+    Trash2,
+    ChevronRight,
+} from 'lucide-react'
+
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import {
+    DropdownMenu,
+    DropdownMenuTrigger,
+    DropdownMenuContent,
+    DropdownMenuItem,
+    DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu'
 import {
     Alert,
     AlertDescription,
     AlertTitle,
 } from '@/components/ui/alert'
-import { Skeleton } from '@/components/ui/skeleton'
+
+const cx = (...a) => a.filter(Boolean).join(' ')
 
 const fadeIn = {
     initial: { opacity: 0, y: 6 },
@@ -27,19 +37,279 @@ const fadeIn = {
     transition: { duration: 0.18 },
 }
 
+/* -------------------------
+   Apple-ish UI atoms
+------------------------- */
+const UI = {
+    page: 'min-h-[calc(100vh-4rem)] bg-slate-50 px-3 py-4 md:px-6 md:py-6 lg:px-8',
+    container: 'mx-auto max-w-6xl space-y-4 md:space-y-5 lg:space-y-6',
+    card:
+        'rounded-3xl border border-black/10 bg-white/85 backdrop-blur shadow-[0_1px_2px_rgba(0,0,0,0.06)]',
+    inset:
+        'rounded-3xl border border-black/10 bg-white/90 backdrop-blur shadow-[0_1px_2px_rgba(0,0,0,0.05)]',
+    subtle: 'rounded-3xl border border-black/10 bg-black/[0.02]',
+    label: 'text-[11px] font-semibold text-slate-600',
+    input:
+        'w-full rounded-2xl border border-black/10 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-black/20 focus:ring-2 focus:ring-black/10',
+    inputSm:
+        'w-full rounded-2xl border border-black/10 bg-white px-3 py-2 text-[13px] text-slate-900 outline-none focus:border-black/20 focus:ring-2 focus:ring-black/10',
+    btn:
+        'inline-flex items-center justify-center gap-2 rounded-2xl px-3 py-2 text-sm font-semibold transition active:scale-[0.99]',
+    btnOutline:
+        'inline-flex items-center justify-center gap-2 rounded-2xl px-3 py-2 text-sm font-semibold border border-black/10 bg-white hover:bg-black/[0.03] transition active:scale-[0.99]',
+    badge:
+        'inline-flex items-center rounded-full border border-black/10 bg-black/[0.03] px-2 py-0.5 text-[11px] font-semibold text-slate-700',
+}
+
+/** Apple segmented control */
+function Segmented({ value, onChange, options, className = '' }) {
+    return (
+        <div
+            className={cx(
+                'inline-flex items-center rounded-2xl border border-black/10 bg-black/[0.03] p-1',
+                className
+            )}
+        >
+            {options.map((o) => {
+                const active = value === o.value
+                return (
+                    <button
+                        key={o.value}
+                        type="button"
+                        onClick={() => onChange(o.value)}
+                        className={cx(
+                            'h-9 px-3 rounded-xl text-[12px] font-semibold tracking-tight transition',
+                            active
+                                ? 'bg-white text-slate-900 border border-black/10 shadow-[0_1px_2px_rgba(0,0,0,0.08)]'
+                                : 'text-slate-600 hover:text-slate-800 hover:bg-white/60'
+                        )}
+                    >
+                        {o.label}
+                    </button>
+                )
+            })}
+        </div>
+    )
+}
+
+/** Apple search */
+function AppleSearch({ value, onChange, placeholder = 'Search…', className = '' }) {
+    return (
+        <div className={cx('relative w-full', className)}>
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <input
+                value={value}
+                onChange={(e) => onChange(e.target.value)}
+                placeholder={placeholder}
+                className={cx(UI.inputSm, 'pl-9 pr-9 bg-white/90')}
+            />
+            {!!value && (
+                <button
+                    type="button"
+                    onClick={() => onChange('')}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-black/[0.04]"
+                    title="Clear"
+                >
+                    <X className="h-4 w-4 text-slate-500" />
+                </button>
+            )}
+        </div>
+    )
+}
+
+/** Apple modal (bottom sheet on mobile, centered on desktop) */
+function AppleModal({ title, subtitle, onClose, children }) {
+    return (
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/35 backdrop-blur-sm p-0 sm:p-4">
+            <div className="w-full max-w-xl max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl border border-black/10 bg-white/90 backdrop-blur-xl shadow-[0_20px_60px_rgba(0,0,0,0.22)] px-4 py-4 sm:px-5 sm:py-5">
+                <div className="mb-4 flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                        <h3 className="text-[16px] sm:text-[18px] font-semibold text-slate-900 tracking-tight">
+                            {title}
+                        </h3>
+                        {subtitle ? (
+                            <p className="mt-1 text-[12px] sm:text-[13px] text-slate-500 leading-relaxed">
+                                {subtitle}
+                            </p>
+                        ) : null}
+                    </div>
+                    <button
+                        onClick={onClose}
+                        type="button"
+                        className="rounded-full p-2 text-slate-500 hover:bg-black/[0.04] hover:text-slate-700"
+                        title="Close"
+                    >
+                        <X className="h-4 w-4" />
+                    </button>
+                </div>
+
+                {children}
+            </div>
+        </div>
+    )
+}
+
+/** macOS list shell */
+function AppleListShell({ title, right, children }) {
+    return (
+        <div className="overflow-hidden rounded-3xl border border-black/10 bg-white/85 backdrop-blur">
+            {(title || right) && (
+                <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-black/10 bg-white/80 backdrop-blur">
+                    <div className="text-[12px] font-semibold text-slate-700 tracking-tight">
+                        {title}
+                    </div>
+                    <div className="flex items-center gap-2">{right}</div>
+                </div>
+            )}
+            <div className="divide-y divide-black/5">{children}</div>
+        </div>
+    )
+}
+
+function RowActions({ canUpdate, canDelete, onEdit, onDelete }) {
+    if (!canUpdate && !canDelete) return null
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <button
+                    type="button"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-full hover:bg-black/[0.04] text-slate-600"
+                    title="Actions"
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <MoreHorizontal className="h-4.5 w-4.5" />
+                </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="rounded-2xl">
+                {canUpdate && (
+                    <DropdownMenuItem
+                        onSelect={(e) => {
+                            e.preventDefault()
+                            onEdit?.()
+                        }}
+                        className="cursor-pointer"
+                    >
+                        <Pencil className="h-4 w-4 mr-2" />
+                        Edit
+                    </DropdownMenuItem>
+                )}
+                {canUpdate && canDelete && <DropdownMenuSeparator />}
+                {canDelete && (
+                    <DropdownMenuItem
+                        onSelect={(e) => {
+                            e.preventDefault()
+                            onDelete?.()
+                        }}
+                        className="cursor-pointer text-rose-700 focus:text-rose-700"
+                    >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete
+                    </DropdownMenuItem>
+                )}
+            </DropdownMenuContent>
+        </DropdownMenu>
+    )
+}
+
+function AppleListRow({
+    index,
+    title,
+    subtitle,
+    canClick,
+    onClick,
+    canUpdate,
+    canDelete,
+    onEdit,
+    onDelete,
+}) {
+    return (
+        <div
+            role={canClick ? 'button' : undefined}
+            tabIndex={canClick ? 0 : -1}
+            onClick={canClick ? onClick : undefined}
+            onKeyDown={(e) => {
+                if (!canClick) return
+                if (e.key === 'Enter' || e.key === ' ') onClick?.()
+            }}
+            className={cx(
+                'group px-4 py-3 transition',
+                canClick ? 'cursor-pointer hover:bg-black/[0.02]' : 'cursor-default'
+            )}
+        >
+            <div className="flex items-start gap-3">
+                <div className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-black/[0.04] border border-black/10 text-[11px] font-semibold text-slate-600">
+                    {index}
+                </div>
+
+                <div className="min-w-0 flex-1">
+                    <div className="text-[14px] sm:text-[15px] font-semibold text-slate-900 truncate">
+                        {title}
+                    </div>
+                    <div className="mt-1 text-[12px] text-slate-600 line-clamp-1">
+                        {subtitle || <span className="text-slate-400">No description</span>}
+                    </div>
+                </div>
+
+                <div className="flex items-center gap-1">
+                    <RowActions
+                        canUpdate={canUpdate}
+                        canDelete={canDelete}
+                        onEdit={onEdit}
+                        onDelete={onDelete}
+                    />
+                    <ChevronRight className="h-5 w-5 text-slate-300 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition" />
+                </div>
+            </div>
+        </div>
+    )
+}
+
+function SkeletonRow() {
+    return (
+        <div className="px-4 py-3">
+            <div className="flex items-start gap-3">
+                <div className="h-6 w-6 rounded-full bg-black/[0.06]" />
+                <div className="flex-1 space-y-2">
+                    <div className="h-3 w-1/3 rounded-full bg-black/[0.06]" />
+                    <div className="h-2.5 w-1/2 rounded-full bg-black/[0.05]" />
+                </div>
+                <div className="h-9 w-9 rounded-full bg-black/[0.05]" />
+            </div>
+        </div>
+    )
+}
+
+function EmptyState({ title, subtitle }) {
+    return (
+        <div className="rounded-3xl border border-black/10 bg-white/80 p-6 text-center text-slate-600">
+            <div className="mx-auto h-12 w-12 rounded-3xl bg-black/[0.04] grid place-items-center">
+                <Building2 className="h-6 w-6 text-slate-400" />
+            </div>
+            <div className="mt-3 font-semibold text-slate-900">{title}</div>
+            <div className="mt-1 text-[12px] text-slate-500">{subtitle}</div>
+        </div>
+    )
+}
+
+/* -------------------------
+   PAGE
+------------------------- */
 export default function Departments() {
     const { hasAny, canView, canCreate, canUpdate, canDelete } =
         useModulePerms('departments')
 
     const [items, setItems] = useState([])
-    const [form, setForm] = useState({ name: '', description: '' })
-    const [editId, setEditId] = useState(null)
     const [error, setError] = useState('')
-    const [loadingSave, setLoadingSave] = useState(false)
     const [loadingList, setLoadingList] = useState(false)
 
     const [searchTerm, setSearchTerm] = useState('')
     const [filterChip, setFilterChip] = useState('all') // all | withDesc | withoutDesc
+
+    // sheet modal state
+    const [modalOpen, setModalOpen] = useState(false)
+    const [editId, setEditId] = useState(null)
+    const [form, setForm] = useState({ name: '', description: '' })
+    const [saving, setSaving] = useState(false)
 
     const load = useCallback(async () => {
         if (!canView) return
@@ -62,21 +332,86 @@ export default function Departments() {
         load()
     }, [load])
 
+    const filteredItems = useMemo(() => {
+        return (items || []).filter((d) => {
+            if (!d) return false
+            const name = (d.name || '').toLowerCase()
+            const desc = (d.description || '').toLowerCase()
+            const query = searchTerm.toLowerCase().trim()
+
+            if (query && !(`${name} ${desc}`.includes(query))) return false
+            if (filterChip === 'withDesc' && !d.description) return false
+            if (filterChip === 'withoutDesc' && d.description) return false
+            return true
+        })
+    }, [items, searchTerm, filterChip])
+
+    // ----- permission denied state -----
+    if (!hasAny || !canView) {
+        return (
+            <div className={UI.page}>
+                <div className={UI.container}>
+                    <div className={cx(UI.card, 'relative overflow-hidden text-white bg-gradient-to-r from-slate-900 via-slate-800 to-slate-900')}>
+                        <div className="absolute inset-0 opacity-25 bg-[radial-gradient(circle_at_top,_#e5e7eb,_transparent_55%)]" />
+                        <div className="relative px-5 py-6 sm:px-7 sm:py-7 md:px-9 md:py-8 flex items-center gap-3">
+                            <div className="inline-flex h-11 w-11 items-center justify-center rounded-3xl bg-white/10 border border-white/20">
+                                <Building2 className="w-6 h-6" />
+                            </div>
+                            <div>
+                                <h1 className="text-lg md:text-xl font-semibold tracking-tight">
+                                    Departments
+                                </h1>
+                                <p className="mt-1 text-xs sm:text-sm text-slate-100/90">
+                                    Configure clinical and support departments for your hospital.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className={cx(UI.card, 'p-4')}>
+                        <Alert className="border-amber-200 bg-amber-50 text-amber-900 rounded-2xl">
+                            <AlertTitle className="font-semibold">Access restricted</AlertTitle>
+                            <AlertDescription className="text-sm">
+                                Your role does not currently include access to Departments configuration. Please contact your system administrator.
+                            </AlertDescription>
+                        </Alert>
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
+    const openCreate = () => {
+        if (!canCreate) return
+        setEditId(null)
+        setForm({ name: '', description: '' })
+        setModalOpen(true)
+    }
+
+    const openEdit = (d) => {
+        if (!canUpdate) return
+        setEditId(d.id)
+        setForm({ name: d.name || '', description: d.description || '' })
+        setModalOpen(true)
+    }
+
+    const closeModal = () => {
+        setModalOpen(false)
+        setEditId(null)
+        setForm({ name: '', description: '' })
+    }
+
     const save = async (e) => {
         e.preventDefault()
         if (!editId && !canCreate) return
         if (editId && !canUpdate) return
 
-        setLoadingSave(true)
+        setSaving(true)
         setError('')
         try {
-            if (editId) {
-                await API.put(`/departments/${editId}`, form)
-            } else {
-                await API.post('/departments/', form)
-            }
-            setForm({ name: '', description: '' })
-            setEditId(null)
+            if (editId) await API.put(`/departments/${editId}`, form)
+            else await API.post('/departments/', form)
+            closeModal()
             load()
         } catch (e) {
             const s = e?.response?.status
@@ -84,7 +419,7 @@ export default function Departments() {
             else if (s === 401) setError('Session expired. Please login again.')
             else setError(e?.response?.data?.detail || 'Failed to save department.')
         } finally {
-            setLoadingSave(false)
+            setSaving(false)
         }
     }
 
@@ -102,86 +437,10 @@ export default function Departments() {
         }
     }
 
-    const edit = (d) => {
-        if (!canUpdate) return
-        setEditId(d.id)
-        setForm({ name: d.name, description: d.description || '' })
-    }
-
-    const resetForm = () => {
-        setEditId(null)
-        setForm({ name: '', description: '' })
-    }
-
-    const filteredItems = useMemo(() => {
-        return (items || []).filter((d) => {
-            if (!d) return false
-            const name = (d.name || '').toLowerCase()
-            const desc = (d.description || '').toLowerCase()
-            const query = searchTerm.toLowerCase().trim()
-
-            if (query && !(`${name} ${desc}`.includes(query))) {
-                return false
-            }
-
-            if (filterChip === 'withDesc' && !d.description) return false
-            if (filterChip === 'withoutDesc' && d.description) return false
-
-            return true
-        })
-    }, [items, searchTerm, filterChip])
-
-    // ----- permission denied state -----
-    if (!hasAny || !canView) {
-        return (
-            <div className="min-h-[calc(100vh-4rem)] bg-slate-50 px-3 py-4 md:px-6 md:py-6 lg:px-8">
-                <div className="mx-auto max-w-6xl space-y-4">
-                    {/* Hero-like blocked card */}
-                    <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-slate-800 via-slate-700 to-slate-900 text-white shadow-md">
-                        <div className="absolute inset-0 opacity-20 bg-[radial-gradient(circle_at_top,_#e5e7eb,_transparent_55%)]" />
-                        <div className="relative px-5 py-6 sm:px-7 sm:py-7 md:px-9 md:py-8 flex items-center gap-3">
-                            <div className="inline-flex h-11 w-11 items-center justify-center rounded-3xl bg-white/10 border border-white/20">
-                                <Building2 className="w-6 h-6" />
-                            </div>
-                            <div>
-                                <h1 className="text-lg md:text-xl font-semibold tracking-tight">
-                                    Departments module
-                                </h1>
-                                <p className="mt-1 text-xs sm:text-sm text-slate-100/90">
-                                    Configure clinical and support departments for your hospital.
-                                </p>
-                            </div>
-                        </div>
-                    </div>
-
-                    <Card className="rounded-3xl border-amber-200 bg-amber-50 shadow-sm">
-                        <CardHeader>
-                            <CardTitle className="text-base text-amber-900">
-                                Access restricted
-                            </CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                            <Alert className="border-amber-200 bg-amber-50 text-amber-900 rounded-2xl">
-                                <AlertTitle className="font-semibold">
-                                    You don’t have permission
-                                </AlertTitle>
-                                <AlertDescription className="text-sm">
-                                    Your role does not currently include access to the Departments
-                                    configuration. Please contact the system administrator if you
-                                    believe this is a mistake.
-                                </AlertDescription>
-                            </Alert>
-                        </CardContent>
-                    </Card>
-                </div>
-            </div>
-        )
-    }
-
     return (
-        <div className="min-h-[calc(100vh-4rem)] bg-slate-50 px-3 py-4 md:px-6 md:py-6 lg:px-8">
-            <div className="mx-auto max-w-6xl space-y-4 md:space-y-5 lg:space-y-6">
-                {/* TOP META ROW */}
+        <div className={UI.page}>
+            <div className={UI.container}>
+                {/* Top meta */}
                 <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
                     <Badge
                         variant="outline"
@@ -189,402 +448,219 @@ export default function Departments() {
                     >
                         Admin · Departments
                     </Badge>
-                    <div className="flex items-center gap-2 text-[11px] text-slate-500">
-                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-sm animate-pulse" />
-                        <span className="hidden sm:inline">Desktop workspace</span>
-                        <span className="sm:hidden">Responsive view</span>
-                    </div>
+                   
                 </div>
 
-                {/* HERO HEADER (gradient) */}
+                {/* Hero (Apple glass gradient) */}
                 <motion.div {...fadeIn}>
-                    <div className="relative overflow-hidden rounded-3xl bg-gradient-to-r from-teal-700 via-teal-600 to-blue-600 text-white shadow-md">
+                    <div className={cx(UI.card, 'relative overflow-hidden')}>
+                        <div className="absolute inset-0 bg-gradient-to-r from-teal-700 via-teal-600 to-blue-600 opacity-90" />
                         <div className="absolute inset-0 opacity-25 pointer-events-none bg-[radial-gradient(circle_at_top,_#e0f2fe,_transparent_55%)]" />
-                        <div className="relative flex flex-col gap-4 md:flex-row md:items-center md:justify-between px-4 py-5 sm:px-6 sm:py-6 md:px-8 md:py-7 lg:px-10 lg:py-8">
-                            <div className="space-y-3 max-w-xl">
-                                <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium backdrop-blur-sm border border-white/20">
-                                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/20 text-[11px]">
-                                        <Building2 className="w-3.5 h-3.5" />
-                                    </span>
-                                    Core clinical & support structure
+
+                        <div className="relative px-5 py-6 sm:px-7 sm:py-7 md:px-9 md:py-8 text-white">
+                            <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                                <div className="max-w-2xl space-y-2">
+                                    <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium backdrop-blur-sm border border-white/20">
+                                        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-white/20 text-[11px]">
+                                            <Building2 className="w-3.5 h-3.5" />
+                                        </span>
+                                        Core clinical & support structure
+                                    </div>
+
+                                    <h1 className="text-xl md:text-2xl lg:text-3xl font-semibold tracking-tight">
+                                        Clinical & Support Departments
+                                    </h1>
+                                    <p className="text-sm md:text-base text-teal-50/90 leading-relaxed">
+                                        Keep OPD/IPD, diagnostics and support services aligned across the hospital.
+                                    </p>
+
+                                    <div className="mt-2 flex flex-wrap gap-2">
+                                        <span className="inline-flex items-center rounded-full border border-white/25 bg-white/10 px-3 py-1 text-xs font-semibold">
+                                            Master configuration
+                                        </span>
+                                        <span className="inline-flex items-center rounded-full border border-white/20 bg-white/5 px-3 py-1 text-xs">
+                                            Used by OPD / IPD / Lab / OT
+                                        </span>
+                                    </div>
                                 </div>
 
-                                <div className="flex items-start gap-3">
-                                    <div className="inline-flex h-11 w-11 md:h-12 md:w-12 items-center justify-center rounded-3xl bg-white/10 text-white shadow-sm border border-white/20">
-                                        <Building2 className="w-6 h-6" />
+                                <div className="w-full md:w-auto">
+                                    <div className="rounded-3xl border border-white/20 bg-white/10 backdrop-blur px-4 py-3">
+                                        <div className="text-[10px] font-medium uppercase tracking-wide text-teal-100/90">
+                                            Departments
+                                        </div>
+                                        <div className="mt-1 text-2xl font-semibold text-white tabular-nums">
+                                            {items.length}
+                                        </div>
+                                        <div className="mt-1 text-[11px] text-teal-100/80">
+                                            Active list used across modules
+                                        </div>
                                     </div>
-                                    <div className="space-y-1.5">
-                                        <h1 className="text-xl md:text-2xl lg:text-3xl font-semibold tracking-tight">
-                                            Clinical & Support Departments
-                                        </h1>
-                                        <p className="text-sm md:text-base text-teal-50/90 leading-relaxed">
-                                            Configure <span className="font-semibold">OPD, IPD, diagnostics and support</span> departments so that
-                                            doctors, staff and services stay aligned across your hospital.
-                                        </p>
-                                    </div>
-                                </div>
-                            </div>
-
-                            <div className="w-full md:w-auto space-y-3">
-                                <div className="flex flex-wrap gap-2 justify-start md:justify-end">
-                                    <Badge className="bg-white/15 text-xs font-semibold border border-white/25 text-white rounded-full px-3 py-1">
-                                        Master configuration
-                                    </Badge>
-                                    <Badge className="bg-white/10 text-xs border border-white/20 text-teal-50 rounded-full px-3 py-1">
-                                        Used by OPD / IPD / Lab / OT
-                                    </Badge>
-                                </div>
-                                <div className="grid grid-cols-1 gap-2 md:min-w-[220px]">
-                                    <SummaryTile
-                                        label="Departments"
-                                        value={items.length}
-                                        hint="Mapped across OPD, IPD, lab, radiology, etc."
-                                    />
                                 </div>
                             </div>
                         </div>
                     </div>
                 </motion.div>
 
-                {/* ERROR CARD */}
+                {/* Error */}
                 {error && (
                     <motion.div {...fadeIn}>
                         <Alert className="rounded-2xl border-red-200 bg-red-50 text-red-800">
                             <AlertTitle className="font-semibold">Issue</AlertTitle>
-                            <AlertDescription className="text-sm">
-                                {error}
-                            </AlertDescription>
+                            <AlertDescription className="text-sm">{error}</AlertDescription>
                         </Alert>
                     </motion.div>
                 )}
 
-                {/* MAIN GRID: FORM + LIST */}
-                <div className="grid items-start gap-4 lg:grid-cols-[minmax(0,260px)_minmax(0,1fr)]">
-                    {/* LEFT – FORM */}
-                    <motion.div {...fadeIn}>
-                        <Card className="rounded-3xl border-slate-200 bg-white shadow-sm">
-                            <CardHeader className="pb-3">
-                                <CardTitle className="text-sm font-semibold text-slate-900">
-                                    {editId ? 'Edit department' : 'Create department'}
-                                </CardTitle>
-                                <p className="mt-1 text-xs text-slate-600">
-                                    Add or update hospital departments that will be used across modules.
-                                </p>
-                            </CardHeader>
-                            <CardContent>
-                                <form onSubmit={save} className="space-y-3">
-                                    <div className="space-y-1.5">
-                                        <label className="text-xs font-medium text-slate-800">
-                                            Department name<span className="text-rose-500">*</span>
-                                        </label>
-                                        <Input
-                                            placeholder="e.g., General Medicine"
-                                            value={form.name}
-                                            onChange={(e) =>
-                                                setForm({ ...form, name: e.target.value })
-                                            }
-                                            required
-                                            disabled={!(!editId ? canCreate : canUpdate)}
-                                            className="h-9 rounded-xl border-slate-200 bg-slate-50 text-sm text-slate-900 focus-visible:ring-2 focus-visible:ring-teal-100 focus-visible:border-teal-500"
-                                        />
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <label className="text-xs font-medium text-slate-800">
-                                            Description
-                                            <span className="text-slate-400"> (optional)</span>
-                                        </label>
-                                        <Input
-                                            placeholder="Short description to help staff identify this department"
-                                            value={form.description}
-                                            onChange={(e) =>
-                                                setForm({ ...form, description: e.target.value })
-                                            }
-                                            disabled={!(!editId ? canCreate : canUpdate)}
-                                            className="h-9 rounded-xl border-slate-200 bg-slate-50 text-sm text-slate-900 focus-visible:ring-2 focus-visible:ring-teal-100 focus-visible:border-teal-500"
-                                        />
-                                    </div>
-
-                                    <div className="flex items-center justify-between gap-2 pt-1">
-                                        {editId && (
-                                            <button
-                                                type="button"
-                                                onClick={resetForm}
-                                                className="text-xs text-slate-500 underline underline-offset-2"
-                                            >
-                                                Cancel edit &amp; reset
-                                            </button>
-                                        )}
-                                        <Button
-                                            type="submit"
-                                            className="ml-auto rounded-full bg-blue-600 px-4 py-2 text-xs sm:text-sm font-semibold text-white hover:bg-blue-700 active:scale-95"
-                                            disabled={
-                                                loadingSave ||
-                                                (!editId ? !canCreate : !canUpdate)
-                                            }
-                                        >
-                                            {loadingSave
-                                                ? 'Saving…'
-                                                : editId
-                                                    ? 'Update department'
-                                                    : 'Create department'}
-                                        </Button>
-                                    </div>
-                                </form>
-                            </CardContent>
-                        </Card>
-                    </motion.div>
-
-                    {/* RIGHT – LIST */}
-                    <motion.div {...fadeIn}>
-                        <Card className="rounded-3xl border-slate-200 bg-white shadow-sm">
-                            <CardHeader className="border-b border-slate-100 pb-3">
-                                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                    <div>
-                                        <CardTitle className="text-sm font-semibold text-slate-900">
-                                            Department list
-                                        </CardTitle>
-                                        <p className="mt-1 text-[11px] text-slate-500">
-                                            {items.length} configured department
-                                            {items.length === 1 ? '' : 's'}.
-                                        </p>
-                                    </div>
-
-                                    {/* Search + New button bar (compact on small) */}
-                                    <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-end">
-                                        {/* Search input */}
-                                        <div className="relative w-full sm:w-52">
-                                            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
-                                            <input
-                                                type="text"
-                                                value={searchTerm}
-                                                onChange={(e) => setSearchTerm(e.target.value)}
-                                                placeholder="Search by name or description"
-                                                className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-8 pr-3 py-1.5 text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-500"
-                                            />
-                                        </div>
-
-                                        {/* Primary "New" button */}
-                                        {canCreate && (
-                                            <Button
-                                                type="button"
-                                                onClick={resetForm}
-                                                className="inline-flex items-center justify-center gap-1.5 rounded-full bg-blue-600 px-3 py-1.5 text-xs sm:text-sm font-semibold text-white hover:bg-blue-700 active:scale-95"
-                                            >
-                                                <Plus className="w-3.5 h-3.5" />
-                                                New department
-                                            </Button>
-                                        )}
-                                    </div>
+                {/* Controls */}
+                <motion.div {...fadeIn}>
+                    <div className={cx(UI.inset, 'p-3 sm:p-4')}>
+                        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                            <div className="min-w-0">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <span className={UI.badge}>
+                                        Total: <span className="ml-1 tabular-nums">{items.length}</span>
+                                    </span>
+                                    <span className={UI.badge}>
+                                        Showing: <span className="ml-1 tabular-nums">{filteredItems.length}</span>
+                                    </span>
                                 </div>
 
-                                {/* Filter chips */}
-                                <div className="mt-3 flex flex-wrap gap-1.5">
-                                    {[
-                                        { key: 'all', label: 'All' },
-                                        { key: 'withDesc', label: 'With description' },
-                                        { key: 'withoutDesc', label: 'Without description' },
-                                    ].map((chip) => (
-                                        <button
-                                            key={chip.key}
-                                            type="button"
-                                            onClick={() => setFilterChip(chip.key)}
-                                            className={[
-                                                'inline-flex items-center rounded-full px-3 py-1 text-[11px] sm:text-xs transition',
-                                                filterChip === chip.key
-                                                    ? 'bg-blue-600 text-white shadow-sm'
-                                                    : 'bg-slate-100 text-slate-600 hover:bg-slate-200',
-                                            ].join(' ')}
-                                        >
-                                            {chip.label}
-                                        </button>
-                                    ))}
+                                <div className="mt-3 flex flex-wrap items-center gap-2">
+                                    <span className={UI.label}>Filter</span>
+                                    <Segmented
+                                        value={filterChip}
+                                        onChange={setFilterChip}
+                                        options={[
+                                            { value: 'all', label: 'All' },
+                                            { value: 'withDesc', label: 'With description' },
+                                            { value: 'withoutDesc', label: 'Without description' },
+                                        ]}
+                                    />
                                 </div>
-                            </CardHeader>
+                            </div>
 
-                            <CardContent className="pt-4">
-                                {/* LOADING LIST */}
-                                {loadingList ? (
-                                    <div className="space-y-2">
-                                        {[0, 1, 2].map((i) => (
-                                            <div
-                                                key={i}
-                                                className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-3"
-                                            >
-                                                <div className="flex-1 space-y-2">
-                                                    <Skeleton className="h-3 w-1/3 rounded-full bg-slate-100" />
-                                                    <Skeleton className="h-2.5 w-1/2 rounded-full bg-slate-100" />
-                                                </div>
-                                                <Skeleton className="h-6 w-20 rounded-full bg-slate-100" />
-                                            </div>
-                                        ))}
-                                    </div>
-                                ) : (
-                                    <>
-                                        {/* DESKTOP / TABLET: TABLE VIEW */}
-                                        <div className="hidden md:block">
-                                            <div className="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
-                                                <table className="min-w-full text-xs">
-                                                    <thead className="bg-slate-50 text-[11px] font-medium text-slate-600">
-                                                        <tr>
-                                                            <th className="p-2 text-left">#</th>
-                                                            <th className="p-2 text-left">Name</th>
-                                                            <th className="p-2 text-left">
-                                                                Description
-                                                            </th>
-                                                            <th className="p-2 text-right">Actions</th>
-                                                        </tr>
-                                                    </thead>
-                                                    <tbody>
-                                                        {filteredItems.map((d, i) => (
-                                                            <tr
-                                                                key={d.id}
-                                                                className="border-t border-slate-100 text-xs text-slate-800 hover:bg-slate-50/80 transition-colors"
-                                                            >
-                                                                <td className="p-2 align-top">
-                                                                    {i + 1}
-                                                                </td>
-                                                                <td className="p-2 align-top font-semibold text-slate-900">
-                                                                    {d.name}
-                                                                </td>
-                                                                <td className="p-2 align-top text-slate-500">
-                                                                    <span className="line-clamp-2 text-[11px]">
-                                                                        {d.description || '—'}
-                                                                    </span>
-                                                                </td>
-                                                                <td className="p-2 align-top text-right">
-                                                                    <div className="inline-flex gap-2">
-                                                                        {canUpdate && (
-                                                                            <Button
-                                                                                type="button"
-                                                                                variant="outline"
-                                                                                size="sm"
-                                                                                className="h-7 rounded-full border-slate-200 px-3 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
-                                                                                onClick={() => edit(d)}
-                                                                            >
-                                                                                Edit
-                                                                            </Button>
-                                                                        )}
-                                                                        {canDelete && (
-                                                                            <Button
-                                                                                type="button"
-                                                                                variant="outline"
-                                                                                size="sm"
-                                                                                className="h-7 rounded-full border border-rose-200 px-3 text-[11px] font-semibold text-rose-700 hover:bg-rose-50"
-                                                                                onClick={() => remove(d.id)}
-                                                                            >
-                                                                                Delete
-                                                                            </Button>
-                                                                        )}
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        ))}
-                                                        {!filteredItems.length && (
-                                                            <tr>
-                                                                <td colSpan={4} className="p-4">
-                                                                    <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-center">
-                                                                        <p className="text-sm font-medium text-slate-700">
-                                                                            No departments match your filters.
-                                                                        </p>
-                                                                        <p className="mt-1 text-[11px] text-slate-500">
-                                                                            Adjust search or filter, or create a new
-                                                                            department from the left panel.
-                                                                        </p>
-                                                                    </div>
-                                                                </td>
-                                                            </tr>
-                                                        )}
-                                                    </tbody>
-                                                </table>
-                                            </div>
-                                        </div>
-
-                                        {/* MOBILE: CARD-BASED LAYOUT */}
-                                        <div className="grid gap-3 md:hidden">
-                                            {filteredItems.map((d, i) => (
-                                                <div
-                                                    key={d.id}
-                                                    className="rounded-2xl border border-slate-200 bg-white px-3 py-3 shadow-sm flex flex-col gap-2"
-                                                >
-                                                    <div className="flex items-start justify-between gap-2">
-                                                        <div className="space-y-0.5">
-                                                            <div className="flex items-center gap-2">
-                                                                <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-[11px] text-slate-600">
-                                                                    {i + 1}
-                                                                </span>
-                                                                <h3 className="text-sm font-semibold text-slate-900">
-                                                                    {d.name}
-                                                                </h3>
-                                                            </div>
-                                                            <p className="text-[11px] text-slate-600 line-clamp-2">
-                                                                {d.description || 'No description'}
-                                                            </p>
-                                                        </div>
-                                                    </div>
-                                                    <div className="flex items-center justify-end gap-2 pt-1">
-                                                        {canUpdate && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => edit(d)}
-                                                                className="inline-flex items-center rounded-full border border-slate-200 px-3 py-1 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
-                                                            >
-                                                                Edit
-                                                            </button>
-                                                        )}
-                                                        {canDelete && (
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => remove(d.id)}
-                                                                className="inline-flex items-center rounded-full border border-rose-200 px-3 py-1 text-[11px] font-semibold text-rose-700 hover:bg-rose-50"
-                                                            >
-                                                                Delete
-                                                            </button>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            ))}
-
-                                            {!filteredItems.length && (
-                                                <div className="rounded-2xl border border-dashed border-slate-300 bg-slate-50 px-4 py-5 text-center">
-                                                    <p className="text-sm font-medium text-slate-700">
-                                                        No departments match your filters.
-                                                    </p>
-                                                    <p className="mt-1 text-[11px] text-slate-500">
-                                                        Adjust search or filters, or create a new department from the
-                                                        form above.
-                                                    </p>
-                                                </div>
-                                            )}
-                                        </div>
-                                    </>
+                            <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-end">
+                                <AppleSearch
+                                    value={searchTerm}
+                                    onChange={setSearchTerm}
+                                    placeholder="Search name or description…"
+                                    className="sm:w-[320px]"
+                                />
+                                {canCreate && (
+                                    <button
+                                        type="button"
+                                        onClick={openCreate}
+                                        className={cx(UI.btn, 'text-white shadow-sm bg-blue-600 hover:bg-blue-700')}
+                                    >
+                                        <Plus className="h-4 w-4" />
+                                        New
+                                    </button>
                                 )}
-                            </CardContent>
-                        </Card>
-                    </motion.div>
-                </div>
+                            </div>
+                        </div>
+                    </div>
+                </motion.div>
+
+                {/* List (macOS rows, no tables) */}
+                <motion.div {...fadeIn}>
+                    {loadingList ? (
+                        <AppleListShell title="Department list" right={<span className={UI.badge}>Loading…</span>}>
+                            {[0, 1, 2, 3].map((i) => (
+                                <SkeletonRow key={i} />
+                            ))}
+                        </AppleListShell>
+                    ) : filteredItems.length === 0 ? (
+                        <EmptyState
+                            title="No departments found"
+                            subtitle="Try changing your search/filter, or create a new department."
+                        />
+                    ) : (
+                        <AppleListShell
+                            title="Department list"
+                           
+                        >
+                            {filteredItems.map((d, idx) => (
+                                <AppleListRow
+                                    key={d.id}
+                                    index={idx + 1}
+                                    title={d.name}
+                                    subtitle={d.description}
+                                    canClick={canUpdate}
+                                    onClick={() => openEdit(d)}
+                                    canUpdate={canUpdate}
+                                    canDelete={canDelete}
+                                    onEdit={() => openEdit(d)}
+                                    onDelete={() => remove(d.id)}
+                                />
+                            ))}
+                        </AppleListShell>
+                    )}
+                </motion.div>
+
+                {/* Create/Edit Sheet */}
+                {modalOpen && (
+                    <AppleModal
+                        title={editId ? 'Edit department' : 'New department'}
+                        subtitle="Departments are used in OPD/IPD registration, staff workflows, and reporting."
+                        onClose={closeModal}
+                    >
+                        <form onSubmit={save} className="space-y-3">
+                            <div className="space-y-1.5">
+                                <label className={UI.label}>
+                                    Department name <span className="text-rose-500">*</span>
+                                </label>
+                                <input
+                                    className={UI.input}
+                                    placeholder="e.g., General Medicine"
+                                    value={form.name}
+                                    onChange={(e) => setForm({ ...form, name: e.target.value })}
+                                    required
+                                    disabled={editId ? !canUpdate : !canCreate}
+                                />
+                            </div>
+
+                            <div className="space-y-1.5">
+                                <label className={UI.label}>Description</label>
+                                <input
+                                    className={UI.input}
+                                    placeholder="Optional short description"
+                                    value={form.description}
+                                    onChange={(e) => setForm({ ...form, description: e.target.value })}
+                                    disabled={editId ? !canUpdate : !canCreate}
+                                />
+                            </div>
+
+                            <div className="pt-2 flex flex-wrap items-center justify-between gap-2">
+                                {editId && canDelete ? (
+                                    <button
+                                        type="button"
+                                        onClick={() => remove(editId)}
+                                        className="inline-flex items-center gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-sm font-semibold text-rose-700 hover:bg-rose-100/60"
+                                    >
+                                        <Trash2 className="h-4 w-4" />
+                                        Delete
+                                    </button>
+                                ) : (
+                                    <div />
+                                )}
+
+                                <div className="ml-auto flex gap-2">
+                                    <button type="button" onClick={closeModal} className={cx(UI.btnOutline, 'h-10')}>
+                                        Cancel
+                                    </button>
+                                    <button
+                                        className={cx(UI.btn, 'h-10 text-white shadow-sm bg-blue-600 hover:bg-blue-700')}
+                                        disabled={saving || (editId ? !canUpdate : !canCreate)}
+                                    >
+                                        {saving ? 'Saving…' : editId ? 'Update' : 'Create'}
+                                    </button>
+                                </div>
+                            </div>
+                        </form>
+                    </AppleModal>
+                )}
             </div>
         </div>
-    )
-}
-
-function SummaryTile({ label, value, hint }) {
-    return (
-        <motion.div
-            whileHover={{ y: -2, scale: 1.01 }}
-            transition={{ type: 'spring', stiffness: 240, damping: 22 }}
-            className="rounded-2xl border border-white/40 bg-white/10 px-3 py-2 text-[11px] text-teal-50/90"
-        >
-            <div className="text-[10px] font-medium uppercase tracking-wide text-teal-100/90">
-                {label}
-            </div>
-            <div className="mt-1 text-sm font-semibold text-white">
-                {value}
-            </div>
-            {hint && (
-                <div className="mt-0.5 text-[10px] text-teal-100/80">
-                    {hint}
-                </div>
-            )}
-        </motion.div>
     )
 }

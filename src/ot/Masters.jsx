@@ -1,3 +1,4 @@
+// FILE: frontend/src/ot/OtMasters.jsx
 import { useEffect, useState } from 'react'
 import {
     listOtSurgeries,
@@ -7,16 +8,36 @@ import {
 } from '../api/ot'
 import { toast } from 'sonner'
 import { Plus, Pencil, Trash2, RefreshCw } from 'lucide-react'
-import { useCan } from '../hooks/usePerm'
+import { useCanAny } from '../hooks/useCan'   // ✅ UPDATED IMPORT
 
 export default function OtMasters() {
-    const canManage = useCan('ot.masters.manage') || useCan('ot.masters.view')
-    const canEdit = useCan('ot.masters.manage')
+    // ---------------- PERMISSIONS (mirror backend) ----------------
+
+    // List / view OT procedures:
+    // backend: _need_any(user, ["ot.masters.view", "ot.procedures.view"])
+    const canView = useCanAny(['ot.masters.view', 'ot.procedures.view'])
+
+    // Create OT procedure:
+    // backend: _need_any(user, ["ot.masters.manage", "ot.procedures.create"])
+    const canCreate = useCanAny(['ot.masters.manage', 'ot.procedures.create'])
+
+    // Update OT procedure:
+    // backend: _need_any(user, ["ot.masters.manage", "ot.procedures.update"])
+    const canUpdate = useCanAny(['ot.masters.manage', 'ot.procedures.update'])
+
+    // Delete OT procedure:
+    // backend: _need_any(user, ["ot.masters.manage", 'ot.procedures.delete'])
+    const canDelete = useCanAny(['ot.masters.manage', 'ot.procedures.delete'])
+
+    // convenience – any edit (create or update)
+    const canEditAny = canCreate || canUpdate || canDelete
+
     const [rows, setRows] = useState([])
     const [q, setQ] = useState('')
     const [loading, setLoading] = useState(true)
 
     const load = async () => {
+        if (!canView) return // safety: don't even call API if no permission
         setLoading(true)
         try {
             const { data } = await listOtSurgeries({
@@ -26,9 +47,7 @@ export default function OtMasters() {
             })
             setRows(data.items || [])
         } catch (e) {
-            toast.error(
-                e?.response?.data?.detail || 'Failed to load surgeries'
-            )
+            toast.error(e?.response?.data?.detail || 'Failed to load surgeries')
         } finally {
             setLoading(false)
         }
@@ -37,7 +56,7 @@ export default function OtMasters() {
     useEffect(() => {
         load()
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
+    }, [canView])
 
     const [form, setForm] = useState({
         id: null,
@@ -50,6 +69,10 @@ export default function OtMasters() {
     const [open, setOpen] = useState(false)
 
     const onNew = () => {
+        if (!canCreate) {
+            toast.error('You do not have permission to create OT procedures.')
+            return
+        }
         setForm({
             id: null,
             code: '',
@@ -62,6 +85,10 @@ export default function OtMasters() {
     }
 
     const onEdit = (r) => {
+        if (!canUpdate) {
+            toast.error('You do not have permission to update OT procedures.')
+            return
+        }
         setForm({
             id: r.id,
             code: r.code || '',
@@ -82,12 +109,23 @@ export default function OtMasters() {
     const onSave = async () => {
         if (!form.code.trim() || !form.name.trim())
             return toast.error('Code and Name are required')
+
+        // guard based on mode
+        if (form.id && !canUpdate) {
+            toast.error('You do not have permission to update OT procedures.')
+            return
+        }
+        if (!form.id && !canCreate) {
+            toast.error('You do not have permission to create OT procedures.')
+            return
+        }
+
         try {
             const payload = {
                 code: form.code.trim(),
                 name: form.name.trim(),
                 default_cost: Number(form.default_cost || 0),
-                hourly_cost: Number(form.hourly_cost || 0), // NEW
+                hourly_cost: Number(form.hourly_cost || 0),
                 active: !!form.active,
             }
 
@@ -106,6 +144,10 @@ export default function OtMasters() {
     }
 
     const onDelete = async (id) => {
+        if (!canDelete) {
+            toast.error('You do not have permission to delete OT procedures.')
+            return
+        }
         if (!confirm('Delete this surgery master?')) return
         try {
             await deleteOtSurgery(id)
@@ -116,7 +158,9 @@ export default function OtMasters() {
         }
     }
 
-    if (!canManage) {
+    // ---------------- RENDER ----------------
+
+    if (!canView) {
         return (
             <div className="p-4 text-sm text-gray-500">
                 You do not have permission to view OT Masters.
@@ -127,8 +171,8 @@ export default function OtMasters() {
     return (
         <div className="p-4 space-y-4 text-black">
             <header className="flex items-center justify-between gap-3">
-                <h1 className="text-xl font-semibold">OT Masters</h1>
-                <div className="flex gap-2">
+                <h1 className="text-xl font-semibold">OT Masters – Procedures</h1>
+                <div className="flex flex-wrap gap-2 items-center">
                     <input
                         className="input"
                         placeholder="Search name/code…"
@@ -139,10 +183,10 @@ export default function OtMasters() {
                         <RefreshCw className="h-4 w-4 mr-2" />
                         Refresh
                     </button>
-                    {canEdit && (
+                    {canCreate && (
                         <button className="btn" onClick={onNew}>
                             <Plus className="h-4 w-4 mr-2" />
-                            New Surgery
+                            New Procedure
                         </button>
                     )}
                 </div>
@@ -154,12 +198,8 @@ export default function OtMasters() {
                         <tr>
                             <th className="px-3 py-2 text-left">Code</th>
                             <th className="px-3 py-2 text-left">Name</th>
-                            <th className="px-3 py-2 text-left">
-                                Package Cost
-                            </th>
-                            <th className="px-3 py-2 text-left">
-                                OT Hourly Cost
-                            </th>
+                            <th className="px-3 py-2 text-left">Package Cost</th>
+                            <th className="px-3 py-2 text-left">OT Hourly Cost</th>
                             <th className="px-3 py-2 text-left">Active</th>
                             <th className="px-3 py-2 text-right">Actions</th>
                         </tr>
@@ -178,40 +218,31 @@ export default function OtMasters() {
                                     <td className="px-3 py-2">{r.code}</td>
                                     <td className="px-3 py-2">{r.name}</td>
                                     <td className="px-3 py-2">
-                                        ₹{' '}
-                                        {Number(
-                                            r.default_cost || 0
-                                        ).toFixed(2)}
+                                        ₹ {Number(r.default_cost || 0).toFixed(2)}
                                     </td>
                                     <td className="px-3 py-2">
-                                        ₹{' '}
-                                        {Number(
-                                            r.hourly_cost || 0
-                                        ).toFixed(2)}{' '}
-                                        / hr
+                                        ₹ {Number(r.hourly_cost || 0).toFixed(2)} / hr
                                     </td>
-                                    <td className="px-3 py-2">
-                                        {r.active ? 'Yes' : 'No'}
-                                    </td>
+                                    <td className="px-3 py-2">{r.active ? 'Yes' : 'No'}</td>
                                     <td className="px-3 py-2 text-right">
-                                        {canEdit && (
+                                        {canEditAny && (
                                             <>
-                                                <button
-                                                    className="btn-ghost mr-2"
-                                                    onClick={() =>
-                                                        onEdit(r)
-                                                    }
-                                                >
-                                                    <Pencil className="h-4 w-4" />
-                                                </button>
-                                                <button
-                                                    className="btn-ghost text-red-600"
-                                                    onClick={() =>
-                                                        onDelete(r.id)
-                                                    }
-                                                >
-                                                    <Trash2 className="h-4 w-4" />
-                                                </button>
+                                                {canUpdate && (
+                                                    <button
+                                                        className="btn-ghost mr-2"
+                                                        onClick={() => onEdit(r)}
+                                                    >
+                                                        <Pencil className="h-4 w-4" />
+                                                    </button>
+                                                )}
+                                                {canDelete && (
+                                                    <button
+                                                        className="btn-ghost text-red-600"
+                                                        onClick={() => onDelete(r.id)}
+                                                    >
+                                                        <Trash2 className="h-4 w-4" />
+                                                    </button>
+                                                )}
                                             </>
                                         )}
                                     </td>
@@ -241,7 +272,7 @@ export default function OtMasters() {
                         onClick={(e) => e.stopPropagation()}
                     >
                         <h3 className="font-medium mb-3">
-                            {form.id ? 'Edit Surgery' : 'New Surgery'}
+                            {form.id ? 'Edit Procedure' : 'New Procedure'}
                         </h3>
                         <div className="grid gap-3">
                             <input
@@ -305,10 +336,7 @@ export default function OtMasters() {
                             </label>
                         </div>
                         <div className="mt-4 flex justify-end gap-2">
-                            <button
-                                className="btn-ghost"
-                                onClick={() => setOpen(false)}
-                            >
+                            <button className="btn-ghost" onClick={() => setOpen(false)}>
                                 Cancel
                             </button>
                             <button className="btn" onClick={onSave}>

@@ -1,7 +1,7 @@
-// FILE: src/billing/BillingInvoicePage.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from 'react'
+import { useParams, useNavigate } from 'react-router-dom'
+import { toast } from 'sonner'
 import {
-    createInvoice,
     getInvoice,
     updateInvoice,
     finalizeInvoice,
@@ -12,277 +12,283 @@ import {
     voidInvoiceItem,
     addPayment,
     deletePayment,
-    listAdvances,
-    applyAdvancesToInvoice,
-    getBillingMasters,
     fetchInvoicePdf,
     autoAddIpdBedCharges,
     autoAddOtCharges,
-} from "../api/billing";
-import { listPatients } from "../api/patients";
+
+    // advances
+    listAdvances,
+    applyAdvanceToInvoice,
+    listInvoiceAdvanceAdjustments,
+    removeInvoiceAdvanceAdjustment,
+    getBillingMasters,
+} from '../api/billing'
+
+import PatientPicker from '../components/PatientPicker'
 
 const BILLING_TYPES = [
-    { value: "op_billing", label: "OP Billing" },
-    { value: "ip_billing", label: "IP Billing" },
-    { value: "pharmacy", label: "Pharmacy" },
-    { value: "lab", label: "Laboratory" },
-    { value: "radiology", label: "Radiology" },
-    { value: "general", label: "General" },
-];
+    { value: 'op_billing', label: 'OP Billing' },
+    { value: 'ip_billing', label: 'IP Billing' },
+    { value: 'ot', label: 'OT' },
+    { value: 'pharmacy', label: 'Pharmacy' },
+    { value: 'lab', label: 'Laboratory' },
+    { value: 'radiology', label: 'Radiology' },
+    { value: 'general', label: 'General' },
+]
 
-const PAYMENT_MODES = [
-    "cash",
-    "card",
-    "upi",
-    "credit",
-    "cheque",
-    "neft",
-    "rtgs",
-    "wallet",
-    "other",
-];
+const PAYMENT_MODES = ['cash', 'card', 'upi', 'credit', 'cheque', 'neft', 'rtgs', 'wallet', 'other']
 
-export default function BillingInvoicePage({
-    defaultBillingType = "op_billing",
-    defaultContextType = "opd",
-}) {
-    const [patientQuery, setPatientQuery] = useState("");
-    const [patientList, setPatientList] = useState([]);
-    const [selectedPatient, setSelectedPatient] = useState(null);
+function money(x) {
+    const n = Number(x || 0)
+    return n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
 
-    const [masters, setMasters] = useState({ doctors: [], credit_providers: [] });
+function invNo(inv) {
+    return inv?.invoice_number || inv?.invoice_uid || '—'
+}
 
-    const [billingType, setBillingType] = useState(defaultBillingType);
-    const [contextType, setContextType] = useState(defaultContextType);
-    const [consultantId, setConsultantId] = useState("");
-    const [providerId, setProviderId] = useState("");
-    const [remarks, setRemarks] = useState("");
+function patientName(p) {
+    if (!p) return 'Patient'
+    return (p.full_name || `${p.first_name || ''} ${p.last_name || ''}`.trim() || 'Patient').trim()
+}
 
-    const [invoiceIdInput, setInvoiceIdInput] = useState("");
-    const [invoice, setInvoice] = useState(null);
-    const [loadingInvoice, setLoadingInvoice] = useState(false);
-    const [savingHeader, setSavingHeader] = useState(false);
+function patientSub(p) {
+    if (!p) return 'UHID —'
+    const uhid = p.uhid || p.uhid_no || p.patient_uid || p.mrn
+    const phone = p.phone || p.mobile || p.contact_no
+    return `${uhid ? `UHID ${uhid}` : 'UHID —'}${phone ? ` • ${phone}` : ''}`
+}
 
-    const [manualDesc, setManualDesc] = useState("");
-    const [manualQty, setManualQty] = useState(1);
-    const [manualPrice, setManualPrice] = useState("");
-    const [manualTax, setManualTax] = useState("");
+export default function BillingInvoicePage() {
+    const { id } = useParams()
+    const nav = useNavigate()
 
-    const [serviceType, setServiceType] = useState("lab");
-    const [serviceRefId, setServiceRefId] = useState("");
-    const [serviceDesc, setServiceDesc] = useState("");
-    const [servicePrice, setServicePrice] = useState("");
-    const [serviceTax, setServiceTax] = useState("");
+    const [masters, setMasters] = useState({ doctors: [], credit_providers: [] })
 
-    const [payAmount, setPayAmount] = useState("");
-    const [payMode, setPayMode] = useState("cash");
-    const [payRef, setPayRef] = useState("");
+    const [invoice, setInvoice] = useState(null)
+    const [loadingInvoice, setLoadingInvoice] = useState(false)
+    const [savingHeader, setSavingHeader] = useState(false)
 
-    const [advances, setAdvances] = useState([]);
-    const [advLoading, setAdvLoading] = useState(false);
+    // header state
+    const [billingType, setBillingType] = useState('op_billing')
+    const [contextType, setContextType] = useState('opd')
+    const [consultantId, setConsultantId] = useState('')
+    const [providerId, setProviderId] = useState('')
+    const [remarks, setRemarks] = useState('')
 
-    const [autoAdmissionId, setAutoAdmissionId] = useState("");
-    const [autoOtCaseId, setAutoOtCaseId] = useState("");
-    const [autoBedMode, setAutoBedMode] = useState("mixed"); // daily | hourly | mixed
-    const [autoLoading, setAutoLoading] = useState(false);
-    const [autoBedBootstrapped, setAutoBedBootstrapped] = useState(false);
+    // add manual
+    const [manualDesc, setManualDesc] = useState('')
+    const [manualQty, setManualQty] = useState(1)
+    const [manualPrice, setManualPrice] = useState('')
+    const [manualTax, setManualTax] = useState('')
 
-    // ----- Simple toast helper -----
-    const [toast, setToast] = useState(null); // { type: "success" | "error" | "info", message: string }
+    // add service (kept as is; you can replace with pickers later)
+    const [serviceType, setServiceType] = useState('lab')
+    const [serviceRefId, setServiceRefId] = useState('')
+    const [serviceDesc, setServiceDesc] = useState('')
+    const [servicePrice, setServicePrice] = useState('')
+    const [serviceTax, setServiceTax] = useState('')
 
-    const showToast = (type, message) => {
-        setToast({ type, message });
-        setTimeout(() => {
-            setToast(null);
-        }, 3500);
-    };
+    // payments
+    const [payAmount, setPayAmount] = useState('')
+    const [payMode, setPayMode] = useState('cash')
+    const [payRef, setPayRef] = useState('')
+
+    // advances
+    const [advances, setAdvances] = useState([])
+    const [advAdjustments, setAdvAdjustments] = useState([])
+    const [advLoading, setAdvLoading] = useState(false)
+    const [adjLoading, setAdjLoading] = useState(false)
+    const [applyAmt, setApplyAmt] = useState('') // optional partial apply
+
+    // auto billing
+    const [autoAdmissionId, setAutoAdmissionId] = useState('')
+    const [autoOtCaseId, setAutoOtCaseId] = useState('')
+    const [autoBedMode, setAutoBedMode] = useState('mixed')
+    const [autoLoading, setAutoLoading] = useState(false)
+
+    const locked = invoice?.status === 'finalized'
 
     const totals = useMemo(() => {
-        if (!invoice) return null;
+        if (!invoice) return null
         return {
             gross: Number(invoice.gross_total || 0),
             tax: Number(invoice.tax_total || 0),
             net: Number(invoice.net_total || 0),
             paid: Number(invoice.amount_paid || 0),
+            adv: Number(invoice.advance_adjusted || 0),
             balance: Number(invoice.balance_due || 0),
-        };
-    }, [invoice]);
+        }
+    }, [invoice])
 
-    // ----- Load masters once -----
+    const availableAdvanceTotal = useMemo(() => {
+        return (advances || []).reduce((a, x) => a + Number(x.balance_remaining || 0), 0)
+    }, [advances])
+
+    // masters
     useEffect(() => {
-        const run = async () => {
+        ; (async () => {
             try {
-                const { data } = await getBillingMasters();
-                setMasters(data || { doctors: [], credit_providers: [] });
-            } catch (err) {
-                console.error(err);
+                const { data } = await getBillingMasters()
+                setMasters(data || { doctors: [], credit_providers: [] })
+            } catch (e) {
+                console.error(e)
             }
-        };
-        run();
-    }, []);
+        })()
+    }, [])
 
-    // ----- Patient search -----
+    // load invoice
     useEffect(() => {
-        if (!patientQuery) {
-            setPatientList([]);
-            return;
-        }
-        const ctrl = new AbortController();
-        const run = async () => {
-            try {
-                const { data } = await listPatients(patientQuery);
-                setPatientList(data || []);
-            } catch (err) {
-                console.error(err);
-            }
-        };
-        run();
-        return () => ctrl.abort();
-    }, [patientQuery]);
+        if (!id) return
+        loadInvoice(Number(id))
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [id])
 
-    const handleSelectPatient = (p) => {
-        setSelectedPatient(p);
-        setPatientQuery(`${p.first_name || ""} ${p.last_name || ""}`.trim());
-    };
-
-    // ----- Create / Load Invoice -----
-
-    const handleCreateInvoice = async () => {
-        if (!selectedPatient) {
-            alert("Select a patient first");
-            return;
-        }
+    async function loadInvoice(invoiceId) {
+        setLoadingInvoice(true)
         try {
-            setLoadingInvoice(true);
-            const payload = {
-                patient_id: selectedPatient.id,
-                context_type: contextType,
-                billing_type: billingType,
-                consultant_id: consultantId || null,
-                provider_id: providerId || null,
-                remarks: remarks || null,
-            };
-            const { data } = await createInvoice(payload);
-            setInvoice(data);
-            setInvoiceIdInput(String(data.id));
-        } catch (err) {
-            console.error(err);
-            alert("Create invoice failed");
+            const { data } = await getInvoice(invoiceId)
+            setInvoice(data)
+
+            setBillingType(data.billing_type || 'op_billing')
+            setContextType(data.context_type || 'opd')
+            setConsultantId(data.consultant_id || '')
+            setProviderId(data.provider_id || '')
+            setRemarks(data.remarks || '')
+
+            // auto-fill for auto billing controls
+            if (data.context_type === 'ipd' && data.context_id) setAutoAdmissionId(String(data.context_id))
+            if (data.context_type === 'ot' && data.context_id) setAutoOtCaseId(String(data.context_id))
+
+            // load advances + adjustments
+            await Promise.all([loadAdvances(data.patient_id), loadAdjustments(data.id)])
+        } catch (e) {
+            console.error(e)
+            toast.error('Invoice not found')
         } finally {
-            setLoadingInvoice(false);
+            setLoadingInvoice(false)
         }
-    };
+    }
 
-    const handleLoadInvoice = async () => {
-        if (!invoiceIdInput) return;
+    async function loadAdvances(patientId) {
+        if (!patientId) return
+        setAdvLoading(true)
         try {
-            setLoadingInvoice(true);
-            const { data } = await getInvoice(Number(invoiceIdInput));
-            setInvoice(data);
-            // set header fields from invoice
-            setBillingType(data.billing_type || defaultBillingType);
-            setContextType(data.context_type || defaultContextType);
-            setConsultantId(data.consultant_id || "");
-            setProviderId(data.provider_id || "");
-            setRemarks(data.remarks || "");
-            setAutoBedBootstrapped(false); // allow auto-bed bootstrap again on fresh load
-        } catch (err) {
-            console.error(err);
-            alert("Invoice not found");
+            const { data } = await listAdvances({ patient_id: patientId })
+            // show only with balance + not voided (UI-safe)
+            const list = (data || []).filter((a) => !a.is_voided && Number(a.balance_remaining || 0) > 0)
+            setAdvances(list)
+        } catch (e) {
+            console.error(e)
         } finally {
-            setLoadingInvoice(false);
+            setAdvLoading(false)
         }
-    };
+    }
 
-    const handleSaveHeader = async () => {
-        if (!invoice) return;
+    async function loadAdjustments(invoiceId) {
+        if (!invoiceId) return
+        setAdjLoading(true)
         try {
-            setSavingHeader(true);
+            const { data } = await listInvoiceAdvanceAdjustments(invoiceId)
+            setAdvAdjustments(data || [])
+        } catch (e) {
+            console.error(e)
+        } finally {
+            setAdjLoading(false)
+        }
+    }
+
+    async function handleSaveHeader() {
+        if (!invoice) return
+        try {
+            setSavingHeader(true)
             const payload = {
                 billing_type: billingType,
                 consultant_id: consultantId || null,
                 provider_id: providerId || null,
-                visit_no: invoice.visit_no || null,
                 remarks: remarks || null,
-            };
-            const { data } = await updateInvoice(invoice.id, payload);
-            setInvoice(data);
-        } catch (err) {
-            console.error(err);
-            alert("Failed to update header");
+            }
+            const { data } = await updateInvoice(invoice.id, payload)
+            setInvoice(data)
+            toast.success('Header saved')
+        } catch (e) {
+            console.error(e)
+            toast.error('Failed to update header')
         } finally {
-            setSavingHeader(false);
+            setSavingHeader(false)
         }
-    };
+    }
 
-    const handleFinalize = async () => {
-        if (!invoice) return;
-        if (!window.confirm("Finalize this invoice? No further item edits allowed.")) return;
+    async function handleFinalize() {
+        if (!invoice) return
+        if (!window.confirm('Finalize this invoice?')) return
         try {
-            const { data } = await finalizeInvoice(invoice.id);
-            setInvoice(data);
-            alert("Invoice finalized");
-        } catch (err) {
-            console.error(err);
-            alert("Finalize failed");
+            const { data } = await finalizeInvoice(invoice.id)
+            setInvoice(data)
+            toast.success('Invoice finalized')
+        } catch (e) {
+            console.error(e)
+            toast.error(e?.response?.data?.detail || 'Finalize failed')
         }
-    };
+    }
 
-    const handleCancel = async () => {
-        if (!invoice) return;
-        if (!window.confirm("Cancel this invoice?")) return;
+    async function handleCancel() {
+        if (!invoice) return
+        if (!window.confirm('Cancel this invoice?')) return
         try {
-            await cancelInvoice(invoice.id);
-            alert("Invoice cancelled");
-            setInvoice(null);
-            setAutoAdmissionId("");
-            setAutoOtCaseId("");
-            setAutoBedBootstrapped(false);
-        } catch (err) {
-            console.error(err);
-            alert("Cancel failed");
+            await cancelInvoice(invoice.id)
+            toast.success('Invoice cancelled')
+            nav('/billing')
+        } catch (e) {
+            console.error(e)
+            toast.error('Cancel failed')
         }
-    };
+    }
 
-    // ----- Items -----
+    async function handlePrint() {
+        if (!invoice) return
+        try {
+            const res = await fetchInvoicePdf(invoice.id)
+            const blob = new Blob([res.data], { type: 'application/pdf' })
+            const url = URL.createObjectURL(blob)
+            window.open(url, '_blank')
+        } catch (e) {
+            console.error(e)
+            toast.error('Failed to generate PDF')
+        }
+    }
 
-    const handleAddManualItem = async () => {
-        if (!invoice) {
-            alert("Create or load an invoice first");
-            return;
-        }
-        if (!manualDesc || !manualPrice) {
-            alert("Description and price are required");
-            return;
-        }
+    // items
+    async function handleAddManualItem() {
+        if (!invoice) return toast.error('Load invoice first')
+        if (locked) return toast.error('Invoice is finalized')
+        if (!manualDesc || !manualPrice) return toast.error('Description and price are required')
+
         try {
             const payload = {
                 description: manualDesc,
                 quantity: Number(manualQty) || 1,
                 unit_price: Number(manualPrice),
                 tax_rate: Number(manualTax) || 0,
-            };
-            const { data } = await addManualItem(invoice.id, payload);
-            setInvoice(data);
-            setManualDesc("");
-            setManualQty(1);
-            setManualPrice("");
-            setManualTax("");
-        } catch (err) {
-            console.error(err);
-            alert("Failed to add manual item");
+            }
+            const { data } = await addManualItem(invoice.id, payload)
+            setInvoice(data)
+            setManualDesc('')
+            setManualQty(1)
+            setManualPrice('')
+            setManualTax('')
+            toast.success('Item added')
+        } catch (e) {
+            console.error(e)
+            toast.error('Failed to add manual item')
         }
-    };
+    }
 
-    const handleAddServiceItem = async () => {
-        if (!invoice) {
-            alert("Create or load an invoice first");
-            return;
-        }
-        if (!serviceRefId) {
-            alert("Service reference ID is required");
-            return;
-        }
+    async function handleAddServiceItem() {
+        if (!invoice) return toast.error('Load invoice first')
+        if (locked) return toast.error('Invoice is finalized')
+        if (!serviceRefId) return toast.error('Service ref is required')
+
         try {
             const payload = {
                 service_type: serviceType,
@@ -291,315 +297,242 @@ export default function BillingInvoicePage({
                 quantity: 1,
                 unit_price: servicePrice ? Number(servicePrice) : undefined,
                 tax_rate: serviceTax ? Number(serviceTax) : 0,
-            };
-            const { data } = await addServiceItem(invoice.id, payload);
-            setInvoice(data);
-            setServiceRefId("");
-            setServiceDesc("");
-            setServicePrice("");
-            setServiceTax("");
-        } catch (err) {
-            console.error(err);
-            alert("Failed to add service item");
+            }
+            const { data } = await addServiceItem(invoice.id, payload)
+            setInvoice(data)
+            setServiceRefId('')
+            setServiceDesc('')
+            setServicePrice('')
+            setServiceTax('')
+            toast.success('Service item added')
+        } catch (e) {
+            console.error(e)
+            toast.error(e?.response?.data?.detail || 'Failed to add service item')
         }
-    };
+    }
 
-    const handleUpdateLine = async (item, changes) => {
-        if (!invoice) return;
+    async function handleUpdateLine(item, changes) {
+        if (!invoice) return
+        if (locked) return
+        if (item.is_voided) return
         try {
-            const { data } = await updateInvoiceItem(invoice.id, item.id, changes);
-            setInvoice(data);
-        } catch (err) {
-            console.error(err);
-            alert("Update line failed");
+            const { data } = await updateInvoiceItem(invoice.id, item.id, changes)
+            setInvoice(data)
+        } catch (e) {
+            console.error(e)
+            toast.error('Update failed')
         }
-    };
+    }
 
-    const handleVoidLine = async (item) => {
-        if (!invoice) return;
-        if (!window.confirm("Void this line item?")) return;
+    async function handleVoidLine(item) {
+        if (!invoice) return
+        if (locked) return toast.error('Invoice is finalized')
+        if (item.is_voided) return
+        if (!window.confirm('Void this line item?')) return
+
         try {
-            const { data } = await voidInvoiceItem(invoice.id, item.id, {
-                reason: "Voided from UI",
-            });
-            setInvoice(data);
-        } catch (err) {
-            console.error(err);
-            alert("Void line failed");
+            const { data } = await voidInvoiceItem(invoice.id, item.id, { reason: 'Voided from UI' })
+            setInvoice(data)
+            toast.success('Item voided')
+        } catch (e) {
+            console.error(e)
+            toast.error('Void failed')
         }
-    };
+    }
 
-    // ----- Payments -----
+    // payments
+    async function handleAddPayment() {
+        if (!invoice) return toast.error('Load invoice first')
+        if (!payAmount) return toast.error('Amount is required')
 
-    const handleAddPayment = async () => {
-        if (!invoice) {
-            alert("Create or load an invoice first");
-            return;
-        }
-        if (!payAmount) {
-            alert("Amount is required");
-            return;
-        }
         try {
-            const payload = {
-                amount: Number(payAmount),
-                mode: payMode,
-                reference_no: payRef || null,
-            };
-            const { data } = await addPayment(invoice.id, payload);
-            setInvoice(data);
-            setPayAmount("");
-            setPayRef("");
-        } catch (err) {
-            console.error(err);
-            alert("Failed to add payment");
+            const payload = { amount: Number(payAmount), mode: payMode, reference_no: payRef || null }
+            const { data } = await addPayment(invoice.id, payload)
+            setInvoice(data)
+            setPayAmount('')
+            setPayRef('')
+            toast.success('Payment added')
+        } catch (e) {
+            console.error(e)
+            toast.error(e?.response?.data?.detail || 'Failed to add payment')
         }
-    };
+    }
 
-    const handleDeletePayment = async (pay) => {
-        if (!invoice) return;
-        if (!window.confirm("Delete this payment?")) return;
+    async function handleDeletePayment(p) {
+        if (!invoice) return
+        if (!window.confirm('Delete this payment?')) return
         try {
-            const { data } = await deletePayment(invoice.id, pay.id);
-            setInvoice(data);
-        } catch (err) {
-            console.error(err);
-            alert("Delete payment failed");
+            const { data } = await deletePayment(invoice.id, p.id)
+            setInvoice(data)
+            toast.success('Payment deleted')
+        } catch (e) {
+            console.error(e)
+            toast.error('Delete payment failed')
         }
-    };
+    }
 
-    // ----- Advances -----
+    // advances apply
+    async function handleApplyAdvance(auto = true) {
+        if (!invoice) return
+        if (invoice.balance_due <= 0) return toast.info('No balance due')
 
-    const loadAdvances = async () => {
-        if (!invoice) return;
-        setAdvLoading(true);
         try {
-            const { data } = await listAdvances({
-                patient_id: invoice.patient_id,
-                only_with_balance: true,
-            });
-            setAdvances(data || []);
-        } catch (err) {
-            console.error(err);
-        } finally {
-            setAdvLoading(false);
-        }
-    };
+            const amt = applyAmt?.trim() ? Number(applyAmt) : null
+            if (!auto && (!amt || amt <= 0)) return toast.error('Enter valid amount')
 
-    const handleApplyAdvances = async () => {
-        if (!invoice) return;
+            const payload = auto ? {} : { amount: amt }
+            const { data } = await applyAdvanceToInvoice(invoice.id, payload)
+
+            toast.success(`Advance applied: ₹ ${money(data.applied_amount)}`)
+            await loadInvoice(invoice.id) // reload invoice + advances + adjustments
+            setApplyAmt('')
+        } catch (e) {
+            console.error(e)
+            toast.error(e?.response?.data?.detail || 'Advance apply failed')
+        }
+    }
+
+    async function handleRemoveAdjustment(adj) {
+        if (!invoice) return
+        if (!window.confirm('Remove this advance adjustment?')) return
         try {
-            const { data } = await applyAdvancesToInvoice(invoice.id, {});
-            setInvoice(data);
-            alert("Advances applied");
-            loadAdvances();
-        } catch (err) {
-            console.error(err);
-            alert("Apply advances failed");
+            await removeInvoiceAdvanceAdjustment(invoice.id, adj.id)
+            toast.success('Adjustment removed')
+            await loadInvoice(invoice.id)
+        } catch (e) {
+            console.error(e)
+            toast.error(e?.response?.data?.detail || 'Remove failed')
         }
-    };
+    }
 
-    // ----- Auto IPD Bed + OT Charges (button) -----
+    // auto billing
+    async function handleAutoIpdAndOt() {
+        if (!invoice) return toast.error('Load invoice first')
+        if (locked) return toast.error('Invoice is finalized')
+        if (!autoAdmissionId && !autoOtCaseId) return toast.error('Enter Admission and/or OT Case')
 
-    const handleAutoIpdBedAndOt = async () => {
-        if (!invoice) {
-            showToast("error", "Create or load an invoice first.");
-            return;
-        }
-
-        if (!autoAdmissionId && !autoOtCaseId) {
-            showToast(
-                "error",
-                "Enter Admission ID and/or OT Case ID for auto-billing."
-            );
-            return;
-        }
-
-        setAutoLoading(true);
+        setAutoLoading(true)
         try {
-            let latestInvoice = invoice;
+            let latest = invoice
 
-            // 1️⃣ Auto IPD Bed Charges (optional)
             if (autoAdmissionId) {
                 const { data } = await autoAddIpdBedCharges(invoice.id, {
                     admission_id: Number(autoAdmissionId),
-                    mode: autoBedMode || "mixed",
+                    mode: autoBedMode || 'mixed',
                     skip_if_already_billed: true,
-                    upto_ts: null, // backend will default to now
-                });
-                latestInvoice = data;
+                    upto_ts: null,
+                })
+                latest = data
             }
 
-            // 2️⃣ Auto OT Charges (optional)
             if (autoOtCaseId) {
-                const { data } = await autoAddOtCharges(invoice.id, {
-                    case_id: Number(autoOtCaseId),
-                });
-                latestInvoice = data;
+                const { data } = await autoAddOtCharges(invoice.id, { case_id: Number(autoOtCaseId) })
+                latest = data
             }
 
-            setInvoice(latestInvoice);
-            showToast(
-                "success",
-                "Auto IPD bed and OT charges added successfully."
-            );
-        } catch (err) {
-            console.error("Auto IPD/OT billing failed", err);
-            const msg =
-                err?.response?.data?.detail ||
-                err?.message ||
-                "Unable to auto-add IPD bed / OT charges.";
-            showToast("error", msg);
+            setInvoice(latest)
+            toast.success('Auto charges added')
+        } catch (e) {
+            console.error(e)
+            toast.error(e?.response?.data?.detail || 'Auto billing failed')
         } finally {
-            setAutoLoading(false);
+            setAutoLoading(false)
         }
-    };
+    }
 
-    // ----- Auto-fill Admission / OT IDs from invoice context -----
-
-    useEffect(() => {
-        if (!invoice) return;
-
-        if (
-            !autoAdmissionId &&
-            invoice.context_type === "ipd" &&
-            invoice.context_id
-        ) {
-            setAutoAdmissionId(String(invoice.context_id));
-        }
-
-        if (
-            !autoOtCaseId &&
-            invoice.context_type === "ot" &&
-            invoice.context_id
-        ) {
-            setAutoOtCaseId(String(invoice.context_id));
-        }
-    }, [invoice, autoAdmissionId, autoOtCaseId]);
-
-    // ----- Auto-run IPD bed charges on first load when ip_billing + ipd -----
-
-    useEffect(() => {
-        if (!invoice) return;
-        if (autoBedBootstrapped) return;
-
-        if (
-            invoice.billing_type === "ip_billing" &&
-            invoice.context_type === "ipd" &&
-            invoice.context_id
-        ) {
-            // Ensure Admission ID is visible in UI as well
-            if (!autoAdmissionId) {
-                setAutoAdmissionId(String(invoice.context_id));
-            }
-
-            (async () => {
-                try {
-                    setAutoLoading(true);
-                    const { data } = await autoAddIpdBedCharges(invoice.id, {
-                        admission_id: Number(invoice.context_id),
-                        mode: autoBedMode || "mixed",
-                        skip_if_already_billed: true,
-                        upto_ts: null,
-                    });
-                    setInvoice(data);
-                    setAutoBedBootstrapped(true);
-                    showToast(
-                        "success",
-                        "IPD bed charges auto-added from admission."
-                    );
-                } catch (err) {
-                    console.error(
-                        "Auto-bootstrap IPD bed charges failed",
-                        err
-                    );
-                    showToast(
-                        "error",
-                        "Could not auto-add IPD bed charges. You can try again from Auto IPD Bed + OT."
-                    );
-                    setAutoBedBootstrapped(true);
-                } finally {
-                    setAutoLoading(false);
-                }
-            })();
-        }
-    }, [invoice, autoBedBootstrapped, autoBedMode, autoAdmissionId]);
-
-    // ----- Print -----
-
-    const handlePrint = async () => {
-        if (!invoice) return;
-        try {
-            const res = await fetchInvoicePdf(invoice.id);
-            const blob = new Blob([res.data], { type: "application/pdf" });
-            const url = URL.createObjectURL(blob);
-            window.open(url, "_blank");
-        } catch (err) {
-            console.error(err);
-            alert("Failed to generate PDF");
-        }
-    };
-
-    // ----- Render -----
+    if (loadingInvoice || !invoice) {
+        return (
+            <div className="p-4">
+                <div className="rounded-2xl border bg-white p-6 text-center text-sm text-slate-500">
+                    {loadingInvoice ? 'Loading invoice…' : 'Invoice not loaded'}
+                </div>
+            </div>
+        )
+    }
 
     return (
-        <div className="p-4 space-y-4">
-            {/* Top bar: patient + invoice load/create */}
-            <div className="bg-white border rounded-lg shadow-sm p-3 space-y-3">
-                <div className="grid grid-cols-1 md:grid-cols-[2fr,1fr,1fr] gap-3">
-                    {/* Patient picker */}
-                    <div>
-                        <label className="block text-xs font-semibold text-gray-700 mb-1">
-                            Patient
-                        </label>
-                        <input
-                            value={patientQuery}
-                            onChange={(e) => {
-                                setPatientQuery(e.target.value);
-                                setSelectedPatient(null);
-                            }}
-                            placeholder="Search by name / phone / UHID..."
-                            className="w-full border rounded-md px-2 py-1 text-sm focus:outline-none focus:ring focus:ring-indigo-200"
-                        />
-                        {patientList.length > 0 && !selectedPatient && (
-                            <div className="mt-1 border rounded-md bg-white max-h-40 overflow-auto text-xs">
-                                {patientList.map((p) => (
-                                    <button
-                                        key={p.id}
-                                        type="button"
-                                        onClick={() => handleSelectPatient(p)}
-                                        className="w-full text-left px-2 py-1 hover:bg-indigo-50"
-                                    >
-                                        #{p.id} – {p.first_name} {p.last_name}{" "}
-                                        {p.phone && (
-                                            <span className="text-gray-500">
-                                                ({p.phone})
-                                            </span>
-                                        )}
-                                    </button>
-                                ))}
-                            </div>
-                        )}
-                        {selectedPatient && (
-                            <div className="mt-1 text-[11px] text-gray-600">
-                                Selected: #{selectedPatient.id} –{" "}
-                                {selectedPatient.first_name}{" "}
-                                {selectedPatient.last_name}{" "}
-                                {selectedPatient.phone &&
-                                    `(${selectedPatient.phone})`}
-                            </div>
-                        )}
+        <div className="min-h-[calc(100vh-4rem)] bg-slate-50 p-3 md:p-6 space-y-4">
+            {/* Top Header */}
+            <div className="rounded-2xl border bg-white p-4 shadow-sm">
+                <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+                    <div className="space-y-1">
+                        <div className="text-sm text-slate-500">Invoice</div>
+                        <div className="text-xl font-extrabold text-slate-900">{invNo(invoice)}</div>
+                        <div className="text-sm font-semibold text-slate-700">{patientName(invoice.patient)}</div>
+                        <div className="text-xs text-slate-500">{patientSub(invoice.patient)}</div>
                     </div>
 
-                    {/* Billing type & context */}
+                    <div className="flex flex-wrap gap-2 items-center">
+                        <span className="rounded-full border px-3 py-1 text-xs font-bold bg-slate-50 text-slate-700">
+                            Status: {String(invoice.status || 'draft').toUpperCase()}
+                        </span>
+
+                        <button
+                            type="button"
+                            onClick={handlePrint}
+                            className="rounded-xl border border-indigo-200 bg-indigo-50 px-4 py-2 text-sm font-bold text-indigo-700 hover:bg-indigo-100"
+                        >
+                            Print
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={handleSaveHeader}
+                            disabled={savingHeader}
+                            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                        >
+                            {savingHeader ? 'Saving…' : 'Save Header'}
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={handleFinalize}
+                            className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700"
+                        >
+                            Finalize
+                        </button>
+
+                        <button
+                            type="button"
+                            onClick={handleCancel}
+                            className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white hover:bg-rose-700"
+                        >
+                            Cancel
+                        </button>
+                    </div>
+                </div>
+
+                {/* Totals */}
+                {totals && (
+                    <div className="mt-4 grid grid-cols-2 md:grid-cols-5 gap-2">
+                        <div className="rounded-xl border bg-slate-50 p-3">
+                            <div className="text-[11px] text-slate-500">Net</div>
+                            <div className="text-base font-extrabold text-slate-900">₹ {money(totals.net)}</div>
+                        </div>
+                        <div className="rounded-xl border bg-emerald-50 p-3">
+                            <div className="text-[11px] text-emerald-700">Paid</div>
+                            <div className="text-base font-extrabold text-emerald-900">₹ {money(totals.paid)}</div>
+                        </div>
+                        <div className="rounded-xl border bg-indigo-50 p-3">
+                            <div className="text-[11px] text-indigo-700">Advance Used</div>
+                            <div className="text-base font-extrabold text-indigo-900">₹ {money(totals.adv)}</div>
+                        </div>
+                        <div className="rounded-xl border bg-rose-50 p-3 md:col-span-2">
+                            <div className="text-[11px] text-rose-700">Balance Due</div>
+                            <div className="text-base font-extrabold text-rose-900">₹ {money(totals.balance)}</div>
+                        </div>
+                    </div>
+                )}
+
+                {/* Header fields */}
+                <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
                     <div>
-                        <label className="block text-xs font-semibold text-gray-700 mb-1">
-                            Billing Type
-                        </label>
+                        <label className="text-xs font-bold text-slate-700">Billing Type</label>
                         <select
                             value={billingType}
                             onChange={(e) => setBillingType(e.target.value)}
-                            className="w-full border rounded-md px-2 py-1 text-sm"
+                            disabled={locked}
+                            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
                         >
                             {BILLING_TYPES.map((bt) => (
                                 <option key={bt.value} value={bt.value}>
@@ -607,741 +540,485 @@ export default function BillingInvoicePage({
                                 </option>
                             ))}
                         </select>
-                        <label className="block text-xs font-semibold text-gray-700 mt-2 mb-1">
-                            Context Type
-                        </label>
+                    </div>
+
+                    <div>
+                        <label className="text-xs font-bold text-slate-700">Consultant</label>
                         <select
-                            value={contextType}
-                            onChange={(e) => setContextType(e.target.value)}
-                            className="w-full border rounded-md px-2 py-1 text-sm"
+                            value={consultantId}
+                            onChange={(e) => setConsultantId(e.target.value)}
+                            disabled={locked}
+                            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
                         >
-                            <option value="">None</option>
-                            <option value="opd">OPD</option>
-                            <option value="ipd">IPD (Admission)</option>
-                            <option value="ot">OT Case</option>
-                            <option value="lab">Lab</option>
-                            <option value="radiology">Radiology</option>
-                            <option value="pharmacy">Pharmacy</option>
-                            <option value="other">Other</option>
+                            <option value="">— None —</option>
+                            {(masters.doctors || []).map((d) => (
+                                <option key={d.id} value={d.id}>
+                                    {d.name}
+                                </option>
+                            ))}
                         </select>
                     </div>
 
-                    {/* Invoice load / create */}
-                    <div className="flex flex-col gap-2 justify-between">
-                        <div>
-                            <label className="block text-xs font-semibold text-gray-700 mb-1">
-                                Invoice ID
-                            </label>
-                            <div className="flex gap-2">
-                                <input
-                                    value={invoiceIdInput}
-                                    onChange={(e) =>
-                                        setInvoiceIdInput(e.target.value)
-                                    }
-                                    className="flex-1 border rounded-md px-2 py-1 text-sm"
-                                    placeholder="Enter ID & load"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={handleLoadInvoice}
-                                    className="px-3 py-1 text-xs rounded-md border bg-gray-50 hover:bg-gray-100"
-                                >
-                                    Load
-                                </button>
-                            </div>
-                        </div>
-                        <div className="flex gap-2 justify-end pt-1">
-                            <button
-                                type="button"
-                                onClick={handleCreateInvoice}
-                                disabled={loadingInvoice}
-                                className="px-3 py-1 text-xs rounded-md bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-60"
-                            >
-                                {loadingInvoice ? "Creating..." : "New Invoice"}
-                            </button>
-                            {invoice && (
-                                <button
-                                    type="button"
-                                    onClick={handlePrint}
-                                    className="px-3 py-1 text-xs rounded-md border border-indigo-600 text-indigo-600 hover:bg-indigo-50"
-                                >
-                                    Print
-                                </button>
-                            )}
-                        </div>
+                    <div>
+                        <label className="text-xs font-bold text-slate-700">Credit Provider</label>
+                        <select
+                            value={providerId}
+                            onChange={(e) => setProviderId(e.target.value)}
+                            disabled={locked}
+                            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                        >
+                            <option value="">— Self / Cash —</option>
+                            {(masters.credit_providers || []).map((p) => (
+                                <option key={p.id} value={p.id}>
+                                    {p.code ? `${p.code} – ` : ''}{p.name}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    <div className="md:col-span-3">
+                        <label className="text-xs font-bold text-slate-700">Remarks</label>
+                        <textarea
+                            value={remarks}
+                            onChange={(e) => setRemarks(e.target.value)}
+                            disabled={locked}
+                            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm min-h-[84px]"
+                            placeholder="Any note"
+                        />
                     </div>
                 </div>
             </div>
 
-            {/* Header + totals */}
-            {invoice && (
-                <div className="bg-white border rounded-lg shadow-sm p-3 space-y-3">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                        <div className="space-y-1 text-xs">
-                            <div className="font-semibold text-gray-800">
-                                Invoice #{invoice.id}
-                            </div>
-                            <div className="text-gray-600">
-                                Status:{" "}
-                                <span className="font-semibold">
-                                    {invoice.status}
-                                </span>
-                            </div>
-                            {invoice.invoice_number && (
-                                <div className="text-gray-600">
-                                    Invoice No: {invoice.invoice_number}
-                                </div>
-                            )}
+            {/* Main grid */}
+            <div className="grid grid-cols-1 lg:grid-cols-[2fr,1fr] gap-4">
+                {/* Items */}
+                <div className="rounded-2xl border bg-white p-4 shadow-sm space-y-4">
+                    <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                        <div>
+                            <div className="text-lg font-extrabold text-slate-900">Bill Items</div>
+                            <div className="text-xs text-slate-500">Edit qty/price/tax before finalize.</div>
                         </div>
 
-                        <div className="flex flex-wrap gap-2 text-xs">
-                            {totals && (
-                                <>
-                                    <span className="px-2 py-[2px] rounded-full bg-gray-100">
-                                        Net:{" "}
-                                        <strong>
-                                            {totals.net.toFixed(2)}
-                                        </strong>
-                                    </span>
-                                    <span className="px-2 py-[2px] rounded-full bg-green-50 text-green-700">
-                                        Paid:{" "}
-                                        <strong>
-                                            {totals.paid.toFixed(2)}
-                                        </strong>
-                                    </span>
-                                    <span className="px-2 py-[2px] rounded-full bg-red-50 text-red-700">
-                                        Balance:{" "}
-                                        <strong>
-                                            {totals.balance.toFixed(2)}
-                                        </strong>
-                                    </span>
-                                </>
-                            )}
-                        </div>
-
-                        <div className="flex flex-wrap gap-2 text-xs">
-                            <button
-                                type="button"
-                                onClick={handleSaveHeader}
-                                disabled={savingHeader}
-                                className="px-3 py-1 rounded-md border text-gray-700 hover:bg-gray-50 disabled:opacity-60"
-                            >
-                                {savingHeader ? "Saving..." : "Save Header"}
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleFinalize}
-                                className="px-3 py-1 rounded-md bg-emerald-600 text-white hover:bg-emerald-700"
-                            >
-                                Finalize
-                            </button>
-                            <button
-                                type="button"
-                                onClick={handleCancel}
-                                className="px-3 py-1 rounded-md bg-red-600 text-white hover:bg-red-700"
-                            >
-                                Cancel
-                            </button>
-                        </div>
-                    </div>
-
-                    {/* Header fields (consultant, credit provider, remarks) */}
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2 text-xs">
-                        <div>
-                            <label className="block font-semibold text-gray-700 mb-1">
-                                Consultant
-                            </label>
-                            <select
-                                value={consultantId}
-                                onChange={(e) =>
-                                    setConsultantId(e.target.value)
-                                }
-                                className="w-full border rounded-md px-2 py-1 text-sm"
-                            >
-                                <option value="">— None —</option>
-                                {(masters.doctors || []).map((d) => (
-                                    <option key={d.id} value={d.id}>
-                                        {d.name} ({d.email})
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block font-semibold text-gray-700 mb-1">
-                                Credit Provider (TPA / Insurance / Corporate)
-                            </label>
-                            <select
-                                value={providerId}
-                                onChange={(e) =>
-                                    setProviderId(e.target.value)
-                                }
-                                className="w-full border rounded-md px-2 py-1 text-sm"
-                            >
-                                <option value="">— Self / Cash —</option>
-                                {(masters.credit_providers || []).map((p) => (
-                                    <option key={p.id} value={p.id}>
-                                        {p.code ? `${p.code} – ` : ""}
-                                        {p.name}
-                                    </option>
-                                ))}
-                            </select>
-                        </div>
-                        <div>
-                            <label className="block font-semibold text-gray-700 mb-1">
-                                Remarks
-                            </label>
-                            <textarea
-                                value={remarks}
-                                onChange={(e) => setRemarks(e.target.value)}
-                                className="w-full border rounded-md px-2 py-1 text-sm h-16"
+                        {/* Auto controls */}
+                        <div className="flex flex-wrap items-center gap-2 text-[12px]">
+                            <input
+                                type="number"
+                                value={autoAdmissionId}
+                                onChange={(e) => setAutoAdmissionId(e.target.value)}
+                                className="w-28 rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                placeholder="Admission ID"
+                                disabled={locked}
                             />
+                            <select
+                                value={autoBedMode}
+                                onChange={(e) => setAutoBedMode(e.target.value)}
+                                className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                disabled={locked}
+                            >
+                                <option value="daily">Daily</option>
+                                <option value="hourly">Hourly</option>
+                                <option value="mixed">Mixed</option>
+                            </select>
+                            <input
+                                type="number"
+                                value={autoOtCaseId}
+                                onChange={(e) => setAutoOtCaseId(e.target.value)}
+                                className="w-28 rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                placeholder="OT Case ID"
+                                disabled={locked}
+                            />
+                            <button
+                                type="button"
+                                onClick={handleAutoIpdAndOt}
+                                disabled={autoLoading || locked}
+                                className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-extrabold text-white hover:bg-emerald-700 disabled:opacity-60"
+                            >
+                                {autoLoading ? 'Applying…' : 'Auto Charges'}
+                            </button>
                         </div>
                     </div>
-                </div>
-            )}
 
-            {/* Items + payments grid */}
-            {invoice && (
-                <div className="grid grid-cols-1 lg:grid-cols-[2fr,1fr] gap-4">
-                    {/* Items block */}
-                    <div className="bg-white border rounded-lg shadow-sm p-3 space-y-3">
-                        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                            <h2 className="text-sm font-semibold text-gray-800">
-                                Bill Items
-                            </h2>
-
-                            {/* ⭐ Auto IPD Bed + OT Controls */}
-                            <div className="flex flex-wrap items-center gap-2 text-[11px]">
-                                <div className="flex items-center gap-1">
-                                    <span className="text-gray-600">
-                                        Admission ID
-                                    </span>
-                                    <input
-                                        type="number"
-                                        value={autoAdmissionId}
-                                        onChange={(e) =>
-                                            setAutoAdmissionId(
-                                                e.target.value
-                                            )
-                                        }
-                                        className="w-20 border rounded-md px-1 py-0.5 text-xs"
-                                        placeholder="IPD"
-                                    />
-                                </div>
-                                <div className="flex items-center gap-1">
-                                    <span className="text-gray-600">Mode</span>
-                                    <select
-                                        value={autoBedMode}
-                                        onChange={(e) =>
-                                            setAutoBedMode(e.target.value)
-                                        }
-                                        className="border rounded-md px-1 py-0.5 text-xs"
-                                    >
-                                        <option value="daily">Daily</option>
-                                        <option value="hourly">Hourly</option>
-                                        <option value="mixed">Mixed</option>
-                                    </select>
-                                </div>
-                                <div className="flex items-center gap-1">
-                                    <span className="text-gray-600">
-                                        OT Case ID
-                                    </span>
-                                    <input
-                                        type="number"
-                                        value={autoOtCaseId}
-                                        onChange={(e) =>
-                                            setAutoOtCaseId(e.target.value)
-                                        }
-                                        className="w-20 border rounded-md px-1 py-0.5 text-xs"
-                                        placeholder="OT"
-                                    />
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={handleAutoIpdBedAndOt}
-                                    disabled={
-                                        autoLoading ||
-                                        invoice.status === "finalized"
-                                    }
-                                    className="px-3 py-1 rounded-md bg-emerald-600 text-white text-[11px] font-semibold hover:bg-emerald-700 disabled:opacity-60"
-                                >
-                                    {autoLoading
-                                        ? "Applying..."
-                                        : "Auto IPD Bed + OT"}
-                                </button>
-                            </div>
-                        </div>
-
-                        <table className="w-full text-xs border-t">
-                            <thead className="bg-gray-50">
+                    <div className="overflow-auto rounded-xl border">
+                        <table className="min-w-full text-sm">
+                            <thead className="bg-slate-50 text-slate-700">
                                 <tr>
-                                    <th className="px-2 py-1 text-left">#</th>
-                                    <th className="px-2 py-1 text-left">
-                                        Description
-                                    </th>
-                                    <th className="px-2 py-1 text-right">
-                                        Qty
-                                    </th>
-                                    <th className="px-2 py-1 text-right">
-                                        Price
-                                    </th>
-                                    <th className="px-2 py-1 text-right">
-                                        GST%
-                                    </th>
-                                    <th className="px-2 py-1 text-right">
-                                        GST Amt
-                                    </th>
-                                    <th className="px-2 py-1 text-right">
-                                        Total
-                                    </th>
-                                    <th className="px-2 py-1 text-right">
-                                        Actions
-                                    </th>
+                                    <th className="p-3 text-left text-xs font-extrabold">#</th>
+                                    <th className="p-3 text-left text-xs font-extrabold">Description</th>
+                                    <th className="p-3 text-right text-xs font-extrabold">Qty</th>
+                                    <th className="p-3 text-right text-xs font-extrabold">Price</th>
+                                    <th className="p-3 text-right text-xs font-extrabold">GST%</th>
+                                    <th className="p-3 text-right text-xs font-extrabold">Tax</th>
+                                    <th className="p-3 text-right text-xs font-extrabold">Total</th>
+                                    <th className="p-3 text-right text-xs font-extrabold">Action</th>
                                 </tr>
                             </thead>
                             <tbody>
-                                {invoice.items.length === 0 && (
+                                {(invoice.items || []).length === 0 && (
                                     <tr>
-                                        <td
-                                            className="px-2 py-2 text-center text-gray-500"
-                                            colSpan={8}
-                                        >
-                                            No items yet.
-                                        </td>
+                                        <td colSpan={8} className="p-6 text-center text-slate-500">No items yet.</td>
                                     </tr>
                                 )}
-                                {invoice.items.map((it, idx) => (
-                                    <tr
-                                        key={it.id}
-                                        className={
-                                            it.is_voided
-                                                ? "bg-red-50 text-gray-400"
-                                                : ""
-                                        }
-                                    >
-                                        <td className="px-2 py-1">
-                                            {idx + 1}
-                                        </td>
-                                        <td className="px-2 py-1">
-                                            {it.description}
-                                        </td>
-                                        <td className="px-2 py-1 text-right">
+
+                                {(invoice.items || []).map((it, idx) => (
+                                    <tr key={it.id} className={`border-t ${it.is_voided ? 'bg-rose-50 text-slate-400' : ''}`}>
+                                        <td className="p-3">{idx + 1}</td>
+                                        <td className="p-3 font-semibold">{it.description}</td>
+
+                                        <td className="p-3 text-right">
                                             <input
                                                 type="number"
                                                 min="1"
                                                 value={it.quantity}
-                                                onChange={(e) =>
-                                                    handleUpdateLine(it, {
-                                                        quantity:
-                                                            Number(
-                                                                e.target.value
-                                                            ) || 1,
-                                                    })
-                                                }
-                                                className="w-16 border rounded-md px-1 text-right"
-                                                disabled={
-                                                    it.is_voided ||
-                                                    invoice.status ===
-                                                    "finalized"
-                                                }
+                                                onChange={(e) => handleUpdateLine(it, { quantity: Number(e.target.value) || 1 })}
+                                                className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-right"
+                                                disabled={locked || it.is_voided}
                                             />
                                         </td>
-                                        <td className="px-2 py-1 text-right">
+
+                                        <td className="p-3 text-right">
                                             <input
                                                 type="number"
                                                 step="0.01"
                                                 value={it.unit_price}
-                                                onChange={(e) =>
-                                                    handleUpdateLine(it, {
-                                                        unit_price:
-                                                            Number(
-                                                                e.target.value
-                                                            ) || 0,
-                                                    })
-                                                }
-                                                className="w-20 border rounded-md px-1 text-right"
-                                                disabled={
-                                                    it.is_voided ||
-                                                    invoice.status ===
-                                                    "finalized"
-                                                }
+                                                onChange={(e) => handleUpdateLine(it, { unit_price: Number(e.target.value) || 0 })}
+                                                className="w-24 rounded-lg border border-slate-200 px-2 py-1 text-right"
+                                                disabled={locked || it.is_voided}
                                             />
                                         </td>
-                                        <td className="px-2 py-1 text-right">
+
+                                        <td className="p-3 text-right">
                                             <input
                                                 type="number"
                                                 step="0.1"
                                                 value={it.tax_rate}
-                                                onChange={(e) =>
-                                                    handleUpdateLine(it, {
-                                                        tax_rate:
-                                                            Number(
-                                                                e.target.value
-                                                            ) || 0,
-                                                    })
-                                                }
-                                                className="w-16 border rounded-md px-1 text-right"
-                                                disabled={
-                                                    it.is_voided ||
-                                                    invoice.status ===
-                                                    "finalized"
-                                                }
+                                                onChange={(e) => handleUpdateLine(it, { tax_rate: Number(e.target.value) || 0 })}
+                                                className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-right"
+                                                disabled={locked || it.is_voided}
                                             />
                                         </td>
-                                        <td className="px-2 py-1 text-right">
-                                            {Number(
-                                                it.tax_amount || 0
-                                            ).toFixed(2)}
-                                        </td>
-                                        <td className="px-2 py-1 text-right">
-                                            {Number(
-                                                it.line_total || 0
-                                            ).toFixed(2)}
-                                        </td>
-                                        <td className="px-2 py-1 text-right">
-                                            {!it.is_voided &&
-                                                invoice.status !==
-                                                "finalized" && (
-                                                    <button
-                                                        type="button"
-                                                        onClick={() =>
-                                                            handleVoidLine(it)
-                                                        }
-                                                        className="text-[11px] text-red-600 hover:underline"
-                                                    >
-                                                        Void
-                                                    </button>
-                                                )}
-                                            {it.is_voided && (
-                                                <span className="text-[11px] text-red-500">
-                                                    Voided
-                                                </span>
+
+                                        <td className="p-3 text-right">{money(it.tax_amount)}</td>
+                                        <td className="p-3 text-right font-extrabold">{money(it.line_total)}</td>
+
+                                        <td className="p-3 text-right">
+                                            {!it.is_voided && !locked ? (
+                                                <button type="button" onClick={() => handleVoidLine(it)} className="text-rose-700 font-extrabold hover:underline">
+                                                    Void
+                                                </button>
+                                            ) : it.is_voided ? (
+                                                <span className="text-rose-700 font-extrabold">Voided</span>
+                                            ) : (
+                                                <span className="text-slate-400 font-bold">Locked</span>
                                             )}
                                         </td>
                                     </tr>
                                 ))}
                             </tbody>
                         </table>
+                    </div>
 
-                        {/* Add manual item */}
-                        <div className="mt-3 border-t pt-3 space-y-2 text-xs">
-                            <div className="font-semibold text-gray-800">
-                                Add Manual Item
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-[2fr,0.5fr,0.5fr,0.5fr,auto] gap-2">
-                                <input
-                                    value={manualDesc}
-                                    onChange={(e) =>
-                                        setManualDesc(e.target.value)
-                                    }
-                                    placeholder="Description (e.g., Dressing charges)"
-                                    className="border rounded-md px-2 py-1 text-sm"
-                                />
-                                <input
-                                    type="number"
-                                    min="1"
-                                    value={manualQty}
-                                    onChange={(e) =>
-                                        setManualQty(e.target.value)
-                                    }
-                                    placeholder="Qty"
-                                    className="border rounded-md px-2 py-1 text-sm"
-                                />
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    value={manualPrice}
-                                    onChange={(e) =>
-                                        setManualPrice(e.target.value)
-                                    }
-                                    placeholder="Unit Price"
-                                    className="border rounded-md px-2 py-1 text-sm"
-                                />
-                                <input
-                                    type="number"
-                                    step="0.1"
-                                    value={manualTax}
-                                    onChange={(e) =>
-                                        setManualTax(e.target.value)
-                                    }
-                                    placeholder="GST%"
-                                    className="border rounded-md px-2 py-1 text-sm"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={handleAddManualItem}
-                                    className="px-3 py-1 text-xs rounded-md bg-indigo-600 text-white hover:bg-indigo-700"
-                                >
-                                    Add Manual
-                                </button>
-                            </div>
-                        </div>
+                    {/* Add manual */}
+                    <div className="rounded-2xl border bg-slate-50 p-4 space-y-3">
+                        <div className="text-sm font-extrabold text-slate-900">Add Manual Item</div>
 
-                        {/* Add service item */}
-                        <div className="mt-3 border-t pt-3 space-y-2 text-xs">
-                            <div className="font-semibold text-gray-800">
-                                Add Service Item
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-[1fr,1fr,2fr,0.7fr,0.7fr,auto] gap-2">
-                                <select
-                                    value={serviceType}
-                                    onChange={(e) =>
-                                        setServiceType(e.target.value)
-                                    }
-                                    className="border rounded-md px-2 py-1 text-sm"
-                                >
-                                    <option value="lab">Lab</option>
-                                    <option value="radiology">
-                                        Radiology
-                                    </option>
-                                    <option value="opd">OPD</option>
-                                    <option value="ipd">IPD</option>
-                                    <option value="pharmacy">
-                                        Pharmacy
-                                    </option>
-                                    <option value="ot">OT</option>
-                                    <option value="manual">
-                                        Manual (with ref)
-                                    </option>
-                                    <option value="other">Other</option>
-                                </select>
-                                <input
-                                    value={serviceRefId}
-                                    onChange={(e) =>
-                                        setServiceRefId(e.target.value)
-                                    }
-                                    placeholder="Service Ref ID"
-                                    className="border rounded-md px-2 py-1 text-sm"
-                                />
-                                <input
-                                    value={serviceDesc}
-                                    onChange={(e) =>
-                                        setServiceDesc(e.target.value)
-                                    }
-                                    placeholder="Description (optional)"
-                                    className="border rounded-md px-2 py-1 text-sm"
-                                />
-                                <input
-                                    type="number"
-                                    step="0.01"
-                                    value={servicePrice}
-                                    onChange={(e) =>
-                                        setServicePrice(e.target.value)
-                                    }
-                                    placeholder="Price"
-                                    className="border rounded-md px-2 py-1 text-sm"
-                                />
-                                <input
-                                    type="number"
-                                    step="0.1"
-                                    value={serviceTax}
-                                    onChange={(e) =>
-                                        setServiceTax(e.target.value)
-                                    }
-                                    placeholder="GST%"
-                                    className="border rounded-md px-2 py-1 text-sm"
-                                />
-                                <button
-                                    type="button"
-                                    onClick={handleAddServiceItem}
-                                    className="px-3 py-1 text-xs rounded-md bg-slate-700 text-white hover:bg-slate-800"
-                                >
-                                    Add Service
-                                </button>
-                            </div>
+                        <div className="grid grid-cols-1 md:grid-cols-[2fr,0.7fr,0.8fr,0.7fr,auto] gap-2">
+                            <input
+                                value={manualDesc}
+                                onChange={(e) => setManualDesc(e.target.value)}
+                                placeholder="Description (e.g., Dressing charges)"
+                                className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                disabled={locked}
+                            />
+                            <input
+                                type="number"
+                                min="1"
+                                value={manualQty}
+                                onChange={(e) => setManualQty(e.target.value)}
+                                className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                disabled={locked}
+                            />
+                            <input
+                                type="number"
+                                step="0.01"
+                                value={manualPrice}
+                                onChange={(e) => setManualPrice(e.target.value)}
+                                placeholder="Unit Price"
+                                className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                disabled={locked}
+                            />
+                            <input
+                                type="number"
+                                step="0.1"
+                                value={manualTax}
+                                onChange={(e) => setManualTax(e.target.value)}
+                                placeholder="GST%"
+                                className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                disabled={locked}
+                            />
+                            <button
+                                type="button"
+                                onClick={handleAddManualItem}
+                                disabled={locked}
+                                className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-extrabold text-white hover:bg-indigo-700 disabled:opacity-60"
+                            >
+                                Add
+                            </button>
                         </div>
                     </div>
 
-                    {/* Payments & advances */}
-                    <div className="bg-white border rounded-lg shadow-sm p-3 space-y-3 text-xs">
-                        <div className="flex items-center justify-between">
-                            <h2 className="text-sm font-semibold text-gray-800">
-                                Payments
-                            </h2>
+                    {/* Add service */}
+                    <div className="rounded-2xl border bg-slate-50 p-4 space-y-3">
+                        <div className="text-sm font-extrabold text-slate-900">Add Service Item</div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-[1fr,1fr,2fr,0.9fr,0.7fr,auto] gap-2">
+                            <select
+                                value={serviceType}
+                                onChange={(e) => setServiceType(e.target.value)}
+                                className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                disabled={locked}
+                            >
+                                <option value="lab">Lab</option>
+                                <option value="radiology">Radiology</option>
+                                <option value="pharmacy">Pharmacy</option>
+                                <option value="ot">OT</option>
+                                <option value="ipd">IPD</option>
+                                <option value="opd">OPD</option>
+                                <option value="manual">Manual (with ref)</option>
+                                <option value="other">Other</option>
+                            </select>
+
+                            <input
+                                value={serviceRefId}
+                                onChange={(e) => setServiceRefId(e.target.value)}
+                                placeholder="Service Ref"
+                                className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                disabled={locked}
+                            />
+
+                            <input
+                                value={serviceDesc}
+                                onChange={(e) => setServiceDesc(e.target.value)}
+                                placeholder="Description (optional)"
+                                className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                disabled={locked}
+                            />
+
+                            <input
+                                type="number"
+                                step="0.01"
+                                value={servicePrice}
+                                onChange={(e) => setServicePrice(e.target.value)}
+                                placeholder="Price"
+                                className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                disabled={locked}
+                            />
+
+                            <input
+                                type="number"
+                                step="0.1"
+                                value={serviceTax}
+                                onChange={(e) => setServiceTax(e.target.value)}
+                                placeholder="GST%"
+                                className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                disabled={locked}
+                            />
+
                             <button
                                 type="button"
-                                onClick={loadAdvances}
-                                className="px-2 py-1 rounded-md border text-[11px] hover:bg-gray-50"
+                                onClick={handleAddServiceItem}
+                                disabled={locked}
+                                className="rounded-xl bg-slate-800 px-4 py-2 text-sm font-extrabold text-white hover:bg-slate-900 disabled:opacity-60"
                             >
-                                Load Advances
+                                Add
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                {/* Right panel: Payments + Advances */}
+                <div className="space-y-4">
+                    {/* Payments */}
+                    <div className="rounded-2xl border bg-white p-4 shadow-sm space-y-3">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <div className="text-lg font-extrabold text-slate-900">Payments</div>
+                                <div className="text-xs text-slate-500">Split payments supported.</div>
+                            </div>
+                        </div>
+
+                        <div className="overflow-auto rounded-xl border">
+                            <table className="min-w-full text-sm">
+                                <thead className="bg-slate-50 text-slate-700">
+                                    <tr>
+                                        <th className="p-3 text-left text-xs font-extrabold">Mode</th>
+                                        <th className="p-3 text-left text-xs font-extrabold">Ref</th>
+                                        <th className="p-3 text-right text-xs font-extrabold">Amount</th>
+                                        <th className="p-3 text-right text-xs font-extrabold">Action</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {(invoice.payments || []).length === 0 && (
+                                        <tr>
+                                            <td colSpan={4} className="p-6 text-center text-slate-500">No payments yet.</td>
+                                        </tr>
+                                    )}
+                                    {(invoice.payments || []).map((p) => (
+                                        <tr key={p.id} className="border-t">
+                                            <td className="p-3 font-semibold">{String(p.mode || '').toUpperCase()}</td>
+                                            <td className="p-3 text-slate-600">{p.reference_no || '—'}</td>
+                                            <td className="p-3 text-right font-extrabold">₹ {money(p.amount)}</td>
+                                            <td className="p-3 text-right">
+                                                <button type="button" onClick={() => handleDeletePayment(p)} className="text-rose-700 font-extrabold hover:underline">
+                                                    Delete
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        {!locked && (
+                            <div className="rounded-2xl border bg-slate-50 p-3 space-y-2">
+                                <div className="text-sm font-extrabold text-slate-900">Add Payment</div>
+                                <div className="grid grid-cols-1 gap-2">
+                                    <select value={payMode} onChange={(e) => setPayMode(e.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 text-sm">
+                                        {PAYMENT_MODES.map((m) => (
+                                            <option key={m} value={m}>{m.toUpperCase()}</option>
+                                        ))}
+                                    </select>
+
+                                    <input
+                                        type="number"
+                                        step="0.01"
+                                        value={payAmount}
+                                        onChange={(e) => setPayAmount(e.target.value)}
+                                        placeholder="Amount"
+                                        className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                    />
+
+                                    <input
+                                        value={payRef}
+                                        onChange={(e) => setPayRef(e.target.value)}
+                                        placeholder="Reference (optional)"
+                                        className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                    />
+
+                                    <button type="button" onClick={handleAddPayment} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-extrabold text-white hover:bg-indigo-700">
+                                        Add Payment
+                                    </button>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+
+                    {/* Advances */}
+                    <div className="rounded-2xl border bg-white p-4 shadow-sm space-y-3">
+                        <div className="flex items-start justify-between gap-2">
+                            <div>
+                                <div className="text-lg font-extrabold text-slate-900">Advances</div>
+                                <div className="text-xs text-slate-500">
+                                    Available: <span className="font-extrabold text-slate-900">₹ {money(availableAdvanceTotal)}</span>
+                                </div>
+                            </div>
+
+                            <button
+                                type="button"
+                                onClick={() => loadAdvances(invoice.patient_id)}
+                                className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-extrabold text-slate-700 hover:bg-slate-100"
+                            >
+                                Refresh
                             </button>
                         </div>
 
-                        <table className="w-full text-xs border-t">
-                            <thead className="bg-gray-50">
-                                <tr>
-                                    <th className="px-2 py-1 text-left">
-                                        Mode
-                                    </th>
-                                    <th className="px-2 py-1 text-left">
-                                        Ref
-                                    </th>
-                                    <th className="px-2 py-1 text-right">
-                                        Amount
-                                    </th>
-                                    <th className="px-2 py-1 text-right">
-                                        Actions
-                                    </th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {invoice.payments.length === 0 && (
-                                    <tr>
-                                        <td
-                                            className="px-2 py-2 text-center text-gray-500"
-                                            colSpan={4}
-                                        >
-                                            No payments yet.
-                                        </td>
-                                    </tr>
-                                )}
-                                {invoice.payments.map((p) => (
-                                    <tr key={p.id}>
-                                        <td className="px-2 py-1">
-                                            {p.mode}
-                                        </td>
-                                        <td className="px-2 py-1">
-                                            {p.reference_no || "—"}
-                                        </td>
-                                        <td className="px-2 py-1 text-right">
-                                            {Number(
-                                                p.amount || 0
-                                            ).toFixed(2)}
-                                        </td>
-                                        <td className="px-2 py-1 text-right">
-                                            <button
-                                                type="button"
-                                                onClick={() =>
-                                                    handleDeletePayment(p)
-                                                }
-                                                className="text-[11px] text-red-600 hover:underline"
-                                            >
-                                                Delete
-                                            </button>
-                                        </td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                        <div className="grid grid-cols-1 gap-2">
+                            <button
+                                type="button"
+                                onClick={() => handleApplyAdvance(true)}
+                                className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-extrabold text-white hover:bg-emerald-700"
+                            >
+                                Auto Apply Advance (Best)
+                            </button>
 
-                        {/* Add payment */}
-                        <div className="border-t pt-3 space-y-2">
-                            <div className="font-semibold text-gray-800">
-                                Add Payment
-                            </div>
-                            <div className="grid grid-cols-1 md:grid-cols-[1fr,1fr,2fr,auto] gap-2">
-                                <select
-                                    value={payMode}
-                                    onChange={(e) =>
-                                        setPayMode(e.target.value)
-                                    }
-                                    className="border rounded-md px-2 py-1 text-sm"
-                                >
-                                    {PAYMENT_MODES.map((m) => (
-                                        <option key={m} value={m}>
-                                            {m.toUpperCase()}
-                                        </option>
-                                    ))}
-                                </select>
+                            <div className="grid grid-cols-1 md:grid-cols-[1fr,auto] gap-2">
                                 <input
-                                    type="number"
-                                    step="0.01"
-                                    value={payAmount}
-                                    onChange={(e) =>
-                                        setPayAmount(e.target.value)
-                                    }
-                                    placeholder="Amount"
-                                    className="border rounded-md px-2 py-1 text-sm"
-                                />
-                                <input
-                                    value={payRef}
-                                    onChange={(e) =>
-                                        setPayRef(e.target.value)
-                                    }
-                                    placeholder="Reference (optional)"
-                                    className="border rounded-md px-2 py-1 text-sm"
+                                    value={applyAmt}
+                                    onChange={(e) => setApplyAmt(e.target.value)}
+                                    placeholder="Apply partial amount (e.g., 500)"
+                                    className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
                                 />
                                 <button
                                     type="button"
-                                    onClick={handleAddPayment}
-                                    className="px-3 py-1 text-xs rounded-md bg-indigo-600 text-white hover:bg-indigo-700"
+                                    onClick={() => handleApplyAdvance(false)}
+                                    className="rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-2 text-sm font-extrabold text-emerald-800 hover:bg-emerald-100"
                                 >
-                                    Add Payment
+                                    Apply
                                 </button>
                             </div>
                         </div>
 
-                        {/* Advances view / apply */}
-                        <div className="border-t pt-3 space-y-2">
-                            <div className="flex items-center justify-between">
-                                <div className="font-semibold text-gray-800">
-                                    Patient Advances
-                                </div>
-                                <button
-                                    type="button"
-                                    onClick={handleApplyAdvances}
-                                    className="px-3 py-1 text-xs rounded-md bg-emerald-600 text-white hover:bg-emerald-700"
-                                >
-                                    Apply to Invoice
-                                </button>
-                            </div>
-                            <div className="border rounded-md max-h-40 overflow-auto">
-                                {advLoading && (
-                                    <div className="px-2 py-2 text-center text-gray-500">
-                                        Loading advances...
-                                    </div>
-                                )}
-                                {!advLoading && advances.length === 0 && (
-                                    <div className="px-2 py-2 text-center text-gray-500">
-                                        No advances with balance.
-                                    </div>
-                                )}
-                                {!advLoading &&
-                                    advances.map((a) => (
-                                        <div
-                                            key={a.id}
-                                            className="px-2 py-1 border-b last:border-b-0 flex justify-between text-[11px]"
-                                        >
+                        {/* Adjustments */}
+                        <div className="rounded-2xl border bg-slate-50 p-3">
+                            <div className="text-sm font-extrabold text-slate-900">Applied Adjustments</div>
+                            <div className="mt-2 space-y-2 max-h-56 overflow-auto">
+                                {adjLoading ? (
+                                    <div className="text-sm text-slate-500">Loading…</div>
+                                ) : (advAdjustments || []).length === 0 ? (
+                                    <div className="text-sm text-slate-500">No adjustments yet.</div>
+                                ) : (
+                                    advAdjustments.map((adj) => (
+                                        <div key={adj.id} className="rounded-xl border bg-white p-3 flex items-center justify-between gap-2">
                                             <div>
-                                                <div className="font-semibold">
-                                                    ADV #{a.id} –{" "}
-                                                    {a.mode.toUpperCase()}
-                                                </div>
-                                                <div className="text-gray-600">
-                                                    Amount:{" "}
-                                                    {Number(
-                                                        a.amount || 0
-                                                    ).toFixed(2)}{" "}
-                                                    | Balance:{" "}
-                                                    {Number(
-                                                        a.balance_remaining ||
-                                                        0
-                                                    ).toFixed(2)}
+                                                <div className="text-sm font-extrabold text-slate-900">₹ {money(adj.amount_applied)}</div>
+                                                <div className="text-xs text-slate-500">
+                                                    Applied at {adj.applied_at ? new Date(adj.applied_at).toLocaleString() : '—'}
                                                 </div>
                                             </div>
+                                            <button
+                                                type="button"
+                                                onClick={() => handleRemoveAdjustment(adj)}
+                                                className="text-rose-700 font-extrabold hover:underline"
+                                            >
+                                                Remove
+                                            </button>
                                         </div>
-                                    ))}
+                                    ))
+                                )}
                             </div>
+                        </div>
+
+                        {/* Available advances list */}
+                        <div className="rounded-2xl border bg-slate-50 p-3">
+                            <div className="text-sm font-extrabold text-slate-900">Available Advances</div>
+                            <div className="mt-2 space-y-2 max-h-56 overflow-auto">
+                                {advLoading ? (
+                                    <div className="text-sm text-slate-500">Loading…</div>
+                                ) : (advances || []).length === 0 ? (
+                                    <div className="text-sm text-slate-500">No available advance.</div>
+                                ) : (
+                                    advances.map((a) => (
+                                        <div key={a.id} className="rounded-xl border bg-white p-3">
+                                            <div className="flex items-center justify-between">
+                                                <div className="text-sm font-extrabold text-slate-900">{String(a.mode || '').toUpperCase()}</div>
+                                                <div className="text-sm font-extrabold text-indigo-700">₹ {money(a.balance_remaining)}</div>
+                                            </div>
+                                            <div className="text-xs text-slate-500">
+                                                Received: {a.received_at ? new Date(a.received_at).toLocaleString() : '—'}
+                                                {a.reference_no ? ` • Ref: ${a.reference_no}` : ''}
+                                            </div>
+                                            {a.remarks ? <div className="text-xs text-slate-600 mt-1">{a.remarks}</div> : null}
+                                        </div>
+                                    ))
+                                )}
+                            </div>
+                        </div>
+
+                        <div className="text-[11px] text-slate-500">
+                            Tip: Advances can be applied to OP/IP/OT/Pharmacy/Lab/Radiology/General invoices by patient.
                         </div>
                     </div>
                 </div>
-            )}
-
-            {/* Simple toast */}
-            {toast && (
-                <div className="fixed bottom-4 right-4 z-40">
-                    <div
-                        className={`max-w-xs rounded-lg px-3 py-2 text-xs shadow-lg ${toast.type === "success"
-                                ? "bg-emerald-600 text-white"
-                                : toast.type === "error"
-                                    ? "bg-red-600 text-white"
-                                    : "bg-slate-800 text-white"
-                            }`}
-                    >
-                        {toast.message}
-                    </div>
-                </div>
-            )}
+            </div>
         </div>
-    );
+    )
 }

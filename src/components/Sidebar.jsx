@@ -1,7 +1,11 @@
-import { useEffect, useMemo, useState, useRef } from 'react';
+// src/layout/Sidebar.jsx
+import { useEffect, useMemo, useState } from 'react'
+import { NavLink, useLocation } from 'react-router-dom'
+
 import { useAuth } from '../store/authStore'
 import { useUI } from '../store/uiStore'
 import { useBranding } from '../branding/BrandingProvider'
+
 import {
   Users as UsersIcon,
   Building2,
@@ -23,21 +27,13 @@ import {
   Package,
   Pill,
   ClipboardList,
-  Truck,
   Boxes,
   History,
-  AlertTriangle,
   ShoppingCart,
-  RotateCcw,
-  Factory,
-  MapPin,
   FlaskConical,
-  PackageOpen,
   Scan,
   LayoutTemplate,
   FileText,
-  ScrollText,
-  Stamp,
   Receipt,
   Activity,
   BarChart2,
@@ -45,14 +41,11 @@ import {
   TestTube2,
   Settings2,
   CalendarDays,
-  Layers,
   Microscope,
   Cpu,
   BookOpenText,
-  Wallet
+  Wallet,
 } from 'lucide-react'
-import { NavLink, useLocation } from 'react-router-dom';
-
 
 const defaultPrimary = '#2563eb'
 const makeActiveBg = (primary) => {
@@ -148,28 +141,44 @@ const GROUPS = [
         label: 'Supplier Ledger',
         to: '/pharmacy/accounts/supplier-ledger',
         icon: BookOpenText,
-        reqAny: ['pharmacy.accounts.supplier_ledger.view', 'pharmacy.accounts.supplier_ledger.manage', 'pharmacy.accounts.supplier_ledger.export'],
+        reqAny: [
+          'pharmacy.accounts.supplier_ledger.view',
+          'pharmacy.accounts.supplier_ledger.manage',
+          'pharmacy.accounts.supplier_ledger.export',
+        ],
       },
       {
         key: 'pharmacy-supplier-monthly-summary',
         label: 'Monthly Summary',
         to: '/pharmacy/accounts/supplier-monthly-summary',
         icon: CalendarDays,
-        reqAny: ['pharmacy.accounts.supplier_ledger.view', 'pharmacy.accounts.supplier_ledger.manage', 'pharmacy.accounts.supplier_ledger.export'],
+        reqAny: [
+          'pharmacy.accounts.supplier_ledger.view',
+          'pharmacy.accounts.supplier_ledger.manage',
+          'pharmacy.accounts.supplier_ledger.export',
+        ],
       },
       {
         key: 'pharmacy-supplier-payments',
         label: 'Supplier Payments',
         to: '/pharmacy/accounts/supplier-payments',
         icon: Wallet,
-        reqAny: ['pharmacy.accounts.supplier_ledger.view', 'pharmacy.accounts.supplier_ledger.manage', 'pharmacy.accounts.supplier_ledger.export'],
+        reqAny: [
+          'pharmacy.accounts.supplier_ledger.view',
+          'pharmacy.accounts.supplier_ledger.manage',
+          'pharmacy.accounts.supplier_ledger.export',
+        ],
       },
       {
         key: 'pharmacy-supplier-statement',
         label: 'Supplier Statement',
         to: '/pharmacy/accounts/supplier-statement',
         icon: FileText,
-        reqAny: ['pharmacy.accounts.supplier_ledger.view', 'pharmacy.accounts.supplier_ledger.manage', 'pharmacy.accounts.supplier_ledger.export'],
+        reqAny: [
+          'pharmacy.accounts.supplier_ledger.view',
+          'pharmacy.accounts.supplier_ledger.manage',
+          'pharmacy.accounts.supplier_ledger.export',
+        ],
       },
     ],
   },
@@ -324,92 +333,49 @@ const GROUPS = [
     label: 'Laboratory',
     icon: FlaskConical,
     items: [
-      // ----------------------------------------------------
-      // 1. Lab Orders & Reporting
-      // ----------------------------------------------------
       {
         key: 'lab-orders',
         label: 'Orders & Reporting',
         to: '/lab/orders',
-        icon: TestTube2, // Modern order/test icon
-        reqAny: [
-          'lab.orders.view',
-          'lab.orders.create',
-          'orders.lab.view',
-          'orders.lab.create',
-        ],
+        icon: TestTube2,
+        reqAny: ['lab.orders.view', 'lab.orders.create', 'orders.lab.view', 'orders.lab.create'],
       },
-
-
-
-      // ----------------------------------------------------
-      // 3. Lab Service Master
-      // ----------------------------------------------------
       {
         key: 'lab-service-master',
         label: 'Lab Service Master',
         to: '/lab/service/masters',
-        icon: Microscope, // Very intuitive for lab tests
-        reqAny: [
-          'lis.masters.services.view',
-          'lis.masters.services.create',
-          'lis.masters.services.update',
-        ],
+        icon: Microscope,
+        reqAny: ['lis.masters.services.view', 'lis.masters.services.create', 'lis.masters.services.update'],
       },
-
-      // ----------------------------------------------------
-      // 4. Analyzer Device Mapping
-      // ----------------------------------------------------
       {
         key: 'lab-device-mapping',
         label: 'Analyzer Device Mapping',
         to: '/lis/device-mapping',
-        icon: Cpu, // Represents machine / analyzer device
-        reqAny: [
-          'lab.devices.view',
-          'lab.devices.manage',
-        ],
+        icon: Cpu,
+        reqAny: ['lab.devices.view', 'lab.devices.manage'],
       },
-
-      // ----------------------------------------------------
-      // 5. Analyzer Result Staging
-      // ----------------------------------------------------
       {
         key: 'lab-analyzer-staging',
         label: 'Analyzer Staging',
         to: '/lis/analyzer-staging',
-        icon: Settings2, // Represents processing / staging
-        reqAny: [
-          'lab.device_results.review',
-          'lab.devices.view',
-        ],
+        icon: Settings2,
+        reqAny: ['lab.device_results.review', 'lab.devices.view'],
       },
-
-      // ----------------------------------------------------
-      // 6. Analyzer Logs
-      // ----------------------------------------------------
       {
         key: 'lab-device-logs',
         label: 'Analyzer Logs',
         to: '/lis/device-logs',
-        icon: History, // Represents logs/history
-        reqAny: [
-          'lab.device_logs.view',
-          'lab.devices.view',
-        ],
+        icon: History,
+        reqAny: ['lab.device_logs.view', 'lab.devices.view'],
       },
-
-      // ----------------------------------------------------
-      // 7. Lab Master Configurations (Legacy)
-      // ----------------------------------------------------
       {
         key: 'lab-masters',
         label: 'Lab Masters (NABL)',
         to: '/lab/masters',
-        icon: KeyRound, // Perfect for master configuration
+        icon: KeyRound,
         reqAny: ['lab.masters.manage'],
       },
-    ]
+    ],
   },
 
   // Radiology (RIS)
@@ -448,27 +414,40 @@ const GROUPS = [
   {
     key: 'ot',
     label: 'Operation Theatre',
-    icon: Scissors, // main OT section
+    icon: Scissors,
     items: [
       {
         key: 'ot-masters',
         label: 'OT Masters',
         to: '/ot/masters',
-        icon: Settings2, // config / setup
-        reqAny: ['ot.cases.view', 'ot.cases.create', 'ipd.view'],
+        icon: Settings2,
+        reqAny: [
+          'ot.masters.view',
+          'ot.specialities.view',
+          'ot.procedures.view',
+          'ot.masters.create',
+          'ot.masters.update',
+          'ot.masters.delete',
+          'ot.specialities.create',
+          'ot.specialities.update',
+          'ot.specialities.delete',
+          'ot.procedures.create',
+          'ot.procedures.update',
+          'ot.procedures.delete',
+        ],
       },
       {
         key: 'ot-schedule',
         label: 'OT Schedule',
         to: '/ot/schedule',
-        icon: CalendarDays, // day-wise schedule
-        reqAny: ['ot.cases.view', 'ot.cases.create', 'ipd.view'],
+        icon: CalendarDays,
+        reqAny: ['ot.schedule.view'],
       },
       {
         key: 'ot-logs',
         label: 'OT Logs / Register',
         to: '/ot/logs',
-        icon: ClipboardList, // log / register
+        icon: ClipboardList,
         reqAny: ['ot.cases.view', 'ot.cases.create', 'ipd.view'],
       },
     ],
@@ -485,7 +464,7 @@ const GROUPS = [
         label: 'Billing Console',
         to: '/billing',
         icon: LayoutDashboard,
-        reqAny: ['billing.invoices.view', 'billing.invoices.create'],
+        reqAny: ['billing.view', 'billing.create'],
       },
     ],
   },
@@ -515,12 +494,7 @@ const GROUPS = [
         label: 'Permissions (Access Logs)',
         to: '/admin/permissions',
         icon: KeyRound,
-        reqAny: [
-          'permissions.view',
-          'permissions.create',
-          'permissions.update',
-          'permissions.delete',
-        ],
+        reqAny: ['permissions.view', 'permissions.create', 'permissions.update', 'permissions.delete'],
       },
     ],
   },
@@ -531,26 +505,40 @@ export default function Sidebar() {
   const modules = useAuth((s) => s.modules) || {}
   const location = useLocation()
 
-  const {
-    sidebarCollapsed: collapsed,
-    toggleCollapse,
-    sidebarMobileOpen,
-    closeMobile,
-  } = useUI()
-
+  const { sidebarCollapsed: collapsed, toggleCollapse, sidebarMobileOpen, closeMobile } = useUI()
   const { branding } = useBranding() || {}
+
+  // ✅ detect desktop (md and above) so collapse works ONLY on desktop
+  const [isDesktop, setIsDesktop] = useState(() => {
+    if (typeof window === 'undefined') return true
+    return window.matchMedia('(min-width: 768px)').matches
+  })
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+    const mq = window.matchMedia('(min-width: 768px)')
+    const onChange = (e) => setIsDesktop(e.matches)
+    // safari compatibility
+    if (mq.addEventListener) mq.addEventListener('change', onChange)
+    else mq.addListener(onChange)
+    setIsDesktop(mq.matches)
+    return () => {
+      if (mq.removeEventListener) mq.removeEventListener('change', onChange)
+      else mq.removeListener(onChange)
+    }
+  }, [])
+
+  const effectiveCollapsed = !!collapsed && isDesktop // ✅ never collapsed on mobile
 
   const primary = branding?.primary_color || defaultPrimary
   const sidebarBgColor = branding?.sidebar_bg_color || '#ffffff'
-  const sidebarTextColor = branding?.text_color || '#111827'    // ← sidebar text
-  const iconColor = branding?.icon_color || sidebarTextColor    // ← sidebar icon color
+  const sidebarTextColor = branding?.text_color || '#111827'
+  const iconColor = branding?.icon_color || sidebarTextColor
   const iconBgColor = branding?.icon_bg_color || 'rgba(37,99,235,0.08)'
   const activeBg = makeActiveBg(primary)
   const activeBorder = makeActiveBorder(primary)
 
   const orgName = (branding?.org_name || '').trim() || 'NABH HIMS'
-  const orgTagline =
-    (branding?.org_tagline || '').trim() || 'Smart • Secure • NABH-Standard'
+  const orgTagline = (branding?.org_tagline || '').trim() || 'Smart • Secure • NABH-Standard'
 
   const initials = useMemo(() => {
     const n = branding?.org_name?.trim()
@@ -561,35 +549,21 @@ export default function Sidebar() {
     return (parts[0][0] + parts[1][0]).toUpperCase()
   }, [branding?.org_name])
 
-  // Lock scroll when mobile drawer is open
+  // ✅ Mobile scroll fix: lock background scroll WITHOUT position:fixed (prevents inner scroll bug)
   useEffect(() => {
     if (!sidebarMobileOpen) return
-    const scrollY = window.scrollY
-    const prev = {
-      position: document.body.style.position,
-      top: document.body.style.top,
-      width: document.body.style.width,
-      overflow: document.body.style.overflow,
-      ob: document.documentElement.style.overscrollBehavior,
-    }
-    document.body.style.position = 'fixed'
-    document.body.style.top = `-${scrollY}px`
-    document.body.style.width = '100%'
+    const prevOverflow = document.body.style.overflow
+    const prevOb = document.documentElement.style.overscrollBehavior
     document.body.style.overflow = 'hidden'
     document.documentElement.style.overscrollBehavior = 'none'
     return () => {
-      document.body.style.position = prev.position || ''
-      document.body.style.top = prev.top || ''
-      document.body.style.width = prev.width || ''
-      document.body.style.overflow = prev.overflow || ''
-      document.documentElement.style.overscrollBehavior = prev.ob || ''
-      window.scrollTo(0, scrollY)
+      document.body.style.overflow = prevOverflow || ''
+      document.documentElement.style.overscrollBehavior = prevOb || ''
     }
   }, [sidebarMobileOpen])
 
   const admin = !!user?.is_admin
 
-  // Flatten permission codes into a Set
   const grantedSet = useMemo(() => {
     const fromModules = Object.values(modules)
       .flat()
@@ -605,7 +579,6 @@ export default function Sidebar() {
 
   const hasAny = (codes = []) => (admin ? true : codes.some((c) => grantedSet.has(c)))
 
-  // Compute visible groups/items
   const groups = useMemo(() => {
     return GROUPS.map((g) => {
       if (g.flatLink) {
@@ -619,7 +592,8 @@ export default function Sidebar() {
       const visible = items.some((it) => it._visible)
       return { ...g, items, _visible: visible }
     }).filter((g) => g._visible)
-  }, [grantedSet, admin])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [admin, grantedSet])
 
   const isGroupRouteActive = (g) => {
     if (g.flatLink) return location.pathname.startsWith(g.flatLink.to)
@@ -638,21 +612,36 @@ export default function Sidebar() {
 
   const toggleGroup = (key) => setOpen((o) => ({ ...o, [key]: !o[key] }))
 
-  const desktopWidth = collapsed ? 'md:w-16' : 'md:w-64'
+  // Desktop collapsed flyout
+  const [flyoutKey, setFlyoutKey] = useState(null)
+  useEffect(() => {
+    if (!effectiveCollapsed) setFlyoutKey(null)
+  }, [effectiveCollapsed])
+  useEffect(() => {
+    setFlyoutKey(null)
+  }, [location.pathname])
+
+  const desktopWidth = effectiveCollapsed ? 'md:w-16' : 'md:w-64'
 
   return (
     <>
       {/* Mobile overlay */}
       <div
         onClick={closeMobile}
-        className={`fixed inset-0 z-40 bg-black/35 backdrop-blur-sm transition-opacity md:hidden ${sidebarMobileOpen ? 'opacity-100' : 'pointer-events-none opacity-0'
-          }`}
+        className={[
+          'fixed inset-0 z-100 bg-black/35 backdrop-blur-sm transition-opacity md:hidden',
+          sidebarMobileOpen ? 'opacity-100' : 'pointer-events-none opacity-0',
+        ].join(' ')}
       />
 
-      {/* Sidebar */}
+      {/* Desktop collapsed flyout overlay */}
+      {effectiveCollapsed && flyoutKey ? (
+        <div className="fixed inset-0 z-40 hidden md:block" onClick={() => setFlyoutKey(null)} />
+      ) : null}
+
       <aside
         className={[
-          'z-50 border-r transition-all duration-300 ease-out',
+          'z-50 border-r transition-[width,transform] duration-300 ease-out',
           'fixed left-0 top-0 h-[100dvh] w-[86vw] max-w-sm md:w-auto',
           sidebarMobileOpen ? 'translate-x-0' : '-translate-x-full',
           'md:static md:translate-x-0 md:sticky md:top-0 md:h-[100dvh]',
@@ -660,15 +649,22 @@ export default function Sidebar() {
           'grid grid-rows-[auto,1fr,auto] min-h-0',
           'overflow-x-hidden overflow-y-hidden',
         ].join(' ')}
-        style={{
-          backgroundColor: sidebarBgColor,
-          color: sidebarTextColor,
-        }}
+        style={{ backgroundColor: sidebarBgColor, color: sidebarTextColor }}
       >
         {/* Header */}
-        <div className="flex items-center justify-between gap-2 px-3 py-3">
-          <div className="flex items-center gap-2 min-w-0">
-            {branding?.logo_url ? (
+        <div
+          className={
+            effectiveCollapsed
+              ? 'px-2 py-3 flex flex-col items-center gap-2'
+              : 'px-3 py-3 flex items-center justify-between gap-2'
+          }
+        >
+          <div
+            className={
+              effectiveCollapsed ? 'flex flex-col items-center gap-2' : 'flex items-center gap-2 min-w-0'
+            }
+          >
+            {branding?.logo_url && !effectiveCollapsed ? (
               <img
                 src={branding.logo_url}
                 alt="Logo"
@@ -676,27 +672,23 @@ export default function Sidebar() {
               />
             ) : (
               <div
-                className="grid h-8 w-8 place-items-center rounded-xl ring-1"
-                style={{
-                  backgroundColor: iconBgColor,
-                  borderColor: activeBorder,
-                }}
+                className={
+                  effectiveCollapsed
+                    ? 'grid h-9 w-9 place-items-center rounded-2xl ring-1'
+                    : 'grid h-8 w-8 place-items-center rounded-xl ring-1'
+                }
+                style={{ backgroundColor: iconBgColor, borderColor: activeBorder }}
               >
                 <span className="text-xs font-bold" style={{ color: iconColor }}>
                   {initials}
                 </span>
               </div>
             )}
-            {!collapsed && (
+
+            {!effectiveCollapsed && (
               <div className="truncate">
-                <div className="text-xs font-semibold tracking-tight leading-snug">
-                  {orgName}
-                </div>
-                {orgTagline && (
-                  <div className="text-[10px] leading-tight">
-                    {orgTagline}
-                  </div>
-                )}
+                <div className="text-xs font-semibold tracking-tight leading-snug">{orgName}</div>
+                {orgTagline ? <div className="text-[10px] leading-tight">{orgTagline}</div> : null}
               </div>
             )}
           </div>
@@ -704,20 +696,27 @@ export default function Sidebar() {
           {/* Mobile close */}
           <button
             onClick={closeMobile}
-            className="md:hidden inline-flex h-8 w-8 items-center justify-center rounded-xl hover:bg-gray-50 active:scale-95 transition"
+            className="md:hidden inline-flex h-9 w-9 items-center justify-center rounded-2xl hover:bg-gray-50 active:scale-95 transition"
             aria-label="Close sidebar"
           >
             <X className="h-5 w-5" style={{ color: iconColor }} />
           </button>
 
-          {/* Collapse toggle (desktop) */}
+          {/* Desktop collapse toggle */}
           <button
-            onClick={toggleCollapse}
-            className="hidden md:inline-flex h-8 w-8 items-center justify-center rounded-xl hover:bg-gray-50 active:scale-95 transition"
-            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-            title={collapsed ? 'Expand' : 'Collapse'}
+            onClick={() => {
+              setFlyoutKey(null)
+              toggleCollapse()
+            }}
+            className={[
+              'hidden md:inline-flex items-center justify-center',
+              effectiveCollapsed ? 'h-9 w-9 rounded-2xl' : 'h-8 w-8 rounded-xl',
+              'hover:bg-gray-50 active:scale-95 transition',
+            ].join(' ')}
+            aria-label={effectiveCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={effectiveCollapsed ? 'Expand' : 'Collapse'}
           >
-            {collapsed ? (
+            {effectiveCollapsed ? (
               <ChevronRight className="h-5 w-5" style={{ color: iconColor }} />
             ) : (
               <ChevronLeft className="h-5 w-5" style={{ color: iconColor }} />
@@ -725,23 +724,27 @@ export default function Sidebar() {
           </button>
         </div>
 
-        {/* Menu */}
-        <nav className="min-h-0 flex-1 overflow-y-auto no-scrollbar y-fade px-2 pb-4 pt-1 space-y-1 overscroll-contain touch-pan-y">
+        {/* ✅ Menu (scrollable on mobile + desktop) */}
+        <nav
+          className="min-h-0 flex-1 overflow-y-auto no-scrollbar y-fade px-2 pb-4 pt-1 space-y-1 overscroll-contain touch-pan-y"
+          style={{ WebkitOverflowScrolling: 'touch' }}
+        >
           {groups.map((group) => {
             // Flat single link
             if (group.flatLink) {
               const GIcon = group.icon || KeyRound
+              const active = isGroupRouteActive(group)
+
               return (
                 <NavLink
                   key={group.key}
                   to={group.flatLink.to}
                   onClick={closeMobile}
-                  className={({ isActive }) =>
-                    [
-                      'group relative flex h-10 items-center gap-3 rounded-xl px-3 text-sm leading-none transition-colors duration-200 ease-out active:scale-[0.99]',
-                      collapsed ? 'justify-center' : '',
-                    ].join(' ')
-                  }
+                  className={[
+                    'group relative flex h-10 items-center gap-3 rounded-xl px-3 text-sm leading-none',
+                    'transition-colors duration-200 ease-out active:scale-[0.99]',
+                    effectiveCollapsed ? 'justify-center' : '',
+                  ].join(' ')}
                   style={({ isActive }) =>
                     isActive
                       ? {
@@ -749,42 +752,39 @@ export default function Sidebar() {
                         backgroundColor: primary,
                         boxShadow: `0 0 0 1px ${activeBorder}`,
                       }
-                      : {
-                        color: sidebarTextColor,
-                      }
+                      : { color: sidebarTextColor }
                   }
-                  title={collapsed ? group.label : undefined}
+                  title={effectiveCollapsed ? group.label : undefined}
                 >
-                  <GIcon
-                    className="h-5 w-5 shrink-0"
-                    style={{
-                      color: isGroupRouteActive(group) ? '#ffffff' : iconColor,
-                    }}
-                  />
-                  {!collapsed && (
-                    <span className="transition-all duration-300">
-                      {group.label}
-                    </span>
-                  )}
+                  <GIcon className="h-5 w-5 shrink-0" style={{ color: active ? '#ffffff' : iconColor }} />
+                  {!effectiveCollapsed && <span>{group.label}</span>}
                 </NavLink>
               )
             }
 
-            // Dropdown group
             const GIcon = group.icon || KeyRound
-            const isOpen = !!open[group.key] && !collapsed
             const active = isGroupRouteActive(group)
+            const isOpen = !!open[group.key] && !effectiveCollapsed
+            const isFlyoutOpen = effectiveCollapsed && flyoutKey === group.key
 
             return (
-              <div key={group.key} className="rounded-xl">
+              <div key={group.key} className="relative rounded-xl">
                 <button
                   type="button"
-                  onClick={() => (collapsed ? null : toggleGroup(group.key))}
+                  onClick={() => {
+                    if (effectiveCollapsed) {
+                      setFlyoutKey((k) => (k === group.key ? null : group.key))
+                      return
+                    }
+                    toggleGroup(group.key)
+                  }}
                   className={[
-                    'w-full flex items-center gap-3 rounded-xl px-3 h-10 text-sm transition-colors duration-200 ease-out',
-                    collapsed ? 'justify-center' : 'justify-between',
+                    'w-full flex items-center gap-3 rounded-xl px-3 h-10 text-sm',
+                    'transition-colors duration-200 ease-out active:scale-[0.99]',
+                    effectiveCollapsed ? 'justify-center' : 'justify-between',
                   ].join(' ')}
-                  title={collapsed ? group.label : undefined}
+                  title={effectiveCollapsed ? group.label : undefined}
+                  aria-expanded={effectiveCollapsed ? isFlyoutOpen : isOpen}
                   style={{
                     color: active ? primary : sidebarTextColor,
                     backgroundColor: active ? activeBg : 'transparent',
@@ -792,21 +792,22 @@ export default function Sidebar() {
                   }}
                 >
                   <span className="flex items-center gap-3">
-                    <GIcon
-                      className="h-5 w-5 shrink-0"
-                      style={{ color: iconColor }}
-                    />
-                    {!collapsed && <span className="font-medium">{group.label}</span>}
+                    <GIcon className="h-5 w-5 shrink-0" style={{ color: iconColor }} />
+                    {!effectiveCollapsed && <span className="font-medium">{group.label}</span>}
                   </span>
-                  {!collapsed && (
+
+                  {!effectiveCollapsed && (
                     <ChevronDown
-                      className="h-4 w-4 transition-transform"
+                      className={[
+                        'h-4 w-4 transition-transform duration-200',
+                        isOpen ? 'rotate-180' : 'rotate-0',
+                      ].join(' ')}
                       style={{ color: iconColor }}
                     />
                   )}
                 </button>
 
-                {/* Items */}
+                {/* Expanded items */}
                 {isOpen && (
                   <div className="mt-1 space-y-1 pl-9">
                     {group.items
@@ -818,50 +819,88 @@ export default function Sidebar() {
                             key={it.key}
                             to={it.to}
                             onClick={closeMobile}
-                            className={() =>
-                              'group relative flex h-9 items-center gap-2 rounded-lg px-2 text-sm leading-none transition-colors duration-200 ease-out active:scale-[0.99]'
-                            }
+                            className="group relative flex h-9 items-center gap-2 rounded-lg px-2 text-sm leading-none transition-colors duration-200 ease-out active:scale-[0.99]"
                             style={({ isActive }) =>
                               isActive
-                                ? {
-                                  color: primary,
-                                  backgroundColor: activeBg,
-                                  boxShadow: `0 0 0 1px ${activeBorder}`,
-                                }
+                                ? { color: primary, backgroundColor: activeBg, boxShadow: `0 0 0 1px ${activeBorder}` }
                                 : { color: sidebarTextColor }
                             }
                           >
-                            <Ico
-                              className="h-[18px] w-[18px] shrink-0"
-                              style={{ color: iconColor }}
-                            />
+                            <Ico className="h-[18px] w-[18px] shrink-0" style={{ color: iconColor }} />
                             <span>{it.label}</span>
                           </NavLink>
                         )
                       })}
                   </div>
                 )}
+
+                {/* Desktop flyout */}
+                {isFlyoutOpen ? (
+                  <div className="absolute left-full top-0 ml-2 z-[60] hidden md:block w-72 rounded-2xl border border-slate-200 bg-white shadow-2xl overflow-hidden">
+                    <div className="px-3 py-2 border-b bg-slate-50">
+                      <div className="text-xs font-black text-slate-900">{group.label}</div>
+                      <div className="text-[10px] text-slate-500">Select a page</div>
+                    </div>
+
+                    <div className="p-2 space-y-1 max-h-[70vh] overflow-y-auto no-scrollbar">
+                      {group.items
+                        .filter((it) => it._visible)
+                        .map((it) => {
+                          const Ico = it.icon || KeyRound
+                          return (
+                            <NavLink
+                              key={it.key}
+                              to={it.to}
+                              onClick={() => {
+                                setFlyoutKey(null)
+                                closeMobile()
+                              }}
+                              className="flex items-center gap-2 rounded-xl px-2.5 py-2 text-sm hover:bg-slate-50 transition"
+                              style={({ isActive }) =>
+                                isActive
+                                  ? { color: primary, backgroundColor: activeBg, boxShadow: `0 0 0 1px ${activeBorder}` }
+                                  : { color: '#0f172a' }
+                              }
+                            >
+                              <span className="grid h-8 w-8 place-items-center rounded-xl border border-slate-200 bg-white">
+                                <Ico className="h-[18px] w-[18px]" style={{ color: iconColor }} />
+                              </span>
+                              <div className="min-w-0">
+                                <div className="text-[13px] font-semibold truncate">{it.label}</div>
+                                <div className="text-[10px] text-slate-500 truncate">{it.to}</div>
+                              </div>
+                            </NavLink>
+                          )
+                        })}
+                    </div>
+
+                    <div className="px-3 py-2 border-t bg-white flex justify-end">
+                      <button
+                        onClick={() => setFlyoutKey(null)}
+                        className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-slate-50"
+                      >
+                        Close
+                      </button>
+                    </div>
+                  </div>
+                ) : null}
               </div>
             )
           })}
 
           {groups.length === 0 && (
-            <div className="px-3 py-2 text-xs text-gray-500">
-              No modules granted. Contact administrator.
-            </div>
+            <div className="px-3 py-2 text-xs text-gray-500">No modules granted. Contact administrator.</div>
           )}
         </nav>
 
         {/* Footer */}
         <div className="px-3 pb-3">
-          {!collapsed ? (
+          {!effectiveCollapsed ? (
             <div className="rounded-xl border border-gray-100 bg-gray-50 p-3 text-[11px] text-gray-500">
               Tip: Click the chevron to collapse the sidebar.
             </div>
           ) : (
-            <div className="grid place-items-center text-[10px] text-gray-400">
-              v1.0
-            </div>
+            <div className="grid place-items-center text-[10px] text-gray-400">v1.0</div>
           )}
         </div>
       </aside>

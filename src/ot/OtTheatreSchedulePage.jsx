@@ -26,7 +26,7 @@ import {
 import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { motion, AnimatePresence } from 'framer-motion'
-
+import { useAuth } from '../store/authStore'
 // 🔁 Reusable pickers
 import PatientPicker from '../components/pickers/PatientPicker'
 import DoctorPicker from '../components/pickers/DoctorPicker'
@@ -377,8 +377,8 @@ function ScheduleCards({
                                                 type="button"
                                                 onClick={() => onOpenCase(s)}
                                                 className={`inline-flex items-center justify-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ${s.case_id
-                                                        ? 'border-slate-200 bg-white text-slate-900 hover:border-sky-400 hover:text-sky-800'
-                                                        : 'border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700'
+                                                    ? 'border-slate-200 bg-white text-slate-900 hover:border-sky-400 hover:text-sky-800'
+                                                    : 'border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700'
                                                     }`}
                                             >
                                                 <Activity className="h-4 w-4" />
@@ -1032,11 +1032,31 @@ function ProcedurePicker({ primaryId, additionalIds, onChange }) {
 // ---------------------------------------------------------------------
 // Page component (bed-based OT scheduler) – card layout
 // ---------------------------------------------------------------------
+
 export default function OtTheatreSchedulePage() {
-    const canViewSchedule = useCan('ot.schedule.view')
-    const canCreateSchedule = useCan('ot.schedule.create')
-    const canUpdateSchedule = useCan('ot.schedule.update')
-    const canCloseCase = useCan('ot.cases.close') || useCan('ot.cases.update')
+    const { user, permissions } = useAuth()
+
+    // 🔍 DEBUG – see what this route actually gets
+    console.log('OT Schedule page user=', user?.full_name, 'perms=', permissions)
+
+    // ⛔ TEMP: allow viewing for anyone who can reach this page
+    // (we keep permission checks only for actions below)
+    const canViewSchedule = true
+
+    // 🔐 CREATE / UPDATE / CLOSE still use perms
+    const canCreateSchedule =
+        useCan('ot.schedule.create') ||
+        useCan('ot.schedules.create') ||
+        useCan('ot.cases.create') ||
+        useCan('ipd.view')
+
+    const canUpdateSchedule =
+        useCan('ot.schedule.update') ||
+        useCan('ot.schedules.update') ||
+        useCan('ot.cases.update')
+
+    const canCloseCase =
+        useCan('ot.cases.close') || useCan('ot.cases.update')
 
     const [date, setDate] = useState(formatDateInput(new Date()))
     const [selectedBedId, setSelectedBedId] = useState(null)
@@ -1134,21 +1154,13 @@ export default function OtTheatreSchedulePage() {
     }
 
     useEffect(() => {
-        if (canViewSchedule) {
-            loadSchedule()
-        }
+        // now it will always run, since canViewSchedule=true
+        loadSchedule()
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [date, selectedBedId, canViewSchedule])
+    }, [date, selectedBedId])
 
-    if (!canViewSchedule) {
-        return (
-            <div className="p-4">
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-                    You do not have permission to view OT schedules.
-                </div>
-            </div>
-        )
-    }
+    // ❌ REMOVE this block completely:
+    // if (!canViewSchedule) { ... }
 
     return (
         <>
@@ -1238,3 +1250,4 @@ export default function OtTheatreSchedulePage() {
         </>
     )
 }
+

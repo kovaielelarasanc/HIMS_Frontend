@@ -1,16 +1,15 @@
-// frontend/src/opd/Triage.jsx
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { fetchQueue, recordVitals } from '../api/opd'
+import { motion, AnimatePresence } from 'framer-motion'
+import {
+    fetchQueue,
+    recordVitals,
+    fetchLatestVitals,
+    fetchVitalsHistory,
+} from '../api/opd'
 import DoctorPicker from './components/DoctorPicker'
 
-import {
-    Card,
-    CardHeader,
-    CardTitle,
-    CardDescription,
-    CardContent,
-} from '@/components/ui/card'
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -24,33 +23,290 @@ import {
     Stethoscope,
     HeartPulse,
     Thermometer,
-    CalendarDays,
     User2,
     Loader2,
+    Search,
+    RefreshCcw,
+    CheckCircle2,
+    AlertTriangle,
+    ShieldAlert,
+    History,
+    Sparkles,
+    X,
+    Save,
+    ArrowLeft,
+    TrendingUp,
+    TrendingDown,
+    Minus,
 } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
+
+/* ----------------------------- Helpers ----------------------------- */
 
 const todayStr = () => new Date().toISOString().slice(0, 10)
+
+const resetFormObj = {
+    height_cm: '',
+    weight_kg: '',
+    temp_c: '',
+    pulse: '',
+    resp_rate: '',
+    spo2: '',
+    bp_sys: '',
+    bp_dia: '',
+    notes: '',
+}
+
+const toStr = (v) => (v === null || v === undefined ? '' : String(v))
+const num = (v) => {
+    const n = Number(v)
+    return Number.isFinite(n) ? n : null
+}
+
+const niceDT = (iso) => {
+    if (!iso) return ''
+    const d = new Date(iso)
+    if (Number.isNaN(d.getTime())) return iso
+    return d.toLocaleString()
+}
+
+function cx(...xs) {
+    return xs.filter(Boolean).join(' ')
+}
+
+function computeBMI(heightCm, weightKg) {
+    const h = num(heightCm)
+    const w = num(weightKg)
+    if (!h || !w || h <= 0 || w <= 0) return null
+    const m = h / 100
+    const bmi = w / (m * m)
+    if (!Number.isFinite(bmi)) return null
+    return Math.round(bmi * 10) / 10
+}
+
+function bmiLabel(bmi) {
+    if (bmi === null) return null
+    if (bmi < 18.5) return { label: 'Underweight', tone: 'warning' }
+    if (bmi < 25) return { label: 'Normal', tone: 'ok' }
+    if (bmi < 30) return { label: 'Overweight', tone: 'warning' }
+    return { label: 'Obese', tone: 'critical' }
+}
+
+/** UI-only heuristic badge (not clinical advice). */
+function vitalsSeverity(v) {
+    let level = 0
+    const reasons = []
+
+    const t = num(v.temp_c)
+    const p = num(v.pulse)
+    const rr = num(v.resp_rate)
+    const s = num(v.spo2)
+    const sbp = num(v.bp_sys)
+    const dbp = num(v.bp_dia)
+
+    if (s !== null) {
+        if (s < 90) { level = Math.max(level, 2); reasons.push('Low SpO₂ (<90)') }
+        else if (s < 94) { level = Math.max(level, 1); reasons.push('Borderline SpO₂ (<94)') }
+    }
+
+    if (t !== null) {
+        if (t >= 40 || t < 34) { level = Math.max(level, 2); reasons.push('Temp critical') }
+        else if (t >= 39 || t < 36) { level = Math.max(level, 1); reasons.push('Temp abnormal') }
+    }
+
+    if (p !== null) {
+        if (p > 130 || p < 40) { level = Math.max(level, 2); reasons.push('Pulse critical') }
+        else if (p > 110 || p < 50) { level = Math.max(level, 1); reasons.push('Pulse abnormal') }
+    }
+
+    if (rr !== null) {
+        if (rr > 30 || rr < 8) { level = Math.max(level, 2); reasons.push('Resp rate critical') }
+        else if (rr > 20 || rr < 12) { level = Math.max(level, 1); reasons.push('Resp rate abnormal') }
+    }
+
+    if (sbp !== null) {
+        if (sbp < 90) { level = Math.max(level, 2); reasons.push('Low systolic BP') }
+        else if (sbp < 100) { level = Math.max(level, 1); reasons.push('Borderline systolic BP') }
+        else if (sbp >= 180) { level = Math.max(level, 2); reasons.push('Very high systolic BP') }
+        else if (sbp >= 140) { level = Math.max(level, 1); reasons.push('High systolic BP') }
+    }
+    if (dbp !== null) {
+        if (dbp >= 120) { level = Math.max(level, 2); reasons.push('Very high diastolic BP') }
+        else if (dbp >= 90) { level = Math.max(level, 1); reasons.push('High diastolic BP') }
+    }
+
+    const label = level === 2 ? 'Critical' : level === 1 ? 'Warning' : 'Normal'
+    return { level, label, reasons }
+}
+
+/* ----------------------------- UI Tokens ----------------------------- */
+
+const UI = {
+    pageBg: 'bg-[radial-gradient(circle_at_top,_rgba(13,148,136,0.10),_transparent_55%)]',
+    glass:
+        'rounded-3xl border border-black/10 bg-white/75 backdrop-blur-xl shadow-[0_12px_35px_rgba(2,6,23,0.10)]',
+    glassSoft:
+        'rounded-3xl border border-black/10 bg-white/70 backdrop-blur-xl shadow-[0_6px_22px_rgba(2,6,23,0.08)]',
+    chip:
+        'inline-flex items-center rounded-full border border-black/10 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700',
+    input:
+        'w-full rounded-2xl border border-black/10 bg-white/85 px-3 py-2 text-[12px] font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-500',
+}
+
+/* ----------------------------- Sparkline + Trends ----------------------------- */
+
+function safeSeries(historyAsc, pick) {
+    const out = []
+    for (const h of historyAsc || []) {
+        const v = pick(h)
+        const n = num(v)
+        out.push(n)
+    }
+    return out
+}
+
+function trendInfo(series) {
+    const clean = (series || []).filter((x) => typeof x === 'number' && Number.isFinite(x))
+    if (clean.length === 0) return { current: null, prev: null, delta: null, dir: 'flat' }
+    const current = clean[clean.length - 1]
+    const prev = clean.length >= 2 ? clean[clean.length - 2] : null
+    const delta = prev === null ? null : (current - prev)
+    const dir = delta === null ? 'flat' : delta > 0 ? 'up' : delta < 0 ? 'down' : 'flat'
+    return { current, prev, delta, dir }
+}
+
+function formatDelta(delta, digits = 0) {
+    if (delta === null || !Number.isFinite(delta)) return '—'
+    const sign = delta > 0 ? '+' : delta < 0 ? '−' : ''
+    const abs = Math.abs(delta)
+    const val = digits > 0 ? abs.toFixed(digits) : String(Math.round(abs))
+    return `${sign}${val}`
+}
+
+function Sparkline({ series, series2, height = 28 }) {
+    const w = 120
+    const h = height
+    const pad = 3
+
+    const s1 = (series || []).filter((x) => typeof x === 'number' && Number.isFinite(x))
+    const s2 = (series2 || []).filter((x) => typeof x === 'number' && Number.isFinite(x))
+
+    const all = [...s1, ...s2]
+    if (all.length < 2) {
+        return (
+            <div className="h-[28px] w-[120px] rounded-2xl border border-black/10 bg-black/[0.02] grid place-items-center">
+                <Minus className="h-4 w-4 text-slate-400" />
+            </div>
+        )
+    }
+
+    const min = Math.min(...all)
+    const max = Math.max(...all)
+    const span = max - min || 1
+
+    const buildPath = (arr) => {
+        if (!arr || arr.length < 2) return ''
+        const n = arr.length
+        const step = (w - pad * 2) / (n - 1)
+        return arr
+            .map((v, i) => {
+                const x = pad + i * step
+                const y = pad + (h - pad * 2) * (1 - (v - min) / span)
+                return `${i === 0 ? 'M' : 'L'} ${x.toFixed(2)} ${y.toFixed(2)}`
+            })
+            .join(' ')
+    }
+
+    const p1 = buildPath(s1)
+    const p2 = buildPath(s2)
+
+    return (
+        <svg
+            width={w}
+            height={h}
+            viewBox={`0 0 ${w} ${h}`}
+            className="rounded-2xl border border-black/10 bg-white/85"
+            aria-hidden="true"
+        >
+            {/* subtle baseline */}
+            <path d={`M ${pad} ${h - pad} L ${w - pad} ${h - pad}`} stroke="currentColor" opacity="0.10" strokeWidth="1" />
+            {/* line 2 (e.g., BP dia) */}
+            {p2 ? <path d={p2} fill="none" stroke="currentColor" opacity="0.35" strokeWidth="2" strokeLinecap="round" /> : null}
+            {/* line 1 */}
+            {p1 ? <path d={p1} fill="none" stroke="currentColor" opacity="0.75" strokeWidth="2.2" strokeLinecap="round" /> : null}
+        </svg>
+    )
+}
+
+function TrendChip({ dir, deltaText }) {
+    const Icon = dir === 'up' ? TrendingUp : dir === 'down' ? TrendingDown : Minus
+    const cls =
+        dir === 'up'
+            ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+            : dir === 'down'
+                ? 'border-amber-200 bg-amber-50 text-amber-800'
+                : 'border-black/10 bg-black/[0.02] text-slate-700'
+
+    return (
+        <span className={cx('inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold', cls)}>
+            <Icon className="h-4 w-4" />
+            {deltaText}
+        </span>
+    )
+}
+
+function TrendTile({ title, value, unit, dir, deltaText, children }) {
+    return (
+        <div className="rounded-3xl border border-black/10 bg-white/75 backdrop-blur px-4 py-3 shadow-[0_10px_24px_rgba(2,6,23,0.08)]">
+            <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        {title}
+                    </div>
+                    <div className="mt-1 flex items-end gap-2">
+                        <div className="text-[20px] font-semibold tracking-tight text-slate-900 tabular-nums">
+                            {value ?? '—'}
+                        </div>
+                        <div className="text-[12px] text-slate-500 pb-0.5">{unit}</div>
+                    </div>
+                    <div className="mt-2">
+                        <TrendChip dir={dir} deltaText={deltaText} />
+                    </div>
+                </div>
+
+                <div className="text-slate-900">{children}</div>
+            </div>
+        </div>
+    )
+}
+
+/* ----------------------------- Component ----------------------------- */
 
 export default function Triage() {
     const [doctorId, setDoctorId] = useState(null)
     const [date, setDate] = useState(todayStr())
+
     const [rows, setRows] = useState([])
     const [loading, setLoading] = useState(false)
+    const [q, setQ] = useState('')
 
+    // modal state
+    const [open, setOpen] = useState(false)
     const [target, setTarget] = useState(null)
-    const [form, setForm] = useState({
-        height_cm: '',
-        weight_kg: '',
-        temp_c: '',
-        pulse: '',
-        resp_rate: '',
-        spo2: '',
-        bp_sys: '',
-        bp_dia: '',
-        notes: '',
-    })
+
+    // vitals form
+    const [form, setForm] = useState({ ...resetFormObj })
     const [saving, setSaving] = useState(false)
+    const vitalsFormRef = useRef(null)
+
+    // prefill/meta/history
+    const [vitalsLoading, setVitalsLoading] = useState(false)
+    const [vitalsMeta, setVitalsMeta] = useState(null) // { id, created_at }
+    const [prefilled, setPrefilled] = useState(false)
+
+    const [historyLoading, setHistoryLoading] = useState(false)
+    const [history, setHistory] = useState([]) // will store more points for charts (e.g., 14)
+
+    const contentTopRef = useRef(null)
 
     const load = async () => {
         if (!doctorId || !date) {
@@ -63,7 +319,7 @@ export default function Triage() {
                 doctor_user_id: Number(doctorId),
                 for_date: date,
             })
-            setRows(data || [])
+            setRows(Array.isArray(data) ? data : [])
         } catch {
             setRows([])
         } finally {
@@ -76,39 +332,124 @@ export default function Triage() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [doctorId, date])
 
-    const handleDoctorChange = (id) => {
-        setDoctorId(id)
+    const filteredRows = useMemo(() => {
+        const s = (q || '').trim().toLowerCase()
+        if (!s) return rows
+        return rows.filter((r) => {
+            const name = (r?.patient?.name || '').toLowerCase()
+            const uhid = (r?.patient?.uhid || '').toLowerCase()
+            const phone = (r?.patient?.phone || '').toLowerCase()
+            return name.includes(s) || uhid.includes(s) || phone.includes(s)
+        })
+    }, [rows, q])
+
+    const total = rows.length
+    const completed = rows.filter((r) => r?.has_vitals).length
+    const pending = total - completed
+
+    const onField = (name, val) => setForm((f) => ({ ...f, [name]: val }))
+
+    const applyVitalsToForm = (data) => {
+        setForm({
+            height_cm: toStr(data?.height_cm),
+            weight_kg: toStr(data?.weight_kg),
+            temp_c: toStr(data?.temp_c),
+            pulse: toStr(data?.pulse),
+            resp_rate: toStr(data?.resp_rate),
+            spo2: toStr(data?.spo2),
+            bp_sys: toStr(data?.bp_sys),
+            bp_dia: toStr(data?.bp_dia),
+            notes: data?.notes ?? '',
+        })
     }
 
-    const resetForm = () => ({
-        height_cm: '',
-        weight_kg: '',
-        temp_c: '',
-        pulse: '',
-        resp_rate: '',
-        spo2: '',
-        bp_sys: '',
-        bp_dia: '',
-        notes: '',
-    })
+    // Fetch more points for charts, but we will still display last 3 entries list.
+    const loadHistory = async (row) => {
+        try {
+            setHistoryLoading(true)
+            const { data } = await fetchVitalsHistory({
+                appointment_id: row.appointment_id,
+                for_date: date,
+                limit: 14,
+            })
+            setHistory(Array.isArray(data) ? data : [])
+        } catch {
+            setHistory([])
+        } finally {
+            setHistoryLoading(false)
+        }
+    }
 
-    const openVitals = (row) => {
+    const openVitals = async (row) => {
         setTarget(row)
-        setForm(resetForm())
-        // Smooth scroll to the vitals form on small screens
-        setTimeout(() => {
-            const el = document.getElementById('triage-vitals-form')
-            if (el) {
-                el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        setOpen(true)
+
+        setForm({ ...resetFormObj })
+        setVitalsMeta(null)
+        setPrefilled(false)
+        setHistory([])
+
+        requestAnimationFrame(() => {
+            contentTopRef.current?.scrollIntoView?.({ behavior: 'instant', block: 'start' })
+        })
+
+        loadHistory(row)
+
+        if (row?.has_vitals) {
+            try {
+                setVitalsLoading(true)
+                const { data } = await fetchLatestVitals({
+                    appointment_id: row.appointment_id,
+                    for_date: date,
+                })
+                applyVitalsToForm(data)
+                setVitalsMeta({ id: data?.id, created_at: data?.created_at })
+                setPrefilled(true)
+            } catch {
+                setVitalsMeta(null)
+                setPrefilled(false)
+            } finally {
+                setVitalsLoading(false)
             }
-        }, 80)
+        }
+    }
+
+    const closeModal = () => {
+        setOpen(false)
+        setTarget(null)
+        setForm({ ...resetFormObj })
+        setVitalsMeta(null)
+        setPrefilled(false)
+        setHistory([])
+    }
+
+    const refreshPrefill = async () => {
+        if (!target) return
+        try {
+            setVitalsLoading(true)
+            const { data } = await fetchLatestVitals({
+                appointment_id: target.appointment_id,
+                for_date: date,
+            })
+            applyVitalsToForm(data)
+            setVitalsMeta({ id: data?.id, created_at: data?.created_at })
+            setPrefilled(true)
+            toast.success('Latest vitals loaded')
+            loadHistory(target)
+        } catch {
+            toast.error('No existing vitals found')
+        } finally {
+            setVitalsLoading(false)
+        }
     }
 
     const saveVitals = async (e) => {
         e.preventDefault()
         if (!target) return
+
         try {
             setSaving(true)
+
             const payload = {
                 appointment_id: target.appointment_id,
                 height_cm: form.height_cm ? Number(form.height_cm) : undefined,
@@ -121,449 +462,829 @@ export default function Triage() {
                 bp_dia: form.bp_dia ? Number(form.bp_dia) : undefined,
                 notes: form.notes || undefined,
             }
+
             await recordVitals(payload)
-            toast.success('Vitals recorded')
-            setTarget(null)
+
+            toast.success(target?.has_vitals ? 'Vitals updated' : 'Vitals recorded')
+            closeModal()
             await load()
         } catch {
-            // errors handled globally
+            // global handler
         } finally {
             setSaving(false)
         }
     }
 
-    const onField = (name, val) =>
-        setForm((f) => ({
-            ...f,
-            [name]: val,
-        }))
+    /* ----------------------------- Modal Computeds ----------------------------- */
 
-    const total = rows.length
-    const completed = rows.filter((r) => r.has_vitals).length
-    const pending = total - completed
+    const severity = useMemo(() => vitalsSeverity(form), [form])
+    const bmi = useMemo(() => computeBMI(form.height_cm, form.weight_kg), [form.height_cm, form.weight_kg])
+    const bmiInfo = useMemo(() => bmiLabel(bmi), [bmi])
+
+    const severityUI = useMemo(() => {
+        if (severity.level === 2) {
+            return {
+                icon: ShieldAlert,
+                pill: 'border-rose-200 bg-rose-50 text-rose-700',
+                dot: 'bg-rose-500',
+            }
+        }
+        if (severity.level === 1) {
+            return {
+                icon: AlertTriangle,
+                pill: 'border-amber-200 bg-amber-50 text-amber-800',
+                dot: 'bg-amber-500',
+            }
+        }
+        return {
+            icon: CheckCircle2,
+            pill: 'border-emerald-200 bg-emerald-50 text-emerald-700',
+            dot: 'bg-emerald-500',
+        }
+    }, [severity.level])
+
+    const SeverityIcon = severityUI.icon
+    const busy = saving || loading || vitalsLoading || historyLoading
+
+    // Prepare chart series from history (sorted ASC by time for sparkline)
+    const historyAsc = useMemo(() => {
+        const arr = Array.isArray(history) ? [...history] : []
+        arr.sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime())
+        return arr
+    }, [history])
+
+    const pulseSeries = useMemo(() => safeSeries(historyAsc, (h) => h.pulse), [historyAsc])
+    const spo2Series = useMemo(() => safeSeries(historyAsc, (h) => h.spo2), [historyAsc])
+    const tempSeries = useMemo(() => safeSeries(historyAsc, (h) => h.temp_c), [historyAsc])
+    const bpSysSeries = useMemo(() => safeSeries(historyAsc, (h) => h.bp_sys), [historyAsc])
+    const bpDiaSeries = useMemo(() => safeSeries(historyAsc, (h) => h.bp_dia), [historyAsc])
+
+    const pulseT = useMemo(() => trendInfo(pulseSeries), [pulseSeries])
+    const spo2T = useMemo(() => trendInfo(spo2Series), [spo2Series])
+    const tempT = useMemo(() => trendInfo(tempSeries), [tempSeries])
+    const bpSysT = useMemo(() => trendInfo(bpSysSeries), [bpSysSeries])
+    const bpDiaT = useMemo(() => trendInfo(bpDiaSeries), [bpDiaSeries])
+
+    const last3Entries = useMemo(() => {
+        const desc = [...historyAsc].reverse()
+        return desc.slice(0, 3)
+    }, [historyAsc])
 
     return (
-        <div className="h-full w-full bg-slate-50">
-            <div className="mx-auto flex max-w-6xl flex-col gap-4 px-3 py-4 sm:px-4 lg:px-6 lg:py-6">
-                {/* Page header */}
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                    <div className="space-y-1">
-                        <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1 text-xs text-slate-500 shadow-sm">
-                            <span className="h-2 w-2 rounded-full bg-emerald-500 animate-pulse" />
-                            <span>Live OPD · Triage &amp; Vitals</span>
-                        </div>
-                        <h1 className="text-xl font-semibold text-slate-900 sm:text-2xl">
-                            OPD Triage (Vitals)
-                        </h1>
-                        <p className="text-xs text-slate-500 sm:text-sm">
-                            Nursing staff can quickly capture vitals for patients waiting in the doctor&apos;s queue.
-                        </p>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+        <div className={cx('min-h-[calc(100vh-4rem)] w-full bg-slate-50', UI.pageBg)}>
+            <div className="px-4 py-5 md:px-8 md:py-8">
+                <div className="space-y-4 md:space-y-5">
+                    {/* Top meta row */}
+                    <div className="flex flex-wrap items-center justify-between gap-3">
                         <Badge
                             variant="outline"
-                            className="flex items-center gap-1 rounded-full border-slate-200 bg-white px-3 py-1 text-[11px] font-normal text-slate-700 shadow-sm"
+                            className="rounded-full border-black/10 bg-white/80 px-3 py-1 text-[11px] font-semibold tracking-wide text-slate-700"
                         >
-                            <CalendarDays className="h-3 w-3" />
-                            {date}
+                            OPD · Triage & Vitals
                         </Badge>
-                        {doctorId && (
-                            <Badge
-                                variant="outline"
-                                className="flex items-center gap-1 rounded-full border-slate-200 bg-white px-3 py-1 text-[11px] font-normal text-slate-700 shadow-sm"
-                            >
-                                <Stethoscope className="h-3 w-3" />
-                                Doctor ID {doctorId}
-                            </Badge>
-                        )}
+
+                        <div className="flex items-center gap-2 text-[11px] text-slate-500">
+                            <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-sm animate-pulse" />
+                            <span>Live queue</span>
+                        </div>
                     </div>
-                </div>
 
-                {/* Summary tiles */}
-                <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-                    <Card className="rounded-2xl border-slate-200 shadow-sm">
-                        <CardContent className="flex items-center justify-between gap-3 py-3">
-                            <div className="space-y-1">
-                                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
-                                    Queue size
-                                </p>
-                                <p className="text-xl font-semibold text-slate-900">
-                                    {total}
-                                </p>
-                            </div>
-                            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2">
-                                <User2 className="h-5 w-5 text-slate-700" />
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    <Card className="rounded-2xl border-slate-200 shadow-sm">
-                        <CardContent className="flex items-center justify-between gap-3 py-3">
-                            <div className="space-y-1">
-                                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
-                                    Vitals completed
-                                </p>
-                                <p className="text-xl font-semibold text-slate-900">
-                                    {completed}
-                                </p>
-                            </div>
-                            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2">
-                                <Activity className="h-5 w-5 text-slate-700" />
-                            </div>
-                        </CardContent>
-                    </Card>
-
-                    <Card className="rounded-2xl border-slate-200 shadow-sm">
-                        <CardContent className="flex items-center justify-between gap-3 py-3">
-                            <div className="space-y-1">
-                                <p className="text-xs font-medium text-slate-500 uppercase tracking-wide">
-                                    Pending vitals
-                                </p>
-                                <p className="text-xl font-semibold text-slate-900">
-                                    {pending}
-                                </p>
-                            </div>
-                            <div className="rounded-2xl border border-slate-200 bg-slate-50 p-2">
-                                <HeartPulse className="h-5 w-5 text-slate-700" />
-                            </div>
-                        </CardContent>
-                    </Card>
-                </div>
-
-                {/* Main layout */}
-                <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr),minmax(0,1.6fr)] lg:gap-6">
-                    {/* Left: Doctor/date & queue */}
-                    <motion.div
-                        layout
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.18 }}
-                    >
-                        <Card className="rounded-3xl border-slate-200 bg-white shadow-sm">
-                            <CardHeader className="pb-3">
-                                <CardTitle className="flex items-center gap-2 text-base font-semibold text-slate-900 sm:text-lg">
-                                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-2xl bg-slate-900 text-xs text-white">
-                                        1
-                                    </span>
-                                    Select doctor &amp; view queue
-                                </CardTitle>
-                                <CardDescription className="text-xs text-slate-500 sm:text-sm">
-                                    Pick the doctor and date to load today&apos;s OPD queue for triage.
-                                </CardDescription>
-                            </CardHeader>
-
-                            <CardContent className="space-y-4">
-                                <div className="grid items-end gap-3 md:grid-cols-[2fr,1.3fr]">
-                                    <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-3 sm:p-4">
-                                        <div className="flex items-center gap-2 pb-2">
-                                            <span className="flex h-6 w-6 items-center justify-center rounded-full bg-white text-[11px] font-semibold text-slate-900 shadow-sm">
-                                                <Stethoscope className="h-3 w-3" />
-                                            </span>
-                                            <span className="text-xs font-medium uppercase tracking-wide text-slate-500">
-                                                Doctor
-                                            </span>
-                                        </div>
-                                        <DoctorPicker value={doctorId} onChange={handleDoctorChange} />
-                                    </div>
-
-                                    <div className="space-y-1.5">
-                                        <label className="text-xs font-medium text-slate-600">
-                                            Date
-                                        </label>
-                                        <Input
-                                            type="date"
-                                            value={date}
-                                            onChange={(e) => setDate(e.target.value)}
-                                            className="h-9 rounded-2xl border-slate-200 text-sm"
-                                        />
-                                    </div>
-                                </div>
-
-                                <Separator />
-
-                                <div className="space-y-2">
-                                    <div className="flex items-center justify-between text-[11px] text-slate-400">
-                                        <span>
-                                            {doctorId ? 'Queue for selected doctor' : 'Select a doctor to load queue'}
+                    {/* Header */}
+                    <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}>
+                        <div className={cx(UI.glass, 'relative overflow-hidden')}>
+                            <div className="absolute inset-0 opacity-60 bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.16),_transparent_60%)]" />
+                            <div className="relative px-5 py-5 md:px-7 md:py-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+                                <div className="min-w-0">
+                                    <div className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-1 text-[11px] font-semibold text-slate-700">
+                                        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-black/[0.04] border border-black/10">
+                                            <Sparkles className="h-3.5 w-3.5 text-slate-700" />
                                         </span>
-                                        <span>{total} patient(s)</span>
+                                        Apple-glass workflow · Single column
                                     </div>
 
-                                    {loading ? (
-                                        <div className="space-y-2 mt-1">
-                                            {Array.from({ length: 4 }).map((_, i) => (
-                                                <Skeleton
-                                                    key={i}
-                                                    className="h-14 w-full rounded-2xl bg-slate-100"
-                                                />
-                                            ))}
+                                    <div className="mt-3 flex items-start gap-3">
+                                        <div className="inline-flex h-11 w-11 items-center justify-center rounded-3xl bg-black/[0.04] border border-black/10">
+                                            <HeartPulse className="h-5 w-5 text-slate-700" />
                                         </div>
-                                    ) : rows.length === 0 ? (
-                                        <div className="mt-2 rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-center text-xs text-slate-500">
-                                            No appointments for this doctor / date.
-                                            <div className="mt-1 text-[11px] text-slate-400">
-                                                Use the Appointment Booking screen to add new patients.
-                                            </div>
+                                        <div className="min-w-0">
+                                            <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900">
+                                                OPD Triage
+                                            </h1>
+                                            <p className="mt-1 text-sm text-slate-600 leading-relaxed">
+                                                Select doctor + date → tap a patient → full-screen vitals editor with trends.
+                                            </p>
                                         </div>
-                                    ) : (
-                                        <ScrollArea className="mt-1 max-h-[380px] pr-1">
-                                            <div className="space-y-2 text-sm">
-                                                <AnimatePresence initial={false}>
-                                                    {rows.map((row) => (
-                                                        <motion.div
-                                                            key={row.appointment_id}
-                                                            initial={{ opacity: 0, y: 4 }}
-                                                            animate={{ opacity: 1, y: 0 }}
-                                                            exit={{ opacity: 0, y: -4 }}
-                                                            transition={{ duration: 0.15 }}
-                                                            className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800 sm:flex-row sm:items-center sm:justify-between"
-                                                        >
-                                                            <div className="space-y-0.5">
-                                                                <div className="flex flex-wrap items-center gap-1">
-                                                                    <span className="rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-slate-800 border border-slate-200">
-                                                                        {row.time}
-                                                                    </span>
-                                                                    <span className="font-medium">
-                                                                        {row.patient.name}
-                                                                    </span>
-                                                                    <span className="text-[11px] text-slate-500">
-                                                                        (UHID {row.patient.uhid})
-                                                                    </span>
-                                                                </div>
-                                                                <div className="text-[11px] text-slate-500 flex flex-wrap items-center gap-2">
-                                                                    <span>Vitals:</span>
-                                                                    {row.has_vitals ? (
-                                                                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-medium text-emerald-700 border border-emerald-100">
-                                                                            <Activity className="h-3 w-3" />
-                                                                            Already recorded
-                                                                        </span>
-                                                                    ) : (
-                                                                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-medium text-slate-600 border border-slate-200">
-                                                                            <Activity className="h-3 w-3" />
-                                                                            Not recorded
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                            <div className="flex items-center justify-end">
-                                                                <Button
-                                                                    type="button"
-                                                                    variant={row.has_vitals ? 'outline' : 'default'}
-                                                                    size="sm"
-                                                                    className={`rounded-2xl text-[11px] px-3 ${row.has_vitals
-                                                                            ? 'bg-white text-slate-800 border-slate-300'
-                                                                            : 'bg-slate-900 text-white hover:bg-slate-800'
-                                                                        }`}
-                                                                    onClick={() => openVitals(row)}
-                                                                >
-                                                                    Record vitals
-                                                                </Button>
-                                                            </div>
-                                                        </motion.div>
-                                                    ))}
-                                                </AnimatePresence>
-                                            </div>
-                                        </ScrollArea>
-                                    )}
+                                    </div>
                                 </div>
-                            </CardContent>
-                        </Card>
+
+                                <div className="w-full md:w-[520px] space-y-3">
+                                    <div className={cx(UI.glassSoft, 'p-3')}>
+                                        <div className="grid gap-2">
+                                            <div className="rounded-2xl border border-black/10 bg-white/75 px-3 py-2">
+                                                <div className="flex items-center gap-2 pb-1">
+                                                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-black/[0.04] border border-black/10">
+                                                        <Stethoscope className="h-3.5 w-3.5 text-slate-700" />
+                                                    </span>
+                                                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                                                        Doctor
+                                                    </span>
+                                                </div>
+                                                <DoctorPicker value={doctorId} onChange={setDoctorId} />
+                                            </div>
+
+                                            <div className="flex items-center gap-2">
+                                                <div className="flex-1 space-y-1">
+                                                    <div className="text-[11px] font-semibold text-slate-600">Date</div>
+                                                    <Input
+                                                        type="date"
+                                                        value={date}
+                                                        onChange={(e) => setDate(e.target.value)}
+                                                        className="h-10 rounded-2xl border-black/10 bg-white/85 text-sm"
+                                                    />
+                                                </div>
+
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    className="h-10 rounded-2xl border-black/10 bg-white/85 text-[12px] font-semibold"
+                                                    onClick={load}
+                                                    disabled={loading}
+                                                >
+                                                    <RefreshCcw className={cx('mr-2 h-4 w-4', loading && 'animate-spin')} />
+                                                    Refresh
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <span className={UI.chip}>
+                                            Queue <span className="ml-1 tabular-nums">{total}</span>
+                                        </span>
+                                        <span className={UI.chip}>
+                                            Completed <span className="ml-1 tabular-nums">{completed}</span>
+                                        </span>
+                                        <span className={UI.chip}>
+                                            Pending <span className="ml-1 tabular-nums">{pending}</span>
+                                        </span>
+
+                                        <div className="ml-auto relative w-full md:w-[240px]">
+                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                            <input
+                                                value={q}
+                                                onChange={(e) => setQ(e.target.value)}
+                                                placeholder="Search name / UHID / phone…"
+                                                className={cx(UI.input, 'pl-10 h-10')}
+                                            />
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
                     </motion.div>
 
-                    {/* Right: Vitals form */}
-                    <motion.div
-                        id="triage-vitals-form"
-                        layout
-                        initial={{ opacity: 0, y: 8 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        transition={{ duration: 0.2, delay: 0.05 }}
-                        className="lg:sticky lg:top-24"
-                    >
-                        <Card className="rounded-3xl border-slate-200 bg-white shadow-sm">
-                            <CardHeader className="pb-3">
-                                <div className="flex items-start justify-between gap-2">
+                    {/* Queue list (single column) */}
+                    <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}>
+                        <Card className={cx(UI.glass, 'overflow-hidden')}>
+                            <CardHeader className="border-b border-black/10">
+                                <div className="flex items-start justify-between gap-3">
                                     <div>
-                                        <CardTitle className="flex items-center gap-2 text-base font-semibold text-slate-900 sm:text-lg">
-                                            <HeartPulse className="h-4 w-4 text-slate-700" />
-                                            Record patient vitals
+                                        <CardTitle className="text-base md:text-lg font-semibold text-slate-900">
+                                            Queue
                                         </CardTitle>
-                                        <CardDescription className="text-xs text-slate-500 sm:text-sm">
-                                            Select a patient from the queue to start capturing vitals.
+                                        <CardDescription className="text-[12px] text-slate-600">
+                                            Tap a patient to open full-screen vitals entry/edit with history + trends.
                                         </CardDescription>
                                     </div>
-                                    {(saving || loading) && (
+
+                                    {busy && (
                                         <Badge
                                             variant="outline"
-                                            className="inline-flex items-center gap-1 rounded-full border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-500"
+                                            className="rounded-full border-black/10 bg-white/80 text-[11px] font-semibold text-slate-600"
                                         >
-                                            <Loader2 className="h-3 w-3 animate-spin" />
+                                            <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
                                             Syncing
                                         </Badge>
                                     )}
                                 </div>
                             </CardHeader>
 
-                            <CardContent className="pb-4">
-                                {!target ? (
-                                    <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 px-3 py-4 text-center text-xs text-slate-500">
-                                        No patient selected.
-                                        <div className="mt-1 text-[11px] text-slate-400">
-                                            Click <span className="font-medium">“Record vitals”</span> on any patient in the queue to begin.
+                            <CardContent className="pt-4">
+                                {!doctorId ? (
+                                    <div className="rounded-3xl border border-dashed border-black/15 bg-black/[0.02] px-5 py-7 text-center">
+                                        <div className="mx-auto h-12 w-12 rounded-3xl bg-black/[0.04] border border-black/10 grid place-items-center">
+                                            <Stethoscope className="h-6 w-6 text-slate-400" />
+                                        </div>
+                                        <div className="mt-3 font-semibold text-slate-900">Select a doctor</div>
+                                        <div className="mt-1 text-[12px] text-slate-500">
+                                            Choose doctor + date to load the OPD queue.
+                                        </div>
+                                    </div>
+                                ) : loading ? (
+                                    <div className="space-y-2">
+                                        {Array.from({ length: 7 }).map((_, i) => (
+                                            <Skeleton key={i} className="h-16 w-full rounded-3xl bg-slate-100" />
+                                        ))}
+                                    </div>
+                                ) : rows.length === 0 ? (
+                                    <div className="rounded-3xl border border-dashed border-black/15 bg-black/[0.02] px-5 py-7 text-center">
+                                        <div className="mx-auto h-12 w-12 rounded-3xl bg-black/[0.04] border border-black/10 grid place-items-center">
+                                            <User2 className="h-6 w-6 text-slate-400" />
+                                        </div>
+                                        <div className="mt-3 font-semibold text-slate-900">No appointments</div>
+                                        <div className="mt-1 text-[12px] text-slate-500">
+                                            No queue items for this doctor/date.
                                         </div>
                                     </div>
                                 ) : (
-                                    <form onSubmit={saveVitals} className="space-y-4">
-                                        <div className="rounded-2xl border border-slate-200 bg-slate-50/80 px-3 py-2 text-xs text-slate-700">
-                                            <div className="flex flex-wrap items-center gap-1 sm:gap-2">
-                                                <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 text-[11px] font-medium text-slate-800 border border-slate-200">
-                                                    <User2 className="h-3 w-3" />
-                                                    {target.patient.name}
-                                                </span>
-                                                <span className="text-[11px] text-slate-500">
-                                                    UHID {target.patient.uhid}
-                                                </span>
-                                                <span className="text-[11px] text-slate-500">
-                                                    · Time {target.time}
-                                                </span>
-                                            </div>
-                                        </div>
-
-                                        {/* Height, weight, temperature */}
-                                        <div className="grid gap-3 md:grid-cols-3">
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs font-medium text-slate-600">
-                                                    Height (cm)
-                                                </label>
-                                                <Input
-                                                    value={form.height_cm}
-                                                    onChange={(e) => onField('height_cm', e.target.value)}
-                                                    className="h-9 rounded-2xl border-slate-200 text-sm"
-                                                />
-                                            </div>
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs font-medium text-slate-600">
-                                                    Weight (kg)
-                                                </label>
-                                                <Input
-                                                    value={form.weight_kg}
-                                                    onChange={(e) => onField('weight_kg', e.target.value)}
-                                                    className="h-9 rounded-2xl border-slate-200 text-sm"
-                                                />
-                                            </div>
-                                            <div className="space-y-1.5">
-                                                <label className="flex items-center gap-1 text-xs font-medium text-slate-600">
-                                                    Temperature (°C)
-                                                    <Thermometer className="h-3 w-3 text-slate-500" />
-                                                </label>
-                                                <Input
-                                                    value={form.temp_c}
-                                                    onChange={(e) => onField('temp_c', e.target.value)}
-                                                    className="h-9 rounded-2xl border-slate-200 text-sm"
-                                                />
-                                            </div>
-                                        </div>
-
-                                        {/* Pulse, resp, SpO2, BP */}
-                                        <div className="grid gap-3 md:grid-cols-4">
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs font-medium text-slate-600">
-                                                    Pulse (bpm)
-                                                </label>
-                                                <Input
-                                                    value={form.pulse}
-                                                    onChange={(e) => onField('pulse', e.target.value)}
-                                                    className="h-9 rounded-2xl border-slate-200 text-sm"
-                                                />
-                                            </div>
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs font-medium text-slate-600">
-                                                    Resp. rate
-                                                </label>
-                                                <Input
-                                                    value={form.resp_rate}
-                                                    onChange={(e) => onField('resp_rate', e.target.value)}
-                                                    className="h-9 rounded-2xl border-slate-200 text-sm"
-                                                />
-                                            </div>
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs font-medium text-slate-600">
-                                                    SpO₂ (%)
-                                                </label>
-                                                <Input
-                                                    value={form.spo2}
-                                                    onChange={(e) => onField('spo2', e.target.value)}
-                                                    className="h-9 rounded-2xl border-slate-200 text-sm"
-                                                />
-                                            </div>
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs font-medium text-slate-600">
-                                                    BP (sys / dia)
-                                                </label>
-                                                <div className="flex gap-1.5">
-                                                    <Input
-                                                        value={form.bp_sys}
-                                                        onChange={(e) => onField('bp_sys', e.target.value)}
-                                                        placeholder="Sys"
-                                                        className="h-9 rounded-2xl border-slate-200 text-sm"
-                                                    />
-                                                    <Input
-                                                        value={form.bp_dia}
-                                                        onChange={(e) => onField('bp_dia', e.target.value)}
-                                                        placeholder="Dia"
-                                                        className="h-9 rounded-2xl border-slate-200 text-sm"
-                                                    />
-                                                </div>
-                                            </div>
-                                        </div>
-
-                                        {/* Notes */}
-                                        <div className="space-y-1.5">
-                                            <label className="text-xs font-medium text-slate-600">
-                                                Notes
-                                            </label>
-                                            <Textarea
-                                                value={form.notes}
-                                                onChange={(e) => onField('notes', e.target.value)}
-                                                className="min-h-[70px] rounded-2xl border-slate-200 text-sm"
-                                                placeholder="Enter any triage notes, pain score, alerts…"
-                                            />
-                                        </div>
-
-                                        <Separator />
-
-                                        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                            <p className="text-[11px] text-slate-400">
-                                                Saved vitals will be visible in the doctor&apos;s EMR view for this visit.
-                                            </p>
-                                            <div className="flex items-center gap-2">
-                                                <Button
+                                    <ScrollArea className="max-h-[62vh] pr-2">
+                                        <div className="space-y-2">
+                                            {filteredRows.map((row) => (
+                                                <button
+                                                    key={row.appointment_id}
                                                     type="button"
-                                                    variant="outline"
-                                                    size="sm"
-                                                    className="h-9 rounded-2xl border-slate-300 bg-white text-[11px]"
-                                                    onClick={() => setTarget(null)}
-                                                    disabled={saving}
+                                                    onClick={() => openVitals(row)}
+                                                    className={cx(
+                                                        'w-full text-left rounded-3xl border border-black/10 bg-white/75 backdrop-blur px-4 py-3',
+                                                        'shadow-[0_10px_24px_rgba(2,6,23,0.08)] hover:bg-white/90 transition',
+                                                        'active:scale-[0.995]'
+                                                    )}
                                                 >
-                                                    Cancel
-                                                </Button>
-                                                <Button
-                                                    type="submit"
-                                                    size="sm"
-                                                    className="h-9 rounded-2xl bg-slate-900 px-4 text-[11px] font-semibold uppercase tracking-wide text-white hover:bg-slate-800 disabled:opacity-50"
-                                                    disabled={saving}
-                                                >
-                                                    {saving ? 'Saving…' : 'Save vitals'}
-                                                </Button>
-                                            </div>
+                                                    <div className="flex items-start justify-between gap-3">
+                                                        <div className="min-w-0">
+                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                <span className="inline-flex items-center rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white">
+                                                                    {row.time}
+                                                                </span>
+                                                                <div className="font-semibold text-slate-900 truncate">
+                                                                    {row?.patient?.name || '—'}
+                                                                </div>
+                                                                <div className="text-[12px] text-slate-500">
+                                                                    UHID {row?.patient?.uhid || '—'}
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-slate-600">
+                                                                <span className="inline-flex items-center gap-1">
+                                                                    <User2 className="h-4 w-4 text-slate-400" />
+                                                                    {row?.patient?.phone || 'No phone'}
+                                                                </span>
+
+                                                                {row?.has_vitals ? (
+                                                                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 border border-emerald-200">
+                                                                        <CheckCircle2 className="h-4 w-4" />
+                                                                        Vitals recorded
+                                                                    </span>
+                                                                ) : (
+                                                                    <span className="inline-flex items-center gap-1 rounded-full bg-black/[0.03] px-2.5 py-1 text-[11px] font-semibold text-slate-700 border border-black/10">
+                                                                        <Activity className="h-4 w-4" />
+                                                                        Not recorded
+                                                                    </span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+
+                                                        <div className="shrink-0">
+                                                            <span className="inline-flex items-center rounded-full border border-black/10 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700">
+                                                                {row?.has_vitals ? 'View / Update' : 'Record'}
+                                                            </span>
+                                                        </div>
+                                                    </div>
+                                                </button>
+                                            ))}
+
+                                            {!filteredRows.length && (
+                                                <div className="rounded-3xl border border-dashed border-black/15 bg-black/[0.02] px-5 py-7 text-center">
+                                                    <div className="font-semibold text-slate-900">No matches</div>
+                                                    <div className="mt-1 text-[12px] text-slate-500">
+                                                        Try a different search.
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
-                                    </form>
+
+                                        <div className="h-6" />
+                                    </ScrollArea>
                                 )}
                             </CardContent>
                         </Card>
                     </motion.div>
                 </div>
             </div>
+
+            {/* --------------------------- Fullscreen Vitals Modal --------------------------- */}
+            <AnimatePresence>
+                {open && target && (
+                    <motion.div
+                        className="fixed inset-0 z-50"
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                    >
+                        {/* Backdrop */}
+                        <div
+                            className="absolute inset-0 bg-black/35 backdrop-blur-[2px]"
+                            onClick={closeModal}
+                        />
+
+                        {/* Panel */}
+                        <motion.div
+                            className="absolute inset-0 bg-white"
+                            initial={{ y: 18, opacity: 0, scale: 0.995 }}
+                            animate={{ y: 0, opacity: 1, scale: 1 }}
+                            exit={{ y: 18, opacity: 0, scale: 0.995 }}
+                            transition={{ type: 'spring', stiffness: 260, damping: 26 }}
+                        >
+                            <div className="h-full flex flex-col min-h-0">
+                                {/* Sticky header */}
+                                <div className="sticky top-0 z-30 border-b border-black/10 bg-white/80 backdrop-blur-xl">
+                                    <div className="px-4 md:px-8 py-4">
+                                        <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0">
+                                                <div className="flex items-center gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={closeModal}
+                                                        className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-black/[0.04] border border-black/10 hover:bg-black/[0.06]"
+                                                        title="Back"
+                                                    >
+                                                        <ArrowLeft className="h-5 w-5 text-slate-700" />
+                                                    </button>
+
+                                                    <div className="min-w-0">
+                                                        <div className="text-[16px] md:text-[18px] font-semibold text-slate-900 tracking-tight truncate">
+                                                            Vitals · {target?.patient?.name || 'Patient'}
+                                                        </div>
+                                                        <div className="mt-0.5 text-[12px] text-slate-500 flex flex-wrap items-center gap-2">
+                                                            <span>UHID {target?.patient?.uhid || '—'}</span>
+                                                            <span className="text-slate-300">•</span>
+                                                            <span>Time {target?.time || '—'}</span>
+                                                            {vitalsMeta?.created_at && (
+                                                                <>
+                                                                    <span className="text-slate-300">•</span>
+                                                                    <span>
+                                                                        Last:{' '}
+                                                                        <span className="font-semibold text-slate-700">
+                                                                            {niceDT(vitalsMeta.created_at)}
+                                                                        </span>
+                                                                    </span>
+                                                                </>
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+
+                                                <div className="mt-3 flex flex-wrap items-center gap-2">
+                                                    <span
+                                                        className={cx(
+                                                            'inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-semibold',
+                                                            severityUI.pill
+                                                        )}
+                                                    >
+                                                        <span className={cx('h-1.5 w-1.5 rounded-full', severityUI.dot)} />
+                                                        <SeverityIcon className="h-4 w-4" />
+                                                        {severity.label}
+                                                    </span>
+
+                                                    {bmi !== null && bmiInfo && (
+                                                        <span
+                                                            className={cx(
+                                                                'inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-semibold',
+                                                                bmiInfo.tone === 'critical'
+                                                                    ? 'border-rose-200 bg-rose-50 text-rose-700'
+                                                                    : bmiInfo.tone === 'warning'
+                                                                        ? 'border-amber-200 bg-amber-50 text-amber-800'
+                                                                        : 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                                            )}
+                                                        >
+                                                            BMI {bmi} · {bmiInfo.label}
+                                                        </span>
+                                                    )}
+
+                                                    {prefilled ? (
+                                                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-700 border border-emerald-200">
+                                                            <CheckCircle2 className="h-4 w-4" />
+                                                            Existing loaded
+                                                        </span>
+                                                    ) : (
+                                                        <span className="inline-flex items-center gap-1 rounded-full bg-black/[0.03] px-3 py-1 text-[11px] font-semibold text-slate-700 border border-black/10">
+                                                            <Activity className="h-4 w-4" />
+                                                            New entry
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            <div className="flex items-center gap-2">
+                                                {target?.has_vitals && (
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        onClick={refreshPrefill}
+                                                        disabled={vitalsLoading || saving}
+                                                        className="rounded-2xl border-black/10 bg-white/85 font-semibold"
+                                                    >
+                                                        <RefreshCcw className={cx('h-4 w-4 mr-2', vitalsLoading && 'animate-spin')} />
+                                                        Load latest
+                                                    </Button>
+                                                )}
+
+                                                <Button
+                                                    type="button"
+                                                    variant="outline"
+                                                    onClick={closeModal}
+                                                    className="rounded-2xl border-black/10 bg-white/85 font-semibold"
+                                                    disabled={saving}
+                                                >
+                                                    <X className="h-4 w-4 mr-2" />
+                                                    Close
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Content */}
+                                <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-8 py-5">
+                                    <div ref={contentTopRef} />
+
+                                    <div className="grid gap-4">
+                                        {/* Trends (Apple Health style) */}
+                                        <Card className={cx(UI.glass, 'overflow-hidden')}>
+                                            <CardHeader className="border-b border-black/10">
+                                                <CardTitle className="text-base md:text-lg font-semibold text-slate-900">
+                                                    Trends
+                                                </CardTitle>
+                                                <CardDescription className="text-[12px] text-slate-600">
+                                                    Mini charts + change from previous record.
+                                                </CardDescription>
+                                            </CardHeader>
+
+                                            <CardContent className="pt-4">
+                                                {historyLoading ? (
+                                                    <div className="grid gap-3 md:grid-cols-2">
+                                                        <Skeleton className="h-24 rounded-3xl bg-slate-100" />
+                                                        <Skeleton className="h-24 rounded-3xl bg-slate-100" />
+                                                        <Skeleton className="h-24 rounded-3xl bg-slate-100" />
+                                                        <Skeleton className="h-24 rounded-3xl bg-slate-100" />
+                                                    </div>
+                                                ) : (
+                                                    <div className="grid gap-3 md:grid-cols-2">
+                                                        <TrendTile
+                                                            title="Pulse"
+                                                            value={pulseT.current}
+                                                            unit="bpm"
+                                                            dir={pulseT.dir}
+                                                            deltaText={formatDelta(pulseT.delta, 0)}
+                                                        >
+                                                            <Sparkline series={pulseSeries} />
+                                                        </TrendTile>
+
+                                                        <TrendTile
+                                                            title="SpO₂"
+                                                            value={spo2T.current}
+                                                            unit="%"
+                                                            dir={spo2T.dir}
+                                                            deltaText={formatDelta(spo2T.delta, 0)}
+                                                        >
+                                                            <Sparkline series={spo2Series} />
+                                                        </TrendTile>
+
+                                                        <TrendTile
+                                                            title="BP"
+                                                            value={
+                                                                bpSysT.current !== null || bpDiaT.current !== null
+                                                                    ? `${bpSysT.current ?? '—'}/${bpDiaT.current ?? '—'}`
+                                                                    : null
+                                                            }
+                                                            unit="mmHg"
+                                                            dir={
+                                                                // prefer sys direction if available, else dia
+                                                                bpSysT.dir !== 'flat' ? bpSysT.dir : bpDiaT.dir
+                                                            }
+                                                            deltaText={
+                                                                bpSysT.delta !== null || bpDiaT.delta !== null
+                                                                    ? `${formatDelta(bpSysT.delta, 0)}/${formatDelta(bpDiaT.delta, 0)}`
+                                                                    : '—'
+                                                            }
+                                                        >
+                                                            <Sparkline series={bpSysSeries} series2={bpDiaSeries} />
+                                                        </TrendTile>
+
+                                                        <TrendTile
+                                                            title="Temperature"
+                                                            value={tempT.current}
+                                                            unit="°C"
+                                                            dir={tempT.dir}
+                                                            deltaText={formatDelta(tempT.delta, 1)}
+                                                        >
+                                                            <Sparkline series={tempSeries} />
+                                                        </TrendTile>
+                                                    </div>
+                                                )}
+                                            </CardContent>
+                                        </Card>
+
+                                        {/* Vitals Form Card */}
+                                        <Card className={cx(UI.glass, 'overflow-hidden')}>
+                                            <CardHeader className="border-b border-black/10">
+                                                <CardTitle className="text-base md:text-lg font-semibold text-slate-900 flex items-center gap-2">
+                                                    <HeartPulse className="h-5 w-5 text-slate-700" />
+                                                    Vitals entry
+                                                </CardTitle>
+                                                <CardDescription className="text-[12px] text-slate-600">
+                                                    Single-column capture (fast), with BP inline and notes.
+                                                </CardDescription>
+                                            </CardHeader>
+
+                                            <CardContent className="pt-4">
+                                                <form ref={vitalsFormRef} onSubmit={saveVitals} className="space-y-4">
+                                                    <Field label="Height (cm)">
+                                                        <Input
+                                                            type="number"
+                                                            inputMode="decimal"
+                                                            value={form.height_cm}
+                                                            onChange={(e) => onField('height_cm', e.target.value)}
+                                                            className="h-11 rounded-2xl border-black/10 bg-white/85"
+                                                        />
+                                                    </Field>
+
+                                                    <Field label="Weight (kg)">
+                                                        <Input
+                                                            type="number"
+                                                            inputMode="decimal"
+                                                            value={form.weight_kg}
+                                                            onChange={(e) => onField('weight_kg', e.target.value)}
+                                                            className="h-11 rounded-2xl border-black/10 bg-white/85"
+                                                        />
+                                                    </Field>
+
+                                                    <Field
+                                                        label={
+                                                            <span className="inline-flex items-center gap-2">
+                                                                Temperature (°C) <Thermometer className="h-4 w-4 text-slate-500" />
+                                                            </span>
+                                                        }
+                                                    >
+                                                        <Input
+                                                            type="number"
+                                                            inputMode="decimal"
+                                                            value={form.temp_c}
+                                                            onChange={(e) => onField('temp_c', e.target.value)}
+                                                            className="h-11 rounded-2xl border-black/10 bg-white/85"
+                                                        />
+                                                    </Field>
+
+                                                    <Field label="Pulse (bpm)">
+                                                        <Input
+                                                            type="number"
+                                                            inputMode="numeric"
+                                                            value={form.pulse}
+                                                            onChange={(e) => onField('pulse', e.target.value)}
+                                                            className="h-11 rounded-2xl border-black/10 bg-white/85"
+                                                        />
+                                                    </Field>
+
+                                                    <Field label="Resp. rate">
+                                                        <Input
+                                                            type="number"
+                                                            inputMode="numeric"
+                                                            value={form.resp_rate}
+                                                            onChange={(e) => onField('resp_rate', e.target.value)}
+                                                            className="h-11 rounded-2xl border-black/10 bg-white/85"
+                                                        />
+                                                    </Field>
+
+                                                    <Field label="SpO₂ (%)">
+                                                        <Input
+                                                            type="number"
+                                                            inputMode="decimal"
+                                                            value={form.spo2}
+                                                            onChange={(e) => onField('spo2', e.target.value)}
+                                                            className="h-11 rounded-2xl border-black/10 bg-white/85"
+                                                        />
+                                                    </Field>
+
+                                                    <Field label="BP (sys / dia)">
+                                                        <div className="flex gap-2">
+                                                            <Input
+                                                                type="number"
+                                                                inputMode="numeric"
+                                                                value={form.bp_sys}
+                                                                onChange={(e) => onField('bp_sys', e.target.value)}
+                                                                placeholder="Sys"
+                                                                className="h-11 rounded-2xl border-black/10 bg-white/85"
+                                                            />
+                                                            <Input
+                                                                type="number"
+                                                                inputMode="numeric"
+                                                                value={form.bp_dia}
+                                                                onChange={(e) => onField('bp_dia', e.target.value)}
+                                                                placeholder="Dia"
+                                                                className="h-11 rounded-2xl border-black/10 bg-white/85"
+                                                            />
+                                                        </div>
+                                                    </Field>
+
+                                                    <Field label="Notes">
+                                                        <Textarea
+                                                            value={form.notes}
+                                                            onChange={(e) => onField('notes', e.target.value)}
+                                                            className="min-h-[100px] rounded-2xl border-black/10 bg-white/85"
+                                                            placeholder="Pain score, alerts, triage notes…"
+                                                        />
+                                                    </Field>
+
+                                                    <Separator className="bg-black/10" />
+
+                                                    <div className="flex flex-wrap items-center justify-between gap-2">
+                                                        <div className="text-[12px] text-slate-500">
+                                                            Badges update live as you type.
+                                                        </div>
+
+                                                        <div className="flex flex-wrap items-center gap-2">
+                                                            <Button
+                                                                type="button"
+                                                                variant="outline"
+                                                                className="rounded-2xl border-black/10 bg-white/85 font-semibold"
+                                                                onClick={() => setForm({ ...resetFormObj })}
+                                                                disabled={saving || vitalsLoading}
+                                                            >
+                                                                Clear
+                                                            </Button>
+
+                                                            <Button
+                                                                type="submit"
+                                                                className="rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-semibold"
+                                                                disabled={saving || vitalsLoading}
+                                                            >
+                                                                <Save className="h-4 w-4 mr-2" />
+                                                                {saving ? 'Saving…' : target?.has_vitals ? 'Update vitals' : 'Save vitals'}
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                </form>
+                                            </CardContent>
+                                        </Card>
+
+                                        {/* History Entries (last 3) */}
+                                        <Card className={cx(UI.glass, 'overflow-hidden')}>
+                                            <CardHeader className="border-b border-black/10">
+                                                <div className="flex items-start justify-between gap-3">
+                                                    <div>
+                                                        <CardTitle className="text-base md:text-lg font-semibold text-slate-900 flex items-center gap-2">
+                                                            <History className="h-5 w-5 text-slate-700" />
+                                                            History (last 3)
+                                                        </CardTitle>
+                                                        <CardDescription className="text-[12px] text-slate-600">
+                                                            Load one entry into the form (quick compare).
+                                                        </CardDescription>
+                                                    </div>
+
+                                                    <Button
+                                                        type="button"
+                                                        variant="outline"
+                                                        className="rounded-2xl border-black/10 bg-white/85 font-semibold"
+                                                        onClick={() => loadHistory(target)}
+                                                        disabled={historyLoading}
+                                                    >
+                                                        <RefreshCcw className={cx('h-4 w-4 mr-2', historyLoading && 'animate-spin')} />
+                                                        Refresh
+                                                    </Button>
+                                                </div>
+                                            </CardHeader>
+
+                                            <CardContent className="pt-4">
+                                                {historyLoading ? (
+                                                    <div className="space-y-2">
+                                                        <Skeleton className="h-20 w-full rounded-3xl bg-slate-100" />
+                                                        <Skeleton className="h-20 w-full rounded-3xl bg-slate-100" />
+                                                        <Skeleton className="h-20 w-full rounded-3xl bg-slate-100" />
+                                                    </div>
+                                                ) : last3Entries.length === 0 ? (
+                                                    <div className="rounded-3xl border border-dashed border-black/15 bg-black/[0.02] px-5 py-7 text-center">
+                                                        <div className="mx-auto h-12 w-12 rounded-3xl bg-black/[0.04] border border-black/10 grid place-items-center">
+                                                            <History className="h-6 w-6 text-slate-400" />
+                                                        </div>
+                                                        <div className="mt-3 font-semibold text-slate-900">No history</div>
+                                                        <div className="mt-1 text-[12px] text-slate-500">
+                                                            No vitals history found.
+                                                        </div>
+                                                    </div>
+                                                ) : (
+                                                    <div className="space-y-2">
+                                                        {last3Entries.map((h) => (
+                                                            <div
+                                                                key={h.id}
+                                                                className="rounded-3xl border border-black/10 bg-white/75 backdrop-blur px-4 py-3 shadow-[0_10px_24px_rgba(2,6,23,0.08)]"
+                                                            >
+                                                                <div className="flex items-start justify-between gap-3">
+                                                                    <div className="min-w-0">
+                                                                        <div className="text-[12px] text-slate-500">
+                                                                            {niceDT(h.created_at)}
+                                                                        </div>
+
+                                                                        <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-semibold">
+                                                                            <ChipMini label="Temp" value={toStr(h.temp_c) || '—'} />
+                                                                            <ChipMini label="SpO₂" value={toStr(h.spo2) || '—'} />
+                                                                            <ChipMini label="Pulse" value={toStr(h.pulse) || '—'} />
+                                                                            <ChipMini label="BP" value={`${toStr(h.bp_sys) || '—'}/${toStr(h.bp_dia) || '—'}`} />
+                                                                            <ChipMini label="RR" value={toStr(h.resp_rate) || '—'} />
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <Button
+                                                                        type="button"
+                                                                        className="rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-semibold"
+                                                                        onClick={() => {
+                                                                            applyVitalsToForm(h)
+                                                                            setVitalsMeta({ id: h.id, created_at: h.created_at })
+                                                                            setPrefilled(true)
+                                                                            toast.success('Loaded from history')
+                                                                            contentTopRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' })
+                                                                        }}
+                                                                    >
+                                                                        Load
+                                                                    </Button>
+                                                                </div>
+                                                            </div>
+                                                        ))}
+                                                    </div>
+                                                )}
+                                            </CardContent>
+                                        </Card>
+
+                                        <div className="h-10" />
+                                    </div>
+                                </div>
+
+                                {/* Bottom safe-area action bar */}
+                                <div className="sticky bottom-0 z-30 border-t border-black/10 bg-white/80 backdrop-blur-xl">
+                                    <div className="px-4 md:px-8 py-3 flex items-center justify-between gap-2">
+                                        <div className="text-[12px] text-slate-500 flex items-center gap-2">
+                                            {busy ? (
+                                                <>
+                                                    <Loader2 className="h-4 w-4 animate-spin" />
+                                                    Working…
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                                                    Ready
+                                                </>
+                                            )}
+                                        </div>
+
+                                        <div className="flex items-center gap-2">
+                                            <Button
+                                                type="button"
+                                                variant="outline"
+                                                className="rounded-2xl border-black/10 bg-white/85 font-semibold"
+                                                onClick={closeModal}
+                                                disabled={saving}
+                                            >
+                                                Close
+                                            </Button>
+
+                                            <Button
+                                                type="button"
+                                                className="rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-semibold"
+                                                onClick={() => vitalsFormRef.current?.requestSubmit?.()}
+                                                disabled={saving || vitalsLoading}
+                                                title="Save vitals"
+                                            >
+                                                <Save className="h-4 w-4 mr-2" />
+                                                {saving ? 'Saving…' : 'Save'}
+                                            </Button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                            </div>
+                        </motion.div>
+                    </motion.div>
+                )}
+            </AnimatePresence>
         </div>
+    )
+}
+
+/* ----------------------------- Small UI Bits ----------------------------- */
+
+function Field({ label, children }) {
+    return (
+        <div className="space-y-1.5">
+            <div className="text-[11px] font-semibold text-slate-600">{label}</div>
+            {children}
+        </div>
+    )
+}
+
+function ChipMini({ label, value }) {
+    return (
+        <span className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/85 px-3 py-1">
+            <span className="text-slate-500">{label}</span>
+            <span className="text-slate-900 tabular-nums">{value}</span>
+        </span>
     )
 }

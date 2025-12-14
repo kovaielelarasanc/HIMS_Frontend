@@ -82,10 +82,14 @@ import AnalyzerStagingResults from './lab/AnalyzerStagingResults'
 import AnalyzerDeviceMapping from './lab/AnalyzerDeviceMapping'
 import AnalyzerStatusWidget from './lab/AnalyzerStatusWidget'
 import AnalyzerDeviceLogs from './lab/AnalyzerDeviceLogs'
+
+import Advances from './billing/AdvanceDeposit'
+
 import SupplierLedger from './pharmacy/accounts/SupplierLedger'
 import SupplierMonthlySummary from './pharmacy/accounts/SupplierMonthlySummary'
 import SupplierPaymentAdvanced from './pharmacy/accounts/SupplierPaymentAdvanced'
 import SupplierPayments from './pharmacy/accounts/SupplierPayments'
+
 
 export default function App() {
     useEffect(() => {
@@ -188,6 +192,7 @@ export default function App() {
                             path="/billing/invoices/:invoiceId"
                             element={<InvoiceDetail />}
                         />
+                        <Route path="/billing/advance" element={<Advances />} />
 
                         {/* EMR */}
                         <Route path="/emr" element={<PatientEmrTimeline />} />

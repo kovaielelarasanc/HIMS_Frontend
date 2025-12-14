@@ -11,6 +11,7 @@ import {
     createAnaesthesiaDrug,
     deleteAnaesthesiaDrug,
 } from '../../api/ot'
+import { useCan } from '../../hooks/useCan'
 import {
     ClipboardList,
     Activity,
@@ -128,6 +129,17 @@ function toIntOrNull(value) {
  *  - caseId: OT case id (number)
  */
 export default function AnaesthesiaTab({ caseId }) {
+    const canView =
+        useCan('ot.anaesthesia.view') ||
+        useCan('ot.cases.view') ||
+        useCan('ipd.view')
+
+    const canEdit =
+        useCan('ot.anaesthesia.update') ||
+        useCan('ot.anaesthesia.create') ||
+        useCan('ot.cases.update') ||
+        useCan('ipd.doctor')
+
     const [subTab, setSubTab] = useState('preop') // preop | intra | vitals | drugs
     const [record, setRecord] = useState(emptyRecord)
     const [recordMeta, setRecordMeta] = useState({ id: null, created_at: null })
@@ -151,6 +163,11 @@ export default function AnaesthesiaTab({ caseId }) {
         let alive = true
 
         const load = async () => {
+            if (!canView) {
+                setLoading(false)
+                return
+            }
+
             setLoading(true)
             setError(null)
             try {
@@ -195,7 +212,19 @@ export default function AnaesthesiaTab({ caseId }) {
         return () => {
             alive = false
         }
-    }, [caseId])
+    }, [caseId, canView])
+
+    // --------------------------------------------------
+    // PERMISSION BLOCK
+    // --------------------------------------------------
+
+    if (!canView) {
+        return (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-700">
+                You do not have permission to view Anaesthesia records.
+            </div>
+        )
+    }
 
     // --------------------------------------------------
     // HELPERS
@@ -254,6 +283,11 @@ export default function AnaesthesiaTab({ caseId }) {
     // --------------------------------------------------
 
     const handleSaveRecord = async () => {
+        if (!canEdit) {
+            setError('You do not have permission to edit anaesthesia records.')
+            return
+        }
+
         setSaving(true)
         setError(null)
         setSuccess(null)
@@ -285,6 +319,10 @@ export default function AnaesthesiaTab({ caseId }) {
     // --------------------------------------------------
 
     const handleAddVital = async () => {
+        if (!canEdit) {
+            setError('You do not have permission to add vitals.')
+            return
+        }
         if (!recordMeta.id) {
             setError('Save the anaesthesia record before adding vitals.')
             return
@@ -328,6 +366,10 @@ export default function AnaesthesiaTab({ caseId }) {
     }
 
     const handleDeleteVital = async (id) => {
+        if (!canEdit) {
+            setError('You do not have permission to delete vitals.')
+            return
+        }
         if (!window.confirm('Delete this vitals entry?')) return
         setVitalBusy(true)
         setError(null)
@@ -349,6 +391,10 @@ export default function AnaesthesiaTab({ caseId }) {
     // --------------------------------------------------
 
     const handleAddDrug = async () => {
+        if (!canEdit) {
+            setError('You do not have permission to add drug log entries.')
+            return
+        }
         if (!recordMeta.id) {
             setError('Save the anaesthesia record before adding drug log.')
             return
@@ -374,6 +420,10 @@ export default function AnaesthesiaTab({ caseId }) {
     }
 
     const handleDeleteDrug = async (id) => {
+        if (!canEdit) {
+            setError('You do not have permission to delete drug log entries.')
+            return
+        }
         if (!window.confirm('Delete this drug entry?')) return
         setDrugBusy(true)
         setError(null)
@@ -404,26 +454,96 @@ export default function AnaesthesiaTab({ caseId }) {
                 </h3>
 
                 <div className="grid grid-cols-1 gap-3 text-[12px] sm:grid-cols-2">
-                    <TextInput label="ASA Grade" value={record.asa_grade} onChange={(v) => handleField('asa_grade', v)} />
-                    <TextInput label="Anaesthesia type" value={record.anaesthesia_type} onChange={(v) => handleField('anaesthesia_type', v)} />
-                    <TextInput label="Co-morbidities" value={record.comorbidities} onChange={(v) => handleField('comorbidities', v)} />
-                    <TextInput label="Allergies" value={record.allergies} onChange={(v) => handleField('allergies', v)} />
+                    <TextInput
+                        label="ASA Grade"
+                        value={record.asa_grade}
+                        onChange={(v) => handleField('asa_grade', v)}
+                        disabled={!canEdit}
+                    />
+                    <TextInput
+                        label="Anaesthesia type"
+                        value={record.anaesthesia_type}
+                        onChange={(v) => handleField('anaesthesia_type', v)}
+                        disabled={!canEdit}
+                    />
+                    <TextInput
+                        label="Co-morbidities"
+                        value={record.comorbidities}
+                        onChange={(v) => handleField('comorbidities', v)}
+                        disabled={!canEdit}
+                    />
+                    <TextInput
+                        label="Allergies"
+                        value={record.allergies}
+                        onChange={(v) => handleField('allergies', v)}
+                        disabled={!canEdit}
+                    />
                 </div>
 
                 <div className="grid grid-cols-2 gap-3 text-[12px] md:grid-cols-4">
-                    <TextInput label="Pulse" value={record.preop_pulse} onChange={(v) => handleField('preop_pulse', v)} />
-                    <TextInput label="BP" value={record.preop_bp} onChange={(v) => handleField('preop_bp', v)} />
-                    <TextInput label="RR" value={record.preop_rr} onChange={(v) => handleField('preop_rr', v)} />
-                    <TextInput label="Temp (°C)" value={record.preop_temp_c} onChange={(v) => handleField('preop_temp_c', v)} />
+                    <TextInput
+                        label="Pulse"
+                        value={record.preop_pulse}
+                        onChange={(v) => handleField('preop_pulse', v)}
+                        disabled={!canEdit}
+                    />
+                    <TextInput
+                        label="BP"
+                        value={record.preop_bp}
+                        onChange={(v) => handleField('preop_bp', v)}
+                        disabled={!canEdit}
+                    />
+                    <TextInput
+                        label="RR"
+                        value={record.preop_rr}
+                        onChange={(v) => handleField('preop_rr', v)}
+                        disabled={!canEdit}
+                    />
+                    <TextInput
+                        label="Temp (°C)"
+                        value={record.preop_temp_c}
+                        onChange={(v) => handleField('preop_temp_c', v)}
+                        disabled={!canEdit}
+                    />
                 </div>
 
                 <div className="grid grid-cols-1 gap-3 text-[12px] sm:grid-cols-2">
-                    <TextInput label="CVS" value={record.preop_cvs} onChange={(v) => handleField('preop_cvs', v)} />
-                    <TextInput label="RS" value={record.preop_rs} onChange={(v) => handleField('preop_rs', v)} />
-                    <TextInput label="CNS" value={record.preop_cns} onChange={(v) => handleField('preop_cns', v)} />
-                    <TextInput label="PA" value={record.preop_pa} onChange={(v) => handleField('preop_pa', v)} />
-                    <TextInput label="Veins" value={record.preop_veins} onChange={(v) => handleField('preop_veins', v)} />
-                    <TextInput label="Spine" value={record.preop_spine} onChange={(v) => handleField('preop_spine', v)} />
+                    <TextInput
+                        label="CVS"
+                        value={record.preop_cvs}
+                        onChange={(v) => handleField('preop_cvs', v)}
+                        disabled={!canEdit}
+                    />
+                    <TextInput
+                        label="RS"
+                        value={record.preop_rs}
+                        onChange={(v) => handleField('preop_rs', v)}
+                        disabled={!canEdit}
+                    />
+                    <TextInput
+                        label="CNS"
+                        value={record.preop_cns}
+                        onChange={(v) => handleField('preop_cns', v)}
+                        disabled={!canEdit}
+                    />
+                    <TextInput
+                        label="PA"
+                        value={record.preop_pa}
+                        onChange={(v) => handleField('preop_pa', v)}
+                        disabled={!canEdit}
+                    />
+                    <TextInput
+                        label="Veins"
+                        value={record.preop_veins}
+                        onChange={(v) => handleField('preop_veins', v)}
+                        disabled={!canEdit}
+                    />
+                    <TextInput
+                        label="Spine"
+                        value={record.preop_spine}
+                        onChange={(v) => handleField('preop_spine', v)}
+                        disabled={!canEdit}
+                    />
                 </div>
             </div>
 
@@ -440,52 +560,56 @@ export default function AnaesthesiaTab({ caseId }) {
                         placeholder="Intact / Loose"
                         value={record.airway_teeth_status}
                         onChange={(v) => handleField('airway_teeth_status', v)}
+                        disabled={!canEdit}
                     />
                     <TextInput
                         label="Denture"
                         placeholder="Present / Absent"
                         value={record.airway_denture}
                         onChange={(v) => handleField('airway_denture', v)}
+                        disabled={!canEdit}
                     />
                     <TextInput
                         label="Neck movements"
                         value={record.airway_neck_movements}
                         onChange={(v) => handleField('airway_neck_movements', v)}
+                        disabled={!canEdit}
                     />
                     <TextInput
                         label="Mallampati class"
                         placeholder="Class 1 / 2 / 3 / 4"
                         value={record.airway_mallampati_class}
                         onChange={(v) => handleField('airway_mallampati_class', v)}
+                        disabled={!canEdit}
                     />
                 </div>
 
                 <div className="flex items-center gap-2 text-[12px]">
-                    <label className="inline-flex items-center gap-1.5">
-                        <input
-                            type="checkbox"
-                            className="h-3.5 w-3.5 rounded border-slate-300"
-                            checked={record.difficult_airway_anticipated || false}
-                            onChange={() => toggleBool('difficult_airway_anticipated')}
-                        />
-                        <span className="text-slate-700">Difficult airway anticipated</span>
-                    </label>
+                    <Checkbox
+                        label="Difficult airway anticipated"
+                        checked={record.difficult_airway_anticipated || false}
+                        onChange={() => toggleBool('difficult_airway_anticipated')}
+                        disabled={!canEdit}
+                    />
                 </div>
 
                 <Textarea
                     label="Risk factors"
                     value={record.risk_factors}
                     onChange={(v) => handleField('risk_factors', v)}
+                    disabled={!canEdit}
                 />
                 <Textarea
                     label="Anaesthetic plan"
                     value={record.anaesthetic_plan_detail}
                     onChange={(v) => handleField('anaesthetic_plan_detail', v)}
+                    disabled={!canEdit}
                 />
                 <Textarea
                     label="Pre-op instructions"
                     value={record.preop_instructions}
                     onChange={(v) => handleField('preop_instructions', v)}
+                    disabled={!canEdit}
                 />
             </div>
         </div>
@@ -505,11 +629,13 @@ export default function AnaesthesiaTab({ caseId }) {
                             label="Preoxygenation"
                             checked={record.preoxygenation}
                             onChange={() => toggleBool('preoxygenation')}
+                            disabled={!canEdit}
                         />
                         <Checkbox
                             label="Cricoid pressure"
                             checked={record.cricoid_pressure}
                             onChange={() => toggleBool('cricoid_pressure')}
+                            disabled={!canEdit}
                         />
                     </div>
 
@@ -517,18 +643,15 @@ export default function AnaesthesiaTab({ caseId }) {
                         label="Induction"
                         value={record.induction_route}
                         onChange={(v) => handleField('induction_route', v)}
-                        options={[
-                            '',
-                            'Intravenous',
-                            'Inhalational',
-                            'Rapid sequence',
-                        ]}
+                        options={['', 'Intravenous', 'Inhalational', 'Rapid sequence']}
+                        disabled={!canEdit}
                     />
 
                     <Checkbox
                         label="Intubation done"
                         checked={record.intubation_done}
                         onChange={() => toggleBool('intubation_done')}
+                        disabled={!canEdit}
                     />
 
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
@@ -537,36 +660,56 @@ export default function AnaesthesiaTab({ caseId }) {
                             value={record.intubation_route}
                             onChange={(v) => handleField('intubation_route', v)}
                             options={['', 'Oral', 'Nasal']}
+                            disabled={!canEdit}
                         />
                         <Select
                             label="State"
                             value={record.intubation_state}
                             onChange={(v) => handleField('intubation_state', v)}
                             options={['', 'Awake', 'Anaesthetised']}
+                            disabled={!canEdit}
                         />
                         <Select
                             label="Technique"
                             value={record.intubation_technique}
                             onChange={(v) => handleField('intubation_technique', v)}
                             options={['', 'Visual', 'Blind', 'Fibreoptic', 'Retrograde']}
+                            disabled={!canEdit}
                         />
                         <TextInput
                             label="Laryngoscopy grade"
                             placeholder="I / II / III / IV"
                             value={record.laryngoscopy_grade}
                             onChange={(v) => handleField('laryngoscopy_grade', v)}
+                            disabled={!canEdit}
                         />
                     </div>
 
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <TextInput label="Tube type" value={record.tube_type} onChange={(v) => handleField('tube_type', v)} />
-                        <TextInput label="Size" value={record.tube_size} onChange={(v) => handleField('tube_size', v)} />
-                        <TextInput label="Fixed at" value={record.tube_fixed_at} onChange={(v) => handleField('tube_fixed_at', v)} />
+                        <TextInput
+                            label="Tube type"
+                            value={record.tube_type}
+                            onChange={(v) => handleField('tube_type', v)}
+                            disabled={!canEdit}
+                        />
+                        <TextInput
+                            label="Size"
+                            value={record.tube_size}
+                            onChange={(v) => handleField('tube_size', v)}
+                            disabled={!canEdit}
+                        />
+                        <TextInput
+                            label="Fixed at"
+                            value={record.tube_fixed_at}
+                            onChange={(v) => handleField('tube_fixed_at', v)}
+                            disabled={!canEdit}
+                        />
                         <Select
                             label="Cuff medium"
                             value={record.cuff_medium}
                             onChange={(v) => handleField('cuff_medium', v)}
                             options={['', 'Air', 'Saline', 'Not inflated']}
+                            disabled={!canEdit}
                         />
                     </div>
 
@@ -574,17 +717,20 @@ export default function AnaesthesiaTab({ caseId }) {
                         label="Cuff used"
                         checked={record.cuff_used}
                         onChange={() => toggleBool('cuff_used')}
+                        disabled={!canEdit}
                     />
 
                     <TextInput
                         label="Bilateral breath sounds"
                         value={record.bilateral_breath_sounds}
                         onChange={(v) => handleField('bilateral_breath_sounds', v)}
+                        disabled={!canEdit}
                     />
                     <TextInput
                         label="Added sounds"
                         value={record.added_sounds}
                         onChange={(v) => handleField('added_sounds', v)}
+                        disabled={!canEdit}
                     />
                 </div>
 
@@ -598,16 +744,22 @@ export default function AnaesthesiaTab({ caseId }) {
                         Airway devices
                     </div>
                     <div className="grid grid-cols-2 gap-1">
-                        {['Face mask', 'LMA/ILMA', 'Oral airway', 'Throat pack', 'NG tube', 'Other'].map(
-                            (label) => (
-                                <Checkbox
-                                    key={label}
-                                    label={label}
-                                    checked={(record.airway_devices || []).includes(label)}
-                                    onChange={() => toggleDevice(label)}
-                                />
-                            ),
-                        )}
+                        {[
+                            'Face mask',
+                            'LMA/ILMA',
+                            'Oral airway',
+                            'Throat pack',
+                            'NG tube',
+                            'Other',
+                        ].map((label) => (
+                            <Checkbox
+                                key={label}
+                                label={label}
+                                checked={(record.airway_devices || []).includes(label)}
+                                onChange={() => toggleDevice(label)}
+                                disabled={!canEdit}
+                            />
+                        ))}
                     </div>
 
                     <div className="mt-3 text-[11px] font-semibold text-slate-600">
@@ -633,6 +785,7 @@ export default function AnaesthesiaTab({ caseId }) {
                                 label={label}
                                 checked={record.monitors?.[key] || false}
                                 onChange={() => toggleMonitor(key)}
+                                disabled={!canEdit}
                             />
                         ))}
                     </div>
@@ -648,23 +801,33 @@ export default function AnaesthesiaTab({ caseId }) {
                         label="Ventilation mode"
                         value={record.ventilation_mode_baseline}
                         onChange={(v) => handleField('ventilation_mode_baseline', v)}
-                        options={['', 'Spontaneous', 'Controlled', 'Manual', 'Ventilator']}
+                        options={[
+                            '',
+                            'Spontaneous',
+                            'Controlled',
+                            'Manual',
+                            'Ventilator',
+                        ]}
+                        disabled={!canEdit}
                     />
                     <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
                         <TextInput
                             label="Vt (ml)"
                             value={record.ventilator_vt}
                             onChange={(v) => handleField('ventilator_vt', v)}
+                            disabled={!canEdit}
                         />
                         <TextInput
                             label="Rate (f)"
                             value={record.ventilator_rate}
                             onChange={(v) => handleField('ventilator_rate', v)}
+                            disabled={!canEdit}
                         />
                         <TextInput
                             label="PEEP (cmH₂O)"
                             value={record.ventilator_peep}
                             onChange={(v) => handleField('ventilator_peep', v)}
+                            disabled={!canEdit}
                         />
                     </div>
 
@@ -680,6 +843,7 @@ export default function AnaesthesiaTab({ caseId }) {
                             'Circle system',
                             'Other',
                         ]}
+                        disabled={!canEdit}
                     />
 
                     <div className="mt-2 text-[11px] font-semibold text-slate-600">
@@ -689,23 +853,34 @@ export default function AnaesthesiaTab({ caseId }) {
                         label="Patient position"
                         value={record.patient_position}
                         onChange={(v) => handleField('patient_position', v)}
-                        options={['', 'Supine', 'Lateral', 'Prone', 'Lithotomy', 'Other']}
+                        options={[
+                            '',
+                            'Supine',
+                            'Lateral',
+                            'Prone',
+                            'Lithotomy',
+                            'Other',
+                        ]}
+                        disabled={!canEdit}
                     />
                     <div className="flex flex-wrap gap-2">
                         <Checkbox
                             label="Eyes taped"
                             checked={record.eyes_taped}
                             onChange={() => toggleBool('eyes_taped')}
+                            disabled={!canEdit}
                         />
                         <Checkbox
                             label="Eyes covered with foil"
                             checked={record.eyes_covered_with_foil}
                             onChange={() => toggleBool('eyes_covered_with_foil')}
+                            disabled={!canEdit}
                         />
                         <Checkbox
                             label="Pressure points padded"
                             checked={record.pressure_points_padded}
                             onChange={() => toggleBool('pressure_points_padded')}
+                            disabled={!canEdit}
                         />
                     </div>
 
@@ -723,6 +898,7 @@ export default function AnaesthesiaTab({ caseId }) {
                                 label={label}
                                 checked={record.lines?.[key] || false}
                                 onChange={() => toggleLine(key)}
+                                disabled={!canEdit}
                             />
                         ))}
                     </div>
@@ -730,17 +906,20 @@ export default function AnaesthesiaTab({ caseId }) {
                         label="Tourniquet used"
                         checked={record.tourniquet_used}
                         onChange={() => toggleBool('tourniquet_used')}
+                        disabled={!canEdit}
                     />
 
                     <TextInput
                         label="IV fluids plan"
                         value={record.iv_fluids_plan}
                         onChange={(v) => handleField('iv_fluids_plan', v)}
+                        disabled={!canEdit}
                     />
                     <TextInput
                         label="Blood & components plan"
                         value={record.blood_components_plan}
                         onChange={(v) => handleField('blood_components_plan', v)}
+                        disabled={!canEdit}
                     />
 
                     <div className="mt-2 text-[11px] font-semibold text-slate-600">
@@ -750,42 +929,57 @@ export default function AnaesthesiaTab({ caseId }) {
                         label="Type"
                         value={record.regional_block_type}
                         onChange={(v) => handleField('regional_block_type', v)}
-                        options={['', 'Spinal', 'Epidural', 'Nerve block', 'Combined', 'None']}
+                        options={[
+                            '',
+                            'Spinal',
+                            'Epidural',
+                            'Nerve block',
+                            'Combined',
+                            'None',
+                        ]}
+                        disabled={!canEdit}
                     />
                     <TextInput
                         label="Position"
                         value={record.regional_position}
                         onChange={(v) => handleField('regional_position', v)}
+                        disabled={!canEdit}
                     />
                     <TextInput
                         label="Approach"
                         value={record.regional_approach}
                         onChange={(v) => handleField('regional_approach', v)}
+                        disabled={!canEdit}
                     />
                     <TextInput
                         label="Space & depth"
                         value={record.regional_space_depth}
                         onChange={(v) => handleField('regional_space_depth', v)}
+                        disabled={!canEdit}
                     />
                     <TextInput
                         label="Needle type"
                         value={record.regional_needle_type}
                         onChange={(v) => handleField('regional_needle_type', v)}
+                        disabled={!canEdit}
                     />
                     <TextInput
                         label="Drug injected / dose"
                         value={record.regional_drug_dose}
                         onChange={(v) => handleField('regional_drug_dose', v)}
+                        disabled={!canEdit}
                     />
                     <TextInput
                         label="Level of anaesthesia"
                         value={record.regional_level}
                         onChange={(v) => handleField('regional_level', v)}
+                        disabled={!canEdit}
                     />
                     <TextInput
                         label="Complications"
                         value={record.regional_complications}
                         onChange={(v) => handleField('regional_complications', v)}
+                        disabled={!canEdit}
                     />
 
                     <Select
@@ -793,17 +987,20 @@ export default function AnaesthesiaTab({ caseId }) {
                         value={record.block_adequacy}
                         onChange={(v) => handleField('block_adequacy', v)}
                         options={['', 'Excellent', 'Adequate', 'Poor']}
+                        disabled={!canEdit}
                     />
                     <div className="flex flex-wrap gap-2">
                         <Checkbox
                             label="Sedation needed"
                             checked={record.sedation_needed}
                             onChange={() => toggleBool('sedation_needed')}
+                            disabled={!canEdit}
                         />
                         <Checkbox
                             label="Conversion to GA"
                             checked={record.conversion_to_ga}
                             onChange={() => toggleBool('conversion_to_ga')}
+                            disabled={!canEdit}
                         />
                     </div>
                 </div>
@@ -813,6 +1010,7 @@ export default function AnaesthesiaTab({ caseId }) {
                 label="Intra-op summary / notes"
                 value={record.notes || ''}
                 onChange={(v) => handleField('notes', v)}
+                disabled={!canEdit}
             />
         </div>
     )
@@ -830,31 +1028,37 @@ export default function AnaesthesiaTab({ caseId }) {
                     label="Time (HH:MM)"
                     value={newVital.time}
                     onChange={(v) => setNewVital((p) => ({ ...p, time: v }))}
+                    disabled={!canEdit}
                 />
                 <TextInput
                     label="HR"
                     value={newVital.hr}
                     onChange={(v) => setNewVital((p) => ({ ...p, hr: v }))}
+                    disabled={!canEdit}
                 />
                 <TextInput
                     label="BP"
                     value={newVital.bp}
                     onChange={(v) => setNewVital((p) => ({ ...p, bp: v }))}
+                    disabled={!canEdit}
                 />
                 <TextInput
                     label="SpO₂"
                     value={newVital.spo2}
                     onChange={(v) => setNewVital((p) => ({ ...p, spo2: v }))}
+                    disabled={!canEdit}
                 />
                 <TextInput
                     label="RR"
                     value={newVital.rr}
                     onChange={(v) => setNewVital((p) => ({ ...p, rr: v }))}
+                    disabled={!canEdit}
                 />
                 <TextInput
                     label="Temp °C"
                     value={newVital.temp_c}
                     onChange={(v) => setNewVital((p) => ({ ...p, temp_c: v }))}
+                    disabled={!canEdit}
                 />
             </div>
 
@@ -863,11 +1067,15 @@ export default function AnaesthesiaTab({ caseId }) {
                     label="ETCO₂"
                     value={newVital.etco2}
                     onChange={(v) => setNewVital((p) => ({ ...p, etco2: v }))}
+                    disabled={!canEdit}
                 />
                 <TextInput
                     label="Vent mode"
                     value={newVital.ventilation_mode}
-                    onChange={(v) => setNewVital((p) => ({ ...p, ventilation_mode: v }))}
+                    onChange={(v) =>
+                        setNewVital((p) => ({ ...p, ventilation_mode: v }))
+                    }
+                    disabled={!canEdit}
                 />
                 <TextInput
                     label="Peak P (cmH₂O)"
@@ -875,21 +1083,29 @@ export default function AnaesthesiaTab({ caseId }) {
                     onChange={(v) =>
                         setNewVital((p) => ({ ...p, peak_airway_pressure: v }))
                     }
+                    disabled={!canEdit}
                 />
                 <TextInput
                     label="CVP / PCWP"
                     value={newVital.cvp_pcwp}
                     onChange={(v) => setNewVital((p) => ({ ...p, cvp_pcwp: v }))}
+                    disabled={!canEdit}
                 />
                 <TextInput
                     label="Urine (ml)"
                     value={newVital.urine_output_ml}
-                    onChange={(v) => setNewVital((p) => ({ ...p, urine_output_ml: v }))}
+                    onChange={(v) =>
+                        setNewVital((p) => ({ ...p, urine_output_ml: v }))
+                    }
+                    disabled={!canEdit}
                 />
                 <TextInput
                     label="Blood loss (ml)"
                     value={newVital.blood_loss_ml}
-                    onChange={(v) => setNewVital((p) => ({ ...p, blood_loss_ml: v }))}
+                    onChange={(v) =>
+                        setNewVital((p) => ({ ...p, blood_loss_ml: v }))
+                    }
+                    disabled={!canEdit}
                 />
             </div>
 
@@ -899,18 +1115,25 @@ export default function AnaesthesiaTab({ caseId }) {
                         label="ST segment / comments"
                         value={newVital.st_segment || newVital.comments}
                         onChange={(v) =>
-                            setNewVital((p) => ({ ...p, st_segment: v, comments: v }))
+                            setNewVital((p) => ({
+                                ...p,
+                                st_segment: v,
+                                comments: v,
+                            }))
                         }
+                        disabled={!canEdit}
                     />
                 </div>
-                <button
-                    type="button"
-                    onClick={handleAddVital}
-                    disabled={vitalBusy}
-                    className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-[12px] font-semibold text-white shadow hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                    {vitalBusy ? 'Adding…' : 'Add vitals'}
-                </button>
+                {canEdit && (
+                    <button
+                        type="button"
+                        onClick={handleAddVital}
+                        disabled={vitalBusy}
+                        className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-[12px] font-semibold text-white shadow hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                        {vitalBusy ? 'Adding…' : 'Add vitals'}
+                    </button>
+                )}
             </div>
 
             {/* List */}
@@ -958,12 +1181,14 @@ export default function AnaesthesiaTab({ caseId }) {
                                     <Td>{v.blood_loss_ml}</Td>
                                     <Td>{v.comments}</Td>
                                     <Td>
-                                        <button
-                                            onClick={() => handleDeleteVital(v.id)}
-                                            className="text-xs font-semibold text-red-500 hover:underline"
-                                        >
-                                            Delete
-                                        </button>
+                                        {canEdit && (
+                                            <button
+                                                onClick={() => handleDeleteVital(v.id)}
+                                                className="text-xs font-semibold text-red-500 hover:underline"
+                                            >
+                                                Delete
+                                            </button>
+                                        )}
                                     </Td>
                                 </tr>
                             ))
@@ -986,37 +1211,44 @@ export default function AnaesthesiaTab({ caseId }) {
                     label="Time (HH:MM)"
                     value={newDrug.time}
                     onChange={(v) => setNewDrug((p) => ({ ...p, time: v }))}
+                    disabled={!canEdit}
                 />
                 <TextInput
                     label="Drug name"
                     value={newDrug.drug_name}
                     onChange={(v) => setNewDrug((p) => ({ ...p, drug_name: v }))}
+                    disabled={!canEdit}
                 />
                 <TextInput
                     label="Dose"
                     value={newDrug.dose}
                     onChange={(v) => setNewDrug((p) => ({ ...p, dose: v }))}
+                    disabled={!canEdit}
                 />
                 <TextInput
                     label="Route"
                     value={newDrug.route}
                     onChange={(v) => setNewDrug((p) => ({ ...p, route: v }))}
+                    disabled={!canEdit}
                 />
                 <TextInput
                     label="Remarks"
                     value={newDrug.remarks}
                     onChange={(v) => setNewDrug((p) => ({ ...p, remarks: v }))}
+                    disabled={!canEdit}
                 />
             </div>
 
-            <button
-                type="button"
-                onClick={handleAddDrug}
-                disabled={drugBusy}
-                className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-[12px] font-semibold text-white shadow hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-            >
-                {drugBusy ? 'Adding…' : 'Add drug'}
-            </button>
+            {canEdit && (
+                <button
+                    type="button"
+                    onClick={handleAddDrug}
+                    disabled={drugBusy}
+                    className="inline-flex items-center justify-center rounded-full bg-slate-900 px-4 py-2 text-[12px] font-semibold text-white shadow hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                    {drugBusy ? 'Adding…' : 'Add drug'}
+                </button>
+            )}
 
             <div className="mt-3 overflow-x-auto">
                 <table className="min-w-full text-[11px]">
@@ -1046,12 +1278,14 @@ export default function AnaesthesiaTab({ caseId }) {
                                     <Td>{d.route}</Td>
                                     <Td>{d.remarks}</Td>
                                     <Td>
-                                        <button
-                                            onClick={() => handleDeleteDrug(d.id)}
-                                            className="text-xs font-semibold text-red-500 hover:underline"
-                                        >
-                                            Delete
-                                        </button>
+                                        {canEdit && (
+                                            <button
+                                                onClick={() => handleDeleteDrug(d.id)}
+                                                className="text-xs font-semibold text-red-500 hover:underline"
+                                            >
+                                                Delete
+                                            </button>
+                                        )}
                                     </Td>
                                 </tr>
                             ))
@@ -1119,16 +1353,18 @@ export default function AnaesthesiaTab({ caseId }) {
             {subTab === 'drugs' && renderDrugs()}
 
             {/* Save bar */}
-            <div className="sticky bottom-0 mt-4 flex justify-end border-t bg-slate-50/90 px-2 py-3 backdrop-blur">
-                <button
-                    type="button"
-                    onClick={handleSaveRecord}
-                    disabled={saving}
-                    className="inline-flex items-center rounded-full bg-slate-900 px-5 py-2 text-[13px] font-semibold text-white shadow-md hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                    {saving ? 'Saving…' : 'Save anaesthesia record'}
-                </button>
-            </div>
+            {canEdit && (
+                <div className="sticky bottom-0 mt-4 flex justify-end border-t bg-slate-50/90 px-2 py-3 backdrop-blur">
+                    <button
+                        type="button"
+                        onClick={handleSaveRecord}
+                        disabled={saving}
+                        className="inline-flex items-center rounded-full bg-slate-900 px-5 py-2 text-[13px] font-semibold text-white shadow-md hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                        {saving ? 'Saving…' : 'Save anaesthesia record'}
+                    </button>
+                </div>
+            )}
         </div>
     )
 }
@@ -1153,56 +1389,60 @@ function SubTabButton({ active, onClick, children, icon: Icon }) {
     )
 }
 
-function TextInput({ label, value, onChange, placeholder }) {
+function TextInput({ label, value, onChange, placeholder, disabled = false }) {
     return (
         <label className="flex flex-col gap-1">
             <span className="text-[11px] font-semibold text-slate-600">{label}</span>
             <input
-                className="h-9 rounded-md border border-slate-200 bg-slate-50 px-3 text-[12px] text-slate-900 outline-none ring-0 transition focus:border-slate-400 focus:bg-white"
+                className="h-9 rounded-md border border-slate-200 bg-slate-50 px-3 text-[12px] text-slate-900 outline-none ring-0 transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
                 value={value ?? ''}
                 placeholder={placeholder}
                 onChange={(e) => onChange(e.target.value)}
+                disabled={disabled}
             />
         </label>
     )
 }
 
-function Textarea({ label, value, onChange, placeholder }) {
+function Textarea({ label, value, onChange, placeholder, disabled = false }) {
     return (
         <label className="flex flex-col gap-1">
             <span className="text-[11px] font-semibold text-slate-600">{label}</span>
             <textarea
-                className="min-h-[70px] rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-900 outline-none ring-0 transition focus:border-slate-400 focus:bg-white"
+                className="min-h-[70px] rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-900 outline-none ring-0 transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
                 value={value ?? ''}
                 placeholder={placeholder}
                 onChange={(e) => onChange(e.target.value)}
+                disabled={disabled}
             />
         </label>
     )
 }
 
-function Checkbox({ label, checked, onChange }) {
+function Checkbox({ label, checked, onChange, disabled = false }) {
     return (
         <label className="inline-flex items-center gap-1.5 text-[11px] text-slate-700">
             <input
                 type="checkbox"
-                className="h-3.5 w-3.5 rounded border-slate-300 text-slate-900 focus:ring-0"
+                className="h-3.5 w-3.5 rounded border-slate-300 text-slate-900 focus:ring-0 disabled:cursor-not-allowed disabled:opacity-60"
                 checked={!!checked}
                 onChange={onChange}
+                disabled={disabled}
             />
             <span>{label}</span>
         </label>
     )
 }
 
-function Select({ label, value, onChange, options }) {
+function Select({ label, value, onChange, options, disabled = false }) {
     return (
         <label className="flex flex-col gap-1">
             <span className="text-[11px] font-semibold text-slate-600">{label}</span>
             <select
-                className="h-9 rounded-md border border-slate-200 bg-slate-50 px-3 text-[12px] text-slate-900 outline-none ring-0 transition focus:border-slate-400 focus:bg-white"
+                className="h-9 rounded-md border border-slate-200 bg-slate-50 px-3 text-[12px] text-slate-900 outline-none ring-0 transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
                 value={value ?? ''}
                 onChange={(e) => onChange(e.target.value)}
+                disabled={disabled}
             >
                 {options.map((opt) => (
                     <option key={opt || 'empty'} value={opt}>

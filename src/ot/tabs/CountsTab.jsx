@@ -1,23 +1,15 @@
-// FILE: frontend/src/ot/OtCaseDetailPage.jsx
+// FILE: frontend/src/ot/tabs/CountsTab.jsx
 import { useEffect, useMemo, useState } from 'react'
-
+import { AlertTriangle, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { motion } from 'framer-motion'
+import { useCan } from '../../hooks/useCan'
 import {
     getCountsRecord,
     createCountsRecord,
     updateCountsRecord,
-
 } from '../../api/ot'
-import { useCan } from '../../hooks/useCan'
-import {
-    
-    AlertTriangle,
-    
-    
 
-} from 'lucide-react'
-
-
-
+// ---------- helpers ----------
 function safeDate(value) {
     if (!value) return null
     const d = new Date(value)
@@ -25,125 +17,31 @@ function safeDate(value) {
     return d
 }
 
-function formatDate(value) {
+function formatDateTime(value) {
     const d = safeDate(value)
     if (!d) return '—'
-    return d.toLocaleDateString('en-IN', {
+    return d.toLocaleString('en-IN', {
         day: '2-digit',
         month: 'short',
         year: 'numeric',
-    })
-}
-
-function formatTime(value) {
-    const d = safeDate(value)
-    if (!d) return '—'
-    return d.toLocaleTimeString('en-IN', {
         hour: '2-digit',
         minute: '2-digit',
     })
 }
 
-function formatDateTime(value) {
-    const d = safeDate(value)
-    if (!d) return '—'
-    return `${formatDate(value)} · ${formatTime(value)}`
+function toIntOrNull(val) {
+    if (val === '' || val === null || val === undefined) return null
+    const n = Number(val)
+    return Number.isFinite(n) ? n : null
 }
-
-function joinNonEmpty(...parts) {
-    return parts.filter(Boolean).join(' · ')
-}
-
-function buildPatientName(patient) {
-    if (!patient) return '—'
-    const prefix = patient.prefix || patient.title
-    const first = patient.first_name || patient.given_name
-    const last = patient.last_name || patient.family_name
-
-    const full = [prefix, first, last].filter(Boolean).join(' ')
-    return full || patient.full_name || patient.display_name || '—'
-}
-
-function buildAgeSex(patient) {
-    if (!patient) return null
-
-    const sex =
-        patient.sex ||
-        patient.gender ||
-        patient.sex_label ||
-        null
-
-    let agePart =
-        patient.age_display ||
-        patient.age ||
-        null
-
-    if (!agePart && (patient.age_years != null || patient.age_months != null)) {
-        const y = patient.age_years
-        const m = patient.age_months
-        if (y != null && m != null) agePart = `${y}y ${m}m`
-        else if (y != null) agePart = `${y}y`
-        else if (m != null) agePart = `${m}m`
-    }
-
-    if (!agePart && patient.dob) {
-        const dob = safeDate(patient.dob)
-        if (dob) {
-            const now = new Date()
-            let years = now.getFullYear() - dob.getFullYear()
-            const m = now.getMonth() - dob.getMonth()
-            if (m < 0 || (m === 0 && now.getDate() < dob.getDate())) {
-                years--
-            }
-            agePart = `${years}y`
-        }
-    }
-
-    if (agePart && sex) return `${agePart} / ${sex}`
-    if (agePart) return agePart
-    if (sex) return sex
-    return null
-}
-// simple helper
-function toTimeInput(value) {
-    if (!value) return ''
-
-    // 1) Already in "HH:MM" from backend
-    if (/^\d{2}:\d{2}$/.test(value)) {
-        return value
-    }
-
-    // 2) If backend sends full ISO datetime "2025-12-06T11:14:00"
-    const d = new Date(value)
-    if (!isNaN(d.getTime())) {
-        // returns "HH:MM"
-        return d.toISOString().slice(11, 16)
-    }
-
-    // 3) Fallback – unknown format
-    return ''
-}
-
-
-
-
-
-
-
-
-// ===========================
-//   SPONGE / INSTRUMENT COUNT TAB
-// ===========================
 
 function CountsTab({ caseId }) {
-    const canView = useCan('ot.case.view') || useCan('ot.counts.view')
-    const canEdit = useCan('ot.counts.manage') || useCan('ot.case.update')
+    // ✅ Permission mapping should match backend:
+    // ("ot.counts", ["view","create","update"])
+    const canView = useCan('ot.cases.view') || useCan('ot.counts.view') || useCan('ipd.view')
+    const canEdit = useCan('ot.counts.create') || useCan('ot.counts.update') || useCan('ipd.doctor') || useCan('ipd.nursing')
 
     const [data, setData] = useState(null)
-    const [loading, setLoading] = useState(false)
-    const [saving, setSaving] = useState(false)
-    const [error, setError] = useState(null)
-
     const [form, setForm] = useState({
         sponges_initial: '',
         sponges_added: '',
@@ -158,54 +56,68 @@ function CountsTab({ caseId }) {
         notes: '',
     })
 
-    const toIntOrNull = (val) =>
-        val === '' || val === null || val === undefined ? null : Number(val)
+    const [loading, setLoading] = useState(false)
+    const [saving, setSaving] = useState(false)
+    const [error, setError] = useState(null)
+    const [success, setSuccess] = useState(null)
+
+    const lastStamp = data?.updated_at || data?.created_at
+
+    const banner = useMemo(() => {
+        if (error) {
+            return (
+                <div className="mb-3 flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-700">
+                    <AlertCircle className="h-4 w-4" />
+                    <span>{error}</span>
+                </div>
+            )
+        }
+        if (success) {
+            return (
+                <div className="mb-3 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-700">
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span>{success}</span>
+                </div>
+            )
+        }
+        return null
+    }, [error, success])
 
     const load = async () => {
         if (!canView) return
         try {
             setLoading(true)
             setError(null)
+            setSuccess(null)
 
             const res = await getCountsRecord(caseId)
-            const c = res.data
-            console.log('Counts record API data:', c)
-            setData(c)
+            const c = res?.data
 
-            setForm({
-                sponges_initial: c.sponges_initial ?? '',
-                sponges_added: c.sponges_added ?? '',
-                sponges_final: c.sponges_final ?? '',
-                instruments_initial: c.instruments_initial ?? '',
-                instruments_final: c.instruments_final ?? '',
-                needles_initial: c.needles_initial ?? '',
-                needles_final: c.needles_final ?? '',
-                discrepancy_text: c.discrepancy_text || '',
-                xray_done: !!c.xray_done,
-                resolved_by: c.resolved_by || '',
-                notes: c.notes || '',
-            })
+            if (c) {
+                setData(c)
+                setForm({
+                    sponges_initial: c.sponges_initial ?? '',
+                    sponges_added: c.sponges_added ?? '',
+                    sponges_final: c.sponges_final ?? '',
+                    instruments_initial: c.instruments_initial ?? '',
+                    instruments_final: c.instruments_final ?? '',
+                    needles_initial: c.needles_initial ?? '',
+                    needles_final: c.needles_final ?? '',
+                    discrepancy_text: c.discrepancy_text || '',
+                    xray_done: !!c.xray_done,
+                    resolved_by: c.resolved_by || '',
+                    notes: c.notes || '',
+                })
+            } else {
+                setData(null)
+            }
         } catch (err) {
             if (err?.response?.status === 404) {
-                // no record yet → create mode
+                // no record yet → empty form
                 setData(null)
-                setForm((f) => ({
-                    ...f,
-                    sponges_initial: '',
-                    sponges_added: '',
-                    sponges_final: '',
-                    instruments_initial: '',
-                    instruments_final: '',
-                    needles_initial: '',
-                    needles_final: '',
-                    discrepancy_text: '',
-                    xray_done: false,
-                    resolved_by: '',
-                    notes: '',
-                }))
             } else {
                 console.error('Failed to load counts record', err)
-                setError('Failed to load counts record')
+                setError('Failed to load counts record.')
             }
         } finally {
             setLoading(false)
@@ -217,6 +129,14 @@ function CountsTab({ caseId }) {
         load()
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [caseId, canView])
+
+    if (!canView) {
+        return (
+            <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+                You do not have permission to view sponge/instrument counts.
+            </div>
+        )
+    }
 
     const handleChange = (field, value) => {
         setForm((f) => ({ ...f, [field]: value }))
@@ -230,7 +150,6 @@ function CountsTab({ caseId }) {
         instruments_final: toIntOrNull(form.instruments_final),
         needles_initial: toIntOrNull(form.needles_initial),
         needles_final: toIntOrNull(form.needles_final),
-
         discrepancy_text: form.discrepancy_text || null,
         xray_done: !!form.xray_done,
         resolved_by: form.resolved_by || null,
@@ -239,146 +158,204 @@ function CountsTab({ caseId }) {
 
     const handleSubmit = async (e) => {
         e.preventDefault()
-        if (!canEdit) return
+        if (!canEdit) {
+            setError('You do not have permission to edit counts.')
+            return
+        }
 
         setSaving(true)
         setError(null)
+        setSuccess(null)
+
         const payload = buildPayload()
 
         try {
             if (data?.id) {
                 await updateCountsRecord(caseId, payload)
             } else {
-                const res = await createCountsRecord(caseId, payload)
-                setData(res.data)
+                // Create with safe fallback to update (in case of race / already exists)
+                try {
+                    await createCountsRecord(caseId, payload)
+                } catch (err) {
+                    const status = err?.response?.status
+                    const detail = err?.response?.data?.detail
+                    if (
+                        status === 400 &&
+                        typeof detail === 'string' &&
+                        detail.toLowerCase().includes('already exists')
+                    ) {
+                        await updateCountsRecord(caseId, payload)
+                    } else {
+                        throw err
+                    }
+                }
             }
+
             await load()
+            setSuccess('Counts record saved.')
         } catch (err) {
             console.error('Failed to save counts record', err)
             const msg =
                 err?.response?.data?.detail ||
                 err?.message ||
-                'Failed to save counts record'
+                'Failed to save counts record.'
             setError(msg)
         } finally {
             setSaving(false)
         }
     }
 
-    const numberInput = (field, label) => (
-        <div className="space-y-1" key={field}>
-            <label className="text-xs font-medium text-slate-700">{label}</label>
+    const NumField = ({ field, label, hint }) => (
+        <label className="flex flex-col gap-1">
+            <span className="text-[11px] font-semibold text-slate-700">
+                {label}
+                {hint ? (
+                    <span className="ml-1 font-normal text-slate-500">({hint})</span>
+                ) : null}
+            </span>
             <input
                 type="number"
-                className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs"
+                inputMode="numeric"
+                className="h-9 w-full rounded-md border border-slate-200 bg-slate-50 px-3 text-[12px] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
                 value={form[field]}
                 disabled={!canEdit}
                 onChange={(e) => handleChange(field, e.target.value)}
             />
-        </div>
+        </label>
     )
 
     return (
         <form
             onSubmit={handleSubmit}
-            className="space-y-3 rounded-2xl border bg-white px-4 py-3"
+            className="space-y-3 rounded-2xl border border-slate-200 bg-white/90 px-3 py-3 shadow-sm md:px-4 md:py-4"
         >
-            <div className="flex items-center justify-between gap-2">
+            <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex flex-wrap items-center justify-between gap-2"
+            >
                 <div className="flex items-center gap-2 text-sky-800">
-                    <AlertTriangle className="h-4 w-4" />
-                    <span className="text-sm font-semibold">
-                        Sponge / instrument / needle count
-                    </span>
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-50 text-amber-700">
+                        <AlertTriangle className="h-4 w-4" />
+                    </div>
+                    <div className="flex flex-col">
+                        <span className="text-sm font-semibold md:text-base">
+                            Sponge / Instrument / Needle Counts
+                        </span>
+                        <span className="text-[11px] text-slate-500">
+                            Initial · Added · Final · Discrepancy · X-ray
+                        </span>
+                    </div>
                 </div>
-                {data && (
-                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-700">
-                        Last updated: {data?.updated_at || data?.created_at || '—'}
+
+                {lastStamp && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        Updated: {formatDateTime(lastStamp)}
                     </span>
                 )}
-            </div>
+            </motion.div>
 
-            {loading && (
-                <div className="text-xs text-slate-500">Loading counts record...</div>
-            )}
-            {error && (
-                <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
-                    {error}
+            {banner}
+
+            {loading ? (
+                <div className="space-y-2">
+                    <div className="h-9 w-full animate-pulse rounded-xl bg-slate-100" />
+                    <div className="h-9 w-full animate-pulse rounded-xl bg-slate-100" />
+                    <div className="h-9 w-full animate-pulse rounded-xl bg-slate-100" />
                 </div>
-            )}
+            ) : (
+                <>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-3">
+                        <div className="mb-2 text-[11px] font-semibold text-slate-700">
+                            Sponges
+                        </div>
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                            <NumField field="sponges_initial" label="Initial" />
+                            <NumField field="sponges_added" label="Added during case" />
+                            <NumField field="sponges_final" label="Final count" />
+                        </div>
+                    </div>
 
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                {numberInput('sponges_initial', 'Sponges - initial')}
-                {numberInput('sponges_added', 'Sponges - added during case')}
-                {numberInput('sponges_final', 'Sponges - final count')}
-            </div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-3">
+                        <div className="mb-2 text-[11px] font-semibold text-slate-700">
+                            Instruments & Needles
+                        </div>
+                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                            <NumField field="instruments_initial" label="Instruments - Initial" />
+                            <NumField field="instruments_final" label="Instruments - Final" />
+                        </div>
+                        <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                            <NumField field="needles_initial" label="Needles - Initial" />
+                            <NumField field="needles_final" label="Needles - Final" />
+                        </div>
+                    </div>
 
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                {numberInput('instruments_initial', 'Instruments - initial')}
-                {numberInput('instruments_final', 'Instruments - final')}
-            </div>
+                    <div className="space-y-1">
+                        <span className="text-[11px] font-semibold text-slate-700">
+                            Discrepancy (if any)
+                        </span>
+                        <textarea
+                            rows={2}
+                            className="w-full resize-none rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                            value={form.discrepancy_text}
+                            disabled={!canEdit}
+                            onChange={(e) => handleChange('discrepancy_text', e.target.value)}
+                            placeholder="Describe discrepancy / missing item / reconciliation steps…"
+                        />
+                    </div>
 
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                {numberInput('needles_initial', 'Needles - initial')}
-                {numberInput('needles_final', 'Needles - final')}
-            </div>
-
-            <div className="space-y-1">
-                <label className="text-xs font-medium text-slate-700">
-                    Discrepancy (if any)
-                </label>
-                <textarea
-                    rows={2}
-                    className="w-full resize-none rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs"
-                    value={form.discrepancy_text}
-                    disabled={!canEdit}
-                    onChange={(e) => handleChange('discrepancy_text', e.target.value)}
-                />
-            </div>
-
-            <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs">
-                <input
-                    type="checkbox"
-                    className="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-                    checked={!!form.xray_done}
-                    disabled={!canEdit}
-                    onChange={(e) => handleChange('xray_done', e.target.checked)}
-                />
-                <span>Intra-op / post-op X-ray done for suspected retained item</span>
-            </label>
-
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-700">
-                        Discrepancy resolved by
+                    <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-800">
+                        <input
+                            type="checkbox"
+                            className="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500 disabled:cursor-not-allowed disabled:opacity-60"
+                            checked={!!form.xray_done}
+                            disabled={!canEdit}
+                            onChange={(e) => handleChange('xray_done', e.target.checked)}
+                        />
+                        <span>
+                            X-ray done for suspected retained item (if indicated)
+                        </span>
                     </label>
-                    <input
-                        type="text"
-                        className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs"
-                        value={form.resolved_by}
-                        disabled={!canEdit}
-                        onChange={(e) => handleChange('resolved_by', e.target.value)}
-                    />
-                </div>
-                <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-700">
-                        Notes / corrective action
-                    </label>
-                    <textarea
-                        rows={2}
-                        className="w-full resize-none rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs"
-                        value={form.notes}
-                        disabled={!canEdit}
-                        onChange={(e) => handleChange('notes', e.target.value)}
-                    />
-                </div>
-            </div>
+
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        <label className="flex flex-col gap-1">
+                            <span className="text-[11px] font-semibold text-slate-700">
+                                Resolved by
+                            </span>
+                            <input
+                                type="text"
+                                className="h-9 w-full rounded-md border border-slate-200 bg-slate-50 px-3 text-[12px] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                                value={form.resolved_by}
+                                disabled={!canEdit}
+                                onChange={(e) => handleChange('resolved_by', e.target.value)}
+                                placeholder="Surgeon / Scrub nurse / Circulating nurse…"
+                            />
+                        </label>
+
+                        <label className="flex flex-col gap-1">
+                            <span className="text-[11px] font-semibold text-slate-700">
+                                Notes / corrective action
+                            </span>
+                            <textarea
+                                rows={2}
+                                className="w-full resize-none rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                                value={form.notes}
+                                disabled={!canEdit}
+                                onChange={(e) => handleChange('notes', e.target.value)}
+                                placeholder="Actions taken, incident documentation, re-check method…"
+                            />
+                        </label>
+                    </div>
+                </>
+            )}
 
             {canEdit && (
-                <div className="flex justify-end">
+                <div className="flex justify-end pt-1">
                     <button
                         type="submit"
                         disabled={saving}
-                        className="inline-flex items-center gap-1.5 rounded-xl border border-sky-600 bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-700 disabled:opacity-60"
+                        className="inline-flex items-center gap-1.5 rounded-full border border-sky-600 bg-sky-600 px-4 py-1.5 text-[12px] font-semibold text-white shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
                     >
                         {saving && (
                             <span className="h-3 w-3 animate-spin rounded-full border-[2px] border-white border-b-transparent" />
@@ -391,4 +368,4 @@ function CountsTab({ caseId }) {
     )
 }
 
-export default (CountsTab)
+export default CountsTab

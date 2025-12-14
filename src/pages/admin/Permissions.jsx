@@ -15,7 +15,13 @@ export default function Permissions() {
   const load = useCallback(async () => {
     if (!canView) return
     setError('')
-    try { const r = await API.get('/permissions/'); setItems(r.data) }
+    try { const r = await API.get('/permissions/'); setItems(r.data) 
+        console.log("=============================================");
+        console.log(r.data);        
+        console.log("=============================================");
+    }
+  
+    
     catch (e) {
       const s = e?.response?.status
       if (s === 403) setError('Access denied for Permissions.')

@@ -1,22 +1,15 @@
-// FILE: frontend/src/ot/OtCaseDetailPage.jsx
+// FILE: frontend/src/ot/tabs/OperationNotesTab.jsx
 import { useEffect, useMemo, useState } from 'react'
-import { useParams, useNavigate } from 'react-router-dom'
+import { motion } from 'framer-motion'
+import { FileText, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { useCan } from '../../hooks/useCan'
 import {
-
     getOperationNote,
     createOperationNote,
     updateOperationNote,
-
 } from '../../api/ot'
-import { useCan } from '../../hooks/useCan'
-import {
 
-    FileText,
-
-
-} from 'lucide-react'
-
-
+// ---------- helpers ----------
 function safeDate(value) {
     if (!value) return null
     const d = new Date(value)
@@ -24,114 +17,34 @@ function safeDate(value) {
     return d
 }
 
-function formatDate(value) {
+function formatDateTime(value) {
     const d = safeDate(value)
     if (!d) return '—'
-    return d.toLocaleDateString('en-IN', {
+    return d.toLocaleString('en-IN', {
         day: '2-digit',
         month: 'short',
         year: 'numeric',
-    })
-}
-
-function formatTime(value) {
-    const d = safeDate(value)
-    if (!d) return '—'
-    return d.toLocaleTimeString('en-IN', {
         hour: '2-digit',
         minute: '2-digit',
     })
 }
 
-function formatDateTime(value) {
-    const d = safeDate(value)
-    if (!d) return '—'
-    return `${formatDate(value)} · ${formatTime(value)}`
-}
-
-function joinNonEmpty(...parts) {
-    return parts.filter(Boolean).join(' · ')
-}
-
-function buildPatientName(patient) {
-    if (!patient) return '—'
-    const prefix = patient.prefix || patient.title
-    const first = patient.first_name || patient.given_name
-    const last = patient.last_name || patient.family_name
-
-    const full = [prefix, first, last].filter(Boolean).join(' ')
-    return full || patient.full_name || patient.display_name || '—'
-}
-
-function buildAgeSex(patient) {
-    if (!patient) return null
-
-    const sex =
-        patient.sex ||
-        patient.gender ||
-        patient.sex_label ||
-        null
-
-    let agePart =
-        patient.age_display ||
-        patient.age ||
-        null
-
-    if (!agePart && (patient.age_years != null || patient.age_months != null)) {
-        const y = patient.age_years
-        const m = patient.age_months
-        if (y != null && m != null) agePart = `${y}y ${m}m`
-        else if (y != null) agePart = `${y}y`
-        else if (m != null) agePart = `${m}m`
-    }
-
-    if (!agePart && patient.dob) {
-        const dob = safeDate(patient.dob)
-        if (dob) {
-            const now = new Date()
-            let years = now.getFullYear() - dob.getFullYear()
-            const m = now.getMonth() - dob.getMonth()
-            if (m < 0 || (m === 0 && now.getDate() < dob.getDate())) {
-                years--
-            }
-            agePart = `${years}y`
-        }
-    }
-
-    if (agePart && sex) return `${agePart} / ${sex}`
-    if (agePart) return agePart
-    if (sex) return sex
-    return null
-}
-// simple helper
-function toTimeInput(value) {
-    if (!value) return ''
-
-    // 1) Already in "HH:MM" from backend
-    if (/^\d{2}:\d{2}$/.test(value)) {
-        return value
-    }
-
-    // 2) If backend sends full ISO datetime "2025-12-06T11:14:00"
-    const d = new Date(value)
-    if (!isNaN(d.getTime())) {
-        // returns "HH:MM"
-        return d.toISOString().slice(11, 16)
-    }
-
-    // 3) Fallback – unknown format
-    return ''
-}
-
-
+// ===========================
+//   OPERATION NOTES TAB
+// ===========================
 function OperationNotesTab({ caseId }) {
-    const canView = useCan('ot.case.view') || useCan('ot.operation_notes.view')
-    const canEdit = useCan('ot.operation_notes.manage') || useCan('ot.case.update')
+    // ✅ must match init_db:
+    // ("ot.operation_notes", ["view","create","update"])
+    const canView = useCan('ot.cases.view') || useCan('ot.operation_notes.view') || useCan('ipd.view')
+    const canCreate = useCan('ot.operation_notes.create') || useCan('ipd.doctor') || useCan('ipd.nursing')
+    const canUpdate = useCan('ot.operation_notes.update') || useCan('ipd.doctor') || useCan('ipd.nursing')
+    const canEdit = canCreate || canUpdate
 
     const [data, setData] = useState(null)
     const [loading, setLoading] = useState(false)
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState(null)
+    const [success, setSuccess] = useState(null)
 
     const [form, setForm] = useState({
         diagnosis_pre: '',
@@ -145,14 +58,39 @@ function OperationNotesTab({ caseId }) {
         post_op_orders: '',
     })
 
+    const lastStamp = data?.updated_at || data?.created_at
+
+    const banner = useMemo(() => {
+        if (error) {
+            return (
+                <div className="mb-3 flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-[12px] text-rose-700">
+                    <AlertCircle className="h-4 w-4" />
+                    <span>{error}</span>
+                </div>
+            )
+        }
+        if (success) {
+            return (
+                <div className="mb-3 flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-700">
+                    <CheckCircle2 className="h-4 w-4" />
+                    <span>{success}</span>
+                </div>
+            )
+        }
+        return null
+    }, [error, success])
+
     const load = async () => {
         if (!canView) return
         try {
             setLoading(true)
             setError(null)
+            setSuccess(null)
+
             const res = await getOperationNote(caseId)
-            if (res.data) {
-                const n = res.data
+            const n = res?.data
+
+            if (n) {
                 setData(n)
                 setForm({
                     diagnosis_pre: n.preop_diagnosis || '',
@@ -170,10 +108,10 @@ function OperationNotesTab({ caseId }) {
             }
         } catch (err) {
             if (err?.response?.status === 404) {
-                setData(null)
+                setData(null) // no note yet
             } else {
                 console.error('Failed to load Operation note', err)
-                setError('Failed to load Operation note')
+                setError(err?.response?.data?.detail || 'Failed to load Operation note.')
             }
         } finally {
             setLoading(false)
@@ -199,38 +137,47 @@ function OperationNotesTab({ caseId }) {
 
     const handleSubmit = async (e) => {
         e.preventDefault()
-        if (!canEdit) return
+
+        // If record exists → need update perm, else need create perm
+        if (data && !canUpdate) {
+            setError('You do not have permission to update Operation notes.')
+            return
+        }
+        if (!data && !canCreate) {
+            setError('You do not have permission to create Operation notes.')
+            return
+        }
 
         setSaving(true)
         setError(null)
+        setSuccess(null)
+
         try {
             const payload = {
-                // backend uses current user if this is null / absent
-                surgeon_user_id: null,
+                surgeon_user_id: null, // backend uses current user if null/absent
                 preop_diagnosis: form.diagnosis_pre || null,
                 postop_diagnosis: form.diagnosis_post || null,
                 indication: form.procedure_performed || null,
                 findings: form.findings || null,
                 procedure_steps: form.steps || null,
-                blood_loss_ml:
-                    form.blood_loss_ml === '' ? null : Number(form.blood_loss_ml),
+                blood_loss_ml: form.blood_loss_ml === '' ? null : Number(form.blood_loss_ml),
                 complications: form.complications || null,
                 drains_details: form.drains || null,
                 postop_instructions: form.post_op_orders || null,
             }
+
             if (data) {
                 await updateOperationNote(caseId, payload)
+                setSuccess('Operation note updated.')
             } else {
                 await createOperationNote(caseId, payload)
+                setSuccess('Operation note created.')
             }
+
             await load()
         } catch (err) {
             console.error('Failed to save Operation note', err)
-            const msg =
-                err?.response?.data?.detail ||
-                err?.message ||
-                'Failed to save Operation note'
-            setError(msg)
+            setError(err?.response?.data?.detail || err?.message || 'Failed to save Operation note.')
         } finally {
             setSaving(false)
         }
@@ -239,173 +186,156 @@ function OperationNotesTab({ caseId }) {
     return (
         <form
             onSubmit={handleSubmit}
-            className="space-y-3 rounded-2xl border bg-white px-4 py-3"
+            className="space-y-3 rounded-2xl border border-slate-200 bg-white/90 px-3 py-3 shadow-sm md:px-4 md:py-4"
         >
-            <div className="flex items-center justify-between gap-2">
+            {/* Header */}
+            <motion.div
+                initial={{ opacity: 0, y: 6 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="flex flex-wrap items-center justify-between gap-2"
+            >
                 <div className="flex items-center gap-2 text-sky-800">
-                    <FileText className="h-4 w-4" />
-                    <span className="text-sm font-semibold">Operation notes</span>
+                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-50 text-sky-700">
+                        <FileText className="h-4 w-4" />
+                    </div>
+                    <div className="flex flex-col">
+                        <span className="text-sm font-semibold md:text-base">Operation Notes</span>
+                        <span className="text-[11px] text-slate-500">
+                            Diagnosis · Findings · Steps · Complications · Post-op orders
+                        </span>
+                    </div>
                 </div>
-                {data && (
-                    <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-[11px] text-emerald-700">
-                        Last updated: {data?.updated_at || data?.created_at || '—'}
+
+                {lastStamp && (
+                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        Updated: {formatDateTime(lastStamp)}
                     </span>
                 )}
-            </div>
+            </motion.div>
+
+            {banner}
 
             {loading && (
-                <div className="text-xs text-slate-500">Loading Operation notes...</div>
-            )}
-
-            {error && (
-                <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
-                    {error}
+                <div className="space-y-2">
+                    <div className="h-9 w-full animate-pulse rounded-xl bg-slate-100" />
+                    <div className="h-20 w-full animate-pulse rounded-xl bg-slate-100" />
+                    <div className="h-20 w-full animate-pulse rounded-xl bg-slate-100" />
                 </div>
             )}
 
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-700">
-                        Pre-op diagnosis
-                    </label>
-                    <textarea
+            {!loading && (
+                <>
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        <TextArea
+                            label="Pre-op diagnosis"
+                            rows={2}
+                            value={form.diagnosis_pre}
+                            disabled={!canEdit}
+                            onChange={(v) => handleChange('diagnosis_pre', v)}
+                        />
+                        <TextArea
+                            label="Post-op diagnosis"
+                            rows={2}
+                            value={form.diagnosis_post}
+                            disabled={!canEdit}
+                            onChange={(v) => handleChange('diagnosis_post', v)}
+                        />
+                    </div>
+
+                    <TextArea
+                        label="Procedure performed / indication"
                         rows={2}
-                        className="w-full resize-none rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs"
-                        value={form.diagnosis_pre}
+                        value={form.procedure_performed}
                         disabled={!canEdit}
-                        onChange={(e) => handleChange('diagnosis_pre', e.target.value)}
+                        onChange={(v) => handleChange('procedure_performed', v)}
                     />
-                </div>
-                <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-700">
-                        Post-op diagnosis
-                    </label>
-                    <textarea
+
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                        <TextArea
+                            label="Findings"
+                            rows={3}
+                            value={form.findings}
+                            disabled={!canEdit}
+                            onChange={(v) => handleChange('findings', v)}
+                        />
+                        <TextArea
+                            label="Steps / technique"
+                            rows={3}
+                            value={form.steps}
+                            disabled={!canEdit}
+                            onChange={(v) => handleChange('steps', v)}
+                        />
+                    </div>
+
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                        <TextArea
+                            label="Complications"
+                            rows={2}
+                            value={form.complications}
+                            disabled={!canEdit}
+                            onChange={(v) => handleChange('complications', v)}
+                        />
+                        <TextArea
+                            label="Drains / tubes"
+                            rows={2}
+                            value={form.drains}
+                            disabled={!canEdit}
+                            onChange={(v) => handleChange('drains', v)}
+                        />
+                        <label className="flex flex-col gap-1">
+                            <span className="text-[11px] font-semibold text-slate-700">Approx. blood loss (ml)</span>
+                            <input
+                                type="number"
+                                className="h-9 w-full rounded-md border border-slate-200 bg-slate-50 px-3 text-[12px] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                                value={form.blood_loss_ml}
+                                disabled={!canEdit}
+                                onChange={(e) => handleChange('blood_loss_ml', e.target.value)}
+                            />
+                        </label>
+                    </div>
+
+                    <TextArea
+                        label="Immediate post-op orders"
                         rows={2}
-                        className="w-full resize-none rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs"
-                        value={form.diagnosis_post}
+                        value={form.post_op_orders}
                         disabled={!canEdit}
-                        onChange={(e) => handleChange('diagnosis_post', e.target.value)}
+                        onChange={(v) => handleChange('post_op_orders', v)}
                     />
-                </div>
-            </div>
 
-            <div className="space-y-1">
-                <label className="text-xs font-medium text-slate-700">
-                    Procedure performed / indication
-                </label>
-                <textarea
-                    rows={2}
-                    className="w-full resize-none rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs"
-                    value={form.procedure_performed}
-                    disabled={!canEdit}
-                    onChange={(e) =>
-                        handleChange('procedure_performed', e.target.value)
-                    }
-                />
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-700">
-                        Findings
-                    </label>
-                    <textarea
-                        rows={3}
-                        className="w-full resize-none rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs"
-                        value={form.findings}
-                        disabled={!canEdit}
-                        onChange={(e) => handleChange('findings', e.target.value)}
-                    />
-                </div>
-                <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-700">
-                        Steps / technique
-                    </label>
-                    <textarea
-                        rows={3}
-                        className="w-full resize-none rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs"
-                        value={form.steps}
-                        disabled={!canEdit}
-                        onChange={(e) => handleChange('steps', e.target.value)}
-                    />
-                </div>
-            </div>
-
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
-                <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-700">
-                        Complications
-                    </label>
-                    <textarea
-                        rows={2}
-                        className="w-full resize-none rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs"
-                        value={form.complications}
-                        disabled={!canEdit}
-                        onChange={(e) =>
-                            handleChange('complications', e.target.value)
-                        }
-                    />
-                </div>
-                <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-700">
-                        Drains / tubes
-                    </label>
-                    <textarea
-                        rows={2}
-                        className="w-full resize-none rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs"
-                        value={form.drains}
-                        disabled={!canEdit}
-                        onChange={(e) => handleChange('drains', e.target.value)}
-                    />
-                </div>
-                <div className="space-y-1">
-                    <label className="text-xs font-medium text-slate-700">
-                        Approx. blood loss (ml)
-                    </label>
-                    <input
-                        type="number"
-                        className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs"
-                        value={form.blood_loss_ml}
-                        disabled={!canEdit}
-                        onChange={(e) =>
-                            handleChange('blood_loss_ml', e.target.value)
-                        }
-                    />
-                </div>
-            </div>
-
-            <div className="space-y-1">
-                <label className="text-xs font-medium text-slate-700">
-                    Immediate post-op orders
-                </label>
-                <textarea
-                    rows={2}
-                    className="w-full resize-none rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs"
-                    value={form.post_op_orders}
-                    disabled={!canEdit}
-                    onChange={(e) =>
-                        handleChange('post_op_orders', e.target.value)
-                    }
-                />
-            </div>
-
-            {canEdit && (
-                <div className="flex justify-end">
-                    <button
-                        type="submit"
-                        disabled={saving}
-                        className="inline-flex items-center gap-1.5 rounded-xl border border-sky-600 bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-700 disabled:opacity-60"
-                    >
-                        {saving && (
-                            <span className="h-3 w-3 animate-spin rounded-full border-[2px] border-white border-b-transparent" />
-                        )}
-                        Save Operation note
-                    </button>
-                </div>
+                    {canEdit && (
+                        <div className="flex justify-end pt-1">
+                            <button
+                                type="submit"
+                                disabled={saving}
+                                className="inline-flex items-center gap-1.5 rounded-full border border-sky-600 bg-sky-600 px-4 py-1.5 text-[12px] font-semibold text-white shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+                            >
+                                {saving && (
+                                    <span className="h-3 w-3 animate-spin rounded-full border-[2px] border-white border-b-transparent" />
+                                )}
+                                Save Operation note
+                            </button>
+                        </div>
+                    )}
+                </>
             )}
         </form>
     )
 }
 
-export default (OperationNotesTab)
+function TextArea({ label, value, onChange, rows = 2, disabled }) {
+    return (
+        <label className="flex flex-col gap-1">
+            <span className="text-[11px] font-semibold text-slate-700">{label}</span>
+            <textarea
+                rows={rows}
+                className="w-full resize-none rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                value={value ?? ''}
+                disabled={disabled}
+                onChange={(e) => onChange(e.target.value)}
+            />
+        </label>
+    )
+}
+
+export default OperationNotesTab

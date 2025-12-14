@@ -145,6 +145,19 @@ export function recordVitals(payload) {
     return API.post('/opd/vitals', payload)
 }
 
+
+// ---------- Vitals (triage) ----------
+
+export function fetchLatestVitals(params = {}) {
+  // params: { appointment_id?, patient_id?, for_date? }
+  return API.get('/opd/vitals/latest', { params: toParams(params) })
+}
+
+export function fetchVitalsHistory(params = {}) {
+  // params: { appointment_id?, patient_id?, for_date?, limit? }
+  return API.get('/opd/vitals/history', { params: toParams(params) })
+}
+
 // ---------- Prescription & Orders ----------
 
 export function savePrescription(visitId, payload) {

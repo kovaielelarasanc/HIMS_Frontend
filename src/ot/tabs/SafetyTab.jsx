@@ -1,4 +1,5 @@
 // FILE: frontend/src/ot/tabs/SafetyTab.jsx
+// FILE: frontend/src/ot/tabs/SafetyTab.jsx
 import { useEffect, useState } from 'react'
 import {
     getSafetyChecklist,
@@ -89,11 +90,20 @@ const DEFAULT_FORM = () => ({
 })
 
 function SafetyTab({ caseId }) {
-    const canView = useCan('ot.cases.view') || useCan('ot.safety.view')
-    const canEdit = useCan('ot.safety.manage') || useCan('ot.cases.update')
+    // ✅ align with OT + pre-op permission pattern
+    const canView =
+        useCan('ot.safety_checklist.view') ||
+        useCan('ot.cases.view') ||
+        useCan('ipd.view')
+
+    const canEdit =
+        useCan('ot.safety_checklist.update') ||
+        useCan('ot.safety_checklist.create') ||
+        useCan('ot.cases.update') ||
+        useCan('ipd.doctor')
 
     const [data, setData] = useState(null)
-    const [form, setForm] = useState(DEFAULT_FORM)
+    const [form, setForm] = useState(DEFAULT_FORM())   // ✅ call function
     const [loading, setLoading] = useState(false)
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState(null)

@@ -177,11 +177,16 @@ const hydrateForm = (incoming) => {
 
 function PreopTab({ caseId }) {
     const canView =
-        useCan('ot.cases.view') || useCan('ot.preop_checklist.view')
+        useCan('ot.preop_checklist.view') ||
+        useCan('ot.cases.view') ||
+        useCan('ipd.view')
+
     const canEdit =
         useCan('ot.preop_checklist.update') ||
         useCan('ot.preop_checklist.create') ||
-        useCan('ot.cases.update')
+        useCan('ot.cases.update') ||
+        useCan('ipd.doctor')
+
 
     const [record, setRecord] = useState(null)
     const [form, setForm] = useState(DEFAULT_FORM)
@@ -396,8 +401,8 @@ function PreopTab({ caseId }) {
                                 exit={{ opacity: 0, y: -6 }}
                                 transition={{ duration: 0.16, delay: idx * 0.01 }}
                                 className={`rounded-2xl border px-3 py-2.5 text-xs md:px-3.5 md:py-3 ${isChecked
-                                        ? 'border-sky-200 bg-sky-50/80'
-                                        : 'border-slate-200 bg-slate-50/60'
+                                    ? 'border-sky-200 bg-sky-50/80'
+                                    : 'border-slate-200 bg-slate-50/60'
                                     }`}
                             >
                                 {/* Item + toggles */}
