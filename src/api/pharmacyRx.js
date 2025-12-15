@@ -91,3 +91,11 @@ export function listDispenseQueue(params = {}) {
     // e.g. params = { type: 'OPD' | 'IPD' | 'COUNTER', location_id }
     return API.get('/pharmacy/rx-queue', { params })
 }
+
+
+export async function openPharmacyPrescriptionPdfInNewTab(rxId) {
+    const res = await API.get(`/pharmacy/prescriptions/${rxId}/pdf`, { responseType: 'blob' })
+    const blob = new Blob([res.data], { type: 'application/pdf' })
+    const url = window.URL.createObjectURL(blob)
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }

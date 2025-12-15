@@ -1,1524 +1,2217 @@
 // FILE: src/pages/PharmacyRx.jsx
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'sonner'
 
 import {
-    listPharmacyPrescriptions,
-    createPharmacyPrescription,
-    getPharmacyPrescription,
+  listPharmacyPrescriptions,
+  createPharmacyPrescription,
+  getPharmacyPrescription,
 } from '../api/pharmacyRx'
-import { listPatients } from '../api/patients'
+import { listPatients, getPatientById } from '../api/patients'
 import { getBillingMasters } from '../api/billing'
 import { listInventoryItems } from '../api/inventory'
 
-import {
-    Card,
-    CardHeader,
-    CardTitle,
-    CardContent,
-} from '@/components/ui/card'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
-    Tabs,
-    TabsList,
-    TabsTrigger,
-    TabsContent,
-} from '@/components/ui/tabs'
-import {
-    Select,
-    SelectTrigger,
-    SelectValue,
-    SelectContent,
-    SelectItem,
+  Select,
+  SelectTrigger,
+  SelectValue,
+  SelectContent,
+  SelectItem,
 } from '@/components/ui/select'
 import { ScrollArea } from '@/components/ui/scroll-area'
 
 import {
-    Pill,
-    ClipboardList,
-    User,
-    Search,
-    Plus,
-    ArrowLeft,
-    Filter,
-    Clock3,
-    Stethoscope,
+  Pill,
+  ClipboardList,
+  User,
+  Search,
+  Plus,
+  ArrowLeft,
+  Filter,
+  Clock3,
+  Stethoscope,
+  RotateCcw,
+  CheckCircle2,
+  Sparkles,
+  Phone,
+  Calendar,
+  BadgeCheck,
+  IdCard,
+  MapPin,
 } from 'lucide-react'
 
+/* ----------------------------- helpers/hooks ----------------------------- */
+
+function todayDateTimeLocal() {
+  const d = new Date()
+  const off = d.getTimezoneOffset()
+  const local = new Date(d.getTime() - off * 60 * 1000)
+  return local.toISOString().slice(0, 16)
+}
+
+function fmtDT(x) {
+  if (!x) return '—'
+  try {
+    const s = String(x)
+    return s.replace('T', ' ').slice(0, 16)
+  } catch {
+    return '—'
+  }
+}
+
+function safeStr(x) {
+  return (x ?? '').toString()
+}
+
+function useDebouncedValue(value, delay = 300) {
+  const [v, setV] = useState(value)
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), delay)
+    return () => clearTimeout(t)
+  }, [value, delay])
+  return v
+}
+
+function useOnClickOutside(ref, handler) {
+  useEffect(() => {
+    const listener = (event) => {
+      const el = ref?.current
+      if (!el) return
+      if (el.contains(event.target)) return
+      handler?.(event)
+    }
+    document.addEventListener('mousedown', listener)
+    document.addEventListener('touchstart', listener)
+    return () => {
+      document.removeEventListener('mousedown', listener)
+      document.removeEventListener('touchstart', listener)
+    }
+  }, [ref, handler])
+}
+
+function normalizeFreq(freq) {
+  const f = safeStr(freq).trim().toUpperCase()
+  return f
+}
+
+/** robust getter for inconsistent backend keys */
+function pick(obj, keys, fallback = '') {
+  for (const k of keys) {
+    const v = obj?.[k]
+    if (v !== undefined && v !== null && String(v).trim() !== '') return v
+  }
+  return fallback
+}
+
+function parseFrequencyToPerDay(freqRaw) {
+  const f = normalizeFreq(freqRaw)
+
+  const map = {
+    OD: 1,
+    QD: 1,
+    ONCE: 1,
+    BD: 2,
+    BID: 2,
+    TID: 3,
+    TDS: 3,
+    QID: 4,
+    QHS: 1,
+    HS: 1,
+  }
+  if (map[f]) return map[f]
+
+  if (f.includes('-')) {
+    const parts = f.split('-').map((x) => Number(x || 0))
+    const perDay = parts.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0)
+    return perDay || 0
+  }
+
+  const qh = f.match(/^Q(\d{1,2})H$/)
+  if (qh) {
+    const h = Number(qh[1])
+    if (h > 0) return Math.floor(24 / h)
+  }
+
+  return 0
+}
+
+function calcAutoQty({ frequency, duration_days }) {
+  const d = Number(duration_days || 0)
+  const perDay = parseFrequencyToPerDay(frequency)
+  if (!d || !perDay) return ''
+  return String(perDay * d)
+}
+
+function getPatientDisplay(p) {
+  if (!p) return '—'
+  const name =
+    `${p.first_name || ''} ${p.last_name || ''}`.trim() || p.name || ''
+  const uhid = p.uhid ? `UHID: ${p.uhid}` : ''
+  const phone = p.phone ? `Ph: ${p.phone}` : ''
+  return [name, uhid, phone].filter(Boolean).join(' • ')
+}
+
+function getPatientName(p) {
+  if (!p) return '—'
+  return (
+    `${p.first_name || ''} ${p.last_name || ''}`.trim() ||
+    p.name ||
+    `Patient #${p.id || ''}` ||
+    '—'
+  )
+}
+
+function getPatientAgeGender(p) {
+  if (!p) return ''
+  const a =
+    pick(p, ['age', 'age_years'], '') ||
+    (p.dob ? '' : '') // keep simple
+  const g = pick(p, ['gender', 'sex'], '')
+  return [a ? `${a}y` : '', g].filter(Boolean).join(' • ')
+}
+
+/** normalize Rx line fields (freq missing issue fix) */
+function normalizeLine(l) {
+  const itemName = pick(l, ['item_name', 'medicine_name', 'name'], '')
+  const strength = pick(l, ['strength', 'item_strength'], '')
+  const dose = pick(l, ['dose', 'dosage', 'dose_text'], '')
+  const frequency = pick(l, ['frequency', 'freq', 'dosage_frequency', 'frequency_text', 'freq_code'], '')
+  const duration_days = pick(l, ['duration_days', 'days', 'duration', 'duration_day'], '')
+  const route = pick(l, ['route', 'route_code', 'administration_route'], '')
+  const instructions = pick(l, ['instructions', 'sig', 'remarks', 'instruction'], '')
+  const qty = pick(l, ['total_qty', 'requested_qty', 'qty', 'quantity'], '')
+  return {
+    itemName,
+    strength,
+    dose,
+    frequency,
+    duration_days,
+    route,
+    instructions,
+    qty,
+  }
+}
+
+/* ------------------------------ constants ------------------------------ */
+
 const RX_TYPES = [
-    { value: 'OPD', label: 'OPD' },
-    { value: 'IPD', label: 'IPD' },
-    { value: 'OT', label: 'OT' },
-    { value: 'COUNTER', label: 'Counter' },
+  { value: 'OPD', label: 'OPD' },
+  { value: 'IPD', label: 'IPD' },
+  { value: 'OT', label: 'OT' },
+  { value: 'COUNTER', label: 'Counter' },
 ]
 
 const PRIORITIES = [
-    { value: 'ROUTINE', label: 'Routine' },
-    { value: 'STAT', label: 'STAT / Urgent' },
-    { value: 'PRN', label: 'PRN / As needed' },
+  { value: 'ROUTINE', label: 'Routine' },
+  { value: 'STAT', label: 'STAT / Urgent' },
+  { value: 'PRN', label: 'PRN / As needed' },
 ]
 
-function todayDateTimeLocal() {
-    const d = new Date()
-    const off = d.getTimezoneOffset()
-    const local = new Date(d.getTime() - off * 60 * 1000)
-    return local.toISOString().slice(0, 16)
-}
+const FREQ_PRESETS = [
+  { label: 'OD', value: 'OD' },
+  { label: 'BD', value: 'BD' },
+  { label: 'TID', value: 'TID' },
+  { label: 'QID', value: 'QID' },
+  { label: '1-0-1', value: '1-0-1' },
+  { label: '1-1-1', value: '1-1-1' },
+  { label: '0-0-1', value: '0-0-1' },
+  { label: '0-1-0', value: '0-1-0' },
+]
+
+const ROUTE_PRESETS = ['PO', 'IV', 'IM', 'SC', 'PR', 'INH', 'TOP']
 
 const EMPTY_HEADER = {
-    type: 'OPD',
-    priority: 'ROUTINE',
-    datetime: todayDateTimeLocal(),
-    patient: null,
-    doctorId: '',
-    visitNo: '',
-    admissionNo: '',
-    otCaseNo: '',
-    notes: '',
+  type: 'OPD',
+  priority: 'ROUTINE',
+  datetime: todayDateTimeLocal(),
+  patient: null,
+  doctorId: '',
+  visitNo: '',
+  admissionNo: '',
+  otCaseNo: '',
+  notes: '',
 }
 
 const EMPTY_LINE = {
-    item: null,
-    item_name: '',
-    strength: '',
-    route: 'PO',
-    dose: '',
-    frequency: '',
-    duration_days: '',
-    total_qty: '',
-    instructions: '',
-    is_prn: false,
-    is_stat: false,
-    requested_qty: '',
+  item: null,
+  item_name: '',
+  strength: '',
+  route: 'PO',
+  dose: '',
+  frequency: '',
+  duration_days: '',
+  total_qty: '',
+  instructions: '',
+  is_prn: false,
+  is_stat: false,
+  requested_qty: '',
+  _qtyTouched: false,
 }
 
-export default function PharmacyRx() {
-    const [tab, setTab] = useState('list') // 'list' | 'new' | 'detail'
+/* ------------------------------ UI helpers ------------------------------ */
 
-    // list / queue state
-    const [rxTypeFilter, setRxTypeFilter] = useState('ALL')
-    const [statusFilter, setStatusFilter] = useState('ALL')
-    const [search, setSearch] = useState('')
-    const [listLoading, setListLoading] = useState(false)
-    const [rxList, setRxList] = useState([])
-    const [selectedRx, setSelectedRx] = useState(null)
+function GlassCard({ className = '', children }) {
+  return (
+    <Card
+      className={[
+        'rounded-3xl border border-slate-200/70',
+        'bg-white/70 backdrop-blur-xl',
+        'shadow-[0_12px_30px_rgba(0,0,0,0.06)]',
+        'ring-1 ring-black/[0.03]',
+        className,
+      ].join(' ')}
+    >
+      {children}
+    </Card>
+  )
+}
 
-    // form state
-    const [header, setHeader] = useState(EMPTY_HEADER)
-    const [lines, setLines] = useState([])
-    const [currentLine, setCurrentLine] = useState(EMPTY_LINE)
-    const [submitting, setSubmitting] = useState(false)
-
-    // patient search
-    const [patientQuery, setPatientQuery] = useState('')
-    const [patientResults, setPatientResults] = useState([])
-    const [patientSearching, setPatientSearching] = useState(false)
-    const [showPatientDropdown, setShowPatientDropdown] = useState(false)
-
-    // doctor masters
-    const [doctors, setDoctors] = useState([])
-    const [mastersLoading, setMastersLoading] = useState(false)
-
-    // medicine search
-    const [medQuery, setMedQuery] = useState('')
-    const [medResults, setMedResults] = useState([])
-    const [medSearching, setMedSearching] = useState(false)
-    const [showMedDropdown, setShowMedDropdown] = useState(false)
-
-    // -------- Masters / initial data --------
-
-    useEffect(() => {
-        ; (async () => {
-            try {
-                setMastersLoading(true)
-                const res = await getBillingMasters()
-                const docs = res?.data?.doctors || []
-                setDoctors(docs)
-            } catch (e) {
-                // toast handled by interceptor
-            } finally {
-                setMastersLoading(false)
-            }
-        })()
-    }, [])
-
-    useEffect(() => {
-        fetchRxList()
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [rxTypeFilter, statusFilter])
-
-    async function fetchRxList() {
-        try {
-            setListLoading(true)
-            const params = {}
-            if (rxTypeFilter !== 'ALL') params.type = rxTypeFilter
-            if (statusFilter !== 'ALL') params.status = statusFilter
-            if (search?.trim()) params.q = search.trim()
-            params.limit = 100
-
-            const res = await listPharmacyPrescriptions(params)
-            setRxList(res?.data || [])
-        } catch (e) {
-            // toast via interceptor
-        } finally {
-            setListLoading(false)
-        }
-    }
-
-    // -------- Patient search --------
-
-    useEffect(() => {
-        if (!patientQuery || patientQuery.trim().length < 2) {
-            setPatientResults([])
-            return
-        }
-        let cancelled = false
-            ; (async () => {
-                try {
-                    setPatientSearching(true)
-                    const res = await listPatients(patientQuery.trim())
-                    if (cancelled) return
-                    setPatientResults(res?.data?.items || res?.data || [])
-                    setShowPatientDropdown(true)
-                } catch (e) {
-                    // handled globally
-                } finally {
-                    if (!cancelled) setPatientSearching(false)
-                }
-            })()
-        return () => {
-            cancelled = true
-        }
-    }, [patientQuery])
-
-    function handleSelectPatient(p) {
-        setHeader((prev) => ({
-            ...prev,
-            patient: p,
-        }))
-        setPatientQuery(
-            `${p.uhid ? `${p.uhid} • ` : ''}${p.first_name || ''} ${p.last_name || ''
-                }`.trim()
-        )
-        setShowPatientDropdown(false)
-    }
-
-    // -------- Medicine search --------
-
-    useEffect(() => {
-        if (!medQuery || medQuery.trim().length < 2) {
-            setMedResults([])
-            return
-        }
-        let cancelled = false
-            ; (async () => {
-                try {
-                    setMedSearching(true)
-                    // Reuse inventory search; backend can filter to "pharmacy" items
-                    const res = await listInventoryItems({
-                        q: medQuery.trim(),
-                        kind: 'MEDICINE',
-                        limit: 15,
-                    })
-                    if (cancelled) return
-                    const items = res?.data?.items || res?.data || []
-                    setMedResults(items)
-                    setShowMedDropdown(true)
-                } catch (e) {
-                    // global toast
-                } finally {
-                    if (!cancelled) setMedSearching(false)
-                }
-            })()
-        return () => {
-            cancelled = true
-        }
-    }, [medQuery])
-
-    function handleSelectMedicine(item) {
-        setCurrentLine((prev) => ({
-            ...prev,
-            item,
-            item_name: item.name || item.item_name || '',
-        }))
-        setMedQuery(item.name || item.item_name || '')
-        setShowMedDropdown(false)
-    }
-
-    // -------- Form helpers --------
-
-    function resetForm() {
-        setHeader({
-            ...EMPTY_HEADER,
-            type: header.type || 'OPD',
-        })
-        setLines([])
-        setCurrentLine(EMPTY_LINE)
-        setPatientQuery('')
-    }
-
-    function startNewRx(initialType) {
-        const t = initialType || 'OPD'
-        setHeader((prev) => ({
-            ...EMPTY_HEADER,
-            type: t,
-            datetime: todayDateTimeLocal(),
-        }))
-        setLines([])
-        setCurrentLine(EMPTY_LINE)
-        setPatientQuery('')
-        setSelectedRx(null)
-        setTab('new')
-    }
-
-    function autoQty(line) {
-        const d = Number(line.duration_days || 0)
-        const freqPattern = (line.frequency || '').trim()
-        if (!d || !freqPattern) return ''
-        // simple patterns like "1-0-1", "1-1-1"
-        const parts = freqPattern.split('-').map((x) => Number(x || 0))
-        const perDay = parts.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0)
-        if (!perDay) return ''
-        return String(perDay * d)
-    }
-
-    function handleAddLine() {
-        if (!currentLine.item && !currentLine.item_name) {
-            toast.error('Select a medicine first')
-            return
-        }
-
-        // calculate quantity – from total_qty or from freq + days
-        const auto = autoQty(currentLine)
-        const computedQty = currentLine.total_qty || auto
-
-        if (!computedQty) {
-            toast.error('Enter Total Qty or proper Frequency + Days')
-            return
-        }
-
-        const withQty = {
-            ...currentLine,
-            total_qty: computedQty,
-            requested_qty: currentLine.requested_qty || computedQty,
-        }
-
-        setLines((prev) => [...prev, withQty])
-        setCurrentLine(EMPTY_LINE)
-        setMedQuery('')
-        setShowMedDropdown(false)
-    }
-
-    function handleRemoveLine(idx) {
-        setLines((prev) => prev.filter((_, i) => i !== idx))
-    }
-
-    async function handleSubmitRx() {
-        if (!header.patient && header.type !== 'COUNTER') {
-            toast.error('Select a patient')
-            return
-        }
-        if (!header.doctorId && header.type !== 'COUNTER') {
-            toast.error('Select a doctor')
-            return
-        }
-        if (!lines.length) {
-            toast.error('Add at least one medicine')
-            return
-        }
-
-        const payload = {
-            type: header.type,
-            priority: header.priority,
-            rx_datetime: header.datetime,
-            patient_id: header.patient?.id || null,
-            doctor_user_id: header.doctorId || null,
-            visit_id: header.type === 'OPD' ? header.visitNo || null : null,
-            ipd_admission_id: header.type === 'IPD' ? header.admissionNo || null : null,
-            ot_case_id: header.type === 'OT' ? header.otCaseNo || null : null,
-            notes: header.notes || '',
-            lines: lines.map((l) => {
-                // re-compute quantity just in case
-                const auto = autoQty(l)
-                const qtyStr = l.total_qty || l.requested_qty || auto || ''
-                const qty = qtyStr ? Number(qtyStr) : null
-
-                return {
-                    item_id: l.item?.id || l.item_id || null,
-                    item_name: l.item?.name || l.item_name || '',
-                    strength: l.strength || null,
-                    route: l.route || null,
-                    dose: l.dose || null,
-                    frequency: l.frequency || null,
-                    duration_days: l.duration_days ? Number(l.duration_days) : null,
-
-                    // NEW: what backend expects
-                    requested_qty: qty,
-
-                    // keep total_qty in sync so old code / reports still work
-                    total_qty: qty,
-
-                    instructions: l.instructions || null,
-                    is_prn: !!l.is_prn,
-                    is_stat: !!l.is_stat,
-                }
-            }),
-        }
-
-        try {
-            setSubmitting(true)
-            const res = await createPharmacyPrescription(payload)
-            toast.success('Prescription created & sent to Pharmacy')
-            resetForm()
-            setTab('list')
-            fetchRxList()
-            if (res?.data) setSelectedRx(res.data)
-        } catch (e) {
-            // toast via interceptor
-        } finally {
-            setSubmitting(false)
-        }
-    }
-
-    async function handleOpenRx(row) {
-        try {
-            const res = await getPharmacyPrescription(row.id)
-            const data = res?.data || row
-            setSelectedRx(data)
-            setTab('detail')
-        } catch (e) {
-            // handled globally
-        }
-    }
-
-    const selectedRxLines = useMemo(() => {
-        if (!selectedRx) return []
-        return selectedRx.lines || selectedRx.items || []
-    }, [selectedRx])
-
-    // -------- Render --------
-
-    return (
-        <div className="p-4 md:p-6 space-y-4">
-            <div className="flex items-center justify-between gap-3">
-                <div>
-                    <h1 className="text-xl md:text-2xl font-semibold text-slate-900">
-                        Pharmacy Prescriptions
-                    </h1>
-                    <p className="text-sm text-slate-500">
-                        Create and manage OPD, IPD, OT and Counter prescriptions linked to inventory & billing.
-                    </p>
-                </div>
-                <div className="flex items-center gap-2">
-                    <Select
-                        value={header.type}
-                        onValueChange={(val) =>
-                            setHeader((prev) => ({
-                                ...prev,
-                                type: val,
-                            }))
-                        }
-                    >
-                        <SelectTrigger className="w-[140px] bg-white border-slate-200 rounded-full">
-                            <SelectValue placeholder="Rx Type" />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {RX_TYPES.map((t) => (
-                                <SelectItem key={t.value} value={t.value}>
-                                    {t.label}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-
-                    <Button
-                        className="rounded-full"
-                        onClick={() => startNewRx(header.type || 'OPD')}
-                    >
-                        <Plus className="w-4 h-4 mr-2" />
-                        New Prescription
-                    </Button>
-                </div>
-            </div>
-
-            <Tabs value={tab} onValueChange={setTab}>
-                <TabsList className="mb-4">
-                    <TabsTrigger value="list">Queue / History</TabsTrigger>
-                    <TabsTrigger value="new">New Rx</TabsTrigger>
-                    <TabsTrigger value="detail" disabled={!selectedRx}>
-                        Selected Rx
-                    </TabsTrigger>
-                </TabsList>
-
-                {/* ---- LIST TAB ---- */}
-                <TabsContent value="list" className="space-y-3">
-                    <Card className="border-slate-200 rounded-2xl shadow-sm">
-                        <CardHeader className="pb-3">
-                            <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3">
-                                <div className="flex items-center gap-2 flex-wrap">
-                                    <span className="text-xs uppercase tracking-wide text-slate-500">
-                                        Filter by
-                                    </span>
-                                    <div className="flex flex-wrap gap-1.5">
-                                        <button
-                                            type="button"
-                                            onClick={() => setRxTypeFilter('ALL')}
-                                            className={`px-2.5 py-1 rounded-full text-xs border ${rxTypeFilter === 'ALL'
-                                                ? 'bg-slate-900 text-white border-slate-900'
-                                                : 'bg-white text-slate-700 border-slate-200'
-                                                }`}
-                                        >
-                                            All Types
-                                        </button>
-                                        {RX_TYPES.map((t) => (
-                                            <button
-                                                key={t.value}
-                                                type="button"
-                                                onClick={() => setRxTypeFilter(t.value)}
-                                                className={`px-2.5 py-1 rounded-full text-xs border flex items-center gap-1.5 ${rxTypeFilter === t.value
-                                                    ? 'bg-slate-900 text-white border-slate-900'
-                                                    : 'bg-white text-slate-700 border-slate-200'
-                                                    }`}
-                                            >
-                                                <Pill className="w-3 h-3" />
-                                                {t.label}
-                                            </button>
-                                        ))}
-                                    </div>
-                                </div>
-                                <div className="flex items-center gap-2 w-full md:w-auto">
-                                    <div className="relative flex-1 md:w-64">
-                                        <Search className="w-4 h-4 text-slate-400 absolute left-2.5 top-2.5" />
-                                        <Input
-                                            value={search}
-                                            onChange={(e) => setSearch(e.target.value)}
-                                            placeholder="Search UHID / name / Rx no..."
-                                            className="pl-8 text-sm bg-white border-slate-200 rounded-full"
-                                            onKeyDown={(e) => {
-                                                if (e.key === 'Enter') fetchRxList()
-                                            }}
-                                        />
-                                    </div>
-                                    <Select
-                                        value={statusFilter}
-                                        onValueChange={setStatusFilter}
-                                    >
-                                        <SelectTrigger className="w-[130px] bg-white border-slate-200 rounded-full text-xs">
-                                            <SelectValue placeholder="Status" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                            <SelectItem value="ALL">All status</SelectItem>
-                                            <SelectItem value="DRAFT">Draft</SelectItem>
-                                            <SelectItem value="PENDING">Pending</SelectItem>
-                                            <SelectItem value="PARTIAL">Partial</SelectItem>
-                                            <SelectItem value="DISPENSED">Dispensed</SelectItem>
-                                            <SelectItem value="CANCELLED">Cancelled</SelectItem>
-                                        </SelectContent>
-                                    </Select>
-                                    <Button
-                                        variant="outline"
-                                        size="icon"
-                                        className="rounded-full border-slate-200"
-                                        onClick={fetchRxList}
-                                    >
-                                        <Filter className="w-4 h-4" />
-                                    </Button>
-                                </div>
-                            </div>
-                        </CardHeader>
-                        <CardContent className="pt-0">
-                            <div className="border border-slate-100 rounded-xl overflow-hidden bg-white">
-                                <div className="max-h-[420px] overflow-auto">
-                                    <table className="w-full text-sm">
-                                        <thead className="bg-slate-50/80 sticky top-0 z-10">
-                                            <tr className="text-xs text-slate-500">
-                                                <th className="text-left px-3 py-2.5 font-medium">
-                                                    Rx No
-                                                </th>
-                                                <th className="text-left px-3 py-2.5 font-medium">
-                                                    Patient
-                                                </th>
-                                                <th className="text-left px-3 py-2.5 font-medium">
-                                                    Type / Doctor
-                                                </th>
-                                                <th className="text-left px-3 py-2.5 font-medium">
-                                                    Items
-                                                </th>
-                                                <th className="text-left px-3 py-2.5 font-medium">
-                                                    Created
-                                                </th>
-                                                <th className="text-left px-3 py-2.5 font-medium">
-                                                    Status
-                                                </th>
-                                                <th className="text-right px-3 py-2.5 font-medium">
-                                                    Actions
-                                                </th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {listLoading && (
-                                                <tr>
-                                                    <td
-                                                        colSpan={7}
-                                                        className="px-3 py-6 text-center text-xs text-slate-500"
-                                                    >
-                                                        Loading prescriptions...
-                                                    </td>
-                                                </tr>
-                                            )}
-                                            {!listLoading && !rxList.length && (
-                                                <tr>
-                                                    <td
-                                                        colSpan={7}
-                                                        className="px-3 py-6 text-center text-xs text-slate-500"
-                                                    >
-                                                        No prescriptions found for the selected filters.
-                                                    </td>
-                                                </tr>
-                                            )}
-                                            {!listLoading &&
-                                                rxList.map((row) => {
-                                                    const status =
-                                                        (row.status || '').toUpperCase() || 'PENDING'
-                                                    const type = row.type || row.rx_type || 'OPD'
-                                                    const createdAt =
-                                                        row.created_at ||
-                                                        row.rx_datetime ||
-                                                        row.bill_date ||
-                                                        null
-                                                    const createdStr = createdAt
-                                                        ? String(createdAt).slice(0, 16).replace('T', ' ')
-                                                        : '—'
-                                                    const patient =
-                                                        row.patient ||
-                                                        row.patient_name ||
-                                                        row.patient_uhid ||
-                                                        ''
-                                                    const patientName =
-                                                        typeof patient === 'string'
-                                                            ? patient
-                                                            : `${patient.first_name || ''} ${patient.last_name || ''
-                                                                }`.trim()
-
-                                                    const itemsCount =
-                                                        row.items?.length ||
-                                                        row.lines?.length ||
-                                                        row.item_count ||
-                                                        '—'
-
-                                                    const doctorName =
-                                                        row.doctor_name ||
-                                                        row.doctor ||
-                                                        row.doctor_display ||
-                                                        ''
-
-                                                    return (
-                                                        <tr
-                                                            key={row.id}
-                                                            className="border-t border-slate-100 hover:bg-slate-50/60 transition-colors"
-                                                        >
-                                                            <td className="px-3 py-2.5 align-middle">
-                                                                <div className="flex flex-col">
-                                                                    <span className="text-xs font-medium text-slate-900">
-                                                                        {row.rx_number || `RX-${row.id}`}
-                                                                    </span>
-                                                                    {row.uhid && (
-                                                                        <span className="text-[11px] text-slate-500">
-                                                                            UHID: {row.uhid}
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            </td>
-                                                            <td className="px-3 py-2.5 align-middle">
-                                                                <div className="flex items-center gap-2">
-                                                                    <div className="w-7 h-7 rounded-full bg-slate-100 flex items-center justify-center text-[11px] font-medium text-slate-700">
-                                                                        <User className="w-3 h-3" />
-                                                                    </div>
-                                                                    <div>
-                                                                        <div className="text-xs text-slate-900">
-                                                                            {patientName || '—'}
-                                                                        </div>
-                                                                        {row.patient_uhid && (
-                                                                            <div className="text-[11px] text-slate-500">
-                                                                                {row.patient_uhid}
-                                                                            </div>
-                                                                        )}
-                                                                    </div>
-                                                                </div>
-                                                            </td>
-                                                            <td className="px-3 py-2.5 align-middle">
-                                                                <div className="flex flex-col gap-1">
-                                                                    <div className="flex items-center gap-1.5">
-                                                                        <Badge
-                                                                            variant="outline"
-                                                                            className="border-slate-200 text-[11px] px-1.5 py-0.5"
-                                                                        >
-                                                                            {type}
-                                                                        </Badge>
-                                                                        {doctorName && (
-                                                                            <span className="text-[11px] text-slate-600 flex items-center gap-1">
-                                                                                <Stethoscope className="w-3 h-3" />
-                                                                                {doctorName}
-                                                                            </span>
-                                                                        )}
-                                                                    </div>
-                                                                    {row.context_label && (
-                                                                        <span className="text-[11px] text-slate-500">
-                                                                            {row.context_label}
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                            </td>
-                                                            <td className="px-3 py-2.5 align-middle text-xs text-slate-700">
-                                                                {itemsCount}
-                                                            </td>
-                                                            <td className="px-3 py-2.5 align-middle text-xs text-slate-700">
-                                                                <div className="flex items-center gap-1">
-                                                                    <Clock3 className="w-3 h-3 text-slate-400" />
-                                                                    <span>{createdStr}</span>
-                                                                </div>
-                                                            </td>
-                                                            <td className="px-3 py-2.5 align-middle">
-                                                                <StatusPill status={status} />
-                                                            </td>
-                                                            <td className="px-3 py-2.5 align-middle text-right">
-                                                                <Button
-                                                                    variant="outline"
-                                                                    size="sm"
-                                                                    className="h-7 px-2 text-xs rounded-full border-slate-200"
-                                                                    onClick={() => handleOpenRx(row)}
-                                                                >
-                                                                    <ClipboardList className="w-3 h-3 mr-1" />
-                                                                    View
-                                                                </Button>
-                                                            </td>
-                                                        </tr>
-                                                    )
-                                                })}
-                                        </tbody>
-                                    </table>
-                                </div>
-                            </div>
-                        </CardContent>
-                    </Card>
-                </TabsContent>
-
-                {/* ---- NEW RX TAB ---- */}
-                <TabsContent value="new">
-                    <div className="grid gap-4 lg:grid-cols-[minmax(0,1.5fr)_minmax(0,2fr)]">
-                        {/* Header / context card */}
-                        <Card className="border-slate-200 rounded-2xl shadow-sm">
-                            <CardHeader className="pb-3">
-                                <CardTitle className="flex items-center gap-2 text-sm font-semibold">
-                                    <Pill className="w-4 h-4 text-slate-500" />
-                                    Prescription Details
-                                </CardTitle>
-                            </CardHeader>
-                            <CardContent className="space-y-4">
-                                {/* Rx type + priority */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    <div className="space-y-1.5">
-                                        <Label className="text-xs text-slate-600">
-                                            Prescription Type
-                                        </Label>
-                                        <div className="flex flex-wrap gap-1.5">
-                                            {RX_TYPES.map((t) => (
-                                                <button
-                                                    key={t.value}
-                                                    type="button"
-                                                    onClick={() =>
-                                                        setHeader((prev) => ({ ...prev, type: t.value }))
-                                                    }
-                                                    className={`px-2.5 py-1 rounded-full text-xs border flex items-center gap-1.5 ${header.type === t.value
-                                                        ? 'bg-slate-900 text-white border-slate-900'
-                                                        : 'bg-white text-slate-700 border-slate-200'
-                                                        }`}
-                                                >
-                                                    <Pill className="w-3 h-3" />
-                                                    {t.label}
-                                                </button>
-                                            ))}
-                                        </div>
-                                    </div>
-                                    <div className="space-y-1.5">
-                                        <Label className="text-xs text-slate-600">
-                                            Priority
-                                        </Label>
-                                        <Select
-                                            value={header.priority}
-                                            onValueChange={(val) =>
-                                                setHeader((prev) => ({ ...prev, priority: val }))
-                                            }
-                                        >
-                                            <SelectTrigger className="w-full bg-white border-slate-200 rounded-full h-9 text-xs">
-                                                <SelectValue placeholder="Select priority" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {PRIORITIES.map((p) => (
-                                                    <SelectItem key={p.value} value={p.value}>
-                                                        {p.label}
-                                                    </SelectItem>
-                                                ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                </div>
-
-                                {/* Date/time */}
-                                <div className="space-y-1.5">
-                                    <Label className="text-xs text-slate-600">
-                                        Date &amp; Time
-                                    </Label>
-                                    <Input
-                                        type="datetime-local"
-                                        value={header.datetime}
-                                        onChange={(e) =>
-                                            setHeader((prev) => ({
-                                                ...prev,
-                                                datetime: e.target.value,
-                                            }))
-                                        }
-                                        className="h-9 text-xs bg-white border-slate-200 rounded-full"
-                                    />
-                                </div>
-
-                                {/* Patient selection */}
-                                <div className="space-y-1.5 relative">
-                                    <Label className="text-xs text-slate-600 flex items-center gap-1.5">
-                                        <User className="w-3 h-3" />
-                                        Patient (UHID / name / phone)
-                                    </Label>
-                                    <div className="relative">
-                                        <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2.5 top-2.5" />
-                                        <Input
-                                            value={patientQuery}
-                                            onChange={(e) => {
-                                                setPatientQuery(e.target.value)
-                                                setShowPatientDropdown(true)
-                                            }}
-                                            placeholder={
-                                                header.type === 'COUNTER'
-                                                    ? 'Optional for counter sale'
-                                                    : 'Search patient...'
-                                            }
-                                            className="pl-7 h-9 text-xs bg-white border-slate-200 rounded-full"
-                                        />
-                                    </div>
-                                    <AnimatePresence>
-                                        {showPatientDropdown &&
-                                            (patientResults.length > 0 || patientSearching) && (
-                                                <motion.div
-                                                    initial={{ opacity: 0, y: -4 }}
-                                                    animate={{ opacity: 1, y: 0 }}
-                                                    exit={{ opacity: 0, y: -4 }}
-                                                    className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-52 overflow-auto text-xs"
-                                                >
-                                                    {patientSearching && (
-                                                        <div className="px-3 py-2 text-slate-500">
-                                                            Searching...
-                                                        </div>
-                                                    )}
-                                                    {!patientSearching &&
-                                                        !patientResults.length && (
-                                                            <div className="px-3 py-2 text-slate-500">
-                                                                No patients found
-                                                            </div>
-                                                        )}
-                                                    {!patientSearching &&
-                                                        patientResults.map((p) => (
-                                                            <button
-                                                                key={p.id}
-                                                                type="button"
-                                                                onClick={() => handleSelectPatient(p)}
-                                                                className="w-full text-left px-3 py-1.5 hover:bg-slate-50 flex flex-col gap-0.5"
-                                                            >
-                                                                <div className="flex justify-between items-center">
-                                                                    <span className="font-medium text-slate-900">
-                                                                        {`${p.first_name || ''} ${p.last_name || ''
-                                                                            }`.trim() || p.name || `Patient #${p.id}`}
-                                                                    </span>
-                                                                    {p.uhid && (
-                                                                        <span className="text-[10px] text-slate-500">
-                                                                            UHID: {p.uhid}
-                                                                        </span>
-                                                                    )}
-                                                                </div>
-                                                                <div className="text-[11px] text-slate-500">
-                                                                    {p.age
-                                                                        ? `${p.age}y • `
-                                                                        : ''}
-                                                                    {p.gender ? `${p.gender} • ` : ''}
-                                                                    {p.phone || ''}
-                                                                </div>
-                                                            </button>
-                                                        ))}
-                                                </motion.div>
-                                            )}
-                                    </AnimatePresence>
-                                </div>
-
-                                {/* Context fields by type */}
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                                    {header.type === 'OPD' && (
-                                        <>
-                                            <div className="space-y-1.5">
-                                                <Label className="text-xs text-slate-600">
-                                                    OPD Visit No (optional)
-                                                </Label>
-                                                <Input
-                                                    value={header.visitNo}
-                                                    onChange={(e) =>
-                                                        setHeader((prev) => ({
-                                                            ...prev,
-                                                            visitNo: e.target.value,
-                                                        }))
-                                                    }
-                                                    placeholder="e.g., OPD-2025-0001"
-                                                    className="h-9 text-xs bg-white border-slate-200 rounded-full"
-                                                />
-                                            </div>
-                                        </>
-                                    )}
-                                    {header.type === 'IPD' && (
-                                        <>
-                                            <div className="space-y-1.5">
-                                                <Label className="text-xs text-slate-600">
-                                                    Admission No
-                                                </Label>
-                                                <Input
-                                                    value={header.admissionNo}
-                                                    onChange={(e) =>
-                                                        setHeader((prev) => ({
-                                                            ...prev,
-                                                            admissionNo: e.target.value,
-                                                        }))
-                                                    }
-                                                    placeholder="IPD admission number"
-                                                    className="h-9 text-xs bg-white border-slate-200 rounded-full"
-                                                />
-                                            </div>
-                                        </>
-                                    )}
-                                    {header.type === 'OT' && (
-                                        <>
-                                            <div className="space-y-1.5">
-                                                <Label className="text-xs text-slate-600">
-                                                    OT Case No
-                                                </Label>
-                                                <Input
-                                                    value={header.otCaseNo}
-                                                    onChange={(e) =>
-                                                        setHeader((prev) => ({
-                                                            ...prev,
-                                                            otCaseNo: e.target.value,
-                                                        }))
-                                                    }
-                                                    placeholder="OT / procedure case ID"
-                                                    className="h-9 text-xs bg-white border-slate-200 rounded-full"
-                                                />
-                                            </div>
-                                        </>
-                                    )}
-                                    {/* doctor select (for all non-counter ideally) */}
-                                    <div className="space-y-1.5">
-                                        <Label className="text-xs text-slate-600 flex items-center gap-1">
-                                            <Stethoscope className="w-3 h-3" />
-                                            Consultant / Prescriber
-                                        </Label>
-                                        <Select
-                                            value={header.doctorId || ''}
-                                            onValueChange={(val) =>
-                                                setHeader((prev) => ({
-                                                    ...prev,
-                                                    doctorId: val,
-                                                }))
-                                            }
-                                        >
-                                            <SelectTrigger className="w-full bg-white border-slate-200 rounded-full h-9 text-xs">
-                                                <SelectValue placeholder="Select doctor" />
-                                            </SelectTrigger>
-                                            <SelectContent>
-                                                {mastersLoading && (
-                                                    <SelectItem value="__loading" disabled>
-                                                        Loading...
-                                                    </SelectItem>
-                                                )}
-                                                {!mastersLoading &&
-                                                    (!doctors || !doctors.length) && (
-                                                        <SelectItem value="__none" disabled>
-                                                            No doctors configured
-                                                        </SelectItem>
-                                                    )}
-                                                {!mastersLoading &&
-                                                    doctors?.map((d) => (
-                                                        <SelectItem
-                                                            key={d.id}
-                                                            value={String(d.id)}
-                                                        >
-                                                            {d.name || d.full_name || d.email}
-                                                        </SelectItem>
-                                                    ))}
-                                            </SelectContent>
-                                        </Select>
-                                    </div>
-                                </div>
-
-                                {/* Notes */}
-                                <div className="space-y-1.5">
-                                    <Label className="text-xs text-slate-600">
-                                        Clinical notes / instructions to pharmacist (optional)
-                                    </Label>
-                                    <Textarea
-                                        value={header.notes}
-                                        onChange={(e) =>
-                                            setHeader((prev) => ({
-                                                ...prev,
-                                                notes: e.target.value,
-                                            }))
-                                        }
-                                        rows={3}
-                                        className="text-xs bg-white border-slate-200 resize-none rounded-xl"
-                                        placeholder="Eg: Allergic to penicillin, avoid NSAIDs, taper dose after 5 days, etc."
-                                    />
-                                </div>
-                            </CardContent>
-                        </Card>
-
-                        {/* Lines card */}
-                        <Card className="border-slate-200 rounded-2xl shadow-sm">
-                            <CardHeader className="pb-3 flex flex-row items-center justify-between gap-2">
-                                <div className="flex items-center gap-2">
-                                    <ClipboardList className="w-4 h-4 text-slate-500" />
-                                    <CardTitle className="text-sm font-semibold">
-                                        Medicines &amp; Instructions
-                                    </CardTitle>
-                                </div>
-                                <div className="text-[11px] text-slate-500">
-                                    {lines.length ? `${lines.length} lines` : 'No lines added yet'}
-                                </div>
-                            </CardHeader>
-                            <CardContent className="space-y-3">
-                                {/* New line editor */}
-                                <div className="border border-dashed border-slate-200 rounded-xl p-3 bg-slate-50/60">
-                                    <div className="grid md:grid-cols-[minmax(0,2.3fr)_minmax(0,1.1fr)] gap-3">
-                                        <div className="space-y-2">
-                                            {/* Medicine search */}
-                                            <div className="space-y-1 relative">
-                                                <Label className="text-[11px] text-slate-600 flex items-center gap-1.5">
-                                                    Medicine
-                                                    <span className="text-[10px] text-slate-400">
-                                                        (linked to Inventory)
-                                                    </span>
-                                                </Label>
-                                                <div className="relative">
-                                                    <Search className="w-3.5 h-3.5 text-slate-400 absolute left-2 top-2.5" />
-                                                    <Input
-                                                        value={medQuery}
-                                                        onChange={(e) => {
-                                                            setMedQuery(e.target.value)
-                                                            setShowMedDropdown(true)
-                                                        }}
-                                                        placeholder="Search drug name, brand, generic..."
-                                                        className="pl-7 h-9 text-xs bg-white border-slate-200 rounded-full"
-                                                    />
-                                                </div>
-                                                <AnimatePresence>
-                                                    {showMedDropdown &&
-                                                        (medResults.length > 0 || medSearching) && (
-                                                            <motion.div
-                                                                initial={{ opacity: 0, y: -4 }}
-                                                                animate={{ opacity: 1, y: 0 }}
-                                                                exit={{ opacity: 0, y: -4 }}
-                                                                className="absolute z-20 mt-1 w-full bg-white border border-slate-200 rounded-xl shadow-lg max-h-52 overflow-auto text-xs"
-                                                            >
-                                                                {medSearching && (
-                                                                    <div className="px-3 py-2 text-slate-500">
-                                                                        Searching medicines...
-                                                                    </div>
-                                                                )}
-                                                                {!medSearching &&
-                                                                    !medResults.length && (
-                                                                        <div className="px-3 py-2 text-slate-500">
-                                                                            No items found
-                                                                        </div>
-                                                                    )}
-                                                                {!medSearching &&
-                                                                    medResults.map((it) => (
-                                                                        <button
-                                                                            key={it.id}
-                                                                            type="button"
-                                                                            onClick={() => handleSelectMedicine(it)}
-                                                                            className="w-full text-left px-3 py-1.5 hover:bg-slate-50 flex flex-col gap-0.5"
-                                                                        >
-                                                                            <div className="flex justify-between items-center">
-                                                                                <span className="font-medium text-slate-900">
-                                                                                    {it.name || it.item_name}
-                                                                                </span>
-                                                                                {it.code && (
-                                                                                    <span className="text-[10px] text-slate-500">
-                                                                                        {it.code}
-                                                                                    </span>
-                                                                                )}
-                                                                            </div>
-                                                                            <div className="text-[11px] text-slate-500">
-                                                                                {it.strength || it.form || ''}
-                                                                            </div>
-                                                                        </button>
-                                                                    ))}
-                                                            </motion.div>
-                                                        )}
-                                                </AnimatePresence>
-                                            </div>
-
-                                            {/* Instructions: dose / freq / days */}
-                                            <div className="grid grid-cols-3 gap-2">
-                                                <div className="space-y-1">
-                                                    <Label className="text-[11px] text-slate-600">
-                                                        Dose
-                                                    </Label>
-                                                    <Input
-                                                        value={currentLine.dose}
-                                                        onChange={(e) =>
-                                                            setCurrentLine((prev) => ({
-                                                                ...prev,
-                                                                dose: e.target.value,
-                                                            }))
-                                                        }
-                                                        placeholder="e.g. 500 mg"
-                                                        className="h-8 text-[11px] bg-white border-slate-200 rounded-full"
-                                                    />
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <Label className="text-[11px] text-slate-600">
-                                                        Frequency
-                                                    </Label>
-                                                    <Input
-                                                        value={currentLine.frequency}
-                                                        onChange={(e) =>
-                                                            setCurrentLine((prev) => ({
-                                                                ...prev,
-                                                                frequency: e.target.value,
-                                                            }))
-                                                        }
-                                                        placeholder="e.g. 1-0-1"
-                                                        className="h-8 text-[11px] bg-white border-slate-200 rounded-full"
-                                                    />
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <Label className="text-[11px] text-slate-600">
-                                                        Days
-                                                    </Label>
-                                                    <Input
-                                                        value={currentLine.duration_days}
-                                                        onChange={(e) =>
-                                                            setCurrentLine((prev) => ({
-                                                                ...prev,
-                                                                duration_days: e.target.value,
-                                                                total_qty:
-                                                                    prev.total_qty || autoQty({
-                                                                        ...prev,
-                                                                        duration_days: e.target.value,
-                                                                    }),
-                                                            }))
-                                                        }
-                                                        placeholder="e.g. 5"
-                                                        className="h-8 text-[11px] bg-white border-slate-200 rounded-full"
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            {/* Other info */}
-                                            <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
-                                                <div className="space-y-1">
-                                                    <Label className="text-[11px] text-slate-600">
-                                                        Route
-                                                    </Label>
-                                                    <Input
-                                                        value={currentLine.route}
-                                                        onChange={(e) =>
-                                                            setCurrentLine((prev) => ({
-                                                                ...prev,
-                                                                route: e.target.value,
-                                                            }))
-                                                        }
-                                                        placeholder="PO / IV / IM / etc"
-                                                        className="h-8 text-[11px] bg-white border-slate-200 rounded-full"
-                                                    />
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <Label className="text-[11px] text-slate-600">
-                                                        Total Qty
-                                                    </Label>
-                                                    <Input
-                                                        value={currentLine.total_qty}
-                                                        onChange={(e) =>
-                                                            setCurrentLine((prev) => ({
-                                                                ...prev,
-                                                                total_qty: e.target.value,
-                                                            }))
-                                                        }
-                                                        placeholder={
-                                                            autoQty(currentLine)
-                                                                ? `Suggested: ${autoQty(currentLine)}`
-                                                                : 'eg. 10'
-                                                        }
-                                                        className="h-8 text-[11px] bg-white border-slate-200 rounded-full"
-                                                    />
-                                                </div>
-                                            </div>
-
-                                            <div className="space-y-1">
-                                                <Label className="text-[11px] text-slate-600">
-                                                    Instructions to patient
-                                                </Label>
-                                                <Input
-                                                    value={currentLine.instructions}
-                                                    onChange={(e) =>
-                                                        setCurrentLine((prev) => ({
-                                                            ...prev,
-                                                            instructions: e.target.value,
-                                                        }))
-                                                    }
-                                                    placeholder="After food, morning & night, etc."
-                                                    className="h-8 text-[11px] bg-white border-slate-200 rounded-full"
-                                                />
-                                            </div>
-                                        </div>
-
-                                        {/* Add button */}
-                                        <div className="flex flex-col justify-between gap-2">
-                                            <div className="text-[11px] text-slate-500">
-                                                <p>
-                                                    Add medicine to this prescription. Quantity can be
-                                                    auto-estimated from frequency &amp; days.
-                                                </p>
-                                            </div>
-                                            <div className="flex justify-end">
-                                                <Button
-                                                    type="button"
-                                                    size="sm"
-                                                    className="h-9 px-3 rounded-full"
-                                                    onClick={handleAddLine}
-                                                >
-                                                    <Plus className="w-3.5 h-3.5 mr-1" />
-                                                    Add line
-                                                </Button>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-
-                                {/* Lines list */}
-                                <div className="border border-slate-100 rounded-xl overflow-hidden bg-white">
-                                    <ScrollArea className="max-h-[280px]">
-                                        <table className="w-full text-[11px]">
-                                            <thead className="bg-slate-50/80 sticky top-0 z-10">
-                                                <tr className="text-[11px] text-slate-500">
-                                                    <th className="text-left px-3 py-2 font-medium">
-                                                        #
-                                                    </th>
-                                                    <th className="text-left px-3 py-2 font-medium">
-                                                        Medicine
-                                                    </th>
-                                                    <th className="text-left px-3 py-2 font-medium">
-                                                        Dose / Freq / Days
-                                                    </th>
-                                                    <th className="text-left px-3 py-2 font-medium">
-                                                        Route
-                                                    </th>
-                                                    <th className="text-right px-3 py-2 font-medium">
-                                                        Qty
-                                                    </th>
-                                                    <th className="text-right px-3 py-2 font-medium">
-                                                        Actions
-                                                    </th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {!lines.length && (
-                                                    <tr>
-                                                        <td
-                                                            colSpan={6}
-                                                            className="px-3 py-4 text-center text-[11px] text-slate-500"
-                                                        >
-                                                            No lines added. Use the panel above to add
-                                                            medicines to this prescription.
-                                                        </td>
-                                                    </tr>
-                                                )}
-                                                {lines.map((l, idx) => (
-                                                    <tr
-                                                        key={`${l.item_id || l.item?.id || idx}-${idx}`}
-                                                        className="border-t border-slate-100"
-                                                    >
-                                                        <td className="px-3 py-2 align-top text-slate-500">
-                                                            {idx + 1}
-                                                        </td>
-                                                        <td className="px-3 py-2 align-top">
-                                                            <div className="flex flex-col">
-                                                                <span className="text-[11px] font-medium text-slate-900">
-                                                                    {l.item?.name ||
-                                                                        l.item_name ||
-                                                                        'Unnamed medicine'}
-                                                                </span>
-                                                                {l.strength && (
-                                                                    <span className="text-[10px] text-slate-500">
-                                                                        {l.strength}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-3 py-2 align-top text-[11px] text-slate-700">
-                                                            <div className="flex flex-col">
-                                                                <span>
-                                                                    {l.dose || '—'} •{' '}
-                                                                    {l.frequency || '—'} •{' '}
-                                                                    {l.duration_days
-                                                                        ? `${l.duration_days} days`
-                                                                        : '—'}
-                                                                </span>
-                                                                {l.instructions && (
-                                                                    <span className="text-[10px] text-slate-500">
-                                                                        {l.instructions}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-3 py-2 align-top text-[11px] text-slate-700">
-                                                            {l.route || '—'}
-                                                        </td>
-                                                        <td className="px-3 py-2 align-top text-right text-[11px] text-slate-700">
-                                                            {l.total_qty || autoQty(l) || '—'}
-                                                        </td>
-                                                        <td className="px-3 py-2 align-top text-right">
-                                                            <Button
-                                                                variant="ghost"
-                                                                size="sm"
-                                                                className="h-7 px-2 text-[11px] text-slate-500 hover:text-red-600"
-                                                                onClick={() => handleRemoveLine(idx)}
-                                                            >
-                                                                Remove
-                                                            </Button>
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </ScrollArea>
-                                </div>
-
-                                {/* Submit */}
-                                <div className="flex justify-between items-center pt-1">
-                                    <Button
-                                        type="button"
-                                        variant="ghost"
-                                        size="sm"
-                                        className="h-8 px-2 text-xs text-slate-500"
-                                        onClick={() => {
-                                            resetForm()
-                                            setTab('list')
-                                        }}
-                                    >
-                                        <ArrowLeft className="w-3 h-3 mr-1" />
-                                        Back to queue
-                                    </Button>
-                                    <Button
-                                        type="button"
-                                        size="sm"
-                                        className="h-9 px-4 rounded-full"
-                                        onClick={handleSubmitRx}
-                                        disabled={submitting}
-                                    >
-                                        {submitting ? (
-                                            'Saving...'
-                                        ) : (
-                                            <>
-                                                <ClipboardList className="w-3.5 h-3.5 mr-1" />
-                                                Save &amp; Send to Pharmacy
-                                            </>
-                                        )}
-                                    </Button>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    </div>
-                </TabsContent>
-
-                {/* ---- DETAIL TAB ---- */}
-                <TabsContent value="detail">
-                    {!selectedRx ? (
-                        <Card className="border-slate-200 rounded-2xl shadow-sm">
-                            <CardContent className="py-8 text-center text-sm text-slate-500">
-                                Select a prescription from the queue to view details.
-                            </CardContent>
-                        </Card>
-                    ) : (
-                        <Card className="border-slate-200 rounded-2xl shadow-sm">
-                            <CardHeader className="pb-3 flex flex-row items-center justify-between gap-2">
-                                <div className="space-y-1">
-                                    <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                                        <ClipboardList className="w-4 h-4 text-slate-500" />
-                                        Prescription #{selectedRx.rx_number || selectedRx.id}
-                                    </CardTitle>
-                                    <div className="flex flex-wrap gap-2 text-[11px] text-slate-500">
-                                        <span>
-                                            Type:{' '}
-                                            <Badge variant="outline" className="px-1.5 py-0.5">
-                                                {selectedRx.type || selectedRx.rx_type || 'OPD'}
-                                            </Badge>
-                                        </span>
-                                        {selectedRx.priority && (
-                                            <span>Priority: {selectedRx.priority}</span>
-                                        )}
-                                        {selectedRx.doctor_name && (
-                                            <span className="flex items-center gap-1">
-                                                <Stethoscope className="w-3 h-3" />
-                                                {selectedRx.doctor_name}
-                                            </span>
-                                        )}
-                                    </div>
-                                </div>
-                                <div className="text-right text-[11px] text-slate-500">
-                                    <div>
-                                        UHID:{' '}
-                                        {selectedRx.patient_uhid ||
-                                            selectedRx.patient?.uhid ||
-                                            '—'}
-                                    </div>
-                                    <div>
-                                        Patient:{' '}
-                                        {selectedRx.patient_name ||
-                                            `${selectedRx.patient?.first_name || ''} ${selectedRx.patient?.last_name || ''
-                                                }`.trim() ||
-                                            '—'}
-                                    </div>
-                                </div>
-                            </CardHeader>
-                            <CardContent className="space-y-3">
-                                <div className="border border-slate-100 rounded-xl overflow-hidden bg-white">
-                                    <ScrollArea className="max-h-[380px]">
-                                        <table className="w-full text-[11px]">
-                                            <thead className="bg-slate-50/80 sticky top-0 z-10">
-                                                <tr className="text-[11px] text-slate-500">
-                                                    <th className="text-left px-3 py-2 font-medium">
-                                                        #
-                                                    </th>
-                                                    <th className="text-left px-3 py-2 font-medium">
-                                                        Medicine
-                                                    </th>
-                                                    <th className="text-left px-3 py-2 font-medium">
-                                                        Dose / Freq / Days
-                                                    </th>
-                                                    <th className="text-left px-3 py-2 font-medium">
-                                                        Route
-                                                    </th>
-                                                    <th className="text-right px-3 py-2 font-medium">
-                                                        Qty
-                                                    </th>
-                                                </tr>
-                                            </thead>
-                                            <tbody>
-                                                {!selectedRxLines.length && (
-                                                    <tr>
-                                                        <td
-                                                            colSpan={5}
-                                                            className="px-3 py-4 text-center text-[11px] text-slate-500"
-                                                        >
-                                                            No lines found for this prescription.
-                                                        </td>
-                                                    </tr>
-                                                )}
-                                                {selectedRxLines.map((l, idx) => (
-                                                    <tr
-                                                        key={l.id || idx}
-                                                        className="border-t border-slate-100"
-                                                    >
-                                                        <td className="px-3 py-2 align-top text-slate-500">
-                                                            {idx + 1}
-                                                        </td>
-                                                        <td className="px-3 py-2 align-top">
-                                                            <div className="flex flex-col">
-                                                                <span className="text-[11px] font-medium text-slate-900">
-                                                                    {l.item_name ||
-                                                                        l.medicine_name ||
-                                                                        'Unnamed medicine'}
-                                                                </span>
-                                                                {l.strength && (
-                                                                    <span className="text-[10px] text-slate-500">
-                                                                        {l.strength}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-3 py-2 align-top text-[11px] text-slate-700">
-                                                            <div className="flex flex-col">
-                                                                <span>
-                                                                    {l.dose || '—'} •{' '}
-                                                                    {l.frequency || '—'} •{' '}
-                                                                    {l.duration_days
-                                                                        ? `${l.duration_days} days`
-                                                                        : '—'}
-                                                                </span>
-                                                                {l.instructions && (
-                                                                    <span className="text-[10px] text-slate-500">
-                                                                        {l.instructions}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        </td>
-                                                        <td className="px-3 py-2 align-top text-[11px] text-slate-700">
-                                                            {l.route || '—'}
-                                                        </td>
-                                                        <td className="px-3 py-2 align-top text-right text-[11px] text-slate-700">
-                                                            {l.total_qty ||
-                                                                l.qty ||
-                                                                l.quantity ||
-                                                                autoQty(l) ||
-                                                                '—'}
-                                                        </td>
-                                                    </tr>
-                                                ))}
-                                            </tbody>
-                                        </table>
-                                    </ScrollArea>
-                                </div>
-                            </CardContent>
-                        </Card>
-                    )}
-                </TabsContent>
-            </Tabs>
-        </div>
-    )
+function SegmentedTabs({ value }) {
+  return (
+    <TabsList className="w-full sm:w-auto rounded-full bg-white/70 backdrop-blur border border-slate-200 p-1 shadow-sm">
+      <TabsTrigger
+        value="list"
+        className="rounded-full px-4 data-[state=active]:bg-slate-900 data-[state=active]:text-white"
+      >
+        Queue
+      </TabsTrigger>
+      <TabsTrigger
+        value="new"
+        className="rounded-full px-4 data-[state=active]:bg-slate-900 data-[state=active]:text-white"
+      >
+        New
+      </TabsTrigger>
+      <TabsTrigger
+        value="detail"
+        className="rounded-full px-4 data-[state=active]:bg-slate-900 data-[state=active]:text-white"
+      >
+        Selected
+      </TabsTrigger>
+    </TabsList>
+  )
 }
 
 function StatusPill({ status }) {
-    const s = (status || '').toUpperCase()
-    let label = s
-    let cls =
-        'bg-slate-50 text-slate-700 border border-slate-200'
+  const s = (status || '').toUpperCase()
+  let label = s || 'PENDING'
+  let cls = 'bg-white/70 text-slate-700 border border-slate-200'
 
-    if (s === 'PENDING' || s === 'NEW') {
-        label = 'Pending'
-        cls = 'bg-amber-50 text-amber-700 border border-amber-200'
-    } else if (s === 'PARTIAL') {
-        label = 'Partial'
-        cls = 'bg-blue-50 text-blue-700 border border-blue-200'
-    } else if (s === 'DISPENSED' || s === 'COMPLETED') {
-        label = 'Dispensed'
-        cls = 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-    } else if (s === 'CANCELLED') {
-        label = 'Cancelled'
-        cls = 'bg-rose-50 text-rose-700 border border-rose-200'
+  if (s === 'PENDING' || s === 'NEW') {
+    label = 'Pending'
+    cls = 'bg-amber-50/80 text-amber-700 border border-amber-200'
+  } else if (s === 'PARTIAL') {
+    label = 'Partial'
+    cls = 'bg-blue-50/80 text-blue-700 border border-blue-200'
+  } else if (s === 'DISPENSED' || s === 'COMPLETED') {
+    label = 'Dispensed'
+    cls = 'bg-emerald-50/80 text-emerald-700 border border-emerald-200'
+  } else if (s === 'CANCELLED') {
+    label = 'Cancelled'
+    cls = 'bg-rose-50/80 text-rose-700 border border-rose-200'
+  }
+
+  return (
+    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 text-[11px] rounded-full ${cls}`}>
+      <span className="h-1.5 w-1.5 rounded-full bg-current opacity-60" />
+      {label}
+    </span>
+  )
+}
+
+function PatientSummaryCard({ patient, loading }) {
+  const name = getPatientName(patient)
+  const uhid = pick(patient, ['uhid', 'patient_uhid'], '—')
+  const phone = pick(patient, ['phone', 'mobile', 'contact'], '—')
+  const gender = pick(patient, ['gender', 'sex'], '')
+  const age = pick(patient, ['age', 'age_years'], '')
+  const dob = pick(patient, ['dob', 'date_of_birth'], '')
+  const blood = pick(patient, ['blood_group', 'bloodGroup'], '')
+  const address = pick(patient, ['address', 'current_address', 'full_address'], '')
+  const city = pick(patient, ['city'], '')
+  const state = pick(patient, ['state'], '')
+  const pin = pick(patient, ['pincode', 'pin'], '')
+
+  const addrLine = [address, city, state, pin].filter(Boolean).join(', ')
+
+  return (
+    <div className="rounded-3xl border border-slate-200 bg-white/70 backdrop-blur p-4 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2">
+            <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center">
+              <User className="w-5 h-5 text-slate-600" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-slate-900 truncate">
+                {loading ? 'Loading patient...' : name}
+              </div>
+              <div className="text-xs text-slate-500 truncate">
+                {loading ? '—' : [age ? `${age}y` : '', gender].filter(Boolean).join(' • ') || '—'}
+              </div>
+            </div>
+          </div>
+
+          <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+            <div className="flex items-center gap-2 text-slate-600">
+              <IdCard className="w-4 h-4 text-slate-400" />
+              <span className="font-medium text-slate-700">UHID:</span> {uhid}
+            </div>
+            <div className="flex items-center gap-2 text-slate-600">
+              <Phone className="w-4 h-4 text-slate-400" />
+              <span className="font-medium text-slate-700">Phone:</span> {phone}
+            </div>
+            <div className="flex items-center gap-2 text-slate-600">
+              <Calendar className="w-4 h-4 text-slate-400" />
+              <span className="font-medium text-slate-700">DOB:</span> {dob || '—'}
+            </div>
+            <div className="flex items-center gap-2 text-slate-600">
+              <BadgeCheck className="w-4 h-4 text-slate-400" />
+              <span className="font-medium text-slate-700">Blood:</span> {blood || '—'}
+            </div>
+          </div>
+
+          {addrLine ? (
+            <div className="mt-3 flex items-start gap-2 text-xs text-slate-600">
+              <MapPin className="w-4 h-4 text-slate-400 mt-0.5" />
+              <div className="leading-relaxed">
+                <span className="font-medium text-slate-700">Address:</span> {addrLine}
+              </div>
+            </div>
+          ) : null}
+        </div>
+
+        <Badge variant="outline" className="rounded-full text-[11px] border-slate-200">
+          Patient
+        </Badge>
+      </div>
+    </div>
+  )
+}
+
+/* -------------------------------- component ------------------------------- */
+
+export default function PharmacyRx() {
+  const [tab, setTab] = useState('list') // 'list' | 'new' | 'detail'
+
+  // Queue/List
+  const [rxTypeFilter, setRxTypeFilter] = useState('ALL')
+  const [statusFilter, setStatusFilter] = useState('ALL')
+  const [search, setSearch] = useState('')
+  const debouncedSearch = useDebouncedValue(search, 350)
+  const [listLoading, setListLoading] = useState(false)
+  const [rxList, setRxList] = useState([])
+  const [selectedRx, setSelectedRx] = useState(null)
+  const [autoRefresh, setAutoRefresh] = useState(true)
+
+  // New Rx type picker
+  const [newType, setNewType] = useState('OPD')
+
+  // Form
+  const [header, setHeader] = useState(EMPTY_HEADER)
+  const [lines, setLines] = useState([])
+  const [currentLine, setCurrentLine] = useState(EMPTY_LINE)
+  const [submitting, setSubmitting] = useState(false)
+
+  // Patient search
+  const [patientQuery, setPatientQuery] = useState('')
+  const debouncedPatientQuery = useDebouncedValue(patientQuery, 250)
+  const [patientResults, setPatientResults] = useState([])
+  const [patientSearching, setPatientSearching] = useState(false)
+  const [showPatientDropdown, setShowPatientDropdown] = useState(false)
+  const [patientHydrating, setPatientHydrating] = useState(false)
+
+  // Detail patient (hydrated)
+  const [selectedPatient, setSelectedPatient] = useState(null)
+  const [selectedPatientLoading, setSelectedPatientLoading] = useState(false)
+
+  // Masters
+  const [doctors, setDoctors] = useState([])
+  const [mastersLoading, setMastersLoading] = useState(false)
+
+  // Medicine search
+  const [medQuery, setMedQuery] = useState('')
+  const debouncedMedQuery = useDebouncedValue(medQuery, 220)
+  const [medResults, setMedResults] = useState([])
+  const [medSearching, setMedSearching] = useState(false)
+  const [showMedDropdown, setShowMedDropdown] = useState(false)
+
+  // Refs
+  const patientDropRef = useRef(null)
+  const medDropRef = useRef(null)
+  const medInputRef = useRef(null)
+  const listSearchRef = useRef(null)
+
+  // cache for patient details
+  const patientCacheRef = useRef(new Map())
+
+  useOnClickOutside(patientDropRef, () => setShowPatientDropdown(false))
+  useOnClickOutside(medDropRef, () => setShowMedDropdown(false))
+
+  async function hydratePatientById(id, { silent = false } = {}) {
+    if (!id) return null
+    const key = String(id)
+    if (patientCacheRef.current.has(key)) {
+      return patientCacheRef.current.get(key)
+    }
+    try {
+      if (!silent) setPatientHydrating(true)
+      const res = await getPatientById(id)
+      const full = res?.data || null
+      if (full) patientCacheRef.current.set(key, full)
+      return full
+    } catch (e) {
+      return null
+    } finally {
+      if (!silent) setPatientHydrating(false)
+    }
+  }
+
+  /* ----------------------------- masters load ----------------------------- */
+
+  useEffect(() => {
+    ;(async () => {
+      try {
+        setMastersLoading(true)
+        const res = await getBillingMasters()
+        const docs = res?.data?.doctors || []
+        setDoctors(docs)
+
+        const last = localStorage.getItem('pharmacy.lastDoctorId')
+        if (last) {
+          setHeader((p) => ({ ...p, doctorId: p.doctorId || last }))
+        }
+      } catch (e) {
+        // toast via interceptor
+      } finally {
+        setMastersLoading(false)
+      }
+    })()
+  }, [])
+
+  /* ----------------------------- list fetching ---------------------------- */
+
+  useEffect(() => {
+    fetchRxList()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rxTypeFilter, statusFilter, debouncedSearch])
+
+  useEffect(() => {
+    if (tab !== 'list') return
+    if (!autoRefresh) return
+
+    const t = setInterval(() => {
+      fetchRxList(true)
+    }, 20000)
+    return () => clearInterval(t)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, autoRefresh, rxTypeFilter, statusFilter, debouncedSearch])
+
+  async function fetchRxList(silent = false) {
+    try {
+      if (!silent) setListLoading(true)
+      const params = {}
+      if (rxTypeFilter !== 'ALL') params.type = rxTypeFilter
+      if (statusFilter !== 'ALL') params.status = statusFilter
+      if (debouncedSearch?.trim()) params.q = debouncedSearch.trim()
+      params.limit = 100
+
+      const res = await listPharmacyPrescriptions(params)
+      setRxList(res?.data || [])
+    } catch (e) {
+      // toast via interceptor
+    } finally {
+      if (!silent) setListLoading(false)
+    }
+  }
+
+  /* ----------------------------- patient search --------------------------- */
+
+  useEffect(() => {
+    const q = debouncedPatientQuery?.trim()
+    if (!q || q.length < 2) {
+      setPatientResults([])
+      return
     }
 
-    return (
-        <span className={`inline-flex items-center px-2 py-0.5 text-[11px] rounded-full ${cls}`}>
-            {label}
-        </span>
-    )
+    let cancelled = false
+    ;(async () => {
+      try {
+        setPatientSearching(true)
+
+        let res
+        try {
+          res = await listPatients(q)
+        } catch {
+          res = await listPatients({ q })
+        }
+
+        if (cancelled) return
+        setPatientResults(res?.data?.items || res?.data || [])
+        setShowPatientDropdown(true)
+      } catch (e) {
+        // toast via interceptor
+      } finally {
+        if (!cancelled) setPatientSearching(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [debouncedPatientQuery])
+
+  async function handleSelectPatient(p) {
+    // quick set (instant UI)
+    setHeader((prev) => ({ ...prev, patient: p }))
+    setPatientQuery(getPatientDisplay(p))
+    setShowPatientDropdown(false)
+
+    // hydrate full patient details (FIX: missing details)
+    const full = await hydratePatientById(p?.id, { silent: false })
+    if (full) {
+      setHeader((prev) => ({ ...prev, patient: full }))
+      setPatientQuery(getPatientDisplay(full))
+    }
+  }
+
+  function clearPatient() {
+    setHeader((p) => ({ ...p, patient: null }))
+    setPatientQuery('')
+    setPatientResults([])
+    setShowPatientDropdown(false)
+  }
+
+  /* ----------------------------- medicine search -------------------------- */
+
+  useEffect(() => {
+    const q = debouncedMedQuery?.trim()
+    if (!q || q.length < 2) {
+      setMedResults([])
+      return
+    }
+
+    let cancelled = false
+    ;(async () => {
+      try {
+        setMedSearching(true)
+        const res = await listInventoryItems({
+          q,
+          kind: 'MEDICINE',
+          limit: 15,
+        })
+        if (cancelled) return
+        const items = res?.data?.items || res?.data || []
+        setMedResults(items)
+        setShowMedDropdown(true)
+      } catch (e) {
+        // toast via interceptor
+      } finally {
+        if (!cancelled) setMedSearching(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [debouncedMedQuery])
+
+  function handleSelectMedicine(item) {
+    setCurrentLine((prev) => {
+      const next = {
+        ...prev,
+        item,
+        item_name: item.name || item.item_name || prev.item_name || '',
+        strength: prev.strength || item.strength || item.form || '',
+        route: prev.route || item.route || 'PO',
+      }
+
+      if (!next._qtyTouched) {
+        const auto = calcAutoQty(next)
+        if (auto) next.total_qty = auto
+      }
+      return next
+    })
+    setMedQuery(item.name || item.item_name || '')
+    setShowMedDropdown(false)
+  }
+
+  /* ----------------------------- form helpers ----------------------------- */
+
+  function resetForm(keepType = true) {
+    setHeader((prev) => ({
+      ...EMPTY_HEADER,
+      type: keepType ? prev.type : 'OPD',
+      datetime: todayDateTimeLocal(),
+      doctorId: prev.doctorId || '',
+    }))
+    setLines([])
+    setCurrentLine(EMPTY_LINE)
+    setPatientQuery('')
+    setPatientResults([])
+    setMedQuery('')
+    setMedResults([])
+    setShowPatientDropdown(false)
+    setShowMedDropdown(false)
+  }
+
+  function startNewRx(initialType) {
+    const t = initialType || newType || 'OPD'
+    setHeader((prev) => ({
+      ...EMPTY_HEADER,
+      type: t,
+      datetime: todayDateTimeLocal(),
+      doctorId: prev.doctorId || localStorage.getItem('pharmacy.lastDoctorId') || '',
+    }))
+    setLines([])
+    setCurrentLine(EMPTY_LINE)
+    setPatientQuery('')
+    setSelectedRx(null)
+    setSelectedPatient(null)
+    setTab('new')
+
+    setTimeout(() => {
+      medInputRef.current?.focus?.()
+    }, 50)
+  }
+
+  function suggestedQtyForCurrent() {
+    return calcAutoQty(currentLine)
+  }
+
+  function handleAddLine() {
+    const name = currentLine.item?.name || currentLine.item_name
+    if (!currentLine.item && !name) {
+      toast.error('Select a medicine first')
+      return
+    }
+
+    const qtyStr = safeStr(currentLine.total_qty || suggestedQtyForCurrent()).trim()
+    const qty = qtyStr ? Number(qtyStr) : 0
+    if (!qty || !Number.isFinite(qty) || qty <= 0) {
+      toast.error('Enter a valid Total Qty (or set Frequency + Days)')
+      return
+    }
+
+    const newLine = {
+      ...currentLine,
+      total_qty: String(qty),
+      requested_qty: currentLine.requested_qty || String(qty),
+    }
+
+    const newId = newLine.item?.id || newLine.item_id
+    if (newId) {
+      const idx = lines.findIndex((l) => (l.item?.id || l.item_id) === newId)
+      if (idx >= 0) {
+        const prev = lines[idx]
+        const prevQty = Number(prev.total_qty || prev.requested_qty || 0) || 0
+        const mergedQty = prevQty + qty
+        const merged = {
+          ...prev,
+          ...newLine,
+          total_qty: String(mergedQty),
+          requested_qty: String(mergedQty),
+        }
+        setLines((arr) => arr.map((x, i) => (i === idx ? merged : x)))
+        toast.success(`Merged duplicate: ${name} (Qty ${prevQty} → ${mergedQty})`)
+      } else {
+        setLines((prev) => [...prev, newLine])
+      }
+    } else {
+      setLines((prev) => [...prev, newLine])
+    }
+
+    setCurrentLine(EMPTY_LINE)
+    setMedQuery('')
+    setShowMedDropdown(false)
+
+    setTimeout(() => medInputRef.current?.focus?.(), 50)
+  }
+
+  function handleRemoveLine(idx) {
+    setLines((prev) => prev.filter((_, i) => i !== idx))
+  }
+
+  async function handleSubmitRx() {
+    const isCounter = header.type === 'COUNTER'
+
+    if (!isCounter && !header.patient) {
+      toast.error('Select a patient')
+      return
+    }
+    if (!isCounter && !header.doctorId) {
+      toast.error('Select a doctor')
+      return
+    }
+    if (!lines.length) {
+      toast.error('Add at least one medicine')
+      return
+    }
+
+    const payload = {
+      type: header.type,
+      priority: header.priority,
+      rx_datetime: header.datetime,
+      patient_id: header.patient?.id || null,
+      doctor_user_id: isCounter ? null : header.doctorId || null,
+      visit_id: header.type === 'OPD' ? header.visitNo || null : null,
+      ipd_admission_id: header.type === 'IPD' ? header.admissionNo || null : null,
+      ot_case_id: header.type === 'OT' ? header.otCaseNo || null : null,
+      notes: header.notes || '',
+      lines: lines.map((l) => {
+        const qtyStr = safeStr(l.total_qty || l.requested_qty || calcAutoQty(l)).trim()
+        const qty = qtyStr ? Number(qtyStr) : null
+
+        return {
+          item_id: l.item?.id || l.item_id || null,
+          item_name: l.item?.name || l.item_name || '',
+          strength: l.strength || null,
+          route: l.route || null,
+          dose: l.dose || null,
+          frequency: l.frequency || null,
+          duration_days: l.duration_days ? Number(l.duration_days) : null,
+          requested_qty: qty,
+          total_qty: qty,
+          instructions: l.instructions || null,
+          is_prn: !!l.is_prn,
+          is_stat: !!l.is_stat,
+        }
+      }),
+    }
+
+    try {
+      setSubmitting(true)
+
+      if (header.doctorId) {
+        localStorage.setItem('pharmacy.lastDoctorId', header.doctorId)
+      }
+
+      const res = await createPharmacyPrescription(payload)
+      toast.success('Prescription created & sent to Pharmacy')
+
+      resetForm(true)
+      setTab('list')
+      fetchRxList()
+      if (res?.data) setSelectedRx(res.data)
+    } catch (e) {
+      // toast via interceptor
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  async function handleOpenRx(row) {
+    try {
+      const res = await getPharmacyPrescription(row.id)
+      const data = res?.data || row
+      setSelectedRx(data)
+      setTab('detail')
+    } catch (e) {
+      // toast via interceptor
+    }
+  }
+
+  /* -------------------- FIX: hydrate selected patient in detail tab -------------------- */
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
+      if (!selectedRx) {
+        setSelectedPatient(null)
+        return
+      }
+
+      const embedded = selectedRx.patient
+      const pid =
+        selectedRx.patient_id ||
+        selectedRx.patientId ||
+        embedded?.id ||
+        null
+
+      // if embedded patient already has enough data, use it
+      if (embedded && (embedded.uhid || embedded.phone || embedded.gender || embedded.age)) {
+        setSelectedPatient(embedded)
+        return
+      }
+
+      if (!pid) {
+        setSelectedPatient(embedded || null)
+        return
+      }
+
+      try {
+        setSelectedPatientLoading(true)
+        const full = await hydratePatientById(pid, { silent: true })
+        if (cancelled) return
+        setSelectedPatient(full || embedded || null)
+      } finally {
+        if (!cancelled) setSelectedPatientLoading(false)
+      }
+    })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [selectedRx])
+
+  const selectedRxLines = useMemo(() => {
+    if (!selectedRx) return []
+    return selectedRx.lines || selectedRx.items || []
+  }, [selectedRx])
+
+  const queueStats = useMemo(() => {
+    const total = rxList.length
+    const pending = rxList.filter((r) => ['PENDING', 'NEW'].includes(safeStr(r.status).toUpperCase())).length
+    const partial = rxList.filter((r) => safeStr(r.status).toUpperCase() === 'PARTIAL').length
+    const disp = rxList.filter((r) => ['DISPENSED', 'COMPLETED'].includes(safeStr(r.status).toUpperCase())).length
+    return { total, pending, partial, disp }
+  }, [rxList])
+
+  /* ---------------------------- top hotkeys UX ---------------------------- */
+
+  useEffect(() => {
+    const onKey = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setTab('list')
+        setTimeout(() => listSearchRef.current?.focus?.(), 50)
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
+        e.preventDefault()
+        startNewRx(newType)
+      }
+      if (e.key === 'Escape') {
+        setShowPatientDropdown(false)
+        setShowMedDropdown(false)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [newType])
+
+  /* --------------------------------- render -------------------------------- */
+
+  return (
+    <div className="relative w-full">
+      {/* premium background */}
+      <div className="pointer-events-none absolute inset-0">
+        <div className="absolute inset-0 bg-gradient-to-b from-slate-50 via-white to-slate-50" />
+        <div className="absolute -top-24 left-1/2 h-72 w-[720px] -translate-x-1/2 rounded-full bg-slate-200/40 blur-3xl" />
+        <div className="absolute top-36 right-10 h-52 w-52 rounded-full bg-slate-100 blur-2xl" />
+      </div>
+
+      <div className="relative p-3 sm:p-4 md:p-6">
+        <div className="mx-auto w-full max-w-[1440px] space-y-4">
+          {/* Premium Header */}
+          <GlassCard className="overflow-hidden">
+            <div className="relative">
+              <div className="absolute inset-0 bg-gradient-to-r from-white via-white to-slate-50" />
+              <div className="relative p-4 sm:p-5">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <h1 className="text-xl md:text-2xl font-semibold text-slate-900 tracking-tight">
+                      Pharmacy Rx
+                    </h1>
+                    <div className="text-sm text-slate-500 flex flex-wrap items-center gap-2 mt-1">
+                      <span>Fast queue + quick Rx entry for daily pharmacy ops.</span>
+                      <span className="text-[11px] text-slate-400">
+                        Tips: <span className="font-medium">Ctrl+K</span> search •{' '}
+                        <span className="font-medium">Ctrl+N</span> new Rx
+                      </span>
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      <div className="rounded-2xl border border-slate-200 bg-white/70 backdrop-blur px-3 py-2">
+                        <div className="text-[10px] uppercase tracking-wide text-slate-500">Total</div>
+                        <div className="text-sm font-semibold text-slate-900">{queueStats.total}</div>
+                      </div>
+                      <div className="rounded-2xl border border-amber-200 bg-amber-50/60 backdrop-blur px-3 py-2">
+                        <div className="text-[10px] uppercase tracking-wide text-amber-700">Pending</div>
+                        <div className="text-sm font-semibold text-amber-900">{queueStats.pending}</div>
+                      </div>
+                      <div className="rounded-2xl border border-blue-200 bg-blue-50/60 backdrop-blur px-3 py-2">
+                        <div className="text-[10px] uppercase tracking-wide text-blue-700">Partial</div>
+                        <div className="text-sm font-semibold text-blue-900">{queueStats.partial}</div>
+                      </div>
+                      <div className="rounded-2xl border border-emerald-200 bg-emerald-50/60 backdrop-blur px-3 py-2">
+                        <div className="text-[10px] uppercase tracking-wide text-emerald-700">Done</div>
+                        <div className="text-sm font-semibold text-emerald-900">{queueStats.disp}</div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+                    <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white/70 backdrop-blur px-3 py-2 shadow-sm">
+                      <Sparkles className="w-4 h-4 text-slate-500" />
+                      <span className="text-xs text-slate-600">Queue</span>
+                      <Badge variant="outline" className="text-[11px]">
+                        {queueStats.total}
+                      </Badge>
+                      <span className="text-[11px] text-slate-400">•</span>
+                      <span className="text-[11px] text-amber-700">Pending {queueStats.pending}</span>
+                      <span className="text-[11px] text-slate-400">•</span>
+                      <span className="text-[11px] text-blue-700">Partial {queueStats.partial}</span>
+                      <span className="text-[11px] text-slate-400">•</span>
+                      <span className="text-[11px] text-emerald-700">Done {queueStats.disp}</span>
+                    </div>
+
+                    <Select value={newType} onValueChange={setNewType}>
+                      <SelectTrigger className="w-full sm:w-[170px] bg-white/70 backdrop-blur border-slate-200 rounded-full">
+                        <SelectValue placeholder="New Rx Type" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {RX_TYPES.map((t) => (
+                          <SelectItem key={t.value} value={t.value}>
+                            {t.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+
+                    <Button className="rounded-full shadow-sm" onClick={() => startNewRx(newType)}>
+                      <Plus className="w-4 h-4 mr-2" />
+                      New Prescription
+                    </Button>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <Tabs value={tab} onValueChange={setTab} className="w-full">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <SegmentedTabs value={tab} />
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setAutoRefresh((v) => !v)}
+                          className={[
+                            'px-3 py-2 rounded-full text-xs border backdrop-blur shadow-sm',
+                            autoRefresh
+                              ? 'bg-emerald-50/70 text-emerald-700 border-emerald-200'
+                              : 'bg-white/70 text-slate-700 border-slate-200',
+                          ].join(' ')}
+                          title="Auto-refresh queue"
+                        >
+                          <CheckCircle2 className="w-3 h-3 inline mr-1" />
+                          Auto refresh
+                        </button>
+
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-9 rounded-full border-slate-200 bg-white/70 backdrop-blur"
+                          onClick={() => fetchRxList()}
+                        >
+                          <RotateCcw className="w-4 h-4 mr-1" />
+                          Refresh
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* ------------------------------ LIST TAB ------------------------------ */}
+                    <TabsContent value="list" className="mt-4 space-y-3">
+                      <GlassCard>
+                        <CardHeader className="pb-3">
+                          <div className="flex flex-col gap-3">
+                            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-xs uppercase tracking-wide text-slate-500">
+                                  Type
+                                </span>
+                                <div className="flex flex-wrap gap-1.5">
+                                  <button
+                                    type="button"
+                                    onClick={() => setRxTypeFilter('ALL')}
+                                    className={[
+                                      'px-3 py-1.5 rounded-full text-xs border transition shadow-sm backdrop-blur',
+                                      rxTypeFilter === 'ALL'
+                                        ? 'bg-slate-900 text-white border-slate-900'
+                                        : 'bg-white/70 text-slate-700 border-slate-200',
+                                    ].join(' ')}
+                                  >
+                                    All
+                                  </button>
+                                  {RX_TYPES.map((t) => (
+                                    <button
+                                      key={t.value}
+                                      type="button"
+                                      onClick={() => setRxTypeFilter(t.value)}
+                                      className={[
+                                        'px-3 py-1.5 rounded-full text-xs border flex items-center gap-1.5 transition shadow-sm backdrop-blur',
+                                        rxTypeFilter === t.value
+                                          ? 'bg-slate-900 text-white border-slate-900'
+                                          : 'bg-white/70 text-slate-700 border-slate-200',
+                                      ].join(' ')}
+                                    >
+                                      <Pill className="w-3 h-3" />
+                                      {t.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 w-full lg:w-auto">
+                                <div className="relative flex-1 lg:w-[420px]">
+                                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                                  <Input
+                                    ref={listSearchRef}
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    placeholder="Search UHID / name / Rx no..."
+                                    className="pl-9 h-10 text-sm bg-white/70 backdrop-blur border-slate-200 rounded-full"
+                                  />
+                                </div>
+
+                                <Select value={statusFilter} onValueChange={setStatusFilter}>
+                                  <SelectTrigger className="w-[150px] bg-white/70 backdrop-blur border-slate-200 rounded-full text-xs h-10">
+                                    <SelectValue placeholder="Status" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="ALL">All status</SelectItem>
+                                    <SelectItem value="DRAFT">Draft</SelectItem>
+                                    <SelectItem value="PENDING">Pending</SelectItem>
+                                    <SelectItem value="PARTIAL">Partial</SelectItem>
+                                    <SelectItem value="DISPENSED">Dispensed</SelectItem>
+                                    <SelectItem value="CANCELLED">Cancelled</SelectItem>
+                                  </SelectContent>
+                                </Select>
+
+                                <Button
+                                  variant="outline"
+                                  size="icon"
+                                  className="rounded-full border-slate-200 bg-white/70 backdrop-blur h-10 w-10"
+                                  onClick={() => fetchRxList()}
+                                  title="Apply filters"
+                                >
+                                  <Filter className="w-4 h-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        </CardHeader>
+
+                        <CardContent className="pt-0">
+                          <div className="hidden md:block border border-slate-100 rounded-2xl overflow-hidden bg-white/60 backdrop-blur">
+                            <div className="max-h-[560px] overflow-auto">
+                              <div className="overflow-x-auto">
+                                <table className="w-full min-w-[980px] text-sm">
+                                  <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur">
+                                    <tr className="text-xs text-slate-500">
+                                      <th className="text-left px-3 py-3 font-medium">Rx No</th>
+                                      <th className="text-left px-3 py-3 font-medium">Patient</th>
+                                      <th className="text-left px-3 py-3 font-medium">Type / Doctor</th>
+                                      <th className="text-left px-3 py-3 font-medium">Created</th>
+                                      <th className="text-left px-3 py-3 font-medium">Status</th>
+                                      <th className="text-right px-3 py-3 font-medium">Actions</th>
+                                    </tr>
+                                  </thead>
+
+                                  <tbody>
+                                    {listLoading && (
+                                      <tr>
+                                        <td colSpan={7} className="px-3 py-10 text-center text-xs text-slate-500">
+                                          Loading prescriptions...
+                                        </td>
+                                      </tr>
+                                    )}
+
+                                    {!listLoading && !rxList.length && (
+                                      <tr>
+                                        <td colSpan={7} className="px-3 py-12 text-center text-xs text-slate-500">
+                                          No prescriptions found for the selected filters.
+                                        </td>
+                                      </tr>
+                                    )}
+
+                                    {!listLoading &&
+                                      rxList.map((row) => {
+                                        const status = (row.status || '').toUpperCase() || 'PENDING'
+                                        const type = row.type || row.rx_type || 'OPD'
+                                        const createdStr = fmtDT(row.created_at || row.rx_datetime || row.bill_date)
+
+                                        const patientName =
+                                          row.patient_name ||
+                                          `${row.patient?.first_name || ''} ${row.patient?.last_name || ''}`.trim() ||
+                                          row.patient?.name ||
+                                          row.patient_uhid ||
+                                          '—'
+
+                                        const doctorName = row.doctor_name || row.doctor || row.doctor_display || ''
+
+                                        return (
+                                          <tr
+                                            key={row.id}
+                                            className="border-t border-slate-100 hover:bg-slate-50/70 transition-colors"
+                                          >
+                                            <td className="px-3 py-3 align-middle">
+                                              <div className="flex flex-col">
+                                                <span className="text-xs font-semibold text-slate-900">
+                                                  {row.rx_number || `RX-${row.id}`}
+                                                </span>
+                                                {(row.patient_uhid || row.uhid) && (
+                                                  <span className="text-[11px] text-slate-500">
+                                                    UHID: {row.patient_uhid || row.uhid}
+                                                  </span>
+                                                )}
+                                              </div>
+                                            </td>
+
+                                            <td className="px-3 py-3 align-middle">
+                                              <div className="flex items-center gap-2">
+                                                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center text-[11px] font-medium text-slate-700">
+                                                  <User className="w-3.5 h-3.5" />
+                                                </div>
+                                                <div>
+                                                  <div className="text-xs text-slate-900 font-medium">
+                                                    {patientName}
+                                                  </div>
+                                                  {(row.patient_uhid || row.uhid) && (
+                                                    <div className="text-[11px] text-slate-500">
+                                                      {row.patient_uhid || row.uhid}
+                                                    </div>
+                                                  )}
+                                                </div>
+                                              </div>
+                                            </td>
+
+                                            <td className="px-3 py-3 align-middle">
+                                              <div className="flex flex-col gap-1">
+                                                <div className="flex items-center gap-1.5">
+                                                  <Badge
+                                                    variant="outline"
+                                                    className="border-slate-200 text-[11px] px-2 py-0.5"
+                                                  >
+                                                    {type}
+                                                  </Badge>
+                                                  {doctorName && (
+                                                    <span className="text-[11px] text-slate-600 flex items-center gap-1">
+                                                      <Stethoscope className="w-3 h-3" />
+                                                      {doctorName}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                                {row.context_label && (
+                                                  <span className="text-[11px] text-slate-500">
+                                                    {row.context_label}
+                                                  </span>
+                                                )}
+                                              </div>
+                                            </td>
+
+                                            <td className="px-3 py-3 align-middle text-xs text-slate-700">
+                                              <div className="flex items-center gap-1">
+                                                <Clock3 className="w-3 h-3 text-slate-400" />
+                                                <span>{createdStr}</span>
+                                              </div>
+                                            </td>
+
+                                            <td className="px-3 py-3 align-middle">
+                                              <StatusPill status={status} />
+                                            </td>
+
+                                            <td className="px-3 py-3 align-middle text-right">
+                                              <Button
+                                                variant="outline"
+                                                size="sm"
+                                                className="h-8 px-3 text-xs rounded-full border-slate-200 bg-white"
+                                                onClick={() => handleOpenRx(row)}
+                                              >
+                                                <ClipboardList className="w-3.5 h-3.5 mr-1" />
+                                                View
+                                              </Button>
+                                            </td>
+                                          </tr>
+                                        )
+                                      })}
+                                  </tbody>
+                                </table>
+                              </div>
+                            </div>
+                          </div>
+
+                          {/* Mobile list */}
+                          <div className="md:hidden space-y-2">
+                            {listLoading ? (
+                              <div className="rounded-2xl border border-slate-200 bg-white/70 backdrop-blur p-4 text-xs text-slate-500">
+                                Loading prescriptions...
+                              </div>
+                            ) : !rxList.length ? (
+                              <div className="rounded-2xl border border-slate-200 bg-white/70 backdrop-blur p-4 text-xs text-slate-500">
+                                No prescriptions found for the selected filters.
+                              </div>
+                            ) : (
+                              rxList.map((row) => {
+                                const status = (row.status || '').toUpperCase() || 'PENDING'
+                                const type = row.type || row.rx_type || 'OPD'
+                                const createdStr = fmtDT(row.created_at || row.rx_datetime || row.bill_date)
+                                const doctorName = row.doctor_name || row.doctor || row.doctor_display || ''
+                                const patientName =
+                                  row.patient_name ||
+                                  `${row.patient?.first_name || ''} ${row.patient?.last_name || ''}`.trim() ||
+                                  row.patient?.name ||
+                                  row.patient_uhid ||
+                                  '—'
+
+                                return (
+                                  <button
+                                    key={row.id}
+                                    type="button"
+                                    onClick={() => handleOpenRx(row)}
+                                    className="w-full text-left rounded-3xl border border-slate-200 bg-white/70 backdrop-blur p-4 shadow-sm active:scale-[0.99] transition"
+                                  >
+                                    <div className="flex items-start justify-between gap-3">
+                                      <div className="min-w-0">
+                                        <div className="text-sm font-semibold text-slate-900 truncate">
+                                          {row.rx_number || `RX-${row.id}`}
+                                        </div>
+                                        <div className="text-xs text-slate-500 truncate">
+                                          {patientName} {(row.patient_uhid || row.uhid) ? `• ${row.patient_uhid || row.uhid}` : ''}
+                                        </div>
+                                      </div>
+                                      <StatusPill status={status} />
+                                    </div>
+
+                                    <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
+                                      <Badge variant="outline" className="border-slate-200 text-[11px]">
+                                        {type}
+                                      </Badge>
+                                      {doctorName ? (
+                                        <span className="inline-flex items-center gap-1">
+                                          <Stethoscope className="w-3 h-3 text-slate-400" />
+                                          {doctorName}
+                                        </span>
+                                      ) : null}
+                                      <span className="inline-flex items-center gap-1">
+                                        <Clock3 className="w-3 h-3 text-slate-400" />
+                                        {createdStr}
+                                      </span>
+                                    </div>
+
+                                    <div className="mt-3">
+                                      <div className="inline-flex items-center gap-2 rounded-full bg-slate-900 text-white px-3 py-1.5 text-xs">
+                                        <ClipboardList className="w-4 h-4" />
+                                        Open
+                                      </div>
+                                    </div>
+                                  </button>
+                                )
+                              })
+                            )}
+                          </div>
+                        </CardContent>
+                      </GlassCard>
+                    </TabsContent>
+
+                    {/* ------------------------------ NEW RX TAB ------------------------------ */}
+                    <TabsContent value="new" className="mt-4">
+                      <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1.8fr)]">
+                        {/* LEFT */}
+                        <GlassCard>
+                          <CardHeader className="pb-3">
+                            <CardTitle className="flex items-center gap-2 text-sm font-semibold">
+                              <Pill className="w-4 h-4 text-slate-500" />
+                              Prescription Details
+                              <Badge variant="outline" className="ml-1 text-[11px]">
+                                {header.type}
+                              </Badge>
+                            </CardTitle>
+                          </CardHeader>
+
+                          <CardContent className="space-y-4">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              <div className="space-y-1.5">
+                                <Label className="text-xs text-slate-600">Prescription Type</Label>
+                                <div className="flex flex-wrap gap-1.5">
+                                  {RX_TYPES.map((t) => (
+                                    <button
+                                      key={t.value}
+                                      type="button"
+                                      onClick={() => setHeader((prev) => ({ ...prev, type: t.value }))}
+                                      className={[
+                                        'px-3 py-1.5 rounded-full text-xs border flex items-center gap-1.5 transition shadow-sm',
+                                        header.type === t.value
+                                          ? 'bg-slate-900 text-white border-slate-900'
+                                          : 'bg-white/70 text-slate-700 border-slate-200 backdrop-blur',
+                                      ].join(' ')}
+                                    >
+                                      <Pill className="w-3 h-3" />
+                                      {t.label}
+                                    </button>
+                                  ))}
+                                </div>
+                              </div>
+
+                              <div className="space-y-1.5">
+                                <Label className="text-xs text-slate-600">Priority</Label>
+                                <Select
+                                  value={header.priority}
+                                  onValueChange={(val) => setHeader((prev) => ({ ...prev, priority: val }))}
+                                >
+                                  <SelectTrigger className="w-full bg-white/70 backdrop-blur border-slate-200 rounded-full h-10 text-xs">
+                                    <SelectValue placeholder="Select priority" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {PRIORITIES.map((p) => (
+                                      <SelectItem key={p.value} value={p.value}>
+                                        {p.label}
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <Label className="text-xs text-slate-600">Date &amp; Time</Label>
+                              <Input
+                                type="datetime-local"
+                                value={header.datetime}
+                                onChange={(e) =>
+                                  setHeader((prev) => ({
+                                    ...prev,
+                                    datetime: e.target.value,
+                                  }))
+                                }
+                                className="h-10 text-xs bg-white/70 backdrop-blur border-slate-200 rounded-full"
+                              />
+                            </div>
+
+                            {/* Patient picker */}
+                            <div className="space-y-1.5 relative" ref={patientDropRef}>
+                              <div className="flex items-center justify-between">
+                                <Label className="text-xs text-slate-600 flex items-center gap-1.5">
+                                  <User className="w-3 h-3" />
+                                  Patient (UHID / name / phone)
+                                </Label>
+
+                                <div className="flex items-center gap-2">
+                                  {patientHydrating && (
+                                    <span className="text-[11px] text-slate-500">Loading full patient…</span>
+                                  )}
+                                  {header.patient && (
+                                    <button
+                                      type="button"
+                                      onClick={clearPatient}
+                                      className="text-[11px] text-slate-500 hover:text-slate-900"
+                                    >
+                                      Clear
+                                    </button>
+                                  )}
+                                </div>
+                              </div>
+
+                              <div className="relative">
+                                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                                <Input
+                                  value={patientQuery}
+                                  onChange={(e) => {
+                                    setPatientQuery(e.target.value)
+                                    setShowPatientDropdown(true)
+                                  }}
+                                  placeholder={header.type === 'COUNTER' ? 'Optional for counter sale' : 'Search patient...'}
+                                  className="pl-9 h-10 text-sm bg-white/70 backdrop-blur border-slate-200 rounded-full"
+                                />
+                              </div>
+
+                              <AnimatePresence>
+                                {showPatientDropdown && (patientResults.length > 0 || patientSearching) && (
+                                  <motion.div
+                                    initial={{ opacity: 0, y: -6 }}
+                                    animate={{ opacity: 1, y: 0 }}
+                                    exit={{ opacity: 0, y: -6 }}
+                                    className="absolute z-30 mt-2 w-full bg-white/80 backdrop-blur border border-slate-200 rounded-2xl shadow-xl max-h-60 overflow-auto text-xs"
+                                  >
+                                    {patientSearching && (
+                                      <div className="px-3 py-2 text-slate-500">Searching...</div>
+                                    )}
+
+                                    {!patientSearching && !patientResults.length && (
+                                      <div className="px-3 py-2 text-slate-500">No patients found</div>
+                                    )}
+
+                                    {!patientSearching &&
+                                      patientResults.map((p) => (
+                                        <button
+                                          key={p.id}
+                                          type="button"
+                                          onClick={() => handleSelectPatient(p)}
+                                          className="w-full text-left px-3 py-2.5 hover:bg-slate-50 flex flex-col gap-0.5"
+                                        >
+                                          <div className="flex justify-between items-center gap-2">
+                                            <span className="font-medium text-slate-900">
+                                              {getPatientName(p)}
+                                            </span>
+                                            {p.uhid && (
+                                              <span className="text-[10px] text-slate-500">UHID: {p.uhid}</span>
+                                            )}
+                                          </div>
+                                          <div className="text-[11px] text-slate-500">
+                                            {getPatientAgeGender(p) ? `${getPatientAgeGender(p)} • ` : ''}
+                                            {p.phone || ''}
+                                          </div>
+                                        </button>
+                                      ))}
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </div>
+
+                            {/* show selected patient summary (NEW tab) */}
+                            {header.patient && header.type !== 'COUNTER' ? (
+                              <PatientSummaryCard patient={header.patient} loading={patientHydrating} />
+                            ) : null}
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              {header.type === 'OPD' && (
+                                <div className="space-y-1.5">
+                                  <Label className="text-xs text-slate-600">OPD Visit No (optional)</Label>
+                                  <Input
+                                    value={header.visitNo}
+                                    onChange={(e) => setHeader((prev) => ({ ...prev, visitNo: e.target.value }))}
+                                    placeholder="e.g., OPD-2025-0001"
+                                    className="h-10 text-sm bg-white/70 backdrop-blur border-slate-200 rounded-full"
+                                  />
+                                </div>
+                              )}
+
+                              {header.type === 'IPD' && (
+                                <div className="space-y-1.5">
+                                  <Label className="text-xs text-slate-600">Admission No</Label>
+                                  <Input
+                                    value={header.admissionNo}
+                                    onChange={(e) => setHeader((prev) => ({ ...prev, admissionNo: e.target.value }))}
+                                    placeholder="IPD admission number"
+                                    className="h-10 text-sm bg-white/70 backdrop-blur border-slate-200 rounded-full"
+                                  />
+                                </div>
+                              )}
+
+                              {header.type === 'OT' && (
+                                <div className="space-y-1.5">
+                                  <Label className="text-xs text-slate-600">OT Case No</Label>
+                                  <Input
+                                    value={header.otCaseNo}
+                                    onChange={(e) => setHeader((prev) => ({ ...prev, otCaseNo: e.target.value }))}
+                                    placeholder="OT / procedure case ID"
+                                    className="h-10 text-sm bg-white/70 backdrop-blur border-slate-200 rounded-full"
+                                  />
+                                </div>
+                              )}
+
+                              <div className="space-y-1.5">
+                                <Label className="text-xs text-slate-600 flex items-center gap-1">
+                                  <Stethoscope className="w-3 h-3" />
+                                  Consultant / Prescriber {header.type === 'COUNTER' ? '(optional)' : ''}
+                                </Label>
+                                <Select
+                                  value={header.doctorId || ''}
+                                  onValueChange={(val) => setHeader((prev) => ({ ...prev, doctorId: val }))}
+                                >
+                                  <SelectTrigger className="w-full bg-white/70 backdrop-blur border-slate-200 rounded-full h-10 text-sm">
+                                    <SelectValue placeholder="Select doctor" />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {mastersLoading && (
+                                      <SelectItem value="__loading" disabled>
+                                        Loading...
+                                      </SelectItem>
+                                    )}
+                                    {!mastersLoading && (!doctors || !doctors.length) && (
+                                      <SelectItem value="__none" disabled>
+                                        No doctors configured
+                                      </SelectItem>
+                                    )}
+                                    {!mastersLoading &&
+                                      doctors?.map((d) => (
+                                        <SelectItem key={d.id} value={String(d.id)}>
+                                          {d.name || d.full_name || d.email}
+                                        </SelectItem>
+                                      ))}
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <Label className="text-xs text-slate-600">Notes / instructions to pharmacist (optional)</Label>
+                              <Textarea
+                                value={header.notes}
+                                onChange={(e) => setHeader((prev) => ({ ...prev, notes: e.target.value }))}
+                                rows={3}
+                                className="text-sm bg-white/70 backdrop-blur border-slate-200 resize-none rounded-2xl"
+                                placeholder="Eg: Allergic to penicillin, avoid NSAIDs, taper after 5 days..."
+                              />
+                            </div>
+
+                            <div className="flex flex-wrap items-center gap-2 pt-1">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="h-9 rounded-full border-slate-200 bg-white/70 backdrop-blur"
+                                onClick={() => resetForm(true)}
+                              >
+                                <RotateCcw className="w-4 h-4 mr-1" />
+                                Reset
+                              </Button>
+
+                              <div className="text-[11px] text-slate-500 flex items-center gap-2">
+                                <span className="inline-flex items-center gap-1">
+                                  <Sparkles className="w-3 h-3" />
+                                  Automation:
+                                </span>
+                                <span>Debounced search • Auto qty • Merge duplicates</span>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </GlassCard>
+
+                        {/* RIGHT (Medicines) */}
+                        <GlassCard>
+                          <CardHeader className="pb-3 flex flex-row items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              <ClipboardList className="w-4 h-4 text-slate-500" />
+                              <CardTitle className="text-sm font-semibold">
+                                Medicines &amp; Instructions
+                              </CardTitle>
+                            </div>
+                            <div className="text-[11px] text-slate-500">
+                              {lines.length ? `${lines.length} lines` : 'No lines added yet'}
+                            </div>
+                          </CardHeader>
+
+                          <CardContent className="space-y-3">
+                            <div className="border border-slate-200/70 rounded-2xl p-3 bg-white/60 backdrop-blur">
+                              <div className="grid lg:grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)] gap-3">
+                                <div className="space-y-2">
+                                  {/* Medicine search */}
+                                  <div className="space-y-1 relative" ref={medDropRef}>
+                                    <div className="flex items-center justify-between">
+                                      <Label className="text-[11px] text-slate-600">
+                                        Medicine <span className="text-[10px] text-slate-400">(linked to Inventory)</span>
+                                      </Label>
+
+                                      {!!suggestedQtyForCurrent() && !currentLine.total_qty && (
+                                        <span className="text-[10px] text-slate-500">
+                                          Suggested qty:{' '}
+                                          <span className="font-medium">{suggestedQtyForCurrent()}</span>
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    <div className="relative">
+                                      <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                                      <Input
+                                        ref={medInputRef}
+                                        value={medQuery}
+                                        onChange={(e) => {
+                                          setMedQuery(e.target.value)
+                                          setShowMedDropdown(true)
+                                        }}
+                                        placeholder="Search drug name, brand, generic..."
+                                        className="pl-9 h-10 text-sm bg-white/70 backdrop-blur border-slate-200 rounded-full"
+                                      />
+                                    </div>
+
+                                    <AnimatePresence>
+                                      {showMedDropdown && (medResults.length > 0 || medSearching) && (
+                                        <motion.div
+                                          initial={{ opacity: 0, y: -6 }}
+                                          animate={{ opacity: 1, y: 0 }}
+                                          exit={{ opacity: 0, y: -6 }}
+                                          className="absolute z-30 mt-2 w-full bg-white/85 backdrop-blur border border-slate-200 rounded-2xl shadow-xl max-h-60 overflow-auto text-xs"
+                                        >
+                                          {medSearching && (
+                                            <div className="px-3 py-2 text-slate-500">
+                                              Searching medicines...
+                                            </div>
+                                          )}
+
+                                          {!medSearching && !medResults.length && (
+                                            <div className="px-3 py-2 text-slate-500">No items found</div>
+                                          )}
+
+                                          {!medSearching &&
+                                            medResults.map((it) => (
+                                              <button
+                                                key={it.id}
+                                                type="button"
+                                                onClick={() => handleSelectMedicine(it)}
+                                                className="w-full text-left px-3 py-2.5 hover:bg-slate-50 flex flex-col gap-0.5"
+                                              >
+                                                <div className="flex justify-between items-center gap-2">
+                                                  <span className="font-medium text-slate-900">
+                                                    {it.name || it.item_name}
+                                                  </span>
+                                                  {it.code && (
+                                                    <span className="text-[10px] text-slate-500">{it.code}</span>
+                                                  )}
+                                                </div>
+                                                <div className="text-[11px] text-slate-500 flex items-center gap-2">
+                                                  <span>{it.strength || it.form || ''}</span>
+                                                  {Number.isFinite(Number(it.available_qty)) && (
+                                                    <Badge variant="outline" className="text-[10px]">
+                                                      Stock: {it.available_qty}
+                                                    </Badge>
+                                                  )}
+                                                </div>
+                                              </button>
+                                            ))}
+                                        </motion.div>
+                                      )}
+                                    </AnimatePresence>
+                                  </div>
+
+                                  {/* Dose/Freq/Days */}
+                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                    <div className="space-y-1">
+                                      <Label className="text-[11px] text-slate-600">Dose</Label>
+                                      <Input
+                                        value={currentLine.dose}
+                                        onChange={(e) => setCurrentLine((prev) => ({ ...prev, dose: e.target.value }))}
+                                        placeholder="e.g. 500 mg"
+                                        className="h-10 text-sm bg-white/70 backdrop-blur border-slate-200 rounded-full"
+                                      />
+                                    </div>
+
+                                    <div className="space-y-1">
+                                      <Label className="text-[11px] text-slate-600">Frequency</Label>
+                                      <Input
+                                        value={currentLine.frequency}
+                                        onChange={(e) =>
+                                          setCurrentLine((prev) => {
+                                            const next = { ...prev, frequency: e.target.value }
+                                            if (!next._qtyTouched && !next.total_qty) {
+                                              const auto = calcAutoQty(next)
+                                              if (auto) next.total_qty = auto
+                                            }
+                                            return next
+                                          })
+                                        }
+                                        placeholder="e.g. 1-0-1 / BD / TID"
+                                        className="h-10 text-sm bg-white/70 backdrop-blur border-slate-200 rounded-full"
+                                      />
+                                    </div>
+
+                                    <div className="space-y-1">
+                                      <Label className="text-[11px] text-slate-600">Days</Label>
+                                      <Input
+                                        value={currentLine.duration_days}
+                                        onChange={(e) =>
+                                          setCurrentLine((prev) => {
+                                            const next = { ...prev, duration_days: e.target.value }
+                                            if (!next._qtyTouched && !next.total_qty) {
+                                              const auto = calcAutoQty(next)
+                                              if (auto) next.total_qty = auto
+                                            }
+                                            return next
+                                          })
+                                        }
+                                        placeholder="e.g. 5"
+                                        className="h-10 text-sm bg-white/70 backdrop-blur border-slate-200 rounded-full"
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div className="flex flex-wrap gap-1.5 pt-1">
+                                    {FREQ_PRESETS.map((f) => (
+                                      <button
+                                        key={f.value}
+                                        type="button"
+                                        onClick={() =>
+                                          setCurrentLine((prev) => {
+                                            const next = { ...prev, frequency: f.value }
+                                            if (!next._qtyTouched && !next.total_qty) {
+                                              const auto = calcAutoQty(next)
+                                              if (auto) next.total_qty = auto
+                                            }
+                                            return next
+                                          })
+                                        }
+                                        className={[
+                                          'px-3 py-1 rounded-full text-[11px] border shadow-sm transition',
+                                          normalizeFreq(currentLine.frequency) === f.value
+                                            ? 'bg-slate-900 text-white border-slate-900'
+                                            : 'bg-white/70 text-slate-700 border-slate-200 backdrop-blur',
+                                        ].join(' ')}
+                                      >
+                                        {f.label}
+                                      </button>
+                                    ))}
+                                  </div>
+
+                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                                    <div className="space-y-1">
+                                      <Label className="text-[11px] text-slate-600">Route</Label>
+                                      <Select
+                                        value={currentLine.route || 'PO'}
+                                        onValueChange={(val) => setCurrentLine((prev) => ({ ...prev, route: val }))}
+                                      >
+                                        <SelectTrigger className="h-10 text-sm bg-white/70 backdrop-blur border-slate-200 rounded-full">
+                                          <SelectValue placeholder="Route" />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {ROUTE_PRESETS.map((r) => (
+                                            <SelectItem key={r} value={r}>
+                                              {r}
+                                            </SelectItem>
+                                          ))}
+                                        </SelectContent>
+                                      </Select>
+                                    </div>
+
+                                    <div className="space-y-1">
+                                      <Label className="text-[11px] text-slate-600">Total Qty</Label>
+                                      <Input
+                                        value={currentLine.total_qty}
+                                        onChange={(e) =>
+                                          setCurrentLine((prev) => ({
+                                            ...prev,
+                                            total_qty: e.target.value,
+                                            _qtyTouched: true,
+                                          }))
+                                        }
+                                        placeholder={suggestedQtyForCurrent() ? `Suggested: ${suggestedQtyForCurrent()}` : 'eg. 10'}
+                                        className="h-10 text-sm bg-white/70 backdrop-blur border-slate-200 rounded-full"
+                                      />
+                                    </div>
+
+                                    <div className="space-y-1">
+                                      <Label className="text-[11px] text-slate-600">Strength</Label>
+                                      <Input
+                                        value={currentLine.strength}
+                                        onChange={(e) => setCurrentLine((prev) => ({ ...prev, strength: e.target.value }))}
+                                        placeholder="Auto-filled if available"
+                                        className="h-10 text-sm bg-white/70 backdrop-blur border-slate-200 rounded-full"
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div className="space-y-1">
+                                    <Label className="text-[11px] text-slate-600">Instructions to patient</Label>
+                                    <Input
+                                      value={currentLine.instructions}
+                                      onChange={(e) => setCurrentLine((prev) => ({ ...prev, instructions: e.target.value }))}
+                                      placeholder="After food, morning & night, etc."
+                                      className="h-10 text-sm bg-white/70 backdrop-blur border-slate-200 rounded-full"
+                                    />
+                                  </div>
+                                </div>
+
+                                <div className="flex flex-col justify-between gap-2">
+                                  <div className="text-[11px] text-slate-500">
+                                    <p className="leading-relaxed">
+                                      Fast add line. Use frequency chips and auto-qty to reduce typing.
+                                      Duplicate medicines auto-merge.
+                                    </p>
+                                  </div>
+                                  <div className="flex justify-end">
+                                    <Button
+                                      type="button"
+                                      size="sm"
+                                      className="h-10 px-4 rounded-full shadow-sm"
+                                      onClick={handleAddLine}
+                                    >
+                                      <Plus className="w-4 h-4 mr-1" />
+                                      Add line
+                                    </Button>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Lines list */}
+                            <div className="border border-slate-100 rounded-2xl overflow-hidden bg-white/60 backdrop-blur">
+                              <div className="hidden md:block">
+                                <ScrollArea className="max-h-[340px]">
+                                  <div className="overflow-x-auto">
+                                    <table className="w-full min-w-[760px] text-[12px]">
+                                      <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur">
+                                        <tr className="text-[11px] text-slate-500">
+                                          <th className="text-left px-3 py-2 font-medium">#</th>
+                                          <th className="text-left px-3 py-2 font-medium">Medicine</th>
+                                          <th className="text-left px-3 py-2 font-medium">Dose / Freq / Days</th>
+                                          <th className="text-left px-3 py-2 font-medium">Route</th>
+                                          <th className="text-right px-3 py-2 font-medium">Qty</th>
+                                          <th className="text-right px-3 py-2 font-medium">Actions</th>
+                                        </tr>
+                                      </thead>
+                                      <tbody>
+                                        {!lines.length && (
+                                          <tr>
+                                            <td colSpan={6} className="px-3 py-8 text-center text-[11px] text-slate-500">
+                                              No lines added. Use the panel above to add medicines.
+                                            </td>
+                                          </tr>
+                                        )}
+
+                                        {lines.map((l, idx) => (
+                                          <tr key={`${l.item_id || l.item?.id || idx}-${idx}`} className="border-t border-slate-100">
+                                            <td className="px-3 py-2 align-top text-slate-500">{idx + 1}</td>
+                                            <td className="px-3 py-2 align-top">
+                                              <div className="flex flex-col">
+                                                <span className="text-[12px] font-semibold text-slate-900">
+                                                  {l.item?.name || l.item_name || 'Unnamed medicine'}
+                                                </span>
+                                                {(l.strength || l.item?.strength) && (
+                                                  <span className="text-[11px] text-slate-500">
+                                                    {l.strength || l.item?.strength}
+                                                  </span>
+                                                )}
+                                              </div>
+                                            </td>
+
+                                            <td className="px-3 py-2 align-top text-[12px] text-slate-700">
+                                              <div className="flex flex-col">
+                                                <span>
+                                                  {l.dose || '—'} • {l.frequency || '—'} • {l.duration_days ? `${l.duration_days} days` : '—'}
+                                                </span>
+                                                {l.instructions && (
+                                                  <span className="text-[11px] text-slate-500">{l.instructions}</span>
+                                                )}
+                                              </div>
+                                            </td>
+
+                                            <td className="px-3 py-2 align-top text-[12px] text-slate-700">
+                                              {l.route || '—'}
+                                            </td>
+
+                                            <td className="px-3 py-2 align-top text-right text-[12px] text-slate-700 font-semibold">
+                                              {l.total_qty || calcAutoQty(l) || '—'}
+                                            </td>
+
+                                            <td className="px-3 py-2 align-top text-right">
+                                              <Button
+                                                variant="ghost"
+                                                size="sm"
+                                                className="h-8 px-2 text-[11px] text-slate-500 hover:text-red-600"
+                                                onClick={() => handleRemoveLine(idx)}
+                                              >
+                                                Remove
+                                              </Button>
+                                            </td>
+                                          </tr>
+                                        ))}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </ScrollArea>
+                              </div>
+
+                              <div className="md:hidden p-3 space-y-2">
+                                {!lines.length ? (
+                                  <div className="text-center text-xs text-slate-500 py-6">
+                                    No lines added. Use the panel above to add medicines.
+                                  </div>
+                                ) : (
+                                  lines.map((l, idx) => (
+                                    <div key={`${l.item_id || l.item?.id || idx}-${idx}`} className="rounded-2xl border border-slate-200 bg-white/70 backdrop-blur p-3">
+                                      <div className="flex items-start justify-between gap-3">
+                                        <div className="min-w-0">
+                                          <div className="text-sm font-semibold text-slate-900 truncate">
+                                            {l.item?.name || l.item_name || 'Unnamed medicine'}
+                                          </div>
+                                          <div className="text-xs text-slate-500 truncate">
+                                            {(l.strength || l.item?.strength) ? (l.strength || l.item?.strength) : ''}
+                                          </div>
+                                        </div>
+                                        <div className="text-xs font-semibold text-slate-900">
+                                          Qty {l.total_qty || calcAutoQty(l) || '—'}
+                                        </div>
+                                      </div>
+
+                                      <div className="mt-2 text-xs text-slate-700">
+                                        {l.dose || '—'} • {l.frequency || '—'} • {l.duration_days ? `${l.duration_days} days` : '—'} • {l.route || '—'}
+                                      </div>
+                                      {l.instructions ? (
+                                        <div className="mt-1 text-xs text-slate-500">{l.instructions}</div>
+                                      ) : null}
+
+                                      <div className="mt-3 flex justify-end">
+                                        <Button
+                                          variant="outline"
+                                          size="sm"
+                                          className="h-9 rounded-full border-slate-200 bg-white"
+                                          onClick={() => handleRemoveLine(idx)}
+                                        >
+                                          Remove
+                                        </Button>
+                                      </div>
+                                    </div>
+                                  ))
+                                )}
+                              </div>
+                            </div>
+
+                            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-1">
+                              <Button
+                                type="button"
+                                variant="ghost"
+                                size="sm"
+                                className="h-9 px-2 text-sm text-slate-500 justify-start"
+                                onClick={() => {
+                                  resetForm(true)
+                                  setTab('list')
+                                }}
+                              >
+                                <ArrowLeft className="w-4 h-4 mr-1" />
+                                Back to queue
+                              </Button>
+
+                              <div className="flex items-center gap-2 justify-end">
+                                <div className="text-[11px] text-slate-500 hidden md:block">
+                                  Patient:{' '}
+                                  <span className="font-medium text-slate-700">
+                                    {header.patient ? getPatientDisplay(header.patient) : header.type === 'COUNTER' ? 'Counter' : '—'}
+                                  </span>
+                                  <span className="mx-2 text-slate-300">|</span>
+                                  Lines:{' '}
+                                  <span className="font-medium text-slate-700">{lines.length}</span>
+                                </div>
+
+                                <Button
+                                  type="button"
+                                  size="sm"
+                                  className="h-10 px-5 rounded-full shadow-sm"
+                                  onClick={handleSubmitRx}
+                                  disabled={submitting}
+                                >
+                                  {submitting ? (
+                                    'Saving...'
+                                  ) : (
+                                    <>
+                                      <ClipboardList className="w-4 h-4 mr-1" />
+                                      Save &amp; Send
+                                    </>
+                                  )}
+                                </Button>
+                              </div>
+                            </div>
+                          </CardContent>
+                        </GlassCard>
+                      </div>
+                    </TabsContent>
+
+                    {/* ------------------------------ DETAIL TAB ----------------------------- */}
+                    <TabsContent value="detail" className="mt-4">
+                      {!selectedRx ? (
+                        <GlassCard>
+                          <CardContent className="py-10 text-center text-sm text-slate-500">
+                            Select a prescription from the queue to view details.
+                          </CardContent>
+                        </GlassCard>
+                      ) : (
+                        <div className="grid gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1.95fr)]">
+                          {/* LEFT: patient + rx meta */}
+                          <GlassCard>
+                            <CardHeader className="pb-3">
+                              <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                                <ClipboardList className="w-4 h-4 text-slate-500" />
+                                Prescription #{selectedRx.rx_number || selectedRx.id}
+                                <StatusPill status={selectedRx.status || 'PENDING'} />
+                              </CardTitle>
+
+                              <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-500">
+                                <span>
+                                  Type:{' '}
+                                  <Badge variant="outline" className="px-2 py-0.5">
+                                    {selectedRx.type || selectedRx.rx_type || 'OPD'}
+                                  </Badge>
+                                </span>
+                                {selectedRx.priority && <span>Priority: {selectedRx.priority}</span>}
+                                {(selectedRx.doctor_name || selectedRx.doctor_display) && (
+                                  <span className="flex items-center gap-1">
+                                    <Stethoscope className="w-3 h-3" />
+                                    {selectedRx.doctor_name || selectedRx.doctor_display}
+                                  </span>
+                                )}
+                                <span className="flex items-center gap-1">
+                                  <Clock3 className="w-3 h-3" />
+                                  {fmtDT(selectedRx.created_at || selectedRx.rx_datetime)}
+                                </span>
+                              </div>
+                            </CardHeader>
+
+                            <CardContent className="space-y-3">
+                              <PatientSummaryCard
+                                patient={selectedPatient || selectedRx.patient || null}
+                                loading={selectedPatientLoading}
+                              />
+
+                              <div className="flex gap-2">
+                                <Button
+                                  variant="outline"
+                                  className="rounded-full border-slate-200 bg-white/70 backdrop-blur"
+                                  onClick={() => {
+                                    setTab('list')
+                                  }}
+                                >
+                                  <ArrowLeft className="w-4 h-4 mr-2" />
+                                  Back
+                                </Button>
+
+                                <Button
+                                  className="rounded-full"
+                                  onClick={() => {
+                                    // quick clone to new
+                                    const t = selectedRx.type || selectedRx.rx_type || 'OPD'
+                                    startNewRx(t)
+                                    // try to prefill patient if available
+                                    const pid =
+                                      selectedRx.patient_id ||
+                                      selectedRx.patientId ||
+                                      selectedRx.patient?.id ||
+                                      null
+                                    if (pid) {
+                                      ;(async () => {
+                                        const full = await hydratePatientById(pid, { silent: true })
+                                        if (full) {
+                                          setHeader((prev) => ({ ...prev, patient: full }))
+                                          setPatientQuery(getPatientDisplay(full))
+                                        }
+                                      })()
+                                    }
+                                  }}
+                                >
+                                  <Plus className="w-4 h-4 mr-2" />
+                                  Copy as New
+                                </Button>
+                              </div>
+                            </CardContent>
+                          </GlassCard>
+
+                          {/* RIGHT: medicines */}
+                          <GlassCard>
+                            <CardHeader className="pb-3">
+                              <CardTitle className="text-sm font-semibold">
+                                Medicines
+                                <Badge variant="outline" className="ml-2 text-[11px]">
+                                  {selectedRxLines.length}
+                                </Badge>
+                              </CardTitle>
+                            </CardHeader>
+
+                            <CardContent className="space-y-3">
+                              <div className="border border-slate-100 rounded-2xl overflow-hidden bg-white/60 backdrop-blur">
+                                <div className="hidden md:block">
+                                  <ScrollArea className="max-h-[520px]">
+                                    <div className="overflow-x-auto">
+                                      <table className="w-full min-w-[760px] text-[12px]">
+                                        <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur">
+                                          <tr className="text-[11px] text-slate-500">
+                                            <th className="text-left px-3 py-2 font-medium">#</th>
+                                            <th className="text-left px-3 py-2 font-medium">Medicine</th>
+                                            <th className="text-left px-3 py-2 font-medium">Dose / Freq / Days</th>
+                                            <th className="text-left px-3 py-2 font-medium">Route</th>
+                                            <th className="text-right px-3 py-2 font-medium">Qty</th>
+                                          </tr>
+                                        </thead>
+
+                                        <tbody>
+                                          {!selectedRxLines.length && (
+                                            <tr>
+                                              <td colSpan={5} className="px-3 py-8 text-center text-[11px] text-slate-500">
+                                                No lines found for this prescription.
+                                              </td>
+                                            </tr>
+                                          )}
+
+                                          {selectedRxLines.map((l, idx) => {
+                                            const n = normalizeLine(l)
+                                            return (
+                                              <tr key={l.id || idx} className="border-t border-slate-100">
+                                                <td className="px-3 py-2 align-top text-slate-500">{idx + 1}</td>
+                                                <td className="px-3 py-2 align-top">
+                                                  <div className="flex flex-col">
+                                                    <span className="text-[12px] font-semibold text-slate-900">
+                                                      {n.itemName || 'Unnamed medicine'}
+                                                    </span>
+                                                    {n.strength ? (
+                                                      <span className="text-[11px] text-slate-500">{n.strength}</span>
+                                                    ) : null}
+                                                  </div>
+                                                </td>
+                                                <td className="px-3 py-2 align-top text-[12px] text-slate-700">
+                                                  <div className="flex flex-col">
+                                                    <span>
+                                                      {n.dose || '—'} • {n.frequency || '—'} •{' '}
+                                                      {n.duration_days ? `${n.duration_days} days` : '—'}
+                                                    </span>
+                                                    {n.instructions ? (
+                                                      <span className="text-[11px] text-slate-500">{n.instructions}</span>
+                                                    ) : null}
+                                                  </div>
+                                                </td>
+                                                <td className="px-3 py-2 align-top text-[12px] text-slate-700">
+                                                  {n.route || '—'}
+                                                </td>
+                                                <td className="px-3 py-2 align-top text-right text-[12px] text-slate-700 font-semibold">
+                                                  {n.qty || calcAutoQty({ frequency: n.frequency, duration_days: n.duration_days }) || '—'}
+                                                </td>
+                                              </tr>
+                                            )
+                                          })}
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </ScrollArea>
+                                </div>
+
+                                <div className="md:hidden p-3 space-y-2">
+                                  {!selectedRxLines.length ? (
+                                    <div className="text-center text-xs text-slate-500 py-6">
+                                      No lines found for this prescription.
+                                    </div>
+                                  ) : (
+                                    selectedRxLines.map((l, idx) => {
+                                      const n = normalizeLine(l)
+                                      return (
+                                        <div key={l.id || idx} className="rounded-2xl border border-slate-200 bg-white/70 backdrop-blur p-3">
+                                          <div className="flex items-start justify-between gap-3">
+                                            <div className="min-w-0">
+                                              <div className="text-sm font-semibold text-slate-900 truncate">
+                                                {n.itemName || 'Unnamed medicine'}
+                                              </div>
+                                              <div className="text-xs text-slate-500 truncate">
+                                                {n.strength || ''}
+                                              </div>
+                                            </div>
+                                            <div className="text-xs font-semibold text-slate-900">
+                                              Qty {n.qty || calcAutoQty({ frequency: n.frequency, duration_days: n.duration_days }) || '—'}
+                                            </div>
+                                          </div>
+
+                                          <div className="mt-2 text-xs text-slate-700">
+                                            {n.dose || '—'} • {n.frequency || '—'} • {n.duration_days ? `${n.duration_days} days` : '—'} • {n.route || '—'}
+                                          </div>
+                                          {n.instructions ? (
+                                            <div className="mt-1 text-xs text-slate-500">{n.instructions}</div>
+                                          ) : null}
+                                        </div>
+                                      )
+                                    })
+                                  )}
+                                </div>
+                              </div>
+                            </CardContent>
+                          </GlassCard>
+                        </div>
+                      )}
+                    </TabsContent>
+                  </Tabs>
+                </div>
+              </div>
+            </div>
+          </GlassCard>
+        </div>
+      </div>
+    </div>
+  )
 }
