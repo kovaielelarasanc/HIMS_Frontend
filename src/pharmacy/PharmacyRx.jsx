@@ -262,7 +262,7 @@ function GlassCard({ className = '', children }) {
   return (
     <Card
       className={[
-        'rounded-3xl border border-slate-200/70',
+        'rounded-3xl border border-slate-500/70',
         'bg-white/70 backdrop-blur-xl',
         'shadow-[0_12px_30px_rgba(0,0,0,0.06)]',
         'ring-1 ring-black/[0.03]',
@@ -276,7 +276,7 @@ function GlassCard({ className = '', children }) {
 
 function SegmentedTabs({ value }) {
   return (
-    <TabsList className="w-full sm:w-auto rounded-full bg-white/70 backdrop-blur border border-slate-200 p-1 shadow-sm">
+    <TabsList className="w-full sm:w-auto rounded-full bg-white/70 backdrop-blur border border-slate-500 p-1 shadow-sm">
       <TabsTrigger
         value="list"
         className="rounded-full px-4 data-[state=active]:bg-slate-900 data-[state=active]:text-white"
@@ -302,7 +302,7 @@ function SegmentedTabs({ value }) {
 function StatusPill({ status }) {
   const s = (status || '').toUpperCase()
   let label = s || 'PENDING'
-  let cls = 'bg-white/70 text-slate-700 border border-slate-200'
+  let cls = 'bg-white/70 text-slate-700 border border-slate-500'
 
   if (s === 'PENDING' || s === 'NEW') {
     label = 'Pending'
@@ -342,7 +342,7 @@ function PatientSummaryCard({ patient, loading }) {
   const addrLine = [address, city, state, pin].filter(Boolean).join(', ')
 
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white/70 backdrop-blur p-4 shadow-sm">
+    <div className="rounded-3xl border border-slate-500 bg-white/70 backdrop-blur p-4 shadow-sm">
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
@@ -388,7 +388,7 @@ function PatientSummaryCard({ patient, loading }) {
           ) : null}
         </div>
 
-        <Badge variant="outline" className="rounded-full text-[11px] border-slate-200">
+        <Badge variant="outline" className="rounded-full text-[11px] border-slate-500">
           Patient
         </Badge>
       </div>
@@ -928,7 +928,7 @@ export default function PharmacyRx() {
                     </div>
 
                     <div className="mt-3 grid grid-cols-2 sm:grid-cols-4 gap-2">
-                      <div className="rounded-2xl border border-slate-200 bg-white/70 backdrop-blur px-3 py-2">
+                      <div className="rounded-2xl border border-slate-500 bg-white/70 backdrop-blur px-3 py-2">
                         <div className="text-[10px] uppercase tracking-wide text-slate-500">Total</div>
                         <div className="text-sm font-semibold text-slate-900">{queueStats.total}</div>
                       </div>
@@ -948,7 +948,7 @@ export default function PharmacyRx() {
                   </div>
 
                   <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
-                    <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-white/70 backdrop-blur px-3 py-2 shadow-sm">
+                    <div className="flex items-center gap-2 rounded-full border border-slate-500 bg-white/70 backdrop-blur px-3 py-2 shadow-sm">
                       <Sparkles className="w-4 h-4 text-slate-500" />
                       <span className="text-xs text-slate-600">Queue</span>
                       <Badge variant="outline" className="text-[11px]">
@@ -963,7 +963,7 @@ export default function PharmacyRx() {
                     </div>
 
                     <Select value={newType} onValueChange={setNewType}>
-                      <SelectTrigger className="w-full sm:w-[170px] bg-white/70 backdrop-blur border-slate-200 rounded-full">
+                      <SelectTrigger className="w-full sm:w-[170px] bg-white/70 backdrop-blur border-slate-500 rounded-full">
                         <SelectValue placeholder="New Rx Type" />
                       </SelectTrigger>
                       <SelectContent>
@@ -995,7 +995,7 @@ export default function PharmacyRx() {
                             'px-3 py-2 rounded-full text-xs border backdrop-blur shadow-sm',
                             autoRefresh
                               ? 'bg-emerald-50/70 text-emerald-700 border-emerald-200'
-                              : 'bg-white/70 text-slate-700 border-slate-200',
+                              : 'bg-white/70 text-slate-700 border-slate-500',
                           ].join(' ')}
                           title="Auto-refresh queue"
                         >
@@ -1006,7 +1006,7 @@ export default function PharmacyRx() {
                         <Button
                           variant="outline"
                           size="sm"
-                          className="h-9 rounded-full border-slate-200 bg-white/70 backdrop-blur"
+                          className="h-9 rounded-full border-slate-500 bg-white/70 backdrop-blur"
                           onClick={() => fetchRxList()}
                         >
                           <RotateCcw className="w-4 h-4 mr-1" />
@@ -1033,7 +1033,7 @@ export default function PharmacyRx() {
                                       'px-3 py-1.5 rounded-full text-xs border transition shadow-sm backdrop-blur',
                                       rxTypeFilter === 'ALL'
                                         ? 'bg-slate-900 text-white border-slate-900'
-                                        : 'bg-white/70 text-slate-700 border-slate-200',
+                                        : 'bg-white/70 text-slate-700 border-slate-500',
                                     ].join(' ')}
                                   >
                                     All
@@ -1047,7 +1047,7 @@ export default function PharmacyRx() {
                                         'px-3 py-1.5 rounded-full text-xs border flex items-center gap-1.5 transition shadow-sm backdrop-blur',
                                         rxTypeFilter === t.value
                                           ? 'bg-slate-900 text-white border-slate-900'
-                                          : 'bg-white/70 text-slate-700 border-slate-200',
+                                          : 'bg-white/70 text-slate-700 border-slate-500',
                                       ].join(' ')}
                                     >
                                       <Pill className="w-3 h-3" />
@@ -1065,12 +1065,12 @@ export default function PharmacyRx() {
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
                                     placeholder="Search UHID / name / Rx no..."
-                                    className="pl-9 h-10 text-sm bg-white/70 backdrop-blur border-slate-200 rounded-full"
+                                    className="pl-9 h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
                                   />
                                 </div>
 
                                 <Select value={statusFilter} onValueChange={setStatusFilter}>
-                                  <SelectTrigger className="w-[150px] bg-white/70 backdrop-blur border-slate-200 rounded-full text-xs h-10">
+                                  <SelectTrigger className="w-[150px] bg-white/70 backdrop-blur border-slate-500 rounded-full text-xs h-10">
                                     <SelectValue placeholder="Status" />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -1086,7 +1086,7 @@ export default function PharmacyRx() {
                                 <Button
                                   variant="outline"
                                   size="icon"
-                                  className="rounded-full border-slate-200 bg-white/70 backdrop-blur h-10 w-10"
+                                  className="rounded-full border-slate-500 bg-white/70 backdrop-blur h-10 w-10"
                                   onClick={() => fetchRxList()}
                                   title="Apply filters"
                                 >
@@ -1186,7 +1186,7 @@ export default function PharmacyRx() {
                                                 <div className="flex items-center gap-1.5">
                                                   <Badge
                                                     variant="outline"
-                                                    className="border-slate-200 text-[11px] px-2 py-0.5"
+                                                    className="border-slate-500 text-[11px] px-2 py-0.5"
                                                   >
                                                     {type}
                                                   </Badge>
@@ -1220,7 +1220,7 @@ export default function PharmacyRx() {
                                               <Button
                                                 variant="outline"
                                                 size="sm"
-                                                className="h-8 px-3 text-xs rounded-full border-slate-200 bg-white"
+                                                className="h-8 px-3 text-xs rounded-full border-slate-500 bg-white"
                                                 onClick={() => handleOpenRx(row)}
                                               >
                                                 <ClipboardList className="w-3.5 h-3.5 mr-1" />
@@ -1239,11 +1239,11 @@ export default function PharmacyRx() {
                           {/* Mobile list */}
                           <div className="md:hidden space-y-2">
                             {listLoading ? (
-                              <div className="rounded-2xl border border-slate-200 bg-white/70 backdrop-blur p-4 text-xs text-slate-500">
+                              <div className="rounded-2xl border border-slate-500 bg-white/70 backdrop-blur p-4 text-xs text-slate-500">
                                 Loading prescriptions...
                               </div>
                             ) : !rxList.length ? (
-                              <div className="rounded-2xl border border-slate-200 bg-white/70 backdrop-blur p-4 text-xs text-slate-500">
+                              <div className="rounded-2xl border border-slate-500 bg-white/70 backdrop-blur p-4 text-xs text-slate-500">
                                 No prescriptions found for the selected filters.
                               </div>
                             ) : (
@@ -1264,7 +1264,7 @@ export default function PharmacyRx() {
                                     key={row.id}
                                     type="button"
                                     onClick={() => handleOpenRx(row)}
-                                    className="w-full text-left rounded-3xl border border-slate-200 bg-white/70 backdrop-blur p-4 shadow-sm active:scale-[0.99] transition"
+                                    className="w-full text-left rounded-3xl border border-slate-500 bg-white/70 backdrop-blur p-4 shadow-sm active:scale-[0.99] transition"
                                   >
                                     <div className="flex items-start justify-between gap-3">
                                       <div className="min-w-0">
@@ -1279,7 +1279,7 @@ export default function PharmacyRx() {
                                     </div>
 
                                     <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
-                                      <Badge variant="outline" className="border-slate-200 text-[11px]">
+                                      <Badge variant="outline" className="border-slate-500 text-[11px]">
                                         {type}
                                       </Badge>
                                       {doctorName ? (
@@ -1338,7 +1338,7 @@ export default function PharmacyRx() {
                                         'px-3 py-1.5 rounded-full text-xs border flex items-center gap-1.5 transition shadow-sm',
                                         header.type === t.value
                                           ? 'bg-slate-900 text-white border-slate-900'
-                                          : 'bg-white/70 text-slate-700 border-slate-200 backdrop-blur',
+                                          : 'bg-white/70 text-slate-700 border-slate-500 backdrop-blur',
                                       ].join(' ')}
                                     >
                                       <Pill className="w-3 h-3" />
@@ -1354,7 +1354,7 @@ export default function PharmacyRx() {
                                   value={header.priority}
                                   onValueChange={(val) => setHeader((prev) => ({ ...prev, priority: val }))}
                                 >
-                                  <SelectTrigger className="w-full bg-white/70 backdrop-blur border-slate-200 rounded-full h-10 text-xs">
+                                  <SelectTrigger className="w-full bg-white/70 backdrop-blur border-slate-500 rounded-full h-10 text-xs">
                                     <SelectValue placeholder="Select priority" />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -1379,7 +1379,7 @@ export default function PharmacyRx() {
                                     datetime: e.target.value,
                                   }))
                                 }
-                                className="h-10 text-xs bg-white/70 backdrop-blur border-slate-200 rounded-full"
+                                className="h-10 text-xs bg-white/70 backdrop-blur border-slate-500 rounded-full"
                               />
                             </div>
 
@@ -1416,7 +1416,7 @@ export default function PharmacyRx() {
                                     setShowPatientDropdown(true)
                                   }}
                                   placeholder={header.type === 'COUNTER' ? 'Optional for counter sale' : 'Search patient...'}
-                                  className="pl-9 h-10 text-sm bg-white/70 backdrop-blur border-slate-200 rounded-full"
+                                  className="pl-9 h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
                                 />
                               </div>
 
@@ -1426,7 +1426,7 @@ export default function PharmacyRx() {
                                     initial={{ opacity: 0, y: -6 }}
                                     animate={{ opacity: 1, y: 0 }}
                                     exit={{ opacity: 0, y: -6 }}
-                                    className="absolute z-30 mt-2 w-full bg-white/80 backdrop-blur border border-slate-200 rounded-2xl shadow-xl max-h-60 overflow-auto text-xs"
+                                    className="absolute z-30 mt-2 w-full bg-white/80 backdrop-blur border border-slate-500 rounded-2xl shadow-xl max-h-60 overflow-auto text-xs"
                                   >
                                     {patientSearching && (
                                       <div className="px-3 py-2 text-slate-500">Searching...</div>
@@ -1476,7 +1476,7 @@ export default function PharmacyRx() {
                                     value={header.visitNo}
                                     onChange={(e) => setHeader((prev) => ({ ...prev, visitNo: e.target.value }))}
                                     placeholder="e.g., OPD-2025-0001"
-                                    className="h-10 text-sm bg-white/70 backdrop-blur border-slate-200 rounded-full"
+                                    className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
                                   />
                                 </div>
                               )}
@@ -1488,7 +1488,7 @@ export default function PharmacyRx() {
                                     value={header.admissionNo}
                                     onChange={(e) => setHeader((prev) => ({ ...prev, admissionNo: e.target.value }))}
                                     placeholder="IPD admission number"
-                                    className="h-10 text-sm bg-white/70 backdrop-blur border-slate-200 rounded-full"
+                                    className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
                                   />
                                 </div>
                               )}
@@ -1500,7 +1500,7 @@ export default function PharmacyRx() {
                                     value={header.otCaseNo}
                                     onChange={(e) => setHeader((prev) => ({ ...prev, otCaseNo: e.target.value }))}
                                     placeholder="OT / procedure case ID"
-                                    className="h-10 text-sm bg-white/70 backdrop-blur border-slate-200 rounded-full"
+                                    className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
                                   />
                                 </div>
                               )}
@@ -1514,7 +1514,7 @@ export default function PharmacyRx() {
                                   value={header.doctorId || ''}
                                   onValueChange={(val) => setHeader((prev) => ({ ...prev, doctorId: val }))}
                                 >
-                                  <SelectTrigger className="w-full bg-white/70 backdrop-blur border-slate-200 rounded-full h-10 text-sm">
+                                  <SelectTrigger className="w-full bg-white/70 backdrop-blur border-slate-500 rounded-full h-10 text-sm">
                                     <SelectValue placeholder="Select doctor" />
                                   </SelectTrigger>
                                   <SelectContent>
@@ -1545,7 +1545,7 @@ export default function PharmacyRx() {
                                 value={header.notes}
                                 onChange={(e) => setHeader((prev) => ({ ...prev, notes: e.target.value }))}
                                 rows={3}
-                                className="text-sm bg-white/70 backdrop-blur border-slate-200 resize-none rounded-2xl"
+                                className="text-sm bg-white/70 backdrop-blur border-slate-500 resize-none rounded-2xl"
                                 placeholder="Eg: Allergic to penicillin, avoid NSAIDs, taper after 5 days..."
                               />
                             </div>
@@ -1555,7 +1555,7 @@ export default function PharmacyRx() {
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                className="h-9 rounded-full border-slate-200 bg-white/70 backdrop-blur"
+                                className="h-9 rounded-full border-slate-500 bg-white/70 backdrop-blur"
                                 onClick={() => resetForm(true)}
                               >
                                 <RotateCcw className="w-4 h-4 mr-1" />
@@ -1588,7 +1588,7 @@ export default function PharmacyRx() {
                           </CardHeader>
 
                           <CardContent className="space-y-3">
-                            <div className="border border-slate-200/70 rounded-2xl p-3 bg-white/60 backdrop-blur">
+                            <div className="border border-slate-500/70 rounded-2xl p-3 bg-white/60 backdrop-blur">
                               <div className="grid lg:grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)] gap-3">
                                 <div className="space-y-2">
                                   {/* Medicine search */}
@@ -1616,7 +1616,7 @@ export default function PharmacyRx() {
                                           setShowMedDropdown(true)
                                         }}
                                         placeholder="Search drug name, brand, generic..."
-                                        className="pl-9 h-10 text-sm bg-white/70 backdrop-blur border-slate-200 rounded-full"
+                                        className="pl-9 h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
                                       />
                                     </div>
 
@@ -1626,7 +1626,7 @@ export default function PharmacyRx() {
                                           initial={{ opacity: 0, y: -6 }}
                                           animate={{ opacity: 1, y: 0 }}
                                           exit={{ opacity: 0, y: -6 }}
-                                          className="absolute z-30 mt-2 w-full bg-white/85 backdrop-blur border border-slate-200 rounded-2xl shadow-xl max-h-60 overflow-auto text-xs"
+                                          className="absolute z-30 mt-2 w-full bg-white/85 backdrop-blur border border-slate-500 rounded-2xl shadow-xl max-h-60 overflow-auto text-xs"
                                         >
                                           {medSearching && (
                                             <div className="px-3 py-2 text-slate-500">
@@ -1677,7 +1677,7 @@ export default function PharmacyRx() {
                                         value={currentLine.dose}
                                         onChange={(e) => setCurrentLine((prev) => ({ ...prev, dose: e.target.value }))}
                                         placeholder="e.g. 500 mg"
-                                        className="h-10 text-sm bg-white/70 backdrop-blur border-slate-200 rounded-full"
+                                        className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
                                       />
                                     </div>
 
@@ -1696,7 +1696,7 @@ export default function PharmacyRx() {
                                           })
                                         }
                                         placeholder="e.g. 1-0-1 / BD / TID"
-                                        className="h-10 text-sm bg-white/70 backdrop-blur border-slate-200 rounded-full"
+                                        className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
                                       />
                                     </div>
 
@@ -1715,7 +1715,7 @@ export default function PharmacyRx() {
                                           })
                                         }
                                         placeholder="e.g. 5"
-                                        className="h-10 text-sm bg-white/70 backdrop-blur border-slate-200 rounded-full"
+                                        className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
                                       />
                                     </div>
                                   </div>
@@ -1739,7 +1739,7 @@ export default function PharmacyRx() {
                                           'px-3 py-1 rounded-full text-[11px] border shadow-sm transition',
                                           normalizeFreq(currentLine.frequency) === f.value
                                             ? 'bg-slate-900 text-white border-slate-900'
-                                            : 'bg-white/70 text-slate-700 border-slate-200 backdrop-blur',
+                                            : 'bg-white/70 text-slate-700 border-slate-500 backdrop-blur',
                                         ].join(' ')}
                                       >
                                         {f.label}
@@ -1754,7 +1754,7 @@ export default function PharmacyRx() {
                                         value={currentLine.route || 'PO'}
                                         onValueChange={(val) => setCurrentLine((prev) => ({ ...prev, route: val }))}
                                       >
-                                        <SelectTrigger className="h-10 text-sm bg-white/70 backdrop-blur border-slate-200 rounded-full">
+                                        <SelectTrigger className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full">
                                           <SelectValue placeholder="Route" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -1779,7 +1779,7 @@ export default function PharmacyRx() {
                                           }))
                                         }
                                         placeholder={suggestedQtyForCurrent() ? `Suggested: ${suggestedQtyForCurrent()}` : 'eg. 10'}
-                                        className="h-10 text-sm bg-white/70 backdrop-blur border-slate-200 rounded-full"
+                                        className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
                                       />
                                     </div>
 
@@ -1789,7 +1789,7 @@ export default function PharmacyRx() {
                                         value={currentLine.strength}
                                         onChange={(e) => setCurrentLine((prev) => ({ ...prev, strength: e.target.value }))}
                                         placeholder="Auto-filled if available"
-                                        className="h-10 text-sm bg-white/70 backdrop-blur border-slate-200 rounded-full"
+                                        className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
                                       />
                                     </div>
                                   </div>
@@ -1800,7 +1800,7 @@ export default function PharmacyRx() {
                                       value={currentLine.instructions}
                                       onChange={(e) => setCurrentLine((prev) => ({ ...prev, instructions: e.target.value }))}
                                       placeholder="After food, morning & night, etc."
-                                      className="h-10 text-sm bg-white/70 backdrop-blur border-slate-200 rounded-full"
+                                      className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
                                     />
                                   </div>
                                 </div>
@@ -1912,7 +1912,7 @@ export default function PharmacyRx() {
                                   </div>
                                 ) : (
                                   lines.map((l, idx) => (
-                                    <div key={`${l.item_id || l.item?.id || idx}-${idx}`} className="rounded-2xl border border-slate-200 bg-white/70 backdrop-blur p-3">
+                                    <div key={`${l.item_id || l.item?.id || idx}-${idx}`} className="rounded-2xl border border-slate-500 bg-white/70 backdrop-blur p-3">
                                       <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0">
                                           <div className="text-sm font-semibold text-slate-900 truncate">
@@ -1938,7 +1938,7 @@ export default function PharmacyRx() {
                                         <Button
                                           variant="outline"
                                           size="sm"
-                                          className="h-9 rounded-full border-slate-200 bg-white"
+                                          className="h-9 rounded-full border-slate-500 bg-white"
                                           onClick={() => handleRemoveLine(idx)}
                                         >
                                           Remove
@@ -2048,7 +2048,7 @@ export default function PharmacyRx() {
                               <div className="flex gap-2">
                                 <Button
                                   variant="outline"
-                                  className="rounded-full border-slate-200 bg-white/70 backdrop-blur"
+                                  className="rounded-full border-slate-500 bg-white/70 backdrop-blur"
                                   onClick={() => {
                                     setTab('list')
                                   }}
@@ -2173,7 +2173,7 @@ export default function PharmacyRx() {
                                     selectedRxLines.map((l, idx) => {
                                       const n = normalizeLine(l)
                                       return (
-                                        <div key={l.id || idx} className="rounded-2xl border border-slate-200 bg-white/70 backdrop-blur p-3">
+                                        <div key={l.id || idx} className="rounded-2xl border border-slate-500 bg-white/70 backdrop-blur p-3">
                                           <div className="flex items-start justify-between gap-3">
                                             <div className="min-w-0">
                                               <div className="text-sm font-semibold text-slate-900 truncate">

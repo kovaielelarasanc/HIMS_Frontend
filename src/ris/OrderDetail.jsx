@@ -35,6 +35,7 @@ import {
     finalizeRisOrder,
 } from '../api/ris'
 
+
 const fmtDT = (x) => (x ? new Date(x).toLocaleString() : '—')
 
 function cx(...a) {
@@ -95,7 +96,7 @@ function GlassModal({ open, title, subtitle, onClose, children }) {
                     </div>
                     <button
                         type="button"
-                        className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-white/70 text-slate-700 hover:bg-white"
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/50 bg-white/70 text-slate-700 hover:bg-white"
                         onClick={onClose}
                     >
                         <X className="h-4 w-4" />
@@ -304,7 +305,7 @@ export default function RisOrderDetail() {
 
     return (
         <div className="text-slate-900">
-            <div className="relative overflow-hidden rounded-[28px] border border-slate-200 bg-slate-50 p-3 md:p-5">
+            <div className="relative overflow-hidden rounded-[28px] border border-slate-500 bg-slate-50 p-3 md:p-5">
                 {/* soft background glow */}
                 <div className="pointer-events-none absolute -top-24 left-1/2 h-72 w-[820px] -translate-x-1/2 rounded-full bg-sky-200/40 blur-3xl" />
                 <div className="pointer-events-none absolute -bottom-28 left-10 h-72 w-72 rounded-full bg-emerald-200/35 blur-3xl" />
@@ -339,13 +340,13 @@ export default function RisOrderDetail() {
                             </div>
 
                             <div className="mt-3 flex flex-wrap gap-2 text-[11px]">
-                                <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">
+                                <span className="rounded-full border border-slate-500 bg-slate-50 px-3 py-1.5">
                                     Files: <b>{counts.total}</b>
                                 </span>
-                                <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">
+                                <span className="rounded-full border border-slate-500 bg-slate-50 px-3 py-1.5">
                                     Images: <b>{counts.imgs}</b>
                                 </span>
-                                <span className="rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5">
+                                <span className="rounded-full border border-slate-500 bg-slate-50 px-3 py-1.5">
                                     PDFs: <b>{counts.pdfs}</b>
                                 </span>
                             </div>
@@ -357,7 +358,7 @@ export default function RisOrderDetail() {
                             {invoicePath ? (
                                 <Link
                                     to={invoicePath}
-                                    className="inline-flex h-10 items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-4 text-[12px] font-semibold text-slate-800 hover:bg-white"
+                                    className="inline-flex h-10 items-center gap-2 rounded-2xl border border-black/50 bg-white/70 px-4 text-[12px] font-semibold text-slate-800 hover:bg-white"
                                     title="Open invoice"
                                 >
                                     <ReceiptText className="h-4 w-4" />
@@ -423,7 +424,7 @@ export default function RisOrderDetail() {
                                     <PermGate anyOf={['radiology.attachments.add']}>
                                         <button
                                             type="button"
-                                            className="inline-flex h-9 items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 text-[12px] font-semibold text-slate-800 hover:bg-white"
+                                            className="inline-flex h-9 items-center gap-2 rounded-2xl border border-black/50 bg-white/70 px-3 text-[12px] font-semibold text-slate-800 hover:bg-white"
                                             onClick={() => setLinkOpen(true)}
                                         >
                                             <Link2 className="h-4 w-4" />
@@ -436,7 +437,7 @@ export default function RisOrderDetail() {
                             {/* uploader */}
                             {!isFinalized ? (
                                 <PermGate anyOf={['radiology.attachments.add']}>
-                                    <div className="mt-3 rounded-[22px] border border-black/10 bg-white/60 p-3">
+                                    <div className="mt-3 rounded-[22px] border border-black/50 bg-white/60 p-3">
                                         <div className="text-[12px] font-semibold text-slate-800">Upload any file</div>
                                         <p className="mt-0.5 text-[11px] text-slate-600">
                                             Images / PDF / DOCX / ZIP / DICOM export — anything. You can preview images & PDFs.
@@ -446,7 +447,7 @@ export default function RisOrderDetail() {
                                             <input ref={fileRef} type="file" multiple onChange={onPick} className="w-full text-[12px]" />
 
                                             <input
-                                                className="h-10 rounded-2xl border border-black/10 bg-white/70 px-3 text-[12px] outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-200/60"
+                                                className="h-10 rounded-2xl border border-black/50 bg-white/70 px-3 text-[12px] outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-200/60"
                                                 placeholder="Note (optional) — e.g., “CT brain images”, “Referral letter”"
                                                 value={uploadNote}
                                                 onChange={(e) => setUploadNote(e.target.value)}
@@ -478,7 +479,7 @@ export default function RisOrderDetail() {
                                 {attLoading ? (
                                     <div className="text-[12px] text-slate-600">Loading attachments…</div>
                                 ) : attachments.length === 0 ? (
-                                    <div className="rounded-[22px] border border-dashed border-black/10 bg-white/40 p-6 text-center text-[12px] text-slate-600">
+                                    <div className="rounded-[22px] border border-dashed border-black/50 bg-white/40 p-6 text-center text-[12px] text-slate-600">
                                         No attachments yet.
                                     </div>
                                 ) : (
@@ -501,7 +502,7 @@ export default function RisOrderDetail() {
                                                         'flex w-full items-start gap-3 rounded-[22px] border p-3 text-left transition outline-none',
                                                         isActive
                                                             ? 'border-slate-900 bg-white shadow-sm'
-                                                            : 'border-black/10 bg-white/60 hover:bg-white/80',
+                                                            : 'border-black/50 bg-white/60 hover:bg-white/80',
                                                     )}
                                                 >
                                                     <div className="mt-0.5 flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-900 text-white">
@@ -518,7 +519,7 @@ export default function RisOrderDetail() {
                                                             href={a.file_url}
                                                             target="_blank"
                                                             rel="noreferrer"
-                                                            className="inline-flex h-9 items-center justify-center rounded-2xl border border-black/10 bg-white/70 px-3 text-[12px] font-semibold text-slate-800 hover:bg-white"
+                                                            className="inline-flex h-9 items-center justify-center rounded-2xl border border-black/50 bg-white/70 px-3 text-[12px] font-semibold text-slate-800 hover:bg-white"
                                                             onClick={(e) => e.stopPropagation()}
                                                             title="Open"
                                                         >
@@ -527,7 +528,7 @@ export default function RisOrderDetail() {
 
                                                         <a
                                                             href={a.file_url}
-                                                            className="inline-flex h-9 items-center justify-center rounded-2xl border border-black/10 bg-white/70 px-3 text-[12px] font-semibold text-slate-800 hover:bg-white"
+                                                            className="inline-flex h-9 items-center justify-center rounded-2xl border border-black/50 bg-white/70 px-3 text-[12px] font-semibold text-slate-800 hover:bg-white"
                                                             onClick={(e) => e.stopPropagation()}
                                                             download
                                                             title="Download"
@@ -578,7 +579,7 @@ export default function RisOrderDetail() {
                                             href={activeUrl}
                                             target="_blank"
                                             rel="noreferrer"
-                                            className="inline-flex h-9 items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 text-[12px] font-semibold text-slate-800 hover:bg-white"
+                                            className="inline-flex h-9 items-center gap-2 rounded-2xl border border-black/50 bg-white/70 px-3 text-[12px] font-semibold text-slate-800 hover:bg-white"
                                         >
                                             <ExternalLink className="h-4 w-4" />
                                             Open
@@ -595,7 +596,7 @@ export default function RisOrderDetail() {
                                 ) : null}
                             </div>
 
-                            <div className="mt-3 overflow-hidden rounded-[22px] border border-black/10 bg-white/50">
+                            <div className="mt-3 overflow-hidden rounded-[22px] border border-black/50 bg-white/50">
                                 {!activeUrl ? (
                                     <div className="p-10 text-center text-[12px] text-slate-600">Choose an attachment to preview.</div>
                                 ) : activeKind === 'image' ? (
@@ -620,7 +621,7 @@ export default function RisOrderDetail() {
                                                 href={activeUrl}
                                                 target="_blank"
                                                 rel="noreferrer"
-                                                className="inline-flex h-9 items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 text-[12px] font-semibold text-slate-800 hover:bg-white"
+                                                className="inline-flex h-9 items-center gap-2 rounded-2xl border border-black/50 bg-white/70 px-3 text-[12px] font-semibold text-slate-800 hover:bg-white"
                                             >
                                                 <ExternalLink className="h-4 w-4" />
                                                 Open
@@ -647,7 +648,7 @@ export default function RisOrderDetail() {
                             </div>
 
                             <textarea
-                                className="mt-3 min-h-[140px] w-full rounded-[22px] border border-black/10 bg-white/70 p-3 text-[12px] outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-200/60"
+                                className="mt-3 min-h-[140px] w-full rounded-[22px] border border-black/50 bg-white/70 p-3 text-[12px] outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-200/60"
                                 placeholder="Type notes… (optional)"
                                 value={notes}
                                 onChange={(e) => setNotes(e.target.value)}
@@ -679,13 +680,13 @@ export default function RisOrderDetail() {
                 >
                     <div className="space-y-3">
                         <input
-                            className="h-10 w-full rounded-2xl border border-black/10 bg-white/70 px-3 text-[12px] outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-200/60"
+                            className="h-10 w-full rounded-2xl border border-black/50 bg-white/70 px-3 text-[12px] outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-200/60"
                             placeholder="https://…"
                             value={linkUrl}
                             onChange={(e) => setLinkUrl(e.target.value)}
                         />
                         <input
-                            className="h-10 w-full rounded-2xl border border-black/10 bg-white/70 px-3 text-[12px] outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-200/60"
+                            className="h-10 w-full rounded-2xl border border-black/50 bg-white/70 px-3 text-[12px] outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-200/60"
                             placeholder="Note (optional) — e.g., “Old report PDF”"
                             value={linkNote}
                             onChange={(e) => setLinkNote(e.target.value)}
@@ -694,7 +695,7 @@ export default function RisOrderDetail() {
                         <div className="flex justify-end gap-2">
                             <button
                                 type="button"
-                                className="h-10 rounded-2xl border border-black/10 bg-white/70 px-4 text-[12px] font-semibold text-slate-800 hover:bg-white"
+                                className="h-10 rounded-2xl border border-black/50 bg-white/70 px-4 text-[12px] font-semibold text-slate-800 hover:bg-white"
                                 onClick={() => setLinkOpen(false)}
                             >
                                 Cancel

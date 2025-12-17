@@ -87,7 +87,7 @@ export default function RegisterAdmin() {
 
                     <form
                         onSubmit={submit}
-                        className="space-y-5 rounded-2xl border border-slate-200 bg-white/80 p-6 shadow-sm backdrop-blur"
+                        className="space-y-5 rounded-2xl border border-slate-500 bg-white/80 p-6 shadow-sm backdrop-blur"
                     >
                         {/* Hospital details */}
                         <div className="grid gap-4 md:grid-cols-2">
@@ -95,7 +95,7 @@ export default function RegisterAdmin() {
                                 <label className="mb-1 block text-sm text-slate-700">
                                     Hospital / Clinic Name
                                 </label>
-                                <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 focus-within:ring-2 focus-within:ring-blue-200">
+                                <div className="flex items-center gap-2 rounded-xl border border-slate-500 bg-white px-3 py-2 focus-within:ring-2 focus-within:ring-blue-200">
                                     <Building2 className="h-4 w-4 text-slate-400" />
                                     <input
                                         className="w-full bg-transparent outline-none placeholder:text-slate-400"
@@ -112,7 +112,7 @@ export default function RegisterAdmin() {
                                     Hospital Code (Tenant Code)
                                 </label>
                                 <input
-                                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-blue-200"
+                                    className="w-full rounded-xl border border-slate-500 bg-white px-3 py-2 text-sm outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-blue-200"
                                     placeholder="KGH001"
                                     value={form.tenant_code}
                                     onChange={(e) =>
@@ -133,7 +133,7 @@ export default function RegisterAdmin() {
                                     Contact Person
                                 </label>
                                 <input
-                                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-blue-200"
+                                    className="w-full rounded-xl border border-slate-500 bg-white px-3 py-2 text-sm outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-blue-200"
                                     placeholder="Dr. Admin / IT Head"
                                     value={form.contact_person}
                                     onChange={onChange('contact_person')}
@@ -146,7 +146,7 @@ export default function RegisterAdmin() {
                                     Contact Phone
                                 </label>
                                 <input
-                                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-blue-200"
+                                    className="w-full rounded-xl border border-slate-500 bg-white px-3 py-2 text-sm outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-blue-200"
                                     placeholder="+91 9XXXXXXXXX"
                                     value={form.contact_phone}
                                     onChange={onChange('contact_phone')}
@@ -158,7 +158,7 @@ export default function RegisterAdmin() {
                                     Hospital Address
                                 </label>
                                 <textarea
-                                    className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-blue-200"
+                                    className="w-full rounded-xl border border-slate-500 bg-white px-3 py-2 text-sm outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-blue-200"
                                     placeholder="Address, City, State, Pincode"
                                     rows={2}
                                     value={form.hospital_address}
@@ -180,7 +180,7 @@ export default function RegisterAdmin() {
                                         Subscription Plan
                                     </label>
                                     <select
-                                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-200"
+                                        className="w-full rounded-xl border border-slate-500 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-200"
                                         value={form.subscription_plan}
                                         onChange={onChange('subscription_plan')}
                                     >
@@ -220,7 +220,7 @@ export default function RegisterAdmin() {
                                         Admin Name
                                     </label>
                                     <input
-                                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-blue-200"
+                                        className="w-full rounded-xl border border-slate-500 bg-white px-3 py-2 text-sm outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-blue-200"
                                         placeholder="Super Admin"
                                         value={form.admin_name}
                                         onChange={onChange('admin_name')}
@@ -233,7 +233,7 @@ export default function RegisterAdmin() {
                                     </label>
                                     <input
                                         type="email"
-                                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-blue-200"
+                                        className="w-full rounded-xl border border-slate-500 bg-white px-3 py-2 text-sm outline-none placeholder:text-slate-400 focus:ring-2 focus:ring-blue-200"
                                         placeholder="admin@hospital.org"
                                         value={form.email}
                                         onChange={onChange('email')}
@@ -246,7 +246,7 @@ export default function RegisterAdmin() {
                                     </label>
                                     <input
                                         type="password"
-                                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-200"
+                                        className="w-full rounded-xl border border-slate-500 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-200"
                                         value={form.password}
                                         onChange={onChange('password')}
                                         required
@@ -258,7 +258,7 @@ export default function RegisterAdmin() {
                                     </label>
                                     <input
                                         type="password"
-                                        className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-200"
+                                        className="w-full rounded-xl border border-slate-500 bg-white px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-200"
                                         value={form.confirm_password}
                                         onChange={onChange('confirm_password')}
                                         required

@@ -286,7 +286,7 @@ export default function VisitRxTab({ visit, visitId }) {
     const todayStr = new Date().toLocaleDateString()
 
     return (
-        <Card className="border-slate-200 rounded-2xl shadow-sm">
+        <Card className="border-slate-500 rounded-2xl shadow-sm">
             <CardHeader className="pb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div className="flex items-center gap-2">
                     <div className="inline-flex h-9 w-9 items-center justify-center rounded-2xl bg-slate-900 text-white">
@@ -520,7 +520,7 @@ export default function VisitRxTab({ visit, visitId }) {
                                                                         'px-2 py-0.5 rounded-full border text-[9px]',
                                                                         String(l.dose) === d
                                                                             ? 'bg-slate-900 text-white border-slate-900'
-                                                                            : 'bg-white text-slate-700 border-slate-200',
+                                                                            : 'bg-white text-slate-700 border-slate-500',
                                                                     ].join(' ')}
                                                                 >
                                                                     {d}
@@ -546,7 +546,7 @@ export default function VisitRxTab({ visit, visitId }) {
                                                                     'px-2 py-0.5 rounded-full border text-[9px]',
                                                                     l.frequency_code === f.code
                                                                         ? 'bg-slate-900 text-white border-slate-900'
-                                                                        : 'bg-white text-slate-700 border-slate-200',
+                                                                        : 'bg-white text-slate-700 border-slate-500',
                                                                 ].join(' ')}
                                                             >
                                                                 {f.code}
@@ -659,7 +659,7 @@ export default function VisitRxTab({ visit, visitId }) {
                         </div>
 
                         {/* ===== Bottom prescription sheet preview (real-world pad) ===== */}
-                        <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 space-y-2">
+                        <div className="mt-4 rounded-2xl border border-slate-500 bg-slate-50/80 p-3 space-y-2">
                             <div className="flex items-center justify-between">
                                 <div className="flex items-center gap-2">
                                     <Receipt className="h-4 w-4 text-slate-500" />
@@ -673,11 +673,11 @@ export default function VisitRxTab({ visit, visitId }) {
                             </div>
 
                             {lines.length === 0 ? (
-                                <div className="rounded-xl border border-dashed border-slate-200 bg-white px-3 py-4 text-center text-[11px] text-slate-500">
+                                <div className="rounded-xl border border-dashed border-slate-500 bg-white px-3 py-4 text-center text-[11px] text-slate-500">
                                     Start adding medicines above to see a real-world prescription layout here.
                                 </div>
                             ) : (
-                                <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 space-y-3">
+                                <div className="rounded-xl border border-slate-500 bg-white px-3 py-3 space-y-3">
                                     {/* header */}
                                     <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 border-b border-slate-100 pb-2">
                                         <div className="space-y-0.5">

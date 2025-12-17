@@ -263,7 +263,7 @@ function Modal({ open, title, subtitle, onClose, children }) {
 
 function ModalityChip({ modality }) {
     const m = String(modality || '—').toUpperCase()
-    let cls = 'border-slate-200/70 bg-slate-100/70 text-slate-700'
+    let cls = 'border-slate-500/70 bg-slate-100/70 text-slate-700'
     if (m === 'XR' || m === 'X-RAY' || m === 'XRAY') cls = 'border-sky-200/70 bg-sky-50/70 text-sky-700'
     else if (m === 'CT') cls = 'border-indigo-200/70 bg-indigo-50/70 text-indigo-700'
     else if (m === 'MRI') cls = 'border-purple-200/70 bg-purple-50/70 text-purple-700'

@@ -34,13 +34,13 @@ function cx(...xs) {
 const UI = {
     page: 'min-h-[calc(100vh-4rem)] w-full bg-gradient-to-b from-slate-50 via-white to-slate-50',
     glass:
-        'rounded-3xl border border-black/10 bg-white/75 backdrop-blur-xl shadow-[0_12px_35px_rgba(2,6,23,0.10)]',
+        'rounded-3xl border border-black/50 bg-white/75 backdrop-blur-xl shadow-[0_12px_35px_rgba(2,6,23,0.10)]',
     chip:
-        'inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700',
+        'inline-flex items-center gap-2 rounded-full border border-black/50 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700',
     chipBtn:
         'inline-flex items-center gap-2 rounded-full border bg-green-900 px-3 py-1.5 text-[11px] font-semibold text-white hover:text-black hover:bg-black/[0.03] active:scale-[0.99] transition',
     input:
-        'h-11 w-full rounded-2xl border border-black/10 bg-white/85 px-3 text-[12px] font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-500',
+        'h-11 w-full rounded-2xl border border-black/50 bg-white/85 px-3 text-[12px] font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-500',
 }
 
 function StatCard({ label, value, icon: Icon, tone = 'slate' }) {
@@ -51,7 +51,7 @@ function StatCard({ label, value, icon: Icon, tone = 'slate' }) {
                 ? 'bg-emerald-50 text-emerald-900 border-emerald-200'
                 : tone === 'sky'
                     ? 'bg-sky-50 text-sky-900 border-sky-200'
-                    : 'bg-white/80 text-slate-900 border-black/10'
+                    : 'bg-white/80 text-slate-900 border-black/50'
 
     return (
         <div className={cx('rounded-3xl border px-4 py-3', toneCls)}>
@@ -61,7 +61,7 @@ function StatCard({ label, value, icon: Icon, tone = 'slate' }) {
                     <div className="mt-1 text-[20px] font-semibold tracking-tight tabular-nums">{value}</div>
                 </div>
                 {Icon ? (
-                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-black/10 bg-white/30">
+                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-black/50 bg-white/30">
                         <Icon className="h-5 w-5 opacity-80" />
                     </div>
                 ) : null}
@@ -281,7 +281,7 @@ export default function DoctorFees() {
                                 </div>
 
                                 <div className="mt-3 flex items-start gap-3">
-                                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-3xl bg-black/[0.04] border border-black/10">
+                                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-3xl bg-black/[0.04] border border-black/50">
                                         <IndianRupee className="h-5 w-5 text-slate-700" />
                                     </div>
 
@@ -379,7 +379,7 @@ export default function DoctorFees() {
                 <div className="grid gap-4 lg:grid-cols-[1.05fr,0.95fr]">
                     {/* CONFIGURE */}
                     <Card className={cx(UI.glass, 'overflow-hidden')}>
-                        <CardHeader className="border-b border-black/10 bg-white/60 backdrop-blur-xl">
+                        <CardHeader className="border-b border-black/50 bg-white/60 backdrop-blur-xl">
                             <CardTitle className="text-base md:text-lg font-semibold text-slate-900">
                                 Configure Fee
                             </CardTitle>
@@ -392,7 +392,7 @@ export default function DoctorFees() {
                             <div>
                                 <div
                                     className={cx(
-                                        'rounded-2xl border border-black/10 bg-white/85 px-3 py-2',
+                                        'rounded-2xl border border-black/50 bg-white/85 px-3 py-2',
                                         myOnly && 'opacity-70 pointer-events-none',
                                     )}
                                     title={myOnly ? 'My profile ON (doctor locked)' : 'Select doctor'}
@@ -416,7 +416,7 @@ export default function DoctorFees() {
                                             Base consultation fee ({currency})
                                         </label>
                                         <div className="flex items-center gap-2">
-                                            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-black/10 bg-white/70">
+                                            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-black/50 bg-white/70">
                                                 <IndianRupee className="h-4 w-4 text-slate-600" />
                                             </div>
                                             <Input
@@ -425,7 +425,7 @@ export default function DoctorFees() {
                                                 step="50"
                                                 value={baseFee}
                                                 onChange={(e) => setBaseFee(e.target.value)}
-                                                className="h-11 rounded-2xl border-black/10 bg-white/85 text-[12px] font-semibold"
+                                                className="h-11 rounded-2xl border-black/50 bg-white/85 text-[12px] font-semibold"
                                                 placeholder="e.g. 500"
                                             />
                                         </div>
@@ -436,7 +436,7 @@ export default function DoctorFees() {
                                             Follow-up fee ({currency}) (optional)
                                         </label>
                                         <div className="flex items-center gap-2">
-                                            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-black/10 bg-white/70">
+                                            <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-black/50 bg-white/70">
                                                 <IndianRupee className="h-4 w-4 text-slate-600" />
                                             </div>
                                             <Input
@@ -445,7 +445,7 @@ export default function DoctorFees() {
                                                 step="50"
                                                 value={followupFee}
                                                 onChange={(e) => setFollowupFee(e.target.value)}
-                                                className="h-11 rounded-2xl border-black/10 bg-white/85 text-[12px] font-semibold"
+                                                className="h-11 rounded-2xl border-black/50 bg-white/85 text-[12px] font-semibold"
                                                 placeholder="e.g. 300"
                                             />
                                         </div>
@@ -471,7 +471,7 @@ export default function DoctorFees() {
 
                     {/* LIST */}
                     <Card className={cx(UI.glass, 'overflow-hidden')}>
-                        <CardHeader className="border-b border-black/10 bg-white/60 backdrop-blur-xl">
+                        <CardHeader className="border-b border-black/50 bg-white/60 backdrop-blur-xl">
                             <div className="flex items-start justify-between gap-3">
                                 <div>
                                     <CardTitle className="text-base md:text-lg font-semibold text-slate-900">
@@ -484,7 +484,7 @@ export default function DoctorFees() {
 
                                 <Badge
                                     variant="outline"
-                                    className="rounded-full border-black/10 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700"
+                                    className="rounded-full border-black/50 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700"
                                 >
                                     Showing <span className="ml-1 tabular-nums">{filteredList.length}</span>
                                 </Badge>
@@ -516,7 +516,7 @@ export default function DoctorFees() {
                                     {[1, 2, 3].map((i) => (
                                         <div
                                             key={i}
-                                            className="rounded-3xl border border-black/10 bg-white/70 backdrop-blur px-4 py-3"
+                                            className="rounded-3xl border border-black/50 bg-white/70 backdrop-blur px-4 py-3"
                                         >
                                             <div className="flex items-center justify-between gap-3">
                                                 <div className="flex-1 space-y-2">
@@ -550,7 +550,7 @@ export default function DoctorFees() {
                                                     animate={{ opacity: 1, y: 0 }}
                                                     exit={{ opacity: 0, y: -6 }}
                                                     transition={{ duration: 0.14 }}
-                                                    className="rounded-3xl border border-black/10 bg-white/80 backdrop-blur px-4 py-3 shadow-[0_10px_24px_rgba(2,6,23,0.08)]"
+                                                    className="rounded-3xl border border-black/50 bg-white/80 backdrop-blur px-4 py-3 shadow-[0_10px_24px_rgba(2,6,23,0.08)]"
                                                 >
                                                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                                                         <div className="min-w-0">
@@ -562,7 +562,7 @@ export default function DoctorFees() {
                                                                     className={cx(
                                                                         'rounded-full border px-2.5 py-1 text-[11px] font-semibold',
                                                                         row.is_active === false
-                                                                            ? 'border-slate-200 bg-slate-100 text-slate-600'
+                                                                            ? 'border-slate-500 bg-slate-100 text-slate-600'
                                                                             : 'border-emerald-200 bg-emerald-50 text-emerald-800',
                                                                     )}
                                                                 >

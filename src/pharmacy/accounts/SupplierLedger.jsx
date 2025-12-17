@@ -254,7 +254,7 @@ export default function SupplierLedgerScreen() {
   // ✅ Block screen if no permission
   if (!canView) {
     return (
-      <Card className="rounded-3xl border-slate-200 shadow-sm overflow-hidden">
+      <Card className="rounded-3xl border-slate-500 shadow-sm overflow-hidden">
         <CardHeader className="space-y-1">
           <CardTitle className="text-sm font-semibold text-slate-900">Supplier Ledger</CardTitle>
           <p className="text-xs text-slate-500">Permission required.</p>
@@ -277,7 +277,7 @@ export default function SupplierLedgerScreen() {
       <Button
         size="sm"
         variant="outline"
-        className="h-10 rounded-full gap-2 border-slate-200 bg-white/70 backdrop-blur"
+        className="h-10 rounded-full gap-2 border-slate-500 bg-white/70 backdrop-blur"
         onClick={() => loadInvoices(filters)}
         disabled={loading || filterWarnings.length > 0}
       >
@@ -288,7 +288,7 @@ export default function SupplierLedgerScreen() {
       <Button
         size="sm"
         variant="outline"
-        className="h-10 rounded-full gap-2 border-slate-200 bg-white/70 backdrop-blur"
+        className="h-10 rounded-full gap-2 border-slate-500 bg-white/70 backdrop-blur"
         onClick={() => downloadBlob(() => exportLedgerExcel(normalizeFiltersForApi(filters)))}
         disabled={!canExport || filterWarnings.length > 0}
         title={!canExport ? 'No permission: export' : undefined}
@@ -302,9 +302,9 @@ export default function SupplierLedgerScreen() {
   return (
     <div className="space-y-4">
       {/* Apple-premium background + glass container */}
-      <div className="rounded-[28px] border border-slate-200/70 bg-gradient-to-b from-white to-slate-50 shadow-[0_18px_50px_rgba(2,6,23,0.08)] overflow-hidden">
+      <div className="rounded-[28px] border border-slate-500/70 bg-gradient-to-b from-white to-slate-50 shadow-[0_18px_50px_rgba(2,6,23,0.08)] overflow-hidden">
         {/* HEADER (glass) */}
-        <div className="px-4 sm:px-6 py-4 sm:py-5 bg-white/65 backdrop-blur-xl border-b border-slate-200/60">
+        <div className="px-4 sm:px-6 py-4 sm:py-5 bg-white/65 backdrop-blur-xl border-b border-slate-500/60">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
@@ -339,10 +339,10 @@ export default function SupplierLedgerScreen() {
         {/* CONTENT */}
         <div className="p-4 sm:p-6 space-y-3">
           {/* Help panel (premium) */}
-          <div className="rounded-3xl border border-slate-200/70 bg-white/75 backdrop-blur p-4">
+          <div className="rounded-3xl border border-slate-500/70 bg-white/75 backdrop-blur p-4">
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-start gap-3">
-                <div className="mt-0.5 rounded-2xl border border-slate-200 bg-slate-50 p-2">
+                <div className="mt-0.5 rounded-2xl border border-slate-500 bg-slate-50 p-2">
                   <Info className="h-4 w-4 text-slate-700" />
                 </div>
                 <div className="min-w-0">
@@ -374,14 +374,14 @@ export default function SupplierLedgerScreen() {
           </div>
 
           {/* FILTER BAR (glass pills) */}
-          <div className="rounded-3xl border border-slate-200/70 bg-white/75 backdrop-blur p-3">
+          <div className="rounded-3xl border border-slate-500/70 bg-white/75 backdrop-blur p-3">
             <div className="grid gap-2 lg:grid-cols-12 items-end">
               <div className="lg:col-span-4 min-w-0">
                 <label className="block text-[11px] text-slate-500 mb-1">Search</label>
                 <div className="relative">
                   <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
                   <Input
-                    className="h-10 pl-9 bg-white rounded-full border-slate-200"
+                    className="h-10 pl-9 bg-white rounded-full border-slate-500"
                     placeholder="GRN / invoice / supplier / location..."
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
@@ -395,7 +395,7 @@ export default function SupplierLedgerScreen() {
                   value={toSel(filters.supplier_id)}
                   onValueChange={(v) => setFilters((s) => ({ ...s, supplier_id: fromSel(v) }))}
                 >
-                  <SelectTrigger className="h-10 bg-white rounded-full border-slate-200">
+                  <SelectTrigger className="h-10 bg-white rounded-full border-slate-500">
                     <SelectValue placeholder="All suppliers" />
                   </SelectTrigger>
                   <SelectContent>
@@ -415,7 +415,7 @@ export default function SupplierLedgerScreen() {
                   value={toSel(filters.status)}
                   onValueChange={(v) => setFilters((s) => ({ ...s, status: fromSel(v) }))}
                 >
-                  <SelectTrigger className="h-10 bg-white rounded-full border-slate-200">
+                  <SelectTrigger className="h-10 bg-white rounded-full border-slate-500">
                     <SelectValue placeholder="All status" />
                   </SelectTrigger>
                   <SelectContent>
@@ -432,7 +432,7 @@ export default function SupplierLedgerScreen() {
                   <label className="block text-[11px] text-slate-500 mb-1">From</label>
                   <Input
                     type="date"
-                    className="h-10 bg-white rounded-full border-slate-200"
+                    className="h-10 bg-white rounded-full border-slate-500"
                     value={filters.from_date}
                     onChange={(e) => setFilters((s) => ({ ...s, from_date: e.target.value }))}
                   />
@@ -441,7 +441,7 @@ export default function SupplierLedgerScreen() {
                   <label className="block text-[11px] text-slate-500 mb-1">To</label>
                   <Input
                     type="date"
-                    className="h-10 bg-white rounded-full border-slate-200"
+                    className="h-10 bg-white rounded-full border-slate-500"
                     value={filters.to_date}
                     onChange={(e) => setFilters((s) => ({ ...s, to_date: e.target.value }))}
                   />
@@ -514,7 +514,7 @@ export default function SupplierLedgerScreen() {
                 <div className="lg:col-span-2">
                   <label className="block text-[11px] text-slate-500 mb-1">Min amount</label>
                   <Input
-                    className="h-10 bg-white rounded-full border-slate-200"
+                    className="h-10 bg-white rounded-full border-slate-500"
                     placeholder="0"
                     inputMode="decimal"
                     value={filters.min_amount}
@@ -524,7 +524,7 @@ export default function SupplierLedgerScreen() {
                 <div className="lg:col-span-2">
                   <label className="block text-[11px] text-slate-500 mb-1">Max amount</label>
                   <Input
-                    className="h-10 bg-white rounded-full border-slate-200"
+                    className="h-10 bg-white rounded-full border-slate-500"
                     placeholder="0"
                     inputMode="decimal"
                     value={filters.max_amount}
@@ -539,7 +539,7 @@ export default function SupplierLedgerScreen() {
           </div>
 
           {/* Desktop Table (premium) */}
-          <div className="hidden md:block rounded-3xl border border-slate-200/70 bg-white/80 backdrop-blur overflow-hidden">
+          <div className="hidden md:block rounded-3xl border border-slate-500/70 bg-white/80 backdrop-blur overflow-hidden">
             <div className="grid grid-cols-[1.1fr,1.2fr,1.2fr,0.9fr,0.9fr,0.8fr,0.4fr] px-4 py-3 text-xs font-semibold text-slate-500 bg-slate-50/80">
               <span>GRN</span>
               <span>Supplier</span>
@@ -610,7 +610,7 @@ export default function SupplierLedgerScreen() {
                       <Button
                         variant="outline"
                         size="icon"
-                        className="h-9 w-9 rounded-full border-slate-200 bg-white"
+                        className="h-9 w-9 rounded-full border-slate-500 bg-white"
                         onClick={() => openPreview(inv)}
                         title="View details"
                       >
@@ -642,14 +642,14 @@ export default function SupplierLedgerScreen() {
                 </div>
               </div>
             ) : filtered.length === 0 ? (
-              <div className="rounded-3xl border border-slate-200/70 bg-white/80 backdrop-blur p-4 text-sm text-slate-500">
+              <div className="rounded-3xl border border-slate-500/70 bg-white/80 backdrop-blur p-4 text-sm text-slate-500">
                 No invoices found.
               </div>
             ) : (
               filtered.map((inv) => (
                 <div
                   key={inv.id}
-                  className="rounded-3xl border border-slate-200/70 bg-white/80 backdrop-blur p-4 shadow-[0_10px_30px_rgba(2,6,23,0.06)]"
+                  className="rounded-3xl border border-slate-500/70 bg-white/80 backdrop-blur p-4 shadow-[0_10px_30px_rgba(2,6,23,0.06)]"
                 >
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
@@ -667,7 +667,7 @@ export default function SupplierLedgerScreen() {
                     <Button
                       variant="outline"
                       size="sm"
-                      className="h-9 rounded-full gap-2 shrink-0 border-slate-200 bg-white"
+                      className="h-9 rounded-full gap-2 shrink-0 border-slate-500 bg-white"
                       onClick={() => openPreview(inv)}
                     >
                       <Eye className="w-4 h-4" />
@@ -676,11 +676,11 @@ export default function SupplierLedgerScreen() {
                   </div>
 
                   <div className="mt-3 grid grid-cols-2 gap-2 text-xs">
-                    <div className="rounded-2xl bg-slate-50 border border-slate-200 p-3">
+                    <div className="rounded-2xl bg-slate-50 border border-slate-500 p-3">
                       <div className="text-[11px] text-slate-500">Amount</div>
                       <div className="font-semibold mt-1"><Money value={inv.invoice_amount} /></div>
                     </div>
-                    <div className="rounded-2xl bg-slate-50 border border-slate-200 p-3">
+                    <div className="rounded-2xl bg-slate-50 border border-slate-500 p-3">
                       <div className="text-[11px] text-slate-500">Outstanding</div>
                       <div className="font-semibold mt-1"><Money value={inv.outstanding_amount} /></div>
                     </div>
@@ -698,11 +698,11 @@ export default function SupplierLedgerScreen() {
           </div>
 
           {/* Mobile sticky actions */}
-          <div className="sm:hidden sticky bottom-0 -mx-4 px-4 py-3 bg-white/70 backdrop-blur-xl border-t border-slate-200/70 flex items-center justify-between">
+          <div className="sm:hidden sticky bottom-0 -mx-4 px-4 py-3 bg-white/70 backdrop-blur-xl border-t border-slate-500/70 flex items-center justify-between">
             <Button
               size="sm"
               variant="outline"
-              className="h-10 rounded-full gap-2 border-slate-200 bg-white"
+              className="h-10 rounded-full gap-2 border-slate-500 bg-white"
               onClick={() => loadInvoices(filters)}
               disabled={loading || filterWarnings.length > 0}
             >
@@ -741,7 +741,7 @@ export default function SupplierLedgerScreen() {
                       value={active.invoice_number || '—'}
                       sub={fmtDate(active.invoice_date)}
                     />
-                    <div className="rounded-3xl border border-slate-200/70 bg-white/80 backdrop-blur p-4">
+                    <div className="rounded-3xl border border-slate-500/70 bg-white/80 backdrop-blur p-4">
                       <div className="text-xs text-slate-500">Status</div>
                       <div className="mt-2"><StatusBadge inv={active} /></div>
                     </div>
@@ -753,7 +753,7 @@ export default function SupplierLedgerScreen() {
                     <GlassMoney title="Outstanding" value={active.outstanding_amount} />
                   </div>
 
-                  <div className="rounded-3xl border border-slate-200/70 bg-white/80 backdrop-blur p-4">
+                  <div className="rounded-3xl border border-slate-500/70 bg-white/80 backdrop-blur p-4">
                     <div className="flex items-center justify-between gap-2">
                       <div className="font-semibold">Payment History</div>
                       {supplierAdvance > 0 && (
@@ -828,7 +828,7 @@ export default function SupplierLedgerScreen() {
             <Button
               size="sm"
               variant="outline"
-              className="h-10 rounded-full gap-2 border-slate-200 bg-white/70 backdrop-blur w-full"
+              className="h-10 rounded-full gap-2 border-slate-500 bg-white/70 backdrop-blur w-full"
               onClick={() => loadInvoices(filters)}
               disabled={loading || filterWarnings.length > 0}
             >
@@ -838,7 +838,7 @@ export default function SupplierLedgerScreen() {
             <Button
               size="sm"
               variant="outline"
-              className="h-10 rounded-full gap-2 border-slate-200 bg-white/70 backdrop-blur w-full"
+              className="h-10 rounded-full gap-2 border-slate-500 bg-white/70 backdrop-blur w-full"
               onClick={() => downloadBlob(() => exportLedgerExcel(normalizeFiltersForApi(filters)))}
               disabled={!canExport || filterWarnings.length > 0}
               title={!canExport ? 'No permission: export' : undefined}
@@ -865,7 +865,7 @@ function KpiCard({ label, value, tone = 'slate' }) {
           ? 'border-emerald-200 bg-emerald-50 text-emerald-900'
           : tone === 'rose'
             ? 'border-rose-200 bg-rose-50 text-rose-900'
-            : 'border-slate-200 bg-slate-50 text-slate-900'
+            : 'border-slate-500 bg-slate-50 text-slate-900'
 
   return (
     <div className={`rounded-3xl border ${toneCls} p-3`}>
@@ -878,8 +878,8 @@ function KpiCard({ label, value, tone = 'slate' }) {
 function KpiCardMoney({ label, value, tone = 'slate' }) {
   const toneCls =
     tone === 'slate'
-      ? 'border-slate-200 bg-slate-50 text-slate-900'
-      : 'border-slate-200 bg-slate-50 text-slate-900'
+      ? 'border-slate-500 bg-slate-50 text-slate-900'
+      : 'border-slate-500 bg-slate-50 text-slate-900'
 
   return (
     <div className={`rounded-3xl border ${toneCls} p-3`}>
@@ -893,7 +893,7 @@ function KpiCardMoney({ label, value, tone = 'slate' }) {
 
 function MiniInfo({ title, text }) {
   return (
-    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+    <div className="rounded-2xl border border-slate-500 bg-slate-50 p-3">
       <div className="text-[11px] text-slate-500">{title}</div>
       <div className="text-xs text-slate-700 mt-1 leading-relaxed">{text}</div>
     </div>
@@ -902,7 +902,7 @@ function MiniInfo({ title, text }) {
 
 function GlassBox({ title, value, sub }) {
   return (
-    <div className="rounded-3xl border border-slate-200/70 bg-white/80 backdrop-blur p-4">
+    <div className="rounded-3xl border border-slate-500/70 bg-white/80 backdrop-blur p-4">
       <div className="text-xs text-slate-500">{title}</div>
       <div className="font-medium mt-1 text-slate-900">{value}</div>
       {sub ? <div className="text-xs text-slate-500 mt-1">{sub}</div> : null}
@@ -912,7 +912,7 @@ function GlassBox({ title, value, sub }) {
 
 function GlassMoney({ title, value }) {
   return (
-    <div className="rounded-3xl border border-slate-200/70 bg-white/80 backdrop-blur p-4">
+    <div className="rounded-3xl border border-slate-500/70 bg-white/80 backdrop-blur p-4">
       <div className="text-xs text-slate-500">{title}</div>
       <div className="text-lg font-semibold mt-1 text-slate-900"><Money value={value} /></div>
     </div>

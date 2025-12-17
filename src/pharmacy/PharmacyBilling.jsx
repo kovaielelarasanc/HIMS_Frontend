@@ -454,7 +454,7 @@ export default function PharmacyBilling() {
                     <TabsContent value="bills" className="space-y-3">
                         <div className="grid gap-4 lg:grid-cols-[minmax(0,1.7fr)_minmax(0,1.3fr)]">
                             {/* Bills list card */}
-                            <Card className="border-slate-200 rounded-2xl shadow-sm">
+                            <Card className="border-slate-500 rounded-2xl shadow-sm">
                                 <CardHeader className="pb-3">
                                     <div className="flex flex-col gap-3">
                                         <div className="flex items-center justify-between gap-2">
@@ -465,7 +465,7 @@ export default function PharmacyBilling() {
                                             <Button
                                                 variant="outline"
                                                 size="icon"
-                                                className="h-8 w-8 rounded-full border-slate-200"
+                                                className="h-8 w-8 rounded-full border-slate-500"
                                                 onClick={fetchBills}
                                             >
                                                 <Filter className="w-4 h-4" />
@@ -483,7 +483,7 @@ export default function PharmacyBilling() {
                                                             if (e.key === 'Enter') fetchBills()
                                                         }}
                                                         placeholder="Search bill no / UHID / patient / phone"
-                                                        className="pl-8 h-9 text-xs bg-white border-slate-200 rounded-full"
+                                                        className="pl-8 h-9 text-xs bg-white border-slate-500 rounded-full"
                                                     />
                                                 </div>
                                                 <div className="flex items-center gap-2">
@@ -491,13 +491,13 @@ export default function PharmacyBilling() {
                                                         type="date"
                                                         value={dateFrom}
                                                         onChange={(e) => setDateFrom(e.target.value)}
-                                                        className="h-9 text-[11px] bg-white border-slate-200 rounded-full w-[130px]"
+                                                        className="h-9 text-[11px] bg-white border-slate-500 rounded-full w-[130px]"
                                                     />
                                                     <Input
                                                         type="date"
                                                         value={dateTo}
                                                         onChange={(e) => setDateTo(e.target.value)}
-                                                        className="h-9 text-[11px] bg-white border-slate-200 rounded-full w-[130px]"
+                                                        className="h-9 text-[11px] bg-white border-slate-500 rounded-full w-[130px]"
                                                     />
                                                     <Button
                                                         variant="outline"
@@ -515,7 +515,7 @@ export default function PharmacyBilling() {
                                                     value={billTypeFilter}
                                                     onValueChange={setBillTypeFilter}
                                                 >
-                                                    <SelectTrigger className="w-[140px] bg-white border-slate-200 rounded-full h-8 text-[11px]">
+                                                    <SelectTrigger className="w-[140px] bg-white border-slate-500 rounded-full h-8 text-[11px]">
                                                         <SelectValue placeholder="Bill type" />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -534,7 +534,7 @@ export default function PharmacyBilling() {
                                                     value={statusFilter}
                                                     onValueChange={setStatusFilter}
                                                 >
-                                                    <SelectTrigger className="w-[130px] bg-white border-slate-200 rounded-full h-8 text-[11px]">
+                                                    <SelectTrigger className="w-[130px] bg-white border-slate-500 rounded-full h-8 text-[11px]">
                                                         <SelectValue placeholder="Status" />
                                                     </SelectTrigger>
                                                     <SelectContent>
@@ -687,7 +687,7 @@ export default function PharmacyBilling() {
                                                                         <div className="flex flex-col gap-1">
                                                                             <Badge
                                                                                 variant="outline"
-                                                                                className="border-slate-200 text-[10px] px-1.5 py-0.5 w-max"
+                                                                                className="border-slate-500 text-[10px] px-1.5 py-0.5 w-max"
                                                                             >
                                                                                 {type}
                                                                             </Badge>
@@ -723,7 +723,7 @@ export default function PharmacyBilling() {
                                                                             <Button
                                                                                 variant="outline"
                                                                                 size="icon"
-                                                                                className="h-7 w-7 rounded-full border-slate-200"
+                                                                                className="h-7 w-7 rounded-full border-slate-500"
                                                                                 onClick={() => {
                                                                                     const id =
                                                                                         row.id ||
@@ -764,7 +764,7 @@ export default function PharmacyBilling() {
                             </Card>
 
                             {/* Bill detail card */}
-                            <Card className="border-slate-200 rounded-2xl shadow-sm">
+                            <Card className="border-slate-500 rounded-2xl shadow-sm">
                                 <CardHeader className="pb-3">
                                     <CardTitle className="text-sm font-semibold flex items-center gap-2">
                                         <ReceiptIndianRupee className="w-4 h-4 text-slate-500" />
@@ -797,7 +797,7 @@ export default function PharmacyBilling() {
                                                         <div className="flex items-center gap-1 mt-1">
                                                             <Badge
                                                                 variant="outline"
-                                                                className="border-slate-200 text-[10px] px-1.5 py-0.5"
+                                                                className="border-slate-500 text-[10px] px-1.5 py-0.5"
                                                             >
                                                                 {getBillType(selectedBill)}
                                                             </Badge>
@@ -986,7 +986,7 @@ export default function PharmacyBilling() {
                     <TabsContent value="returns" className="space-y-3">
                         <div className="grid gap-4 lg:grid-cols-[minmax(0,1.4fr)_minmax(0,1.6fr)]">
                             {/* New return */}
-                            <Card className="border-slate-200 rounded-2xl shadow-sm">
+                            <Card className="border-slate-500 rounded-2xl shadow-sm">
                                 <CardHeader className="pb-3">
                                     <CardTitle className="text-sm font-semibold flex items-center gap-2">
                                         <RotateCcw className="w-4 h-4 text-slate-500" />
@@ -1007,7 +1007,7 @@ export default function PharmacyBilling() {
                                                         setReturnSearch(e.target.value)
                                                     }
                                                     placeholder="Eg. PB-0001, UHID, patient name"
-                                                    className="pl-8 h-9 text-xs bg-white border-slate-200 rounded-full"
+                                                    className="pl-8 h-9 text-xs bg-white border-slate-500 rounded-full"
                                                 />
                                             </div>
                                             <Button
@@ -1124,7 +1124,7 @@ export default function PharmacyBilling() {
                                                                                         e.target.value
                                                                                     )
                                                                                 }
-                                                                                className="h-8 w-20 ml-auto text-[11px] text-right bg-white border-slate-200 rounded-full"
+                                                                                className="h-8 w-20 ml-auto text-[11px] text-right bg-white border-slate-500 rounded-full"
                                                                             />
                                                                         </td>
                                                                     </tr>
@@ -1145,7 +1145,7 @@ export default function PharmacyBilling() {
                                                         setReturnReason(e.target.value)
                                                     }
                                                     rows={3}
-                                                    className="text-[11px] bg-white border-slate-200 rounded-xl resize-none"
+                                                    className="text-[11px] bg-white border-slate-500 rounded-xl resize-none"
                                                     placeholder="Eg. Patient mismatch, wrong strength, expiry, doctor changed prescription, etc."
                                                 />
                                             </div>
@@ -1173,7 +1173,7 @@ export default function PharmacyBilling() {
                             </Card>
 
                             {/* Returns list */}
-                            <Card className="border-slate-200 rounded-2xl shadow-sm">
+                            <Card className="border-slate-500 rounded-2xl shadow-sm">
                                 <CardHeader className="pb-3">
                                     <CardTitle className="text-sm font-semibold flex items-center gap-2">
                                         <RotateCcw className="w-4 h-4 text-slate-500" />
@@ -1297,7 +1297,7 @@ export default function PharmacyBilling() {
                     <TabsContent value="ipd" className="space-y-3">
                         <div className="grid gap-4 lg:grid-cols-[minmax(0,1.3fr)_minmax(0,1.7fr)]">
                             {/* Generate consolidated */}
-                            <Card className="border-slate-200 rounded-2xl shadow-sm">
+                            <Card className="border-slate-500 rounded-2xl shadow-sm">
                                 <CardHeader className="pb-3">
                                     <CardTitle className="text-sm font-semibold flex items-center gap-2">
                                         <Hospital className="w-4 h-4 text-slate-500" />
@@ -1322,7 +1322,7 @@ export default function PharmacyBilling() {
                                                     setIpdPatientId(e.target.value)
                                                 }
                                                 placeholder="Eg. 123 (required)"
-                                                className="h-9 text-xs bg-white border-slate-200 rounded-full"
+                                                className="h-9 text-xs bg-white border-slate-500 rounded-full"
                                             />
                                         </div>
                                         <div className="space-y-1.5">
@@ -1335,7 +1335,7 @@ export default function PharmacyBilling() {
                                                     setIpdAdmissionId(e.target.value)
                                                 }
                                                 placeholder="Eg. 45 – IPD admission table ID"
-                                                className="h-9 text-xs bg-white border-slate-200 rounded-full"
+                                                className="h-9 text-xs bg-white border-slate-500 rounded-full"
                                             />
                                         </div>
                                     </div>
@@ -1463,7 +1463,7 @@ export default function PharmacyBilling() {
                             </Card>
 
                             {/* IPD bills list */}
-                            <Card className="border-slate-200 rounded-2xl shadow-sm">
+                            <Card className="border-slate-500 rounded-2xl shadow-sm">
                                 <CardHeader className="pb-3">
                                     <CardTitle className="text-sm font-semibold flex items-center gap-2">
                                         <Hospital className="w-4 h-4 text-slate-500" />
@@ -1620,7 +1620,7 @@ export default function PharmacyBilling() {
                                             ?.slice(0, 10) || '—'}
                                     </div>
                                 </div>
-                                <div className="flex items-center justify-between mt-1 pt-1 border-t border-dashed border-slate-200">
+                                <div className="flex items-center justify-between mt-1 pt-1 border-t border-dashed border-slate-500">
                                     <div className="text-[11px] text-slate-600">
                                         Total / Paid / Balance
                                     </div>
@@ -1662,7 +1662,7 @@ export default function PharmacyBilling() {
                                         value={paymentMode}
                                         onValueChange={setPaymentMode}
                                     >
-                                        <SelectTrigger className="w-full h-9 bg-white border-slate-200 rounded-full text-[11px]">
+                                        <SelectTrigger className="w-full h-9 bg-white border-slate-500 rounded-full text-[11px]">
                                             <SelectValue placeholder="Select mode" />
                                         </SelectTrigger>
                                         <SelectContent>
@@ -1688,7 +1688,7 @@ export default function PharmacyBilling() {
                                         onChange={(e) =>
                                             setPaymentAmount(e.target.value)
                                         }
-                                        className="h-9 text-xs bg-white border-slate-200 rounded-full"
+                                        className="h-9 text-xs bg-white border-slate-500 rounded-full"
                                     />
                                 </div>
                             </div>
@@ -1729,7 +1729,7 @@ function StatusChip({ status }) {
     const s = (status || '').toUpperCase()
     let label = s || '—'
     let cls =
-        'bg-slate-50 text-slate-700 border border-slate-200'
+        'bg-slate-50 text-slate-700 border border-slate-500'
 
     if (s === 'UNPAID' || s === 'PENDING' || s === 'DRAFT') {
         label = 'Unpaid'

@@ -131,7 +131,7 @@ export default function DischargedList() {
     const totalCount = rows.length
 
     const bedStateBadgeClass = (state) => {
-        if (!state) return 'bg-slate-50 text-slate-700 border-slate-200'
+        if (!state) return 'bg-slate-50 text-slate-700 border-slate-500'
         if (state === 'vacant')
             return 'bg-emerald-50 text-emerald-700 border-emerald-200'
         if (state === 'occupied')
@@ -140,7 +140,7 @@ export default function DischargedList() {
             return 'bg-amber-50 text-amber-700 border-amber-200'
         if (state === 'preoccupied')
             return 'bg-sky-50 text-sky-700 border-sky-200'
-        return 'bg-slate-50 text-slate-700 border-slate-200'
+        return 'bg-slate-50 text-slate-700 border-slate-500'
     }
 
     return (
@@ -160,7 +160,7 @@ export default function DischargedList() {
                     </p>
                 </div>
                 <div className="grid grid-cols-3 gap-2 text-xs">
-                    <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+                    <div className="flex items-center gap-2 rounded-xl border border-slate-500 bg-white px-3 py-2 shadow-sm">
                         <User className="h-4 w-4 text-slate-500" />
                         <span className="leading-tight">
                             <span className="font-medium text-slate-800">
@@ -170,7 +170,7 @@ export default function DischargedList() {
                             Completed stays
                         </span>
                     </div>
-                    <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+                    <div className="flex items-center gap-2 rounded-xl border border-slate-500 bg-white px-3 py-2 shadow-sm">
                         <BedDouble className="h-4 w-4 text-slate-500" />
                         <span className="leading-tight">
                             <span className="font-medium text-slate-800">
@@ -180,7 +180,7 @@ export default function DischargedList() {
                             Ward / room / bed
                         </span>
                     </div>
-                    <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 shadow-sm">
+                    <div className="flex items-center gap-2 rounded-xl border border-slate-500 bg-white px-3 py-2 shadow-sm">
                         <Clock3 className="h-4 w-4 text-slate-500" />
                         <span className="leading-tight">
                             <span className="font-medium text-slate-800">
@@ -195,12 +195,12 @@ export default function DischargedList() {
 
             <div className="mx-auto max-w-6xl space-y-3">
                 {/* Search + stats + refresh */}
-                <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm md:flex-row md:items-center md:justify-between">
+                <div className="flex flex-col gap-3 rounded-2xl border border-slate-500 bg-white p-3 shadow-sm md:flex-row md:items-center md:justify-between">
                     <div className="w-full md:max-w-md">
                         <div className="relative">
                             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                             <input
-                                className="w-full rounded-2xl border border-slate-200 bg-white px-9 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                                className="w-full rounded-2xl border border-slate-500 bg-white px-9 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
                                 placeholder="Search by Admission no, UHID, Bed code…"
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
@@ -223,7 +223,7 @@ export default function DischargedList() {
                         <button
                             type="button"
                             onClick={loadData}
-                            className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="inline-flex items-center gap-1 rounded-full border border-slate-500 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                             disabled={loading}
                         >
                             {loading ? (
@@ -246,8 +246,8 @@ export default function DischargedList() {
 
                 {/* Loading / empty global states */}
                 {loading && !rows.length && (
-                    <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-10 text-sm text-slate-600 shadow-sm">
-                        <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1.5 text-xs">
+                    <div className="flex items-center justify-center rounded-2xl border border-slate-500 bg-white px-4 py-10 text-sm text-slate-600 shadow-sm">
+                        <span className="inline-flex items-center gap-2 rounded-full border border-slate-500 px-3 py-1.5 text-xs">
                             <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
                             Loading discharged admissions…
                         </span>
@@ -255,14 +255,14 @@ export default function DischargedList() {
                 )}
 
                 {!loading && pageRows.length === 0 && (
-                    <div className="rounded-2xl border border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500 shadow-sm">
+                    <div className="rounded-2xl border border-slate-500 bg-white px-4 py-8 text-center text-sm text-slate-500 shadow-sm">
                         No discharged records found.
                     </div>
                 )}
 
                 {/* Main content: desktop table + mobile cards */}
                 {!loading && pageRows.length > 0 && (
-                    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+                    <div className="overflow-hidden rounded-2xl border border-slate-500 bg-white shadow-sm">
                         {/* Desktop table (md and up) */}
                         <div className="hidden md:block overflow-x-auto">
                             <table className="min-w-full text-sm">
@@ -347,7 +347,7 @@ export default function DischargedList() {
                                 return (
                                     <div
                                         key={r.id}
-                                        className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs shadow-sm"
+                                        className="rounded-2xl border border-slate-500 bg-slate-50 px-3 py-2 text-xs shadow-sm"
                                     >
                                         <div className="mb-1 flex items-center justify-between gap-2">
                                             <span className="inline-flex items-center rounded-full bg-slate-900 px-2.5 py-0.5 text-[11px] font-semibold tracking-wide text-white">
@@ -410,7 +410,7 @@ export default function DischargedList() {
                                     type="button"
                                     onClick={handlePrev}
                                     disabled={disablePrev}
-                                    className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1.5 font-medium shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                    className="inline-flex items-center gap-1 rounded-full border border-slate-500 bg-white px-3 py-1.5 font-medium shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                     <ChevronLeft className="h-4 w-4" />
                                     Prev
@@ -428,7 +428,7 @@ export default function DischargedList() {
                                     type="button"
                                     onClick={handleNext}
                                     disabled={disableNext}
-                                    className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1.5 font-medium shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                                    className="inline-flex items-center gap-1 rounded-full border border-slate-500 bg-white px-3 py-1.5 font-medium shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                                 >
                                     Next
                                     <ChevronRight className="h-4 w-4" />

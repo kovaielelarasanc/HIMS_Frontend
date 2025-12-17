@@ -2,14 +2,16 @@
 import axios from 'axios'
 import { toast } from 'sonner'
 
-const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
-// const API_BASE =  import.meta.env.VITE_API_URL || 'https://api.nutryah.com/api'
-
+// const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
+const API_BASE = import.meta.env.VITE_API_URL || 'https://api.nutryah.com/api'
 
 const API = axios.create({
   baseURL: API_BASE,
   withCredentials: true,
 })
+
+// Methods that usually mean "data changed"
+const MUTATING = new Set(['post', 'put', 'patch', 'delete'])
 
 // ---------------- Attach token + tenant ----------------
 API.interceptors.request.use((config) => {
@@ -73,7 +75,6 @@ async function reportClientError(error, msg) {
 }
 
 // ---------------- REFRESH TOKEN HELPER ----------------
-
 let currentRefreshPromise = null
 
 /**
@@ -81,10 +82,7 @@ let currentRefreshPromise = null
  * Assumes refresh token is in HTTP-only cookie (withCredentials).
  */
 export async function refreshAccessToken() {
-  if (currentRefreshPromise) {
-    // If a refresh is already in progress, reuse it
-    return currentRefreshPromise
-  }
+  if (currentRefreshPromise) return currentRefreshPromise
 
   const tenantCode = localStorage.getItem('tenant_code') || null
 
@@ -99,19 +97,13 @@ export async function refreshAccessToken() {
         },
       })
 
-      if (!res.ok) {
-        throw new Error(`Refresh failed with status ${res.status}`)
-      }
+      if (!res.ok) throw new Error(`Refresh failed with status ${res.status}`)
 
       const data = await res.json()
-
-      if (data?.access_token) {
-        localStorage.setItem('access_token', data.access_token)
-      }
+      if (data?.access_token) localStorage.setItem('access_token', data.access_token)
 
       return data?.access_token || null
     } finally {
-      // clear promise so next refresh can start fresh
       currentRefreshPromise = null
     }
   })()
@@ -119,14 +111,36 @@ export async function refreshAccessToken() {
   return currentRefreshPromise
 }
 
-// ---------------- Unified error handler + auto-refresh ----------------
-
+// ---------------- Unified success + error handler + auto-refresh ----------------
 API.interceptors.response.use(
-  (res) => res,
+  (res) => {
+    // ✅ SUCCESS TOAST (opt-in per request)
+    // Usage: API.post(url, body, { meta: { successToast: 'Saved!' } })
+    // Or:    API.post(url, body, { meta: { successToast: true } }) // uses server message if available
+    const cfg = res?.config || {}
+    const meta = cfg?.meta || {}
+    const method = String(cfg.method || 'get').toLowerCase()
+
+    if (!meta.silent && MUTATING.has(method) && meta.successToast) {
+      if (typeof meta.successToast === 'string' && meta.successToast.trim()) {
+        toast.success(meta.successToast)
+      } else if (meta.successToast === true) {
+        const serverMsg = res?.data?.message || res?.data?.detail
+        toast.success(
+          typeof serverMsg === 'string' && serverMsg.trim()
+            ? serverMsg
+            : 'Saved successfully',
+        )
+      }
+    }
+
+    return res
+  },
   async (error) => {
     const status = error?.response?.status
     const data = error?.response?.data
     const originalRequest = error.config || {}
+    const meta = originalRequest?.meta || {}
 
     // 1) Handle 401 with refresh-then-retry (only once per request)
     if (status === 401 && !originalRequest._retry) {
@@ -136,16 +150,13 @@ API.interceptors.response.use(
         if (newToken) {
           originalRequest.headers = originalRequest.headers || {}
           originalRequest.headers.Authorization = `Bearer ${newToken}`
-
-          // Retry original API call with new token
           return API(originalRequest)
         }
       } catch (refreshErr) {
         console.error('Refresh token flow failed', refreshErr)
-        // fall through to logout + error handling
       }
 
-      // If we reach here, refresh failed => clear auth
+      // refresh failed => clear auth
       localStorage.clear()
       delete API.defaults.headers?.common?.Authorization
     }
@@ -170,7 +181,10 @@ API.interceptors.response.use(
     }
 
     console.error('API error:', status, data)
-    toast.error(msg)
+
+    // ✅ ERROR TOAST (default ON, can silence per request)
+    // Usage: API.get(url, { meta: { silentError: true } })
+    if (!meta.silentError) toast.error(msg)
 
     // 3) send details to backend error logger
     reportClientError(error, msg)

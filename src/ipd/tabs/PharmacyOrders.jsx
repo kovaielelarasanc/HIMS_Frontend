@@ -502,7 +502,7 @@ export default function PharmacyOrdersTab({ admissionId, admission, patient, can
                                                                 'px-2 py-0.5 rounded-full border text-[9px]',
                                                                 String(l.dose) === d
                                                                     ? 'bg-slate-900 text-white border-slate-900'
-                                                                    : 'bg-white text-slate-700 border-slate-200',
+                                                                    : 'bg-white text-slate-700 border-slate-500',
                                                                 !canWrite && 'opacity-50',
                                                             ]
                                                                 .filter(Boolean)
@@ -531,7 +531,7 @@ export default function PharmacyOrdersTab({ admissionId, admission, patient, can
                                                             'px-2 py-0.5 rounded-full border text-[9px]',
                                                             l.frequency_code === f.code
                                                                 ? 'bg-slate-900 text-white border-slate-900'
-                                                                : 'bg-white text-slate-700 border-slate-200',
+                                                                : 'bg-white text-slate-700 border-slate-500',
                                                             !canWrite && 'opacity-50',
                                                         ]
                                                             .filter(Boolean)
@@ -647,7 +647,7 @@ export default function PharmacyOrdersTab({ admissionId, admission, patient, can
                 </div>
 
                 {/* ===== Bed-side prescription sheet preview at bottom ===== */}
-                <div className="mt-4 rounded-2xl border border-slate-200 bg-slate-50/80 p-3 space-y-2">
+                <div className="mt-4 rounded-2xl border border-slate-500 bg-slate-50/80 p-3 space-y-2">
                     <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                             <Receipt className="h-4 w-4 text-slate-500" />
@@ -661,11 +661,11 @@ export default function PharmacyOrdersTab({ admissionId, admission, patient, can
                     </div>
 
                     {lines.length === 0 ? (
-                        <div className="rounded-xl border border-dashed border-slate-200 bg-white px-3 py-4 text-center text-[11px] text-slate-500">
+                        <div className="rounded-xl border border-dashed border-slate-500 bg-white px-3 py-4 text-center text-[11px] text-slate-500">
                             Add ward medicines above to see the IPD prescription sheet here.
                         </div>
                     ) : (
-                        <div className="rounded-xl border border-slate-200 bg-white px-3 py-3 space-y-3">
+                        <div className="rounded-xl border border-slate-500 bg-white px-3 py-3 space-y-3">
                             {/* header */}
                             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 border-b border-slate-100 pb-2">
                                 <div className="space-y-0.5">

@@ -95,7 +95,7 @@ function IconButton({ title, onClick, disabled, children }) {
             disabled={disabled}
             className={[
                 'inline-flex h-9 w-9 items-center justify-center rounded-xl',
-                'border border-black/10 bg-white/80 backdrop-blur',
+                'border border-black/50 bg-white/80 backdrop-blur',
                 'text-slate-700 hover:bg-white active:scale-[0.98] transition',
                 disabled ? 'opacity-50 cursor-not-allowed' : '',
             ].join(' ')}
@@ -124,7 +124,7 @@ function SegTab({ active, onClick, children }) {
 
 function Card({ title, icon, right, children }) {
     return (
-        <section className="rounded-2xl border border-black/10 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
+        <section className="rounded-2xl border border-black/50 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.04)]">
             <div className="px-4 pt-4 pb-3 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 min-w-0">
                     <span className="text-slate-400">{icon}</span>
@@ -396,18 +396,18 @@ export default function PatientDetailDrawer({ open, onClose, patient, onUpdated 
                     'absolute inset-y-0 right-0',
                     // mobile: full; desktop: drawer width
                     'w-full sm:w-[560px] lg:w-[760px] max-w-[92vw]',
-                    'bg-white shadow-2xl border-l border-black/10',
+                    'bg-white shadow-2xl border-l border-black/50',
                     'flex flex-col',
                 ].join(' ')}
                 onClick={(e) => e.stopPropagation()}
             >
                 {/* top bar */}
-                <div className="sticky top-0 z-10 border-b border-black/10 bg-white/85 backdrop-blur-xl">
+                <div className="sticky top-0 z-10 border-b border-black/50 bg-white/85 backdrop-blur-xl">
                     <div className="px-4 pt-4 pb-3">
                         <div className="flex items-start justify-between gap-3">
                             <div className="min-w-0">
                                 <div className="flex items-center gap-2">
-                                    <div className="h-10 w-10 rounded-2xl border border-black/10 bg-slate-50 grid place-items-center">
+                                    <div className="h-10 w-10 rounded-2xl border border-black/50 bg-slate-50 grid place-items-center">
                                         <User className="h-4 w-4 text-slate-600" />
                                     </div>
                                     <div className="min-w-0">
@@ -453,7 +453,7 @@ export default function PatientDetailDrawer({ open, onClose, patient, onUpdated 
                         </div>
 
                         {/* segmented tabs */}
-                        <div className="mt-4 inline-flex items-center gap-1 rounded-full border border-black/10 bg-black/[0.03] p-1 overflow-x-auto max-w-full">
+                        <div className="mt-4 inline-flex items-center gap-1 rounded-full border border-black/50 bg-black/[0.03] p-1 overflow-x-auto max-w-full">
                             <SegTab active={tab === 'overview'} onClick={() => setTab('overview')}>
                                 Overview
                             </SegTab>
@@ -479,7 +479,7 @@ export default function PatientDetailDrawer({ open, onClose, patient, onUpdated 
                 {/* content */}
                 <div className="flex-1 overflow-y-auto bg-slate-50/70 p-4 space-y-4">
                     {loading ? (
-                        <div className="rounded-2xl border border-black/10 bg-white px-4 py-3 text-[12px] text-slate-500">
+                        <div className="rounded-2xl border border-black/50 bg-white px-4 py-3 text-[12px] text-slate-500">
                             Loading…
                         </div>
                     ) : null}
@@ -537,7 +537,7 @@ export default function PatientDetailDrawer({ open, onClose, patient, onUpdated 
                                 <form onSubmit={handleUploadDoc} className="grid gap-2">
                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                         <select
-                                            className="h-10 rounded-xl border border-black/10 bg-white px-3 text-[12px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-black/10"
+                                            className="h-10 rounded-xl border border-black/50 bg-white px-3 text-[12px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-black/10"
                                             value={newDocType}
                                             onChange={(e) => setNewDocType(e.target.value)}
                                         >
@@ -575,7 +575,7 @@ export default function PatientDetailDrawer({ open, onClose, patient, onUpdated 
                             </Card>
 
                             <Card title="Files" icon={<ImageIcon className="h-4 w-4" />}>
-                                <div className="overflow-hidden rounded-2xl border border-black/10 bg-white">
+                                <div className="overflow-hidden rounded-2xl border border-black/50 bg-white">
                                     {docs.length === 0 ? (
                                         <div className="px-4 py-4 text-[12px] text-slate-500 flex items-center gap-2">
                                             <Inbox className="h-4 w-4 text-slate-300" />
@@ -601,7 +601,7 @@ export default function PatientDetailDrawer({ open, onClose, patient, onUpdated 
                                                         <button
                                                             type="button"
                                                             onClick={() => openPreview(d)}
-                                                            className="rounded-full border border-black/10 bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-700 hover:bg-black/[0.03]"
+                                                            className="rounded-full border border-black/50 bg-white px-3 py-1.5 text-[12px] font-semibold text-slate-700 hover:bg-black/[0.03]"
                                                         >
                                                             Preview
                                                         </button>
@@ -630,14 +630,14 @@ export default function PatientDetailDrawer({ open, onClose, patient, onUpdated 
                             <Card title="Add Consent" icon={<FileText className="h-4 w-4" />}>
                                 <form onSubmit={handleCreateConsent} className="grid gap-2">
                                     <input
-                                        className="h-10 rounded-xl border border-black/10 bg-white px-3 text-[12px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-black/10"
+                                        className="h-10 rounded-xl border border-black/50 bg-white px-3 text-[12px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-black/10"
                                         placeholder="Consent type (e.g., General / Surgery)"
                                         value={newConsentType}
                                         onChange={(e) => setNewConsentType(e.target.value)}
                                     />
                                     <textarea
                                         rows={3}
-                                        className="rounded-xl border border-black/10 bg-white px-3 py-2 text-[12px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-black/10"
+                                        className="rounded-xl border border-black/50 bg-white px-3 py-2 text-[12px] text-slate-800 focus:outline-none focus:ring-2 focus:ring-black/10"
                                         placeholder="Consent text"
                                         value={newConsentText}
                                         onChange={(e) => setNewConsentText(e.target.value)}
@@ -668,7 +668,7 @@ export default function PatientDetailDrawer({ open, onClose, patient, onUpdated 
                                     </span>
                                 }
                             >
-                                <div className="overflow-hidden rounded-2xl border border-black/10 bg-white">
+                                <div className="overflow-hidden rounded-2xl border border-black/50 bg-white">
                                     {consents.length === 0 ? (
                                         <div className="px-4 py-4 text-[12px] text-slate-500 flex items-center gap-2">
                                             <Inbox className="h-4 w-4 text-slate-300" />
@@ -705,7 +705,7 @@ export default function PatientDetailDrawer({ open, onClose, patient, onUpdated 
                             }
                         >
                             {auditLogs.length === 0 && !auditLoading ? (
-                                <div className="rounded-2xl border border-black/10 bg-white px-4 py-4 text-[12px] text-slate-500 flex items-center gap-2">
+                                <div className="rounded-2xl border border-black/50 bg-white px-4 py-4 text-[12px] text-slate-500 flex items-center gap-2">
                                     <Inbox className="h-4 w-4 text-slate-300" />
                                     No audit history for this patient.
                                 </div>
@@ -722,7 +722,7 @@ export default function PatientDetailDrawer({ open, onClose, patient, onUpdated 
                                         const ts = log.created_at ? new Date(log.created_at).toLocaleString() : ''
 
                                         return (
-                                            <div key={log.id} className="rounded-2xl border border-black/10 bg-white p-3">
+                                            <div key={log.id} className="rounded-2xl border border-black/50 bg-white p-3">
                                                 <div className="flex items-center justify-between gap-2">
                                                     <div className="text-[12px] font-semibold text-slate-900">
                                                         {safe(log.action || 'UPDATE')}
@@ -768,7 +768,7 @@ export default function PatientDetailDrawer({ open, onClose, patient, onUpdated 
                             className="relative w-full max-w-4xl h-[84vh] bg-white rounded-2xl shadow-2xl overflow-hidden flex flex-col"
                             onClick={(e) => e.stopPropagation()}
                         >
-                            <div className="px-4 py-3 border-b border-black/10 flex items-center justify-between gap-3">
+                            <div className="px-4 py-3 border-b border-black/50 flex items-center justify-between gap-3">
                                 <div className="min-w-0">
                                     <div className="truncate text-[13px] font-semibold text-slate-900">
                                         {previewDoc.filename}

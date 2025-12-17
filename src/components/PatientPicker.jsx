@@ -46,7 +46,7 @@ export default function PatientPicker({ value, onChange, onSelect }) {
                 className="w-full rounded-md border border-slate-300 px-2.5 py-1.5 text-xs md:text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
             />
 
-            <div className="mt-1 max-h-56 overflow-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+            <div className="mt-1 max-h-56 overflow-auto rounded-xl border border-slate-500 bg-white shadow-sm">
                 {loading && (
                     <div className="px-3 py-2 text-[11px] text-slate-400">
                         Searching…

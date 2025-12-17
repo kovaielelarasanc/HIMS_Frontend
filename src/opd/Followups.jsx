@@ -45,13 +45,13 @@ function cx(...xs) {
 const UI = {
     page: 'min-h-[calc(100vh-4rem)] w-full bg-gradient-to-b from-slate-50 via-white to-slate-50',
     glass:
-        'rounded-3xl border border-black/10 bg-white/75 backdrop-blur-xl shadow-[0_12px_35px_rgba(2,6,23,0.10)]',
+        'rounded-3xl border border-black/50 bg-white/75 backdrop-blur-xl shadow-[0_12px_35px_rgba(2,6,23,0.10)]',
     chip:
-        'inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700',
+        'inline-flex items-center gap-2 rounded-full border border-black/50 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700',
     chipBtn:
         'inline-flex items-center gap-2 rounded-full border bg-green-900 px-3 py-1.5 text-[11px] font-semibold text-white hover:text-black hover:bg-black/[0.03] active:scale-[0.99] transition',
     input:
-        'h-11 w-full rounded-2xl border border-black/10 bg-white/85 px-3 text-[12px] font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-500',
+        'h-11 w-full rounded-2xl border border-black/50 bg-white/85 px-3 text-[12px] font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-500',
 }
 
 
@@ -95,9 +95,9 @@ function statusPill(status) {
         case 'completed':
             return cx(base, 'border-emerald-200 bg-emerald-50 text-emerald-800')
         case 'cancelled':
-            return cx(base, 'border-slate-200 bg-slate-100 text-slate-600')
+            return cx(base, 'border-slate-500 bg-slate-100 text-slate-600')
         default:
-            return cx(base, 'border-slate-200 bg-slate-50 text-slate-700')
+            return cx(base, 'border-slate-500 bg-slate-50 text-slate-700')
     }
 }
 
@@ -111,7 +111,7 @@ function StatCard({ label, value, icon: Icon, tone = 'slate' }) {
                     ? 'bg-sky-50 text-sky-900 border-sky-200'
                     : tone === 'amber'
                         ? 'bg-amber-50 text-amber-900 border-amber-200'
-                        : 'bg-white/80 text-slate-900 border-black/10'
+                        : 'bg-white/80 text-slate-900 border-black/50'
 
     return (
         <div className={cx('rounded-3xl border px-4 py-3', toneCls)}>
@@ -121,7 +121,7 @@ function StatCard({ label, value, icon: Icon, tone = 'slate' }) {
                     <div className="mt-1 text-[20px] font-semibold tracking-tight tabular-nums">{value}</div>
                 </div>
                 {Icon && (
-                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-black/10 bg-white/30">
+                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-black/50 bg-white/30">
                         <Icon className="h-5 w-5 opacity-80" />
                     </div>
                 )}
@@ -144,7 +144,7 @@ function Segmented({ value, onChange }) {
                             'whitespace-nowrap rounded-full border px-3 py-1.5 text-[11px] font-semibold transition',
                             active
                                 ? 'border-slate-900 bg-slate-900 text-white shadow-sm'
-                                : 'border-black/10 bg-white/75 text-slate-700 hover:bg-black/[0.03]',
+                                : 'border-black/50 bg-white/75 text-slate-700 hover:bg-black/[0.03]',
                         )}
                     >
                         {opt.label}
@@ -162,7 +162,7 @@ function AppleDialog({ open, onOpenChange, title, subtitle, right, children }) {
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
                 className={cx(
-                    'p-0 overflow-hidden border border-black/10 bg-white/75 backdrop-blur-xl',
+                    'p-0 overflow-hidden border border-black/50 bg-white/75 backdrop-blur-xl',
                     'shadow-[0_18px_55px_rgba(2,6,23,0.18)]',
 
                     // ✅ MOBILE = bottom-sheet fullscreen
@@ -192,7 +192,7 @@ function AppleDialog({ open, onOpenChange, title, subtitle, right, children }) {
                     </div>
 
                     {/* top bar */}
-                    <div className="relative border-b border-black/10 bg-white/55 backdrop-blur-xl">
+                    <div className="relative border-b border-black/50 bg-white/55 backdrop-blur-xl">
                         <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6">
                             <div className="min-w-0">
                                 <div className="text-[12px] font-semibold tracking-tight text-slate-900 truncate">
@@ -208,7 +208,7 @@ function AppleDialog({ open, onOpenChange, title, subtitle, right, children }) {
                                 <button
                                     type="button"
                                     onClick={() => onOpenChange(false)}
-                                    className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-black/10 bg-white/75 hover:bg-black/[0.03] transition"
+                                    className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-black/50 bg-white/75 hover:bg-black/[0.03] transition"
                                     title="Close"
                                 >
                                     <X className="h-4 w-4 text-slate-700" />
@@ -466,7 +466,7 @@ export default function Followups() {
                                 </div>
 
                                 <div className="mt-3 flex items-start gap-3">
-                                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-3xl bg-black/[0.04] border border-black/10">
+                                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-3xl bg-black/[0.04] border border-black/50">
                                         <ClipboardList className="h-5 w-5 text-slate-700" />
                                     </div>
                                     <div className="min-w-0">
@@ -549,7 +549,7 @@ export default function Followups() {
 
                 {/* FILTERS + LIST */}
                 <Card className={cx(UI.glass, 'overflow-hidden')}>
-                    <CardHeader className="border-b border-black/10 bg-white/60 backdrop-blur-xl">
+                    <CardHeader className="border-b border-black/50 bg-white/60 backdrop-blur-xl">
                         <div className="flex flex-col gap-4">
                             <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                                 <div className="grid w-full gap-3 md:grid-cols-[1.6fr,1fr,1fr]">
@@ -561,7 +561,7 @@ export default function Followups() {
 
                                         <div
                                             className={cx(
-                                                'mt-3 rounded-2xl border border-black/10 bg-white/85 px-3 py-2',
+                                                'mt-3 rounded-2xl border border-black/50 bg-white/85 px-3 py-2',
                                                 myOnly && 'opacity-70 pointer-events-none',
                                             )}
                                             title={myOnly ? 'My follow-ups is ON (doctor locked)' : 'Select doctor (optional)'}
@@ -586,7 +586,7 @@ export default function Followups() {
                                             type="date"
                                             value={dateFrom}
                                             onChange={(e) => setDateFrom(e.target.value)}
-                                            className="h-11 rounded-2xl border-black/10 bg-white/85 text-[12px] font-semibold"
+                                            className="h-11 rounded-2xl border-black/50 bg-white/85 text-[12px] font-semibold"
                                         />
                                     </div>
 
@@ -599,7 +599,7 @@ export default function Followups() {
                                             type="date"
                                             value={dateTo}
                                             onChange={(e) => setDateTo(e.target.value)}
-                                            className="h-11 rounded-2xl border-black/10 bg-white/85 text-[12px] font-semibold"
+                                            className="h-11 rounded-2xl border-black/50 bg-white/85 text-[12px] font-semibold"
                                         />
 
                                         <div className="relative">
@@ -618,7 +618,7 @@ export default function Followups() {
                                     <Button
                                         type="button"
                                         variant="outline"
-                                        className="h-11 rounded-2xl border-black/10 bg-white/85 font-semibold"
+                                        className="h-11 rounded-2xl border-black/50 bg-white/85 font-semibold"
                                         onClick={() => {
                                             setSearchTerm('')
                                             setStatus('waiting')
@@ -646,7 +646,7 @@ export default function Followups() {
                                 <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Status</div>
                                 <Badge
                                     variant="outline"
-                                    className="rounded-full border-black/10 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700"
+                                    className="rounded-full border-black/50 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700"
                                 >
                                     Showing <span className="ml-1 tabular-nums">{sortedRows.length}</span>
                                 </Badge>
@@ -659,7 +659,7 @@ export default function Followups() {
                     <CardContent className="pt-4">
                         {!hasSelection && (
                             <div className="rounded-3xl border border-dashed border-black/20 bg-black/[0.02] px-6 py-10 text-center">
-                                <div className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-3xl border border-black/10 bg-white/60">
+                                <div className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-3xl border border-black/50 bg-white/60">
                                     <Stethoscope className="h-5 w-5 text-slate-600" />
                                 </div>
                                 <div className="text-sm font-semibold text-slate-900">Pick date range to view follow-ups</div>
@@ -670,7 +670,7 @@ export default function Followups() {
                         {hasSelection && loading && (
                             <div className="space-y-3 py-3">
                                 {[0, 1, 2, 3].map((i) => (
-                                    <div key={i} className="rounded-3xl border border-black/10 bg-white/70 backdrop-blur px-4 py-3">
+                                    <div key={i} className="rounded-3xl border border-black/50 bg-white/70 backdrop-blur px-4 py-3">
                                         <div className="flex items-center justify-between gap-3">
                                             <div className="flex-1 space-y-2">
                                                 <Skeleton className="h-4 w-44 rounded-xl" />
@@ -688,7 +688,7 @@ export default function Followups() {
 
                         {hasSelection && !loading && sortedRows.length === 0 && (
                             <div className="rounded-3xl border border-dashed border-black/20 bg-black/[0.02] px-6 py-10 text-center">
-                                <div className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-3xl border border-black/10 bg-white/60">
+                                <div className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-3xl border border-black/50 bg-white/60">
                                     <AlertCircle className="h-5 w-5 text-slate-600" />
                                 </div>
                                 <div className="text-sm font-semibold text-slate-900">No follow-ups found</div>
@@ -707,7 +707,7 @@ export default function Followups() {
                                                 animate={{ opacity: 1, y: 0 }}
                                                 exit={{ opacity: 0, y: -6 }}
                                                 transition={{ duration: 0.14 }}
-                                                className="rounded-3xl border border-black/10 bg-white/80 backdrop-blur px-4 py-3 shadow-[0_10px_24px_rgba(2,6,23,0.08)]"
+                                                className="rounded-3xl border border-black/50 bg-white/80 backdrop-blur px-4 py-3 shadow-[0_10px_24px_rgba(2,6,23,0.08)]"
                                             >
                                                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                                                     {/* LEFT */}
@@ -728,7 +728,7 @@ export default function Followups() {
                                                         </div>
 
                                                         <div className="mt-2 flex items-start gap-3 min-w-0">
-                                                            <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-3xl border border-black/10 bg-black/[0.03] text-[12px] font-semibold text-slate-800">
+                                                            <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-3xl border border-black/50 bg-black/[0.03] text-[12px] font-semibold text-slate-800">
                                                                 {(String(r.patient_name || 'P')
                                                                     .split(' ')
                                                                     .filter(Boolean)
@@ -774,7 +774,7 @@ export default function Followups() {
                                                                 <Button
                                                                     size="sm"
                                                                     variant="outline"
-                                                                    className="h-10 rounded-2xl border-black/10 bg-white/85 font-semibold"
+                                                                    className="h-10 rounded-2xl border-black/50 bg-white/85 font-semibold"
                                                                     onClick={() => openEdit(r)}
                                                                 >
                                                                     Edit
@@ -793,7 +793,7 @@ export default function Followups() {
                                                             <Button
                                                                 size="sm"
                                                                 variant="outline"
-                                                                className="h-10 rounded-2xl border-black/10 bg-white/85 font-semibold"
+                                                                className="h-10 rounded-2xl border-black/50 bg-white/85 font-semibold"
                                                                 onClick={() => navigate('/opd/appointments')}
                                                             >
                                                                 Open appointments
@@ -836,7 +836,7 @@ export default function Followups() {
                 >
                     {editTarget ? (
                         <div className="space-y-4">
-                            <div className="rounded-3xl border border-black/10 bg-white/80 p-4">
+                            <div className="rounded-3xl border border-black/50 bg-white/80 p-4">
                                 <div className="flex flex-wrap items-center gap-2">
                                     <span className={UI.chip}>
                                         <CalendarDays className="h-3.5 w-3.5" />
@@ -907,7 +907,7 @@ export default function Followups() {
                 >
                     {schedTarget ? (
                         <div className="space-y-4">
-                            <div className="rounded-3xl border border-black/10 bg-white/80 p-4">
+                            <div className="rounded-3xl border border-black/50 bg-white/80 p-4">
                                 <div className="flex flex-wrap items-center gap-2">
                                     <span className={UI.chip}>
                                         <CalendarDays className="h-3.5 w-3.5" />
@@ -962,7 +962,7 @@ export default function Followups() {
                                                             'rounded-full border px-3 py-1 text-[11px] font-semibold transition',
                                                             schedTime === t
                                                                 ? 'border-slate-900 bg-slate-900 text-white'
-                                                                : 'border-black/10 bg-white/75 text-slate-700 hover:bg-black/[0.03]',
+                                                                : 'border-black/50 bg-white/75 text-slate-700 hover:bg-black/[0.03]',
                                                         )}
                                                     >
                                                         {t}

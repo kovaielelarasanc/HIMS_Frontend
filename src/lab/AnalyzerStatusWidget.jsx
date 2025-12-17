@@ -30,7 +30,7 @@ function ConnectionBadge({ type }) {
         return (
             <Badge
                 variant="outline"
-                className="gap-1 px-1.5 py-0.5 text-[10px] border-slate-200"
+                className="gap-1 px-1.5 py-0.5 text-[10px] border-slate-500"
             >
                 <Plug className="w-3 h-3 text-slate-500" />
                 RS-232
@@ -41,7 +41,7 @@ function ConnectionBadge({ type }) {
         return (
             <Badge
                 variant="outline"
-                className="gap-1 px-1.5 py-0.5 text-[10px] border-slate-200"
+                className="gap-1 px-1.5 py-0.5 text-[10px] border-slate-500"
             >
                 <Wifi className="w-3 h-3 text-slate-500" />
                 TCP/IP
@@ -52,7 +52,7 @@ function ConnectionBadge({ type }) {
         return (
             <Badge
                 variant="outline"
-                className="gap-1 px-1.5 py-0.5 text-[10px] border-slate-200"
+                className="gap-1 px-1.5 py-0.5 text-[10px] border-slate-500"
             >
                 <FileDown className="w-3 h-3 text-slate-500" />
                 File Drop
@@ -62,7 +62,7 @@ function ConnectionBadge({ type }) {
     return (
         <Badge
             variant="outline"
-            className="gap-1 px-1.5 py-0.5 text-[10px] border-slate-200"
+            className="gap-1 px-1.5 py-0.5 text-[10px] border-slate-500"
         >
             {type}
         </Badge>
@@ -124,7 +124,7 @@ export default function AnalyzerStatusWidget() {
     }
 
     return (
-        <Card className="border-slate-200 shadow-sm h-full">
+        <Card className="border-slate-500 shadow-sm h-full">
             <CardHeader className="pb-2">
                 <div className="flex items-start justify-between gap-2">
                     <div>
@@ -213,14 +213,14 @@ export default function AnalyzerStatusWidget() {
                                             </div>
                                         </div>
                                         <div className="flex flex-wrap items-center gap-1 text-[10px] text-slate-500">
-                                            <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-white border border-slate-200">
+                                            <span className="font-mono text-[10px] px-1.5 py-0.5 rounded bg-white border border-slate-500">
                                                 {item.code}
                                             </span>
                                             <ConnectionBadge type={item.connection_type} />
                                             {item.protocol && (
                                                 <Badge
                                                     variant="outline"
-                                                    className="px-1.5 py-0.5 text-[10px] border-slate-200"
+                                                    className="px-1.5 py-0.5 text-[10px] border-slate-500"
                                                 >
                                                     {item.protocol.toUpperCase()}
                                                 </Badge>

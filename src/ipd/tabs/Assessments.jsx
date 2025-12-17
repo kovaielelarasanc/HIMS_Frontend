@@ -256,7 +256,7 @@ export default function AssessmentsTab({ admissionId, canWrite }) {
                             'rounded-full px-3 py-1 text-xs md:text-sm border',
                             active === t.key
                                 ? 'bg-slate-900 text-white border-slate-900'
-                                : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50',
+                                : 'bg-white text-slate-700 border-slate-500 hover:bg-slate-50',
                         ].join(' ')}
                     >
                         {t.label}

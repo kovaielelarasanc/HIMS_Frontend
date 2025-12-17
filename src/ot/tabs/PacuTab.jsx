@@ -194,7 +194,7 @@ function PacuTab({ caseId }) {
     return (
         <form
             onSubmit={handleSubmit}
-            className="space-y-3 rounded-2xl border border-slate-200 bg-white/90 px-3 py-3 shadow-sm md:px-4 md:py-4"
+            className="space-y-3 rounded-2xl border border-slate-500 bg-white/90 px-3 py-3 shadow-sm md:px-4 md:py-4"
         >
             {/* Header */}
             <motion.div
@@ -287,7 +287,7 @@ function PacuTab({ caseId }) {
                         onChange={(v) => handleChange('complications', v)}
                     />
 
-                    <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-800">
+                    <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-500 bg-slate-50 px-3 py-2 text-[11px] text-slate-800">
                         <input
                             type="checkbox"
                             className="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500 disabled:cursor-not-allowed disabled:opacity-60"
@@ -332,7 +332,7 @@ function Field({ label, value, onChange, placeholder, disabled }) {
             <span className="text-[11px] font-semibold text-slate-700">{label}</span>
             <input
                 type="text"
-                className="h-9 w-full rounded-md border border-slate-200 bg-slate-50 px-3 text-[12px] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                className="h-9 w-full rounded-md border border-slate-500 bg-slate-50 px-3 text-[12px] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
                 value={value ?? ''}
                 placeholder={placeholder}
                 disabled={disabled}
@@ -348,7 +348,7 @@ function TimeField({ label, value, onChange, disabled }) {
             <span className="text-[11px] font-semibold text-slate-700">{label}</span>
             <input
                 type="time"
-                className="h-9 w-full rounded-md border border-slate-200 bg-slate-50 px-3 text-[12px] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                className="h-9 w-full rounded-md border border-slate-500 bg-slate-50 px-3 text-[12px] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
                 value={value ?? ''}
                 disabled={disabled}
                 onChange={(e) => onChange(e.target.value)}
@@ -363,7 +363,7 @@ function TextArea({ label, value, onChange, rows = 2, disabled }) {
             <span className="text-[11px] font-semibold text-slate-700">{label}</span>
             <textarea
                 rows={rows}
-                className="w-full resize-none rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full resize-none rounded-md border border-slate-500 bg-slate-50 px-3 py-2 text-[12px] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
                 value={value ?? ''}
                 disabled={disabled}
                 onChange={(e) => onChange(e.target.value)}

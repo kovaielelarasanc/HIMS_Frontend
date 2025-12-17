@@ -28,7 +28,7 @@ function KpiTile({ label, children, tone = 'slate' }) {
         ? 'border-emerald-200 bg-emerald-50 text-emerald-950'
         : tone === 'blue'
           ? 'border-blue-200 bg-blue-50 text-blue-950'
-          : 'border-slate-200 bg-slate-50 text-slate-950'
+          : 'border-slate-500 bg-slate-50 text-slate-950'
 
   return (
     <div className={`rounded-3xl border ${toneCls} p-3`}>
@@ -112,7 +112,7 @@ export default function SupplierMonthlySummaryScreen() {
 
   if (!canView) {
     return (
-      <Card className="rounded-3xl border-slate-200 shadow-sm overflow-hidden">
+      <Card className="rounded-3xl border-slate-500 shadow-sm overflow-hidden">
         <CardHeader className="space-y-1">
           <CardTitle className="text-sm font-semibold text-slate-900">Monthly Summary</CardTitle>
           <p className="text-xs text-slate-500">Permission required.</p>
@@ -135,9 +135,9 @@ export default function SupplierMonthlySummaryScreen() {
   return (
     <div className="space-y-4">
       {/* Apple-glass container */}
-      <div className="rounded-[28px] border border-slate-200/70 bg-gradient-to-b from-white to-slate-50 shadow-[0_18px_50px_rgba(2,6,23,0.08)] overflow-hidden">
+      <div className="rounded-[28px] border border-slate-500/70 bg-gradient-to-b from-white to-slate-50 shadow-[0_18px_50px_rgba(2,6,23,0.08)] overflow-hidden">
         {/* Glass Header */}
-        <div className="px-4 sm:px-6 py-4 bg-white/70 backdrop-blur-xl border-b border-slate-200/60">
+        <div className="px-4 sm:px-6 py-4 bg-white/70 backdrop-blur-xl border-b border-slate-500/60">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="space-y-1">
               <div className="flex items-center gap-2">
@@ -159,7 +159,7 @@ export default function SupplierMonthlySummaryScreen() {
             <div className="flex flex-col sm:flex-row sm:items-center gap-2">
               <Input
                 type="month"
-                className="h-10 bg-white rounded-full border-slate-200 w-full sm:w-44"
+                className="h-10 bg-white rounded-full border-slate-500 w-full sm:w-44"
                 value={month}
                 onChange={(e) => setMonth(e.target.value)}
               />
@@ -177,7 +177,7 @@ export default function SupplierMonthlySummaryScreen() {
               <Button
                 size="sm"
                 variant="outline"
-                className="h-10 rounded-full gap-2 border-slate-200 bg-white/70 backdrop-blur"
+                className="h-10 rounded-full gap-2 border-slate-500 bg-white/70 backdrop-blur"
                 disabled={!month || !canExport}
                 title={!canExport ? 'No permission to export' : undefined}
                 onClick={() => month && downloadBlob(() => exportMonthlyExcel(month))}
@@ -199,10 +199,10 @@ export default function SupplierMonthlySummaryScreen() {
 
         <div className="p-4 sm:p-6 space-y-3">
           {/* Help panel */}
-          <div className="rounded-3xl border border-slate-200/70 bg-white/75 backdrop-blur p-4">
+          <div className="rounded-3xl border border-slate-500/70 bg-white/75 backdrop-blur p-4">
             <div className="flex items-start justify-between gap-2">
               <div className="flex items-start gap-3">
-                <div className="mt-0.5 rounded-2xl border border-slate-200 bg-slate-50 p-2">
+                <div className="mt-0.5 rounded-2xl border border-slate-500 bg-slate-50 p-2">
                   <Info className="h-4 w-4 text-slate-700" />
                 </div>
                 <div className="min-w-0">
@@ -220,15 +220,15 @@ export default function SupplierMonthlySummaryScreen() {
 
             {showHelp && (
               <div className="mt-3 grid gap-2 sm:grid-cols-3">
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <div className="rounded-2xl border border-slate-500 bg-slate-50 p-3">
                   <div className="text-[11px] text-slate-500">How to use</div>
                   <div className="text-xs text-slate-700 mt-1">Select month → Load → Export Excel.</div>
                 </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <div className="rounded-2xl border border-slate-500 bg-slate-50 p-3">
                   <div className="text-[11px] text-slate-500">Validation</div>
                   <div className="text-xs text-slate-700 mt-1">Month required (YYYY-MM).</div>
                 </div>
-                <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                <div className="rounded-2xl border border-slate-500 bg-slate-50 p-3">
                   <div className="text-[11px] text-slate-500">Tip</div>
                   <div className="text-xs text-slate-700 mt-1">Use search to jump to a supplier.</div>
                 </div>
@@ -237,12 +237,12 @@ export default function SupplierMonthlySummaryScreen() {
           </div>
 
           {/* Search */}
-          <div className="rounded-3xl border border-slate-200/70 bg-white/75 backdrop-blur p-3">
+          <div className="rounded-3xl border border-slate-500/70 bg-white/75 backdrop-blur p-3">
             <label className="block text-[11px] text-slate-500 mb-1">Search supplier</label>
             <div className="relative">
               <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
               <Input
-                className="h-10 pl-9 bg-white rounded-full border-slate-200"
+                className="h-10 pl-9 bg-white rounded-full border-slate-500"
                 placeholder="Type supplier name…"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
@@ -268,7 +268,7 @@ export default function SupplierMonthlySummaryScreen() {
               </div>
             </div>
           ) : filtered.length === 0 ? (
-            <div className="rounded-3xl border border-slate-200/70 bg-white/80 backdrop-blur p-4 text-sm text-slate-500">
+            <div className="rounded-3xl border border-slate-500/70 bg-white/80 backdrop-blur p-4 text-sm text-slate-500">
               No data found for this month.
             </div>
           ) : (
@@ -276,7 +276,7 @@ export default function SupplierMonthlySummaryScreen() {
               {filtered.map((r) => (
                 <div
                   key={r.supplier_id}
-                  className="rounded-3xl border border-slate-200/70 bg-white/80 backdrop-blur p-4 shadow-[0_10px_30px_rgba(2,6,23,0.06)]"
+                  className="rounded-3xl border border-slate-500/70 bg-white/80 backdrop-blur p-4 shadow-[0_10px_30px_rgba(2,6,23,0.06)]"
                 >
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
@@ -285,21 +285,21 @@ export default function SupplierMonthlySummaryScreen() {
                       </div>
                       <div className="text-xs text-slate-500 mt-1">Month: {r.month}</div>
                     </div>
-                    <div className="text-xs rounded-full border border-slate-200 bg-slate-50 px-3 py-1 shrink-0">
+                    <div className="text-xs rounded-full border border-slate-500 bg-slate-50 px-3 py-1 shrink-0">
                       Overdue: <span className="font-semibold">{r.overdue_invoices}</span>
                     </div>
                   </div>
 
                   <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-                    <div className="rounded-2xl bg-slate-50 p-3 border border-slate-200">
+                    <div className="rounded-2xl bg-slate-50 p-3 border border-slate-500">
                       <div className="text-xs text-slate-500">Total purchase</div>
                       <div className="text-base font-semibold mt-1"><Money value={r.total_purchase} /></div>
                     </div>
-                    <div className="rounded-2xl bg-slate-50 p-3 border border-slate-200">
+                    <div className="rounded-2xl bg-slate-50 p-3 border border-slate-500">
                       <div className="text-xs text-slate-500">Total paid</div>
                       <div className="text-base font-semibold mt-1"><Money value={r.total_paid} /></div>
                     </div>
-                    <div className="rounded-2xl bg-slate-50 p-3 border border-slate-200 col-span-2">
+                    <div className="rounded-2xl bg-slate-50 p-3 border border-slate-500 col-span-2">
                       <div className="text-xs text-slate-500">Pending</div>
                       <div className="text-base font-semibold mt-1"><Money value={r.pending_amount} /></div>
                       <div className="text-xs text-slate-500 mt-2">
@@ -314,7 +314,7 @@ export default function SupplierMonthlySummaryScreen() {
         </div>
 
         {/* Mobile sticky bottom bar (premium) */}
-        <div className="sm:hidden sticky bottom-0 px-4 py-3 bg-white/70 backdrop-blur-xl border-t border-slate-200/60 flex items-center gap-2">
+        <div className="sm:hidden sticky bottom-0 px-4 py-3 bg-white/70 backdrop-blur-xl border-t border-slate-500/60 flex items-center gap-2">
           <Button
             size="sm"
             className="h-10 rounded-full w-full"
@@ -327,7 +327,7 @@ export default function SupplierMonthlySummaryScreen() {
           <Button
             size="sm"
             variant="outline"
-            className="h-10 rounded-full w-full border-slate-200 bg-white"
+            className="h-10 rounded-full w-full border-slate-500 bg-white"
             disabled={!month || !canExport}
             onClick={() => month && downloadBlob(() => exportMonthlyExcel(month))}
           >

@@ -139,7 +139,7 @@ export default function Schedules() {
                     </p>
                 </div>
 
-                <Card className="rounded-3xl border-slate-200 shadow-sm">
+                <Card className="rounded-3xl border-slate-500 shadow-sm">
                     <CardHeader className="border-b border-slate-100 pb-4">
                         <CardTitle className="flex items-center justify-between text-base font-semibold text-slate-900">
                             <span>Schedule Setup</span>
@@ -240,7 +240,7 @@ export default function Schedules() {
                     </CardContent>
                 </Card>
 
-                <Card className="rounded-3xl border-slate-200 shadow-sm">
+                <Card className="rounded-3xl border-slate-500 shadow-sm">
                     <CardHeader className="border-b border-slate-100 pb-3">
                         <CardTitle className="text-sm font-semibold text-slate-900">
                             Existing Schedules
@@ -275,7 +275,7 @@ export default function Schedules() {
                                 {list.map((s) => (
                                     <div
                                         key={s.id}
-                                        className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm shadow-sm"
+                                        className="flex items-center justify-between gap-3 rounded-2xl border border-slate-500 bg-white px-3 py-3 text-sm shadow-sm"
                                     >
                                         <div className="space-y-0.5">
                                             <div className="flex flex-wrap items-center gap-1.5">
@@ -288,14 +288,14 @@ export default function Schedules() {
                                             <div className="flex items-center gap-2 text-[11px] text-slate-500">
                                                 <Badge
                                                     variant="outline"
-                                                    className="border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px]"
+                                                    className="border-slate-500 bg-slate-50 px-2 py-0.5 text-[11px]"
                                                 >
                                                     Slot: {s.slot_minutes || 15} min
                                                 </Badge>
                                                 {s.location && (
                                                     <Badge
                                                         variant="outline"
-                                                        className="border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px]"
+                                                        className="border-slate-500 bg-slate-50 px-2 py-0.5 text-[11px]"
                                                     >
                                                         {s.location}
                                                     </Badge>

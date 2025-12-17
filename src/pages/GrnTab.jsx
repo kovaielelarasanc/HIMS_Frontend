@@ -239,7 +239,7 @@ function GlassCard({ className = "", children }) {
   return (
     <Card
       className={[
-        "rounded-3xl border-slate-200/70 bg-white/75 backdrop-blur supports-[backdrop-filter]:bg-white/60",
+        "rounded-3xl border-slate-500/70 bg-white/75 backdrop-blur supports-[backdrop-filter]:bg-white/60",
         "shadow-[0_10px_30px_rgba(2,6,23,0.06)]",
         "ring-1 ring-slate-200/40",
         className,
@@ -275,7 +275,7 @@ function StepPill({ active, children }) {
         "transition-all",
         active
           ? "bg-slate-900 text-white border-slate-900 shadow-sm"
-          : "bg-white/70 text-slate-700 border-slate-200",
+          : "bg-white/70 text-slate-700 border-slate-500",
       ].join(" ")}
     >
       {children}
@@ -285,7 +285,7 @@ function StepPill({ active, children }) {
 
 function StatChip({ label, value, tone = "neutral" }) {
   const tones = {
-    neutral: "bg-slate-50 border-slate-200 text-slate-700",
+    neutral: "bg-slate-50 border-slate-500 text-slate-700",
     good: "bg-emerald-50 border-emerald-200 text-emerald-800",
     warn: "bg-amber-50 border-amber-200 text-amber-900",
   }
@@ -307,7 +307,7 @@ function LineCard({ ln, idx, readonly, onPatch, onSplit, onRemove }) {
       className={[
         "rounded-3xl border p-3 sm:p-4",
         "shadow-[0_6px_18px_rgba(2,6,23,0.05)]",
-        hasIssues ? "border-amber-200/80 bg-amber-50/50" : "border-slate-200/70 bg-white",
+        hasIssues ? "border-amber-200/80 bg-amber-50/50" : "border-slate-500/70 bg-white",
       ].join(" ")}
     >
       <div className="flex items-start justify-between gap-3">
@@ -990,7 +990,7 @@ export default function GrnTab() {
   return (
     <div className="space-y-6">
       {/* Premium page header */}
-      <div className="rounded-3xl border border-slate-200/70 bg-gradient-to-b from-white to-slate-50/70 p-5 shadow-[0_10px_30px_rgba(2,6,23,0.06)]">
+      <div className="rounded-3xl border border-slate-500/70 bg-gradient-to-b from-white to-slate-50/70 p-5 shadow-[0_10px_30px_rgba(2,6,23,0.06)]">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
@@ -1068,7 +1068,7 @@ export default function GrnTab() {
             </div>
           </div>
 
-          <div className="border border-slate-200/70 rounded-3xl overflow-hidden bg-white">
+          <div className="border border-slate-500/70 rounded-3xl overflow-hidden bg-white">
             <div className="hidden md:grid grid-cols-[1.1fr,1.2fr,1.2fr,0.9fr,0.8fr] px-4 py-3 text-xs font-semibold text-slate-500 bg-slate-50">
               <span>PO</span>
               <span>Supplier</span>
@@ -1201,7 +1201,7 @@ export default function GrnTab() {
             </div>
           </div>
 
-          <div className="border border-slate-200/70 rounded-3xl overflow-hidden bg-white">
+          <div className="border border-slate-500/70 rounded-3xl overflow-hidden bg-white">
             <div className="hidden md:grid grid-cols-[1.2fr,1.1fr,1.2fr,0.9fr,0.9fr,0.9fr] px-4 py-3 text-xs font-semibold text-slate-500 bg-slate-50">
               <span>GRN</span>
               <span>Supplier</span>
@@ -1280,7 +1280,7 @@ export default function GrnTab() {
                             "text-[11px] md:text-[10px] capitalize bg-white",
                             grn.status === "POSTED" ? "bg-emerald-50 border-emerald-200 text-emerald-800" : "",
                             grn.status === "CANCELLED" ? "bg-rose-50 border-rose-200 text-rose-800" : "",
-                            grn.status === "DRAFT" ? "bg-slate-50 border-slate-200 text-slate-700" : "",
+                            grn.status === "DRAFT" ? "bg-slate-50 border-slate-500 text-slate-700" : "",
                           ].join(" ")}
                         >
                           {(grn.status || "DRAFT").toLowerCase()}
@@ -1663,7 +1663,7 @@ export default function GrnTab() {
                           </div>
 
                           {itemResults.length > 0 ? (
-                            <div className="absolute z-30 mt-2 w-full rounded-3xl border border-slate-200 bg-white shadow-[0_18px_50px_rgba(2,6,23,0.12)] overflow-hidden">
+                            <div className="absolute z-30 mt-2 w-full rounded-3xl border border-slate-500 bg-white shadow-[0_18px_50px_rgba(2,6,23,0.12)] overflow-hidden">
                               <div className="max-h-72 overflow-auto divide-y">
                                 {itemResults.map((it) => (
                                   <button
@@ -1724,7 +1724,7 @@ export default function GrnTab() {
 
                         <Separator />
 
-                        <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+                        <div className="rounded-3xl border border-slate-500 bg-slate-50 p-4">
                           <div className="flex items-center justify-between">
                             <div className="text-xs text-slate-600">Calculated</div>
                             <div className="text-base font-semibold text-slate-900">₹{money(totals.calculated)}</div>
@@ -1741,7 +1741,7 @@ export default function GrnTab() {
                           <StatChip label="Batch miss" value={totals.missingBatch} tone={totals.missingBatch ? "warn" : "neutral"} />
                         </div>
 
-                        <div className="rounded-2xl border border-slate-200 bg-white p-3 text-xs text-slate-700">
+                        <div className="rounded-2xl border border-slate-500 bg-white p-3 text-xs text-slate-700">
                           <div className="flex justify-between">
                             <span>Qty/Free issues</span>
                             <span className={totals.qtyIssues ? "font-semibold text-amber-900" : "font-semibold"}>
@@ -1776,7 +1776,7 @@ export default function GrnTab() {
                         ) : null}
 
                         {selectedPo?.po_number ? (
-                          <div className="rounded-3xl bg-slate-50 border border-slate-200 p-4 text-xs text-slate-700">
+                          <div className="rounded-3xl bg-slate-50 border border-slate-500 p-4 text-xs text-slate-700">
                             <div className="font-semibold flex items-center gap-1">
                               <Link2 className="w-3 h-3" /> Linked PO
                             </div>

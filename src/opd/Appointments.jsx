@@ -86,20 +86,20 @@ const UI = {
         ' top-0 z-30 ',
     container: 'px-4 py-5 md:px-8 md:py-8',
     glass:
-        'rounded-3xl border border-black/10 bg-white/75 backdrop-blur-xl shadow-[0_12px_35px_rgba(2,6,23,0.10)]',
+        'rounded-3xl border border-black/50 bg-white/75 backdrop-blur-xl shadow-[0_12px_35px_rgba(2,6,23,0.10)]',
     glassSoft:
-        'rounded-3xl border border-black/10 bg-white/70 backdrop-blur-xl shadow-[0_6px_22px_rgba(2,6,23,0.08)]',
+        'rounded-3xl border border-black/50 bg-white/70 backdrop-blur-xl shadow-[0_6px_22px_rgba(2,6,23,0.08)]',
     chip:
-        'inline-flex items-center gap-1 rounded-full border border-black/10 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700',
+        'inline-flex items-center gap-1 rounded-full border border-black/50 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700',
     pillBtn:
-        'inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/85 px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-black/[0.03] active:scale-[0.99] transition disabled:opacity-60 disabled:cursor-not-allowed',
+        'inline-flex items-center gap-2 rounded-full border border-black/50 bg-white/85 px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-black/[0.03] active:scale-[0.99] transition disabled:opacity-60 disabled:cursor-not-allowed',
     input:
-        'w-full rounded-2xl border border-black/10 bg-white/85 px-3 py-2 text-[12px] font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-500',
+        'w-full rounded-2xl border border-black/50 bg-white/85 px-3 py-2 text-[12px] font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-500',
 }
 
 function SegmentedTabs({ value, onChange, tabs }) {
     return (
-        <div className="inline-flex items-center rounded-full border border-black/10 bg-white/85 p-1 shadow-[0_8px_22px_rgba(2,6,23,0.08)]">
+        <div className="inline-flex items-center rounded-full border border-black/50 bg-white/85 p-1 shadow-[0_8px_22px_rgba(2,6,23,0.08)]">
             {tabs.map((t) => {
                 const active = value === t.key
                 return (
@@ -132,10 +132,10 @@ function CollapsibleHeader({ open, onToggle, icon, title, subtitle, right }) {
         <button
             type="button"
             onClick={onToggle}
-            className="w-full flex items-start justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-4 py-3 hover:bg-black/[0.02] transition"
+            className="w-full flex items-start justify-between gap-3 rounded-2xl border border-black/50 bg-white/70 px-4 py-3 hover:bg-black/[0.02] transition"
         >
             <div className="flex items-start gap-3 min-w-0">
-                <div className="h-9 w-9 rounded-2xl border border-black/10 bg-black/[0.04] grid place-items-center">
+                <div className="h-9 w-9 rounded-2xl border border-black/50 bg-black/[0.04] grid place-items-center">
                     {icon}
                 </div>
                 <div className="min-w-0">
@@ -152,7 +152,7 @@ function CollapsibleHeader({ open, onToggle, icon, title, subtitle, right }) {
 
             <div className="flex items-center gap-2">
                 {right}
-                <div className="h-9 w-9 rounded-full border border-black/10 bg-white/85 grid place-items-center">
+                <div className="h-9 w-9 rounded-full border border-black/50 bg-white/85 grid place-items-center">
                     <ChevronRight
                         className={cx('h-4 w-4 text-slate-600 transition', open && 'rotate-90')}
                     />
@@ -516,10 +516,10 @@ export default function AppointmentBooking() {
                             <button
                                 type="button"
                                 onClick={() => setTopDoctorOpen((v) => !v)}
-                                className="w-full rounded-2xl border border-black/10 bg-white/70 px-4 py-3 hover:bg-black/[0.02] transition flex items-center justify-between gap-3"
+                                className="w-full rounded-2xl border border-black/50 bg-white/70 px-4 py-3 hover:bg-black/[0.02] transition flex items-center justify-between gap-3"
                             >
                                 <div className="flex items-center gap-3 min-w-0">
-                                    <div className="h-9 w-9 rounded-2xl border border-black/10 bg-black/[0.04] grid place-items-center">
+                                    <div className="h-9 w-9 rounded-2xl border border-black/50 bg-black/[0.04] grid place-items-center">
                                         <Stethoscope className="h-4 w-4 text-slate-700" />
                                     </div>
                                     <div className="min-w-0">
@@ -549,7 +549,7 @@ export default function AppointmentBooking() {
                                             Clear
                                         </button>
                                     )}
-                                    <div className="h-9 w-9 rounded-full border border-black/10 bg-white/85 grid place-items-center">
+                                    <div className="h-9 w-9 rounded-full border border-black/50 bg-white/85 grid place-items-center">
                                         <ChevronRight
                                             className={cx(
                                                 'h-4 w-4 text-slate-600 transition',
@@ -569,7 +569,7 @@ export default function AppointmentBooking() {
                                         transition={{ duration: 0.18 }}
                                         className="mt-2"
                                     >
-                                        <div className="rounded-2xl border border-black/10 bg-white/70 backdrop-blur px-4 py-3 shadow-[0_10px_28px_rgba(2,6,23,0.08)]">
+                                        <div className="rounded-2xl border border-black/50 bg-white/70 backdrop-blur px-4 py-3 shadow-[0_10px_28px_rgba(2,6,23,0.08)]">
                                             <DoctorPicker value={doctorId} onChange={handleDoctorChange} />
                                             <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-500">
                                                 <span>
@@ -610,7 +610,7 @@ export default function AppointmentBooking() {
                                                 {appointments.length}
                                             </p>
                                         </div>
-                                        <div className="rounded-2xl border border-black/10 bg-black/[0.04] p-2.5">
+                                        <div className="rounded-2xl border border-black/50 bg-black/[0.04] p-2.5">
                                             <User2 className="h-5 w-5 text-slate-700" />
                                         </div>
                                     </CardContent>
@@ -626,7 +626,7 @@ export default function AppointmentBooking() {
                                                 {freeSlots.length}
                                             </p>
                                         </div>
-                                        <div className="rounded-2xl border border-black/10 bg-black/[0.04] p-2.5">
+                                        <div className="rounded-2xl border border-black/50 bg-black/[0.04] p-2.5">
                                             <Clock className="h-5 w-5 text-slate-700" />
                                         </div>
                                     </CardContent>
@@ -642,7 +642,7 @@ export default function AppointmentBooking() {
                                                 {selectedStats.chosen}
                                             </p>
                                         </div>
-                                        <div className="rounded-2xl border border-black/10 bg-black/[0.04] p-2.5">
+                                        <div className="rounded-2xl border border-black/50 bg-black/[0.04] p-2.5">
                                             <Activity className="h-5 w-5 text-slate-700" />
                                         </div>
                                     </CardContent>
@@ -662,7 +662,7 @@ export default function AppointmentBooking() {
                                         </div>
                                         <Badge
                                             variant="outline"
-                                            className="rounded-full border-black/10 bg-white/85 text-[11px] font-semibold text-slate-700"
+                                            className="rounded-full border-black/50 bg-white/85 text-[11px] font-semibold text-slate-700"
                                         >
                                             <Sparkles className="h-3.5 w-3.5 mr-1" />
                                             Premium flow
@@ -689,7 +689,7 @@ export default function AppointmentBooking() {
                                                     transition={{ duration: 0.18 }}
                                                     className="px-1"
                                                 >
-                                                    <div className="rounded-2xl border border-black/10 bg-black/[0.02] p-3">
+                                                    <div className="rounded-2xl border border-black/50 bg-black/[0.02] p-3">
                                                         <PatientPicker value={patientId} onChange={handlePatientChange} />
                                                     </div>
                                                 </motion.div>
@@ -733,7 +733,7 @@ export default function AppointmentBooking() {
                                                     transition={{ duration: 0.18 }}
                                                     className="px-1"
                                                 >
-                                                    <div className="grid gap-3 sm:grid-cols-2 rounded-2xl border border-black/10 bg-black/[0.02] p-3">
+                                                    <div className="grid gap-3 sm:grid-cols-2 rounded-2xl border border-black/50 bg-black/[0.02] p-3">
                                                         <div className="space-y-1.5">
                                                             <label className="text-[11px] font-semibold text-slate-600">
                                                                 Date
@@ -742,7 +742,7 @@ export default function AppointmentBooking() {
                                                                 type="date"
                                                                 value={date}
                                                                 onChange={(e) => setDate(e.target.value)}
-                                                                className="h-11 rounded-2xl border-black/10 bg-white/85"
+                                                                className="h-11 rounded-2xl border-black/50 bg-white/85"
                                                             />
                                                         </div>
                                                         <div className="space-y-1.5">
@@ -753,7 +753,7 @@ export default function AppointmentBooking() {
                                                                 value={purpose}
                                                                 onChange={(e) => setPurpose(e.target.value)}
                                                                 placeholder="Consultation / Review / Procedure…"
-                                                                className="h-11 rounded-2xl border-black/10 bg-white/85"
+                                                                className="h-11 rounded-2xl border-black/50 bg-white/85"
                                                             />
                                                         </div>
                                                     </div>
@@ -800,7 +800,7 @@ export default function AppointmentBooking() {
                                                     transition={{ duration: 0.18 }}
                                                     className="px-1"
                                                 >
-                                                    <div className="rounded-2xl border border-black/10 bg-black/[0.02] p-3 space-y-3">
+                                                    <div className="rounded-2xl border border-black/50 bg-black/[0.02] p-3 space-y-3">
                                                         {!doctorId ? (
                                                             <EmptyState
                                                                 title="Pick a doctor from the top selector"
@@ -857,8 +857,8 @@ export default function AppointmentBooking() {
                                                                                                     active
                                                                                                         ? 'border-slate-900 bg-slate-900 text-white'
                                                                                                         : disabled
-                                                                                                            ? 'border-black/10 bg-black/[0.03] text-slate-400 cursor-not-allowed'
-                                                                                                            : 'border-black/10 bg-white/85 text-slate-700 hover:bg-black/[0.03]'
+                                                                                                            ? 'border-black/50 bg-black/[0.03] text-slate-400 cursor-not-allowed'
+                                                                                                            : 'border-black/50 bg-white/85 text-slate-700 hover:bg-black/[0.03]'
                                                                                                 )}
                                                                                                 title={
                                                                                                     !free
@@ -871,7 +871,7 @@ export default function AppointmentBooking() {
                                                                                                 <Clock className="h-3.5 w-3.5" />
                                                                                                 {s.start}–{s.end}
                                                                                                 {!free && (
-                                                                                                    <span className="ml-1 hidden sm:inline rounded-full bg-white/80 border border-black/10 px-2 py-0.5 text-[10px] font-semibold text-slate-700 max-w-[220px] truncate">
+                                                                                                    <span className="ml-1 hidden sm:inline rounded-full bg-white/80 border border-black/50 px-2 py-0.5 text-[10px] font-semibold text-slate-700 max-w-[220px] truncate">
                                                                                                         {bookedName || 'Booked'}
                                                                                                     </span>
                                                                                                 )}
@@ -1099,7 +1099,7 @@ export default function AppointmentBooking() {
                                                                 ? 'bg-blue-50 text-blue-800 border-blue-200'
                                                                 : st === 'cancelled' || st === 'no_show'
                                                                     ? 'bg-rose-50 text-rose-800 border-rose-200'
-                                                                    : 'bg-black/[0.03] text-slate-700 border-black/10'
+                                                                    : 'bg-black/[0.03] text-slate-700 border-black/50'
 
                                                 return (
                                                     <motion.div
@@ -1108,7 +1108,7 @@ export default function AppointmentBooking() {
                                                         animate={{ opacity: 1, y: 0 }}
                                                         exit={{ opacity: 0, y: -6 }}
                                                         transition={{ duration: 0.16 }}
-                                                        className="rounded-3xl border border-black/10 bg-white/80 backdrop-blur px-4 py-3 shadow-[0_8px_24px_rgba(2,6,23,0.08)]"
+                                                        className="rounded-3xl border border-black/50 bg-white/80 backdrop-blur px-4 py-3 shadow-[0_8px_24px_rgba(2,6,23,0.08)]"
                                                     >
                                                         <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                                                             <div className="min-w-0">
@@ -1147,7 +1147,7 @@ export default function AppointmentBooking() {
                                                                             Vitals done
                                                                         </span>
                                                                     ) : (
-                                                                        <span className="inline-flex items-center gap-1 rounded-full bg-black/[0.03] px-3 py-1 text-[11px] font-semibold text-slate-700 border border-black/10">
+                                                                        <span className="inline-flex items-center gap-1 rounded-full bg-black/[0.03] px-3 py-1 text-[11px] font-semibold text-slate-700 border border-black/50">
                                                                             <Activity className="h-3.5 w-3.5" />
                                                                             No vitals
                                                                         </span>
@@ -1156,7 +1156,7 @@ export default function AppointmentBooking() {
                                                             </div>
 
                                                             <div className="sm:text-right text-[11px] text-slate-500">
-                                                                <div className="rounded-2xl border border-black/10 bg-black/[0.02] px-3 py-2">
+                                                                <div className="rounded-2xl border border-black/50 bg-black/[0.02] px-3 py-2">
                                                                     <div className="font-semibold text-slate-700">Purpose</div>
                                                                     <div className="mt-0.5 text-slate-600">{a.purpose || '—'}</div>
                                                                 </div>

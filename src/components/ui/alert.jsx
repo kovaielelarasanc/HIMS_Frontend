@@ -6,7 +6,7 @@ export function Alert({ variant = "default", className, children, ...props }) {
     const base =
         "relative w-full rounded-lg border px-4 py-3 text-sm flex gap-3 items-start";
     const variants = {
-        default: "bg-slate-50 border-slate-200 text-slate-800",
+        default: "bg-slate-50 border-slate-500 text-slate-800",
         destructive: "bg-rose-50 border-rose-200 text-rose-800",
     };
 

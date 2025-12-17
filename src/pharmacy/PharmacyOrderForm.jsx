@@ -303,7 +303,7 @@ export default function PharmacyOrderForm({
 
     // ---- Body (Card) ----
     const body = (
-        <Card className="border-slate-200 rounded-2xl shadow-sm">
+        <Card className="border-slate-500 rounded-2xl shadow-sm">
             <CardHeader className="pb-3">
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                     <div className="flex items-center gap-2">
@@ -321,7 +321,7 @@ export default function PharmacyOrderForm({
                         <Building2 className="h-3.5 w-3.5 text-slate-400" />
                         <span>Location:</span>
                         <select
-                            className="h-7 rounded-xl border border-slate-200 bg-white px-2 text-[11px] text-slate-700"
+                            className="h-7 rounded-xl border border-slate-500 bg-white px-2 text-[11px] text-slate-700"
                             value={locationId}
                             onChange={(e) => setLocationId(e.target.value)}
                         >
@@ -341,7 +341,7 @@ export default function PharmacyOrderForm({
                 <div className="grid gap-3 lg:grid-cols-[minmax(0,1.6fr)_minmax(0,1.4fr)]">
                     {/* Patient */}
                     <div>
-                        <Card className="border-slate-200 rounded-2xl bg-slate-50/70">
+                        <Card className="border-slate-500 rounded-2xl bg-slate-50/70">
                             <CardContent className="p-3 sm:p-4 space-y-2">
                                 <div className="flex items-center gap-2">
                                     <User className="h-4 w-4 text-slate-500" />
@@ -397,7 +397,7 @@ export default function PharmacyOrderForm({
 
                     {/* Context */}
                     <div className="space-y-2">
-                        <Card className="border-slate-200 rounded-2xl bg-slate-50/70">
+                        <Card className="border-slate-500 rounded-2xl bg-slate-50/70">
                             <CardContent className="p-3 sm:p-4 space-y-3">
                                 <div className="flex items-center gap-2">
                                     <Stethoscope className="h-4 w-4 text-slate-500" />
@@ -482,7 +482,7 @@ export default function PharmacyOrderForm({
                         </Card>
 
                         {patient && (
-                            <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2 text-[11px] text-slate-700 flex flex-wrap items-center gap-2">
+                            <div className="rounded-2xl border border-slate-500 bg-white px-3 py-2 text-[11px] text-slate-700 flex flex-wrap items-center gap-2">
                                 <span className="font-semibold">
                                     {patient.first_name} {patient.last_name}
                                 </span>
@@ -498,7 +498,7 @@ export default function PharmacyOrderForm({
                 </div>
 
                 {/* Lines table */}
-                <div className="rounded-2xl border border-slate-200 bg-slate-50/70 p-2 sm:p-3 space-y-2">
+                <div className="rounded-2xl border border-slate-500 bg-slate-50/70 p-2 sm:p-3 space-y-2">
                     <div className="flex items-center justify-between mb-1">
                         <div className="flex items-center gap-2">
                             <Pill className="h-4 w-4 text-slate-500" />
@@ -520,7 +520,7 @@ export default function PharmacyOrderForm({
                     <div className="overflow-x-auto -mx-1 sm:mx-0">
                         <table className="min-w-full text-[11px]">
                             <thead>
-                                <tr className="border-b border-slate-200 text-[10px] uppercase tracking-wide text-slate-500">
+                                <tr className="border-b border-slate-500 text-[10px] uppercase tracking-wide text-slate-500">
                                     <th className="py-1.5 pr-2 text-left font-medium">Item</th>
                                     <th className="py-1.5 px-2 text-left font-medium">Dose / Frequency</th>
                                     <th className="py-1.5 px-2 text-left font-medium">Duration</th>
@@ -562,7 +562,7 @@ export default function PharmacyOrderForm({
                                                     />
                                                     {ln.showDropdown &&
                                                         (ln.searching || ln.searchResults.length > 0) && (
-                                                            <div className="absolute z-30 mt-1 max-h-60 w-full overflow-auto rounded-xl border border-slate-200 bg-white shadow-lg">
+                                                            <div className="absolute z-30 mt-1 max-h-60 w-full overflow-auto rounded-xl border border-slate-500 bg-white shadow-lg">
                                                                 {ln.searching && (
                                                                     <div className="px-3 py-2 text-[11px] text-slate-500 flex items-center gap-2">
                                                                         <Loader2 className="h-3.5 w-3.5 animate-spin text-slate-400" />
@@ -597,7 +597,7 @@ export default function PharmacyOrderForm({
                                                 </div>
 
                                                 {ln.item && (
-                                                    <div className="rounded-xl bg-white border border-slate-200 px-2 py-1 text-[10px] text-slate-600">
+                                                    <div className="rounded-xl bg-white border border-slate-500 px-2 py-1 text-[10px] text-slate-600">
                                                         {getItemSecondaryText(ln.item) ||
                                                             'Selected from inventory'}
                                                     </div>

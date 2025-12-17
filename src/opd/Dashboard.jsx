@@ -174,7 +174,7 @@ export default function OpdDashboard() {
                     <div className="flex flex-col items-start gap-2 text-xs text-slate-500 md:items-end">
                         <Badge
                             variant="outline"
-                            className="flex items-center gap-1 rounded-full border-slate-200 bg-white px-3 py-1"
+                            className="flex items-center gap-1 rounded-full border-slate-500 bg-white px-3 py-1"
                         >
                             <CalendarRange className="h-3 w-3" />
                             <span>{rangeLabel}</span>
@@ -182,7 +182,7 @@ export default function OpdDashboard() {
                         <div className="flex flex-wrap items-center gap-2">
                             <Badge
                                 variant="outline"
-                                className="rounded-full border-slate-200 bg-slate-50 text-[11px]"
+                                className="rounded-full border-slate-500 bg-slate-50 text-[11px]"
                             >
                                 {doctorId
                                     ? "Filtered by specific doctor"
@@ -196,7 +196,7 @@ export default function OpdDashboard() {
                 </div>
 
                 {/* FILTERS */}
-                <Card className="rounded-3xl border-slate-200 shadow-sm">
+                <Card className="rounded-3xl border-slate-500 shadow-sm">
                     <CardHeader className="border-b border-slate-100 pb-3">
                         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                             <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
@@ -269,7 +269,7 @@ export default function OpdDashboard() {
                 {/* TOP SUMMARY CARDS */}
                 <div className="grid gap-3 md:grid-cols-4">
                     {/* Total appointments */}
-                    <Card className="rounded-3xl border-slate-200 shadow-sm">
+                    <Card className="rounded-3xl border-slate-500 shadow-sm">
                         <CardHeader className="pb-1">
                             <CardTitle className="flex items-center justify-between text-xs font-medium text-slate-500">
                                 Total appointments
@@ -299,7 +299,7 @@ export default function OpdDashboard() {
                     </Card>
 
                     {/* Completed */}
-                    <Card className="rounded-3xl border-slate-200 shadow-sm">
+                    <Card className="rounded-3xl border-slate-500 shadow-sm">
                         <CardHeader className="pb-1">
                             <CardTitle className="flex items-center justify-between text-xs font-medium text-slate-500">
                                 Completed visits
@@ -333,7 +333,7 @@ export default function OpdDashboard() {
                     </Card>
 
                     {/* No-show */}
-                    <Card className="rounded-3xl border-slate-200 shadow-sm">
+                    <Card className="rounded-3xl border-slate-500 shadow-sm">
                         <CardHeader className="pb-1">
                             <CardTitle className="flex items-center justify-between text-xs font-medium text-slate-500">
                                 No-show & cancellations
@@ -363,7 +363,7 @@ export default function OpdDashboard() {
                     </Card>
 
                     {/* Follow-ups */}
-                    <Card className="rounded-3xl border-slate-200 shadow-sm">
+                    <Card className="rounded-3xl border-slate-500 shadow-sm">
                         <CardHeader className="pb-1">
                             <CardTitle className="flex items-center justify-between text-xs font-medium text-slate-500">
                                 Follow-ups
@@ -400,7 +400,7 @@ export default function OpdDashboard() {
                 {/* DOCTOR-WISE LOAD + HIGHLIGHTS */}
                 <div className="grid gap-4 lg:grid-cols-3">
                     {/* Chart */}
-                    <Card className="rounded-3xl border-slate-200 shadow-sm lg:col-span-2">
+                    <Card className="rounded-3xl border-slate-500 shadow-sm lg:col-span-2">
                         <CardHeader className="pb-2">
                             <div className="flex items-center justify-between">
                                 <CardTitle className="flex items-center gap-2 text-sm font-medium text-slate-700">
@@ -442,7 +442,7 @@ export default function OpdDashboard() {
                     </Card>
 
                     {/* Top doctors panel */}
-                    <Card className="rounded-3xl border-slate-200 shadow-sm">
+                    <Card className="rounded-3xl border-slate-500 shadow-sm">
                         <CardHeader className="pb-2">
                             <CardTitle className="flex items-center justify-between text-sm font-medium text-slate-700">
                                 Highlights
@@ -550,7 +550,7 @@ export default function OpdDashboard() {
                 </div>
 
                 {/* DOCTOR TABLE */}
-                <Card className="rounded-3xl border-slate-200 shadow-sm">
+                <Card className="rounded-3xl border-slate-500 shadow-sm">
                     <CardHeader className="pb-2">
                         <CardTitle className="flex items-center justify-between text-sm font-medium text-slate-700">
                             Doctor-wise breakdown

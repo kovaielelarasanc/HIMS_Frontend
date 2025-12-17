@@ -130,14 +130,14 @@ export default function PatientBillingSummary() {
             </div>
 
             {/* Overall totals */}
-            <Card className="border-slate-200 shadow-sm rounded-2xl">
+            <Card className="border-slate-500 shadow-sm rounded-2xl">
                 <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-medium text-slate-800">
                         Overall totals
                     </CardTitle>
                 </CardHeader>
                 <CardContent className="flex flex-wrap gap-3 text-xs">
-                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-3 py-1 border border-slate-200 text-slate-700">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 px-3 py-1 border border-slate-500 text-slate-700">
                         <IndianRupee className="w-3 h-3" />
                         Net total: {money(totals.net_total)}
                     </span>
@@ -154,7 +154,7 @@ export default function PatientBillingSummary() {
 
             <div className="grid gap-4 lg:grid-cols-3">
                 {/* Invoice-wise details */}
-                <Card className="border-slate-200 shadow-sm rounded-2xl lg:col-span-2">
+                <Card className="border-slate-500 shadow-sm rounded-2xl lg:col-span-2">
                     <CardHeader className="pb-3">
                         <CardTitle className="text-sm font-medium text-slate-800">
                             Invoice-wise details
@@ -241,7 +241,7 @@ export default function PatientBillingSummary() {
                 {/* AR ageing + billing type + payment modes */}
                 <div className="space-y-4">
                     {/* AR ageing */}
-                    <Card className="border-slate-200 shadow-sm rounded-2xl">
+                    <Card className="border-slate-500 shadow-sm rounded-2xl">
                         <CardHeader className="pb-2">
                             <CardTitle className="text-sm font-medium text-slate-800">
                                 AR ageing
@@ -275,7 +275,7 @@ export default function PatientBillingSummary() {
                     </Card>
 
                     {/* Payment modes */}
-                    <Card className="border-slate-200 shadow-sm rounded-2xl">
+                    <Card className="border-slate-500 shadow-sm rounded-2xl">
                         <CardHeader className="pb-2">
                             <CardTitle className="text-sm font-medium text-slate-800">
                                 Payment modes
@@ -302,7 +302,7 @@ export default function PatientBillingSummary() {
                     </Card>
 
                     {/* Billing type split */}
-                    <Card className="border-slate-200 shadow-sm rounded-2xl">
+                    <Card className="border-slate-500 shadow-sm rounded-2xl">
                         <CardHeader className="pb-2">
                             <CardTitle className="text-sm font-medium text-slate-800">
                                 Revenue by billing type

@@ -253,7 +253,7 @@ function RoomTypeChip({ type }) {
 
 function BedStateChip({ state }) {
     const s = String(state || 'unknown').toLowerCase()
-    let cls = 'border-slate-200/70 bg-slate-100/70 text-slate-700'
+    let cls = 'border-slate-500/70 bg-slate-100/70 text-slate-700'
     if (s === 'vacant' || s === 'available') cls = 'border-emerald-200/70 bg-emerald-50/70 text-emerald-700'
     else if (s === 'occupied') cls = 'border-rose-200/70 bg-rose-50/70 text-rose-700'
     else if (s === 'reserved' || s === 'cleaning') cls = 'border-amber-200/70 bg-amber-50/70 text-amber-700'

@@ -192,7 +192,7 @@ function OtSpecialitiesTab() {
                             <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-slate-400" />
                             <input
                                 type="text"
-                                className="w-44 rounded-lg border border-slate-200 bg-white pl-7 pr-2 py-1.5 text-xs text-slate-800 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                className="w-44 rounded-lg border border-slate-500 bg-white pl-7 pr-2 py-1.5 text-xs text-slate-800 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                 placeholder="Search..."
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
@@ -292,7 +292,7 @@ function OtSpecialitiesTab() {
                                                 <button
                                                     type="button"
                                                     onClick={() => openEdit(it)}
-                                                    className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700 hover:border-sky-400 hover:text-sky-700"
+                                                    className="inline-flex items-center gap-1 rounded-lg border border-slate-500 bg-white px-2 py-1 text-[11px] text-slate-700 hover:border-sky-400 hover:text-sky-700"
                                                 >
                                                     <Pencil className="h-3 w-3" />
                                                     Edit
@@ -330,7 +330,7 @@ function OtSpecialitiesTab() {
                                 </label>
                                 <input
                                     type="text"
-                                    className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                    className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                     value={form.code}
                                     onChange={(e) =>
                                         setForm((f) => ({ ...f, code: e.target.value }))
@@ -343,7 +343,7 @@ function OtSpecialitiesTab() {
                                 </label>
                                 <input
                                     type="text"
-                                    className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                    className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                     value={form.name}
                                     onChange={(e) =>
                                         setForm((f) => ({ ...f, name: e.target.value }))
@@ -358,7 +358,7 @@ function OtSpecialitiesTab() {
                             </label>
                             <textarea
                                 rows={2}
-                                className="w-full resize-none rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                className="w-full resize-none rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                 value={form.description}
                                 onChange={(e) =>
                                     setForm((f) => ({ ...f, description: e.target.value }))
@@ -395,7 +395,7 @@ function OtSpecialitiesTab() {
                         <button
                             type="button"
                             onClick={() => setModalOpen(false)}
-                            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-500 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
                             disabled={saving}
                         >
                             Cancel
@@ -603,7 +603,7 @@ function OtProceduresTab() {
                             <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-slate-400" />
                             <input
                                 type="text"
-                                className="w-56 rounded-lg border border-slate-200 bg-white pl-7 pr-2 py-1.5 text-xs text-slate-800 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                className="w-56 rounded-lg border border-slate-500 bg-white pl-7 pr-2 py-1.5 text-xs text-slate-800 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                 placeholder="Search by code, name, speciality..."
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
@@ -732,7 +732,7 @@ function OtProceduresTab() {
                                                     <button
                                                         type="button"
                                                         onClick={() => openEdit(it)}
-                                                        className="inline-flex items-center gap-1 rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px] text-slate-700 hover:border-sky-400 hover:text-sky-700"
+                                                        className="inline-flex items-center gap-1 rounded-lg border border-slate-500 bg-white px-2 py-1 text-[11px] text-slate-700 hover:border-sky-400 hover:text-sky-700"
                                                     >
                                                         <Pencil className="h-3 w-3" />
                                                         Edit
@@ -771,7 +771,7 @@ function OtProceduresTab() {
                                 </label>
                                 <input
                                     type="text"
-                                    className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                    className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                     value={form.code}
                                     onChange={(e) =>
                                         setForm((f) => ({ ...f, code: e.target.value }))
@@ -784,7 +784,7 @@ function OtProceduresTab() {
                                 </label>
                                 <input
                                     type="text"
-                                    className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                    className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                     value={form.name}
                                     onChange={(e) =>
                                         setForm((f) => ({ ...f, name: e.target.value }))
@@ -798,7 +798,7 @@ function OtProceduresTab() {
                                 Default speciality (optional)
                             </label>
                             <select
-                                className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                 value={form.speciality_id}
                                 onChange={(e) =>
                                     setForm((f) => ({ ...f, speciality_id: e.target.value }))
@@ -826,7 +826,7 @@ function OtProceduresTab() {
                                 <input
                                     type="number"
                                     min="0"
-                                    className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                    className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                     value={form.duration_hours}
                                     onChange={(e) =>
                                         setForm((f) => ({
@@ -845,7 +845,7 @@ function OtProceduresTab() {
                                     type="number"
                                     min="0"
                                     max="59"
-                                    className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                    className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                     value={form.duration_minutes}
                                     onChange={(e) =>
                                         setForm((f) => ({
@@ -866,7 +866,7 @@ function OtProceduresTab() {
                                 type="number"
                                 step="0.01"
                                 min="0"
-                                className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                 value={form.rate_per_hour}
                                 onChange={(e) =>
                                     setForm((f) => ({
@@ -884,7 +884,7 @@ function OtProceduresTab() {
                             </label>
                             <textarea
                                 rows={2}
-                                className="w-full resize-none rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                className="w-full resize-none rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                 value={form.description}
                                 onChange={(e) =>
                                     setForm((f) => ({ ...f, description: e.target.value }))
@@ -922,7 +922,7 @@ function OtProceduresTab() {
                         <button
                             type="button"
                             onClick={() => setModalOpen(false)}
-                            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
+                            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-500 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
                             disabled={saving}
                         >
                             Cancel
@@ -969,7 +969,7 @@ export default function OtMastersPage() {
                 </div>
             </div>
 
-            <div className="flex gap-2 border-b border-slate-200">
+            <div className="flex gap-2 border-b border-slate-500">
                 {TABS.map((t) => {
                     const active = t.id === tab
                     return (

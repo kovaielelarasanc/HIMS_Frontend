@@ -99,7 +99,7 @@ function RowActions({ onView, onEdit, onDeactivate }) {
             <DropdownMenuContent
                 align="end"
                 sideOffset={8}
-                className="w-44 rounded-2xl p-1.5 border border-black/10 shadow-xl bg-white"
+                className="w-44 rounded-2xl p-1.5 border border-black/50 shadow-xl bg-white"
                 onClick={(e) => e.stopPropagation()}
             >
                 <DropdownMenuItem
@@ -155,7 +155,7 @@ function SegmentedControl({
 
     return (
         <div className="flex items-center gap-2">
-            <div className="inline-flex items-center rounded-2xl border border-black/10 bg-black/[0.03] p-1">
+            <div className="inline-flex items-center rounded-2xl border border-black/50 bg-black/[0.03] p-1">
                 {options.map((opt) => {
                     const active = value === opt.value
                     return (
@@ -167,7 +167,7 @@ function SegmentedControl({
                                 'relative h-9 px-3 rounded-xl text-[12px] font-semibold tracking-tight transition',
                                 'focus:outline-none',
                                 active
-                                    ? 'bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08)] text-slate-900 border border-black/10'
+                                    ? 'bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08)] text-slate-900 border border-black/50'
                                     : 'text-slate-600 hover:text-slate-800 hover:bg-white/60'
                             )}
                             style={active ? activeStyle : undefined}
@@ -183,12 +183,12 @@ function SegmentedControl({
                     <DropdownMenuTrigger asChild>
                         <Button
                             variant="outline"
-                            className="h-10 rounded-2xl border-black/10 bg-white hover:bg-black/[0.03]"
+                            className="h-10 rounded-2xl border-black/50 bg-white hover:bg-black/[0.03]"
                         >
                             More…
                         </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent className="w-56 rounded-2xl p-1.5 border border-black/10 shadow-xl bg-white">
+                    <DropdownMenuContent className="w-56 rounded-2xl p-1.5 border border-black/50 shadow-xl bg-white">
                         {moreOptions.map((opt) => {
                             const active = value === opt.value
                             return (
@@ -318,11 +318,11 @@ function CommandPalette({
             onMouseDown={onClose}
         >
             <div
-                className="w-full max-w-2xl rounded-3xl border border-black/10 bg-white/90 backdrop-blur-xl shadow-[0_20px_60px_rgba(0,0,0,0.22)] overflow-hidden"
+                className="w-full max-w-2xl rounded-3xl border border-black/50 bg-white/90 backdrop-blur-xl shadow-[0_20px_60px_rgba(0,0,0,0.22)] overflow-hidden"
                 onMouseDown={(e) => e.stopPropagation()}
             >
                 {/* top */}
-                <div className="px-4 py-3 border-b border-black/10">
+                <div className="px-4 py-3 border-b border-black/50">
                     <div className="flex items-center gap-2">
                         <div className="h-9 w-9 rounded-2xl grid place-items-center border" style={accent}>
                             <Command className="h-4 w-4" />
@@ -348,7 +348,7 @@ function CommandPalette({
                                         pick(rows[idx] || rows[0])
                                     }
                                 }}
-                                className="h-11 rounded-2xl pl-10 pr-24 border-black/10 bg-white focus-visible:ring-black/10"
+                                className="h-11 rounded-2xl pl-10 pr-24 border-black/50 bg-white focus-visible:ring-black/10"
                                 placeholder="Search patients… (UHID / Name / Phone)"
                             />
                             <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
@@ -362,7 +362,7 @@ function CommandPalette({
                                         <X className="h-4 w-4 text-slate-500" />
                                     </button>
                                 )}
-                                <div className="hidden sm:flex items-center gap-1 rounded-full border border-black/10 bg-black/[0.03] px-2 py-1 text-[11px] text-slate-600">
+                                <div className="hidden sm:flex items-center gap-1 rounded-full border border-black/50 bg-black/[0.03] px-2 py-1 text-[11px] text-slate-600">
                                     <span>Esc</span>
                                 </div>
                             </div>
@@ -434,7 +434,7 @@ function CommandPalette({
                                                             {fullName}
                                                         </div>
                                                         <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[12px] text-slate-500">
-                                                            <span className="font-mono text-[11px] bg-black/[0.04] border border-black/10 rounded-full px-2 py-0.5">
+                                                            <span className="font-mono text-[11px] bg-black/[0.04] border border-black/50 rounded-full px-2 py-0.5">
                                                                 {p.uhid || '—'}
                                                             </span>
                                                             {p.phone && (
@@ -445,7 +445,7 @@ function CommandPalette({
                                                             )}
                                                             <Badge
                                                                 variant="secondary"
-                                                                className="rounded-full border border-black/10 bg-black/[0.03] text-slate-700"
+                                                                className="rounded-full border border-black/50 bg-black/[0.03] text-slate-700"
                                                             >
                                                                 {active ? 'Active' : 'Inactive'}
                                                             </Badge>
@@ -686,7 +686,7 @@ export default function PatientPage() {
             {/* Centered container */}
             <div className="mx-auto w-full max-w-6xl px-3 sm:px-5 py-4 flex flex-col gap-4 min-h-0">
                 {/* Header */}
-                <Card className="rounded-3xl border-black/10 bg-white/90 backdrop-blur shadow-[0_1px_2px_rgba(0,0,0,0.05)] overflow-hidden">
+                <Card className="rounded-3xl border-black/50 bg-white/90 backdrop-blur shadow-[0_1px_2px_rgba(0,0,0,0.05)] overflow-hidden">
                     <CardHeader className="pb-3">
                         <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
                             <div className="min-w-0">
@@ -720,7 +720,7 @@ export default function PatientPage() {
                             <div className="flex flex-wrap gap-2 md:justify-end">
                                 <Button
                                     variant="outline"
-                                    className="rounded-2xl border-black/10 bg-white hover:bg-black/[0.03]"
+                                    className="rounded-2xl border-black/50 bg-white hover:bg-black/[0.03]"
                                     onClick={() => loadPatients(q, patientTypeFilter)}
                                     title="Reload"
                                 >
@@ -748,7 +748,7 @@ export default function PatientPage() {
                                     <div className="relative">
                                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                                         <Input
-                                            className="h-11 rounded-2xl pl-10 pr-24 border-black/10 bg-white focus-visible:ring-black/10"
+                                            className="h-11 rounded-2xl pl-10 pr-24 border-black/50 bg-white focus-visible:ring-black/10"
                                             placeholder="Search UHID, Name, Mobile, Email..."
                                             value={q}
                                             onChange={(e) => setQ(e.target.value)}
@@ -773,7 +773,7 @@ export default function PatientPage() {
                                             <button
                                                 type="button"
                                                 onClick={() => setPaletteOpen(true)}
-                                                className="hidden sm:inline-flex items-center gap-1 rounded-full border border-black/10 bg-black/[0.03] px-2 py-1 text-[11px] text-slate-600 hover:bg-black/[0.05]"
+                                                className="hidden sm:inline-flex items-center gap-1 rounded-full border border-black/50 bg-black/[0.03] px-2 py-1 text-[11px] text-slate-600 hover:bg-black/[0.05]"
                                                 title="Quick Search"
                                             >
                                                 <Command className="h-3.5 w-3.5" />
@@ -786,14 +786,14 @@ export default function PatientPage() {
                                 <div className="flex flex-wrap gap-2">
                                     <Button
                                         variant="outline"
-                                        className="rounded-2xl border-black/10 bg-white hover:bg-black/[0.03]"
+                                        className="rounded-2xl border-black/50 bg-white hover:bg-black/[0.03]"
                                         onClick={handleReset}
                                     >
                                         Reset
                                     </Button>
                                     <Button
                                         variant="outline"
-                                        className="rounded-2xl border-black/10 bg-white hover:bg-black/[0.03]"
+                                        className="rounded-2xl border-black/50 bg-white hover:bg-black/[0.03]"
                                         onClick={() => loadPatients(q, patientTypeFilter)}
                                     >
                                         Apply
@@ -814,7 +814,7 @@ export default function PatientPage() {
                             </div>
 
                             {/* Export (clean) */}
-                            <div className="rounded-3xl border border-black/10 bg-black/[0.02] p-3">
+                            <div className="rounded-3xl border border-black/50 bg-black/[0.02] p-3">
                                 <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                                     <div className="flex items-center gap-2 text-[12px] font-semibold text-slate-700">
                                         <CalendarDays className="h-4 w-4 text-slate-500" />
@@ -826,7 +826,7 @@ export default function PatientPage() {
                                             <label className="text-[11px] font-semibold text-slate-600">From</label>
                                             <Input
                                                 type="date"
-                                                className="h-10 rounded-2xl border-black/10 bg-white focus-visible:ring-black/10"
+                                                className="h-10 rounded-2xl border-black/50 bg-white focus-visible:ring-black/10"
                                                 value={fromDate}
                                                 onChange={(e) => setFromDate(e.target.value)}
                                             />
@@ -835,7 +835,7 @@ export default function PatientPage() {
                                             <label className="text-[11px] font-semibold text-slate-600">To</label>
                                             <Input
                                                 type="date"
-                                                className="h-10 rounded-2xl border-black/10 bg-white focus-visible:ring-black/10"
+                                                className="h-10 rounded-2xl border-black/50 bg-white focus-visible:ring-black/10"
                                                 value={toDate}
                                                 onChange={(e) => setToDate(e.target.value)}
                                             />
@@ -872,10 +872,10 @@ export default function PatientPage() {
                 <div className="flex-1 min-h-0">
                     {/* Desktop */}
                     <div className="hidden md:block h-full min-h-0">
-                        <Card className="h-full min-h-0 rounded-3xl border-black/10 bg-white/90 backdrop-blur shadow-[0_1px_2px_rgba(0,0,0,0.05)] overflow-hidden">
+                        <Card className="h-full min-h-0 rounded-3xl border-black/50 bg-white/90 backdrop-blur shadow-[0_1px_2px_rgba(0,0,0,0.05)] overflow-hidden">
                             <div className="h-full min-h-0 overflow-auto">
                                 <table className="min-w-full text-sm">
-                                    <thead className="sticky top-0 z-10 bg-white/85 backdrop-blur border-b border-black/10">
+                                    <thead className="sticky top-0 z-10 bg-white/85 backdrop-blur border-b border-black/50">
                                         <tr>
                                             <th className="px-5 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
                                                 Patient
@@ -953,7 +953,7 @@ export default function PatientPage() {
                                                                         <div className="min-w-0">
                                                                             <div className="font-semibold text-slate-900 truncate">{fullName}</div>
                                                                             <div className="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-slate-500">
-                                                                                <span className="font-mono text-[11px] bg-black/[0.04] border border-black/10 rounded-full px-2 py-0.5">
+                                                                                <span className="font-mono text-[11px] bg-black/[0.04] border border-black/50 rounded-full px-2 py-0.5">
                                                                                     {p.uhid || '—'}
                                                                                 </span>
                                                                                 <span>Age: {p.age_text || '—'}</span>
@@ -961,7 +961,7 @@ export default function PatientPage() {
                                                                                 <span>{p.gender || '—'}</span>
                                                                                 <Badge
                                                                                     variant="secondary"
-                                                                                    className="rounded-full border border-black/10 bg-black/[0.03] text-slate-700"
+                                                                                    className="rounded-full border border-black/50 bg-black/[0.03] text-slate-700"
                                                                                 >
                                                                                     {active ? 'Active' : 'Inactive'}
                                                                                 </Badge>
@@ -995,7 +995,7 @@ export default function PatientPage() {
                                                         <td className="px-5 py-4 align-top">
                                                             <div className="flex flex-wrap gap-2">
                                                                 {p.patient_type && (
-                                                                    <span className="inline-flex items-center gap-1 rounded-full bg-black/[0.04] border border-black/10 px-2.5 py-1 text-[11px] text-slate-800">
+                                                                    <span className="inline-flex items-center gap-1 rounded-full bg-black/[0.04] border border-black/50 px-2.5 py-1 text-[11px] text-slate-800">
                                                                         <Tag className="h-3.5 w-3.5 text-slate-400" />
                                                                         {p.patient_type}
                                                                     </span>
@@ -1027,13 +1027,13 @@ export default function PatientPage() {
                     {/* Mobile */}
                     <div className="md:hidden grid gap-3">
                         {loading && (
-                            <Card className="rounded-3xl border-black/10 bg-white/90 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+                            <Card className="rounded-3xl border-black/50 bg-white/90 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
                                 <CardContent className="py-6 text-center text-slate-500">Loading…</CardContent>
                             </Card>
                         )}
 
                         {!loading && patients.length === 0 && (
-                            <Card className="rounded-3xl border-black/10 bg-white/90 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
+                            <Card className="rounded-3xl border-black/50 bg-white/90 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
                                 <CardContent className="py-8 text-center">
                                     <div className="mx-auto h-12 w-12 rounded-3xl bg-black/[0.04] grid place-items-center">
                                         <Inbox className="h-6 w-6 text-slate-400" />
@@ -1056,7 +1056,7 @@ export default function PatientPage() {
                                 return (
                                     <Card
                                         key={p.id}
-                                        className="rounded-3xl border-black/10 bg-white/90 shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
+                                        className="rounded-3xl border-black/50 bg-white/90 shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
                                         onClick={() => handleView(p)}
                                     >
                                         <CardContent className="p-4">
@@ -1081,7 +1081,7 @@ export default function PatientPage() {
                                                             </div>
 
                                                             <div className="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-slate-500">
-                                                                <span className="font-mono text-[11px] bg-black/[0.04] border border-black/10 rounded-full px-2 py-0.5">
+                                                                <span className="font-mono text-[11px] bg-black/[0.04] border border-black/50 rounded-full px-2 py-0.5">
                                                                     {p.uhid || '—'}
                                                                 </span>
                                                                 <span>Age: {p.age_text || '—'}</span>
@@ -1093,7 +1093,7 @@ export default function PatientPage() {
                                                         <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                                                             <Badge
                                                                 variant="secondary"
-                                                                className="rounded-full border border-black/10 bg-black/[0.03] text-slate-700"
+                                                                className="rounded-full border border-black/50 bg-black/[0.03] text-slate-700"
                                                             >
                                                                 {active ? 'Active' : 'Inactive'}
                                                             </Badge>
@@ -1120,7 +1120,7 @@ export default function PatientPage() {
 
                                                     <div className="mt-3 flex flex-wrap gap-2">
                                                         {p.patient_type && (
-                                                            <span className="inline-flex items-center gap-1 rounded-full bg-black/[0.04] border border-black/10 px-2.5 py-1 text-[11px] text-slate-800">
+                                                            <span className="inline-flex items-center gap-1 rounded-full bg-black/[0.04] border border-black/50 px-2.5 py-1 text-[11px] text-slate-800">
                                                                 <Tag className="h-3.5 w-3.5 text-slate-400" />
                                                                 {p.patient_type}
                                                             </span>

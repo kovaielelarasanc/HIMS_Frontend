@@ -241,9 +241,9 @@ export default function AdvanceDeposit() {
 
     return (
         <div className="min-h-[calc(100vh-4rem)] bg-gradient-to-b from-slate-50 via-slate-100 to-slate-50">
-            <div className="mx-auto max-w-6xl px-3 md:px-6 py-4 md:py-6 space-y-4 md:space-y-5">
+            <div className="mx-auto max-w-12xl px-3 md:px-6 py-4 md:py-6 space-y-4 md:space-y-5">
                 {/* ✅ Sticky header */}
-                <div className="sticky top-0 z-20 -mx-3 md:-mx-6 px-3 md:px-6 py-3 backdrop-blur bg-white/70 border-b border-slate-200">
+                <div className="sticky top-0 z-20 -mx-3 md:-mx-6 px-3 md:px-6 py-3 backdrop-blur bg-white/70 border-b border-slate-500">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex items-center gap-2">
                             <Button
@@ -298,7 +298,7 @@ export default function AdvanceDeposit() {
 
                 {/* ✅ Patient + Summary */}
                 <motion.div {...fadeUp}>
-                    <Card className="rounded-3xl shadow-sm border-slate-200">
+                    <Card className="rounded-3xl shadow-sm border-slate-500">
                         <CardHeader className="pb-3">
                             <CardTitle className="text-sm flex items-center gap-2">
                                 <Wallet className="h-4 w-4 text-slate-700" />
@@ -327,13 +327,13 @@ export default function AdvanceDeposit() {
                                     />
 
                                     {patientLabel ? (
-                                        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+                                        <div className="rounded-2xl border border-slate-500 bg-slate-50 px-3 py-2">
                                             <div className="text-[11px] text-slate-500">Selected</div>
                                             <div className="text-sm font-semibold text-slate-900">
                                                 {patientLabel.uhid} — {patientLabel.name}
                                             </div>
                                             <div className="text-[11px] text-slate-600">
-                                                {patientLabel.phone ? `📞 ${patientLabel.phone}` : "No phone"}
+                                                {patientLabel.phone ? ` ${patientLabel.phone}` : "No phone"}
                                             </div>
                                         </div>
                                     ) : (
@@ -345,7 +345,7 @@ export default function AdvanceDeposit() {
 
                                 {/* Summary cards */}
                                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                    <div className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm">
+                                    <div className="rounded-3xl border border-slate-500 bg-white p-4 shadow-sm">
                                         <div className="flex items-center justify-between">
                                             <div className="text-[11px] font-medium text-slate-500">
                                                 Total Deposited
@@ -431,7 +431,7 @@ export default function AdvanceDeposit() {
                                     </div>
 
                                     <select
-                                        className="h-9 rounded-2xl border border-slate-200 bg-white px-3 text-xs"
+                                        className="h-9 rounded-2xl border border-slate-500 bg-white px-3 text-xs"
                                         value={modeFilter}
                                         onChange={(e) => setModeFilter(e.target.value)}
                                     >
@@ -446,7 +446,7 @@ export default function AdvanceDeposit() {
                                     </select>
 
                                     <select
-                                        className="h-9 rounded-2xl border border-slate-200 bg-white px-3 text-xs"
+                                        className="h-9 rounded-2xl border border-slate-500 bg-white px-3 text-xs"
                                         value={usedFilter}
                                         onChange={(e) => setUsedFilter(e.target.value)}
                                     >
@@ -466,7 +466,7 @@ export default function AdvanceDeposit() {
 
                 {/* ✅ Deposits list */}
                 <motion.div {...fadeUp}>
-                    <Card className="rounded-3xl shadow-sm border-slate-200">
+                    <Card className="rounded-3xl shadow-sm border-slate-500">
                         <CardHeader className="pb-3">
                             <CardTitle className="text-sm flex items-center gap-2">
                                 <FileText className="h-4 w-4 text-slate-700" />
@@ -476,7 +476,7 @@ export default function AdvanceDeposit() {
 
                         <CardContent className="space-y-3">
                             {!canLoad ? (
-                                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
+                                <div className="rounded-2xl border border-dashed border-slate-500 bg-slate-50 p-6 text-center">
                                     <div className="text-sm font-semibold text-slate-900">
                                         Select a patient
                                     </div>
@@ -491,7 +491,7 @@ export default function AdvanceDeposit() {
                                     <Skeleton className="h-10 w-full rounded-2xl" />
                                 </div>
                             ) : filteredRows.length === 0 ? (
-                                <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50 p-6 text-center">
+                                <div className="rounded-2xl border border-dashed border-slate-500 bg-slate-50 p-6 text-center">
                                     <div className="text-sm font-semibold text-slate-900">
                                         No deposits found
                                     </div>
@@ -625,7 +625,7 @@ export default function AdvanceDeposit() {
                                             return (
                                                 <div
                                                     key={a.id}
-                                                    className="rounded-3xl border border-slate-200 bg-white p-4 shadow-sm"
+                                                    className="rounded-3xl border border-slate-500 bg-white p-4 shadow-sm"
                                                 >
                                                     <div className="flex items-start justify-between gap-3">
                                                         <div className="min-w-0">
@@ -681,7 +681,7 @@ export default function AdvanceDeposit() {
                                                             <button
                                                                 type="button"
                                                                 onClick={() => toggleUsed(a.id)}
-                                                                className="w-full rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-900 flex items-center justify-between"
+                                                                className="w-full rounded-2xl border border-slate-500 bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-900 flex items-center justify-between"
                                                             >
                                                                 <span>Used Invoices</span>
                                                                 {isOpen ? (
@@ -700,7 +700,7 @@ export default function AdvanceDeposit() {
                                                                         transition={{ duration: 0.18 }}
                                                                         className="overflow-hidden"
                                                                     >
-                                                                        <div className="mt-2 rounded-2xl border border-slate-200 overflow-hidden">
+                                                                        <div className="mt-2 rounded-2xl border border-slate-500 overflow-hidden">
                                                                             {usedList.map((u) => (
                                                                                 <button
                                                                                     key={u.id}
@@ -747,7 +747,7 @@ export default function AdvanceDeposit() {
                             exit={{ opacity: 0 }}
                         >
                             <motion.div
-                                className="w-full sm:max-w-lg bg-white rounded-3xl shadow-xl border border-slate-200"
+                                className="w-full sm:max-w-lg bg-white rounded-3xl shadow-xl border border-slate-500"
                                 initial={{ y: 18, opacity: 0 }}
                                 animate={{ y: 0, opacity: 1 }}
                                 exit={{ y: 18, opacity: 0 }}
@@ -755,7 +755,7 @@ export default function AdvanceDeposit() {
                             >
                                 <div className="p-4 border-b border-slate-100 flex items-center justify-between">
                                     <div>
-                                        <div className="text-sm font-extrabold text-slate-900">
+                                        <div className="text-sm font-bold text-slate-900">
                                             Add Advance / Deposit
                                         </div>
                                         <div className="text-[11px] text-slate-500">
@@ -770,16 +770,16 @@ export default function AdvanceDeposit() {
 
                                 <div className="p-4 space-y-3">
                                     {/* patient preview */}
-                                    <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                                    <div className="rounded-2xl border border-slate-500 bg-slate-50 p-3">
                                         <div className="text-[11px] text-slate-500">Patient</div>
-                                        <div className="text-sm font-extrabold text-slate-900">
+                                        <div className="text-sm font-bold text-slate-900">
                                             {patientLabel ? (
                                                 <>
                                                     {patientLabel.uhid} — {patientLabel.name}
                                                     {patientLabel.phone ? (
                                                         <span className="text-slate-600">
                                                             {" "}
-                                                            · 📞 {patientLabel.phone}
+                                                            · +91 {patientLabel.phone}
                                                         </span>
                                                     ) : null}
                                                 </>
@@ -814,7 +814,7 @@ export default function AdvanceDeposit() {
                                                     name="mode"
                                                     value={form.mode}
                                                     onChange={onChange}
-                                                    className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm"
+                                                    className="h-10 w-full rounded-2xl border border-slate-500 bg-white px-3 text-sm"
                                                 >
                                                     <option value="cash">Cash</option>
                                                     <option value="card">Card</option>
@@ -853,8 +853,8 @@ export default function AdvanceDeposit() {
                                             </div>
                                         </div>
 
-                                        <div className="rounded-2xl border border-slate-200 p-3 space-y-2">
-                                            <div className="text-[11px] font-extrabold text-slate-800">
+                                        <div className="rounded-2xl border border-slate-500 p-3 space-y-2">
+                                            <div className="text-[11px] font-bold text-slate-800">
                                                 Optional Context
                                             </div>
 
@@ -867,7 +867,7 @@ export default function AdvanceDeposit() {
                                                         name="context_type"
                                                         value={form.context_type}
                                                         onChange={onChange}
-                                                        className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm"
+                                                        className="h-10 w-full rounded-2xl border border-slate-500 bg-white px-3 text-sm"
                                                     >
                                                         <option value="">None</option>
                                                         <option value="opd">OPD</option>

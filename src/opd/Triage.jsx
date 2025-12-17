@@ -143,13 +143,13 @@ function vitalsSeverity(v) {
 const UI = {
     pageBg: 'bg-[radial-gradient(circle_at_top,_rgba(13,148,136,0.10),_transparent_55%)]',
     glass:
-        'rounded-3xl border border-black/10 bg-white/75 backdrop-blur-xl shadow-[0_12px_35px_rgba(2,6,23,0.10)]',
+        'rounded-3xl border border-black/50 bg-white/75 backdrop-blur-xl shadow-[0_12px_35px_rgba(2,6,23,0.10)]',
     glassSoft:
-        'rounded-3xl border border-black/10 bg-white/70 backdrop-blur-xl shadow-[0_6px_22px_rgba(2,6,23,0.08)]',
+        'rounded-3xl border border-black/50 bg-white/70 backdrop-blur-xl shadow-[0_6px_22px_rgba(2,6,23,0.08)]',
     chip:
-        'inline-flex items-center rounded-full border border-black/10 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700',
+        'inline-flex items-center rounded-full border border-black/50 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700',
     input:
-        'w-full rounded-2xl border border-black/10 bg-white/85 px-3 py-2 text-[12px] font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-500',
+        'w-full rounded-2xl border border-black/50 bg-white/85 px-3 py-2 text-[12px] font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-500',
 }
 
 /* ----------------------------- Sparkline + Trends ----------------------------- */
@@ -193,7 +193,7 @@ function Sparkline({ series, series2, height = 28 }) {
     const all = [...s1, ...s2]
     if (all.length < 2) {
         return (
-            <div className="h-[28px] w-[120px] rounded-2xl border border-black/10 bg-black/[0.02] grid place-items-center">
+            <div className="h-[28px] w-[120px] rounded-2xl border border-black/50 bg-black/[0.02] grid place-items-center">
                 <Minus className="h-4 w-4 text-slate-400" />
             </div>
         )
@@ -224,7 +224,7 @@ function Sparkline({ series, series2, height = 28 }) {
             width={w}
             height={h}
             viewBox={`0 0 ${w} ${h}`}
-            className="rounded-2xl border border-black/10 bg-white/85"
+            className="rounded-2xl border border-black/50 bg-white/85"
             aria-hidden="true"
         >
             {/* subtle baseline */}
@@ -244,7 +244,7 @@ function TrendChip({ dir, deltaText }) {
             ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
             : dir === 'down'
                 ? 'border-amber-200 bg-amber-50 text-amber-800'
-                : 'border-black/10 bg-black/[0.02] text-slate-700'
+                : 'border-black/50 bg-black/[0.02] text-slate-700'
 
     return (
         <span className={cx('inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-[11px] font-semibold', cls)}>
@@ -256,7 +256,7 @@ function TrendChip({ dir, deltaText }) {
 
 function TrendTile({ title, value, unit, dir, deltaText, children }) {
     return (
-        <div className="rounded-3xl border border-black/10 bg-white/75 backdrop-blur px-4 py-3 shadow-[0_10px_24px_rgba(2,6,23,0.08)]">
+        <div className="rounded-3xl border border-black/50 bg-white/75 backdrop-blur px-4 py-3 shadow-[0_10px_24px_rgba(2,6,23,0.08)]">
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
                     <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
@@ -538,7 +538,7 @@ export default function Triage() {
                     <div className="flex flex-wrap items-center justify-between gap-3">
                         <Badge
                             variant="outline"
-                            className="rounded-full border-black/10 bg-white/80 px-3 py-1 text-[11px] font-semibold tracking-wide text-slate-700"
+                            className="rounded-full border-black/50 bg-white/80 px-3 py-1 text-[11px] font-semibold tracking-wide text-slate-700"
                         >
                             OPD · Triage & Vitals
                         </Badge>
@@ -555,15 +555,15 @@ export default function Triage() {
                             <div className="absolute inset-0 opacity-60 bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.16),_transparent_60%)]" />
                             <div className="relative px-5 py-5 md:px-7 md:py-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
                                 <div className="min-w-0">
-                                    <div className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-1 text-[11px] font-semibold text-slate-700">
-                                        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-black/[0.04] border border-black/10">
+                                    <div className="inline-flex items-center gap-2 rounded-full border border-black/50 bg-white/70 px-3 py-1 text-[11px] font-semibold text-slate-700">
+                                        <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-black/[0.04] border border-black/50">
                                             <Sparkles className="h-3.5 w-3.5 text-slate-700" />
                                         </span>
                                         Apple-glass workflow · Single column
                                     </div>
 
                                     <div className="mt-3 flex items-start gap-3">
-                                        <div className="inline-flex h-11 w-11 items-center justify-center rounded-3xl bg-black/[0.04] border border-black/10">
+                                        <div className="inline-flex h-11 w-11 items-center justify-center rounded-3xl bg-black/[0.04] border border-black/50">
                                             <HeartPulse className="h-5 w-5 text-slate-700" />
                                         </div>
                                         <div className="min-w-0">
@@ -580,9 +580,9 @@ export default function Triage() {
                                 <div className="w-full md:w-[520px] space-y-3">
                                     <div className={cx(UI.glassSoft, 'p-3')}>
                                         <div className="grid gap-2">
-                                            <div className="rounded-2xl border border-black/10 bg-white/75 px-3 py-2">
+                                            <div className="rounded-2xl border border-black/50 bg-white/75 px-3 py-2">
                                                 <div className="flex items-center gap-2 pb-1">
-                                                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-black/[0.04] border border-black/10">
+                                                    <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-black/[0.04] border border-black/50">
                                                         <Stethoscope className="h-3.5 w-3.5 text-slate-700" />
                                                     </span>
                                                     <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
@@ -599,14 +599,14 @@ export default function Triage() {
                                                         type="date"
                                                         value={date}
                                                         onChange={(e) => setDate(e.target.value)}
-                                                        className="h-10 rounded-2xl border-black/10 bg-white/85 text-sm"
+                                                        className="h-10 rounded-2xl border-black/50 bg-white/85 text-sm"
                                                     />
                                                 </div>
 
                                                 <Button
                                                     type="button"
                                                     variant="outline"
-                                                    className="h-10 rounded-2xl border-black/10 bg-white/85 text-[12px] font-semibold"
+                                                    className="h-10 rounded-2xl border-black/50 bg-white/85 text-[12px] font-semibold"
                                                     onClick={load}
                                                     disabled={loading}
                                                 >
@@ -646,7 +646,7 @@ export default function Triage() {
                     {/* Queue list (single column) */}
                     <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}>
                         <Card className={cx(UI.glass, 'overflow-hidden')}>
-                            <CardHeader className="border-b border-black/10">
+                            <CardHeader className="border-b border-black/50">
                                 <div className="flex items-start justify-between gap-3">
                                     <div>
                                         <CardTitle className="text-base md:text-lg font-semibold text-slate-900">
@@ -660,7 +660,7 @@ export default function Triage() {
                                     {busy && (
                                         <Badge
                                             variant="outline"
-                                            className="rounded-full border-black/10 bg-white/80 text-[11px] font-semibold text-slate-600"
+                                            className="rounded-full border-black/50 bg-white/80 text-[11px] font-semibold text-slate-600"
                                         >
                                             <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
                                             Syncing
@@ -672,7 +672,7 @@ export default function Triage() {
                             <CardContent className="pt-4">
                                 {!doctorId ? (
                                     <div className="rounded-3xl border border-dashed border-black/15 bg-black/[0.02] px-5 py-7 text-center">
-                                        <div className="mx-auto h-12 w-12 rounded-3xl bg-black/[0.04] border border-black/10 grid place-items-center">
+                                        <div className="mx-auto h-12 w-12 rounded-3xl bg-black/[0.04] border border-black/50 grid place-items-center">
                                             <Stethoscope className="h-6 w-6 text-slate-400" />
                                         </div>
                                         <div className="mt-3 font-semibold text-slate-900">Select a doctor</div>
@@ -688,7 +688,7 @@ export default function Triage() {
                                     </div>
                                 ) : rows.length === 0 ? (
                                     <div className="rounded-3xl border border-dashed border-black/15 bg-black/[0.02] px-5 py-7 text-center">
-                                        <div className="mx-auto h-12 w-12 rounded-3xl bg-black/[0.04] border border-black/10 grid place-items-center">
+                                        <div className="mx-auto h-12 w-12 rounded-3xl bg-black/[0.04] border border-black/50 grid place-items-center">
                                             <User2 className="h-6 w-6 text-slate-400" />
                                         </div>
                                         <div className="mt-3 font-semibold text-slate-900">No appointments</div>
@@ -705,7 +705,7 @@ export default function Triage() {
                                                     type="button"
                                                     onClick={() => openVitals(row)}
                                                     className={cx(
-                                                        'w-full text-left rounded-3xl border border-black/10 bg-white/75 backdrop-blur px-4 py-3',
+                                                        'w-full text-left rounded-3xl border border-black/50 bg-white/75 backdrop-blur px-4 py-3',
                                                         'shadow-[0_10px_24px_rgba(2,6,23,0.08)] hover:bg-white/90 transition',
                                                         'active:scale-[0.995]'
                                                     )}
@@ -736,7 +736,7 @@ export default function Triage() {
                                                                         Vitals recorded
                                                                     </span>
                                                                 ) : (
-                                                                    <span className="inline-flex items-center gap-1 rounded-full bg-black/[0.03] px-2.5 py-1 text-[11px] font-semibold text-slate-700 border border-black/10">
+                                                                    <span className="inline-flex items-center gap-1 rounded-full bg-black/[0.03] px-2.5 py-1 text-[11px] font-semibold text-slate-700 border border-black/50">
                                                                         <Activity className="h-4 w-4" />
                                                                         Not recorded
                                                                     </span>
@@ -745,7 +745,7 @@ export default function Triage() {
                                                         </div>
 
                                                         <div className="shrink-0">
-                                                            <span className="inline-flex items-center rounded-full border border-black/10 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700">
+                                                            <span className="inline-flex items-center rounded-full border border-black/50 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700">
                                                                 {row?.has_vitals ? 'View / Update' : 'Record'}
                                                             </span>
                                                         </div>
@@ -797,7 +797,7 @@ export default function Triage() {
                         >
                             <div className="h-full flex flex-col min-h-0">
                                 {/* Sticky header */}
-                                <div className="sticky top-0 z-30 border-b border-black/10 bg-white/80 backdrop-blur-xl">
+                                <div className="sticky top-0 z-30 border-b border-black/50 bg-white/80 backdrop-blur-xl">
                                     <div className="px-4 md:px-8 py-4">
                                         <div className="flex items-start justify-between gap-3">
                                             <div className="min-w-0">
@@ -805,7 +805,7 @@ export default function Triage() {
                                                     <button
                                                         type="button"
                                                         onClick={closeModal}
-                                                        className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-black/[0.04] border border-black/10 hover:bg-black/[0.06]"
+                                                        className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-black/[0.04] border border-black/50 hover:bg-black/[0.06]"
                                                         title="Back"
                                                     >
                                                         <ArrowLeft className="h-5 w-5 text-slate-700" />
@@ -867,7 +867,7 @@ export default function Triage() {
                                                             Existing loaded
                                                         </span>
                                                     ) : (
-                                                        <span className="inline-flex items-center gap-1 rounded-full bg-black/[0.03] px-3 py-1 text-[11px] font-semibold text-slate-700 border border-black/10">
+                                                        <span className="inline-flex items-center gap-1 rounded-full bg-black/[0.03] px-3 py-1 text-[11px] font-semibold text-slate-700 border border-black/50">
                                                             <Activity className="h-4 w-4" />
                                                             New entry
                                                         </span>
@@ -882,7 +882,7 @@ export default function Triage() {
                                                         variant="outline"
                                                         onClick={refreshPrefill}
                                                         disabled={vitalsLoading || saving}
-                                                        className="rounded-2xl border-black/10 bg-white/85 font-semibold"
+                                                        className="rounded-2xl border-black/50 bg-white/85 font-semibold"
                                                     >
                                                         <RefreshCcw className={cx('h-4 w-4 mr-2', vitalsLoading && 'animate-spin')} />
                                                         Load latest
@@ -893,7 +893,7 @@ export default function Triage() {
                                                     type="button"
                                                     variant="outline"
                                                     onClick={closeModal}
-                                                    className="rounded-2xl border-black/10 bg-white/85 font-semibold"
+                                                    className="rounded-2xl border-black/50 bg-white/85 font-semibold"
                                                     disabled={saving}
                                                 >
                                                     <X className="h-4 w-4 mr-2" />
@@ -911,7 +911,7 @@ export default function Triage() {
                                     <div className="grid gap-4">
                                         {/* Trends (Apple Health style) */}
                                         <Card className={cx(UI.glass, 'overflow-hidden')}>
-                                            <CardHeader className="border-b border-black/10">
+                                            <CardHeader className="border-b border-black/50">
                                                 <CardTitle className="text-base md:text-lg font-semibold text-slate-900">
                                                     Trends
                                                 </CardTitle>
@@ -987,7 +987,7 @@ export default function Triage() {
 
                                         {/* Vitals Form Card */}
                                         <Card className={cx(UI.glass, 'overflow-hidden')}>
-                                            <CardHeader className="border-b border-black/10">
+                                            <CardHeader className="border-b border-black/50">
                                                 <CardTitle className="text-base md:text-lg font-semibold text-slate-900 flex items-center gap-2">
                                                     <HeartPulse className="h-5 w-5 text-slate-700" />
                                                     Vitals entry
@@ -1005,7 +1005,7 @@ export default function Triage() {
                                                             inputMode="decimal"
                                                             value={form.height_cm}
                                                             onChange={(e) => onField('height_cm', e.target.value)}
-                                                            className="h-11 rounded-2xl border-black/10 bg-white/85"
+                                                            className="h-11 rounded-2xl border-black/50 bg-white/85"
                                                         />
                                                     </Field>
 
@@ -1015,7 +1015,7 @@ export default function Triage() {
                                                             inputMode="decimal"
                                                             value={form.weight_kg}
                                                             onChange={(e) => onField('weight_kg', e.target.value)}
-                                                            className="h-11 rounded-2xl border-black/10 bg-white/85"
+                                                            className="h-11 rounded-2xl border-black/50 bg-white/85"
                                                         />
                                                     </Field>
 
@@ -1031,7 +1031,7 @@ export default function Triage() {
                                                             inputMode="decimal"
                                                             value={form.temp_c}
                                                             onChange={(e) => onField('temp_c', e.target.value)}
-                                                            className="h-11 rounded-2xl border-black/10 bg-white/85"
+                                                            className="h-11 rounded-2xl border-black/50 bg-white/85"
                                                         />
                                                     </Field>
 
@@ -1041,7 +1041,7 @@ export default function Triage() {
                                                             inputMode="numeric"
                                                             value={form.pulse}
                                                             onChange={(e) => onField('pulse', e.target.value)}
-                                                            className="h-11 rounded-2xl border-black/10 bg-white/85"
+                                                            className="h-11 rounded-2xl border-black/50 bg-white/85"
                                                         />
                                                     </Field>
 
@@ -1051,7 +1051,7 @@ export default function Triage() {
                                                             inputMode="numeric"
                                                             value={form.resp_rate}
                                                             onChange={(e) => onField('resp_rate', e.target.value)}
-                                                            className="h-11 rounded-2xl border-black/10 bg-white/85"
+                                                            className="h-11 rounded-2xl border-black/50 bg-white/85"
                                                         />
                                                     </Field>
 
@@ -1061,7 +1061,7 @@ export default function Triage() {
                                                             inputMode="decimal"
                                                             value={form.spo2}
                                                             onChange={(e) => onField('spo2', e.target.value)}
-                                                            className="h-11 rounded-2xl border-black/10 bg-white/85"
+                                                            className="h-11 rounded-2xl border-black/50 bg-white/85"
                                                         />
                                                     </Field>
 
@@ -1073,7 +1073,7 @@ export default function Triage() {
                                                                 value={form.bp_sys}
                                                                 onChange={(e) => onField('bp_sys', e.target.value)}
                                                                 placeholder="Sys"
-                                                                className="h-11 rounded-2xl border-black/10 bg-white/85"
+                                                                className="h-11 rounded-2xl border-black/50 bg-white/85"
                                                             />
                                                             <Input
                                                                 type="number"
@@ -1081,7 +1081,7 @@ export default function Triage() {
                                                                 value={form.bp_dia}
                                                                 onChange={(e) => onField('bp_dia', e.target.value)}
                                                                 placeholder="Dia"
-                                                                className="h-11 rounded-2xl border-black/10 bg-white/85"
+                                                                className="h-11 rounded-2xl border-black/50 bg-white/85"
                                                             />
                                                         </div>
                                                     </Field>
@@ -1090,7 +1090,7 @@ export default function Triage() {
                                                         <Textarea
                                                             value={form.notes}
                                                             onChange={(e) => onField('notes', e.target.value)}
-                                                            className="min-h-[100px] rounded-2xl border-black/10 bg-white/85"
+                                                            className="min-h-[100px] rounded-2xl border-black/50 bg-white/85"
                                                             placeholder="Pain score, alerts, triage notes…"
                                                         />
                                                     </Field>
@@ -1106,7 +1106,7 @@ export default function Triage() {
                                                             <Button
                                                                 type="button"
                                                                 variant="outline"
-                                                                className="rounded-2xl border-black/10 bg-white/85 font-semibold"
+                                                                className="rounded-2xl border-black/50 bg-white/85 font-semibold"
                                                                 onClick={() => setForm({ ...resetFormObj })}
                                                                 disabled={saving || vitalsLoading}
                                                             >
@@ -1129,7 +1129,7 @@ export default function Triage() {
 
                                         {/* History Entries (last 3) */}
                                         <Card className={cx(UI.glass, 'overflow-hidden')}>
-                                            <CardHeader className="border-b border-black/10">
+                                            <CardHeader className="border-b border-black/50">
                                                 <div className="flex items-start justify-between gap-3">
                                                     <div>
                                                         <CardTitle className="text-base md:text-lg font-semibold text-slate-900 flex items-center gap-2">
@@ -1144,7 +1144,7 @@ export default function Triage() {
                                                     <Button
                                                         type="button"
                                                         variant="outline"
-                                                        className="rounded-2xl border-black/10 bg-white/85 font-semibold"
+                                                        className="rounded-2xl border-black/50 bg-white/85 font-semibold"
                                                         onClick={() => loadHistory(target)}
                                                         disabled={historyLoading}
                                                     >
@@ -1163,7 +1163,7 @@ export default function Triage() {
                                                     </div>
                                                 ) : last3Entries.length === 0 ? (
                                                     <div className="rounded-3xl border border-dashed border-black/15 bg-black/[0.02] px-5 py-7 text-center">
-                                                        <div className="mx-auto h-12 w-12 rounded-3xl bg-black/[0.04] border border-black/10 grid place-items-center">
+                                                        <div className="mx-auto h-12 w-12 rounded-3xl bg-black/[0.04] border border-black/50 grid place-items-center">
                                                             <History className="h-6 w-6 text-slate-400" />
                                                         </div>
                                                         <div className="mt-3 font-semibold text-slate-900">No history</div>
@@ -1176,7 +1176,7 @@ export default function Triage() {
                                                         {last3Entries.map((h) => (
                                                             <div
                                                                 key={h.id}
-                                                                className="rounded-3xl border border-black/10 bg-white/75 backdrop-blur px-4 py-3 shadow-[0_10px_24px_rgba(2,6,23,0.08)]"
+                                                                className="rounded-3xl border border-black/50 bg-white/75 backdrop-blur px-4 py-3 shadow-[0_10px_24px_rgba(2,6,23,0.08)]"
                                                             >
                                                                 <div className="flex items-start justify-between gap-3">
                                                                     <div className="min-w-0">
@@ -1219,7 +1219,7 @@ export default function Triage() {
                                 </div>
 
                                 {/* Bottom safe-area action bar */}
-                                <div className="sticky bottom-0 z-30 border-t border-black/10 bg-white/80 backdrop-blur-xl">
+                                <div className="sticky bottom-0 z-30 border-t border-black/50 bg-white/80 backdrop-blur-xl">
                                     <div className="px-4 md:px-8 py-3 flex items-center justify-between gap-2">
                                         <div className="text-[12px] text-slate-500 flex items-center gap-2">
                                             {busy ? (
@@ -1239,7 +1239,7 @@ export default function Triage() {
                                             <Button
                                                 type="button"
                                                 variant="outline"
-                                                className="rounded-2xl border-black/10 bg-white/85 font-semibold"
+                                                className="rounded-2xl border-black/50 bg-white/85 font-semibold"
                                                 onClick={closeModal}
                                                 disabled={saving}
                                             >
@@ -1282,7 +1282,7 @@ function Field({ label, children }) {
 
 function ChipMini({ label, value }) {
     return (
-        <span className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/85 px-3 py-1">
+        <span className="inline-flex items-center gap-2 rounded-full border border-black/50 bg-white/85 px-3 py-1">
             <span className="text-slate-500">{label}</span>
             <span className="text-slate-900 tabular-nums">{value}</span>
         </span>

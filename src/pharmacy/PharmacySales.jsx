@@ -69,7 +69,7 @@ export default function PharmacySales() {
                 </div>
             </div>
 
-            <Card className="border-slate-200 rounded-2xl shadow-sm">
+            <Card className="border-slate-500 rounded-2xl shadow-sm">
                 <CardHeader className="pb-2">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div className="flex flex-wrap items-center gap-2">

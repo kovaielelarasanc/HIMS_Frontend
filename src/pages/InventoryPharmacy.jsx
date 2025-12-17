@@ -103,9 +103,9 @@ function useDebouncedValue(value, delay = 350) {
 
 // ---------------- premium UI primitives ----------------
 const GLASS_CARD =
-  'rounded-3xl border border-slate-200/70 bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60 shadow-sm'
+  'rounded-3xl border border-slate-500/70 bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60 shadow-sm'
 const GLASS_BAR =
-  'bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60 border-b border-slate-200/60'
+  'bg-white/70 backdrop-blur supports-[backdrop-filter]:bg-white/60 border-b border-slate-500/60'
 
 function KpiCard({ title, value, subtitle, icon: Icon, iconClass = 'text-slate-400' }) {
   return (
@@ -127,7 +127,7 @@ function Donut({ label, value, total, accent = '#0ea5e9' }) {
   return (
     <div className="flex items-center gap-3">
       <div
-        className="h-12 w-12 rounded-full border border-slate-200 shadow-inner"
+        className="h-12 w-12 rounded-full border border-slate-500 shadow-inner"
         style={{
           background: `conic-gradient(${accent} ${pct}%, #e2e8f0 0)`,
         }}
@@ -152,7 +152,7 @@ function MiniBar({ label, value, max, accent = 'bg-sky-500' }) {
         <span className="text-slate-600">{label}</span>
         <span className="text-slate-900 font-medium">{formatNumber(value)}</span>
       </div>
-      <div className="h-2 rounded-full bg-slate-100 overflow-hidden border border-slate-200/60">
+      <div className="h-2 rounded-full bg-slate-100 overflow-hidden border border-slate-500/60">
         <div className={cx('h-full rounded-full', accent)} style={{ width: `${pct}%` }} />
       </div>
     </div>
@@ -802,7 +802,7 @@ export default function InventoryPharmacy() {
           {/* MAIN */}
           <div className="space-y-4">
             <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-              <TabsList className="w-full justify-start bg-white/70 backdrop-blur border border-slate-200/70 rounded-2xl p-1 overflow-x-auto">
+              <TabsList className="w-full justify-start bg-white/70 backdrop-blur border border-slate-500/70 rounded-2xl p-1 overflow-x-auto">
                 <TabsTrigger className="rounded-xl px-4 py-2 text-xs" value="dashboard">Dashboard</TabsTrigger>
                 <TabsTrigger className="rounded-xl px-4 py-2 text-xs" value="items">Items</TabsTrigger>
                 <TabsTrigger className="rounded-xl px-4 py-2 text-xs" value="locations">Locations</TabsTrigger>
@@ -883,7 +883,7 @@ export default function InventoryPharmacy() {
                                 {expiryAlerts.slice(0, 30).map((b) => (
                                   <div
                                     key={`near-${b.id}`}
-                                    className="flex items-center justify-between rounded-2xl border border-slate-200 px-3 py-2 bg-slate-50"
+                                    className="flex items-center justify-between rounded-2xl border border-slate-500 px-3 py-2 bg-slate-50"
                                   >
                                     <div className="min-w-0">
                                       <p className="text-sm font-medium text-slate-900 truncate">
@@ -937,7 +937,7 @@ export default function InventoryPharmacy() {
                         />
                       </div>
 
-                      <div className="space-y-3 rounded-2xl border border-slate-200/70 bg-white/60 p-3">
+                      <div className="space-y-3 rounded-2xl border border-slate-500/70 bg-white/60 p-3">
                         <MiniBar label="Low stock items" value={lowStock.length} max={Math.max(1, lowStock.length + maxStock.length)} accent="bg-amber-500" />
                         <MiniBar label="Over-stock items" value={maxStock.length} max={Math.max(1, lowStock.length + maxStock.length)} accent="bg-sky-500" />
                         <MiniBar label="Quarantine batches" value={quarantineStock.length} max={Math.max(1, quarantineStock.length + expiredAlerts.length)} accent="bg-slate-700" />
@@ -1043,7 +1043,7 @@ export default function InventoryPharmacy() {
                     </div>
 
                     {/* Desktop table */}
-                    <div className="hidden md:block border border-slate-200/70 rounded-2xl overflow-hidden bg-white/70 backdrop-blur">
+                    <div className="hidden md:block border border-slate-500/70 rounded-2xl overflow-hidden bg-white/70 backdrop-blur">
                       <div className="grid grid-cols-[2fr,1.2fr,1fr,1fr,0.7fr] px-3 py-2 text-xs font-semibold text-slate-500 bg-slate-50 sticky top-0 z-10">
                         <span>Name / code</span>
                         <span>Generic / form</span>
@@ -1148,7 +1148,7 @@ export default function InventoryPharmacy() {
                         </div>
                       ) : (
                         items.map((it) => (
-                          <div key={it.id} className="rounded-2xl border border-slate-200/70 bg-white/70 backdrop-blur p-3 flex items-start justify-between gap-3">
+                          <div key={it.id} className="rounded-2xl border border-slate-500/70 bg-white/70 backdrop-blur p-3 flex items-start justify-between gap-3">
                             <div className="min-w-0">
                               <div className="font-semibold text-slate-900 truncate">{it.name}</div>
                               <div className="text-xs text-slate-500 flex items-center gap-2">
@@ -1202,7 +1202,7 @@ export default function InventoryPharmacy() {
                     </Button>
                   </CardHeader>
                   <CardContent>
-                    <div className="border border-slate-200/70 rounded-2xl overflow-hidden bg-white/70 backdrop-blur">
+                    <div className="border border-slate-500/70 rounded-2xl overflow-hidden bg-white/70 backdrop-blur">
                       <div className="grid grid-cols-[0.6fr,1.4fr,1fr] px-3 py-2 text-xs font-semibold text-slate-500 bg-slate-50 sticky top-0 z-10">
                         <span>Code</span>
                         <span>Name</span>
@@ -1267,7 +1267,7 @@ export default function InventoryPharmacy() {
                   </CardHeader>
 
                   <CardContent>
-                    <div className="border border-slate-200/70 rounded-2xl overflow-hidden bg-white/70 backdrop-blur">
+                    <div className="border border-slate-500/70 rounded-2xl overflow-hidden bg-white/70 backdrop-blur">
                       <div className="grid grid-cols-[0.8fr,1.4fr,1.4fr,0.8fr] px-3 py-2 text-xs font-semibold text-slate-500 bg-slate-50 sticky top-0 z-10">
                         <span>Code</span>
                         <span>Name / contact</span>
@@ -1351,14 +1351,14 @@ export default function InventoryPharmacy() {
 
                   <CardContent className="space-y-4">
                     <Tabs value={stockView} onValueChange={setStockView} className="space-y-3">
-                      <TabsList className="bg-white/70 border border-slate-200/70 rounded-2xl p-1 inline-flex gap-1">
+                      <TabsList className="bg-white/70 border border-slate-500/70 rounded-2xl p-1 inline-flex gap-1">
                         <TabsTrigger className="rounded-xl px-4 py-2 text-xs" value="saleable">Saleable stock</TabsTrigger>
                         <TabsTrigger className="rounded-xl px-4 py-2 text-xs" value="quarantine">Expired & quarantine</TabsTrigger>
                       </TabsList>
 
                       {/* SALEABLE */}
                       <TabsContent value="saleable" className="space-y-3">
-                        <div className="border border-slate-200/70 rounded-2xl overflow-hidden bg-white/70 backdrop-blur">
+                        <div className="border border-slate-500/70 rounded-2xl overflow-hidden bg-white/70 backdrop-blur">
                           <div className="grid grid-cols-[2fr,1.2fr,1fr,0.8fr] px-3 py-2 text-xs font-semibold text-slate-500 bg-slate-50 sticky top-0 z-10">
                             <span>Item</span>
                             <span>Location</span>
@@ -1400,7 +1400,7 @@ export default function InventoryPharmacy() {
 
                       {/* QUARANTINE */}
                       <TabsContent value="quarantine" className="space-y-3">
-                        <div className="border border-slate-200/70 rounded-2xl overflow-hidden bg-white/70 backdrop-blur">
+                        <div className="border border-slate-500/70 rounded-2xl overflow-hidden bg-white/70 backdrop-blur">
                           <div className="grid grid-cols-[2fr,1.2fr,1fr,1fr] px-3 py-2 text-xs font-semibold text-slate-500 bg-slate-50 sticky top-0 z-10">
                             <span>Item / batch</span>
                             <span>Location</span>
@@ -1529,7 +1529,7 @@ export default function InventoryPharmacy() {
                   </CardHeader>
 
                   <CardContent>
-                    <div className="border border-slate-200/70 rounded-2xl overflow-hidden bg-white/70 backdrop-blur">
+                    <div className="border border-slate-500/70 rounded-2xl overflow-hidden bg-white/70 backdrop-blur">
                       <div className="grid grid-cols-[1.1fr,1.2fr,1.2fr,0.9fr,0.9fr] px-3 py-2 text-xs font-semibold text-slate-500 bg-slate-50 sticky top-0 z-10">
                         <span>Return no.</span>
                         <span>Type / supplier</span>
@@ -1609,7 +1609,7 @@ export default function InventoryPharmacy() {
                   </CardHeader>
 
                   <CardContent>
-                    <div className="border border-slate-200/70 rounded-2xl overflow-hidden bg-white/70 backdrop-blur">
+                    <div className="border border-slate-500/70 rounded-2xl overflow-hidden bg-white/70 backdrop-blur">
                       <div className="grid grid-cols-[1.1fr,1.4fr,1fr,1.1fr,0.9fr] px-3 py-2 text-xs font-semibold text-slate-500 bg-slate-50 sticky top-0 z-10">
                         <span>Date / type</span>
                         <span>Item / batch</span>
@@ -1737,7 +1737,7 @@ export default function InventoryPharmacy() {
                   <ArrowRight className="w-4 h-4 opacity-70" />
                 </Button>
 
-                <div className="mt-3 rounded-2xl border border-slate-200/70 bg-white/60 p-3">
+                <div className="mt-3 rounded-2xl border border-slate-500/70 bg-white/60 p-3">
                   <div className="text-xs text-slate-500">Active location</div>
                   <div className="text-sm font-semibold text-slate-900 truncate">
                     {activeLocation?.name || 'All locations'}
@@ -1754,7 +1754,7 @@ export default function InventoryPharmacy() {
         {/* MOBILE FAB */}
         <button
           type="button"
-          className="lg:hidden fixed bottom-6 right-5 z-40 rounded-full shadow-lg border border-slate-200 bg-white/90 backdrop-blur px-4 py-3 flex items-center gap-2"
+          className="lg:hidden fixed bottom-6 right-5 z-40 rounded-full shadow-lg border border-slate-500 bg-white/90 backdrop-blur px-4 py-3 flex items-center gap-2"
           onClick={() => setQuickSheetOpen(true)}
           aria-label="Quick actions"
         >
@@ -1803,7 +1803,7 @@ export default function InventoryPharmacy() {
                 <ArrowRight className="w-4 h-4 opacity-70" />
               </Button>
 
-              <div className="mt-4 rounded-2xl border border-slate-200/70 bg-slate-50 p-3">
+              <div className="mt-4 rounded-2xl border border-slate-500/70 bg-slate-50 p-3">
                 <div className="text-xs text-slate-500">Bulk import options</div>
                 <div className="mt-2 flex items-center justify-between">
                   <div>
@@ -2061,7 +2061,7 @@ export default function InventoryPharmacy() {
                 />
               </div>
 
-              <div className="rounded-2xl border border-slate-200/70 bg-slate-50 p-3 text-xs text-slate-600 flex items-start gap-2">
+              <div className="rounded-2xl border border-slate-500/70 bg-slate-50 p-3 text-xs text-slate-600 flex items-start gap-2">
                 <Info className="h-4 w-4 mt-0.5 text-slate-500" />
                 Tip: Use scanner → it fills this input → press Enter to open the item.
               </div>
@@ -2161,7 +2161,7 @@ export default function InventoryPharmacy() {
                 ) : (
                   <div className="space-y-2 max-h-[280px] overflow-auto pr-1">
                     {returnLines.map((ln, idx) => (
-                      <div key={idx} className="grid gap-2 rounded-2xl border border-slate-200 p-2 bg-white/70 sm:grid-cols-[1.6fr,1fr,0.8fr,0.8fr,0.4fr]">
+                      <div key={idx} className="grid gap-2 rounded-2xl border border-slate-500 p-2 bg-white/70 sm:grid-cols-[1.6fr,1fr,0.8fr,0.8fr,0.4fr]">
                         <Select value={ln.item_id ? String(ln.item_id) : ''} onValueChange={(val) => updateReturnLine(idx, 'item_id', val)}>
                           <SelectTrigger className="bg-white h-10 rounded-2xl">
                             <SelectValue placeholder="Item" />

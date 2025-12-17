@@ -52,7 +52,7 @@ const STATUS_COLORS = {
 }
 
 const PRIORITY_COLORS = {
-    Elective: 'bg-slate-50 text-slate-700 border-slate-200',
+    Elective: 'bg-slate-50 text-slate-700 border-slate-500',
     Emergency: 'bg-red-50 text-red-700 border-red-200',
 }
 
@@ -60,7 +60,7 @@ function StatusBadge({ status }) {
     if (!status) return null
     const cls =
         STATUS_COLORS[status] ||
-        'bg-slate-50 text-slate-700 border-slate-200'
+        'bg-slate-50 text-slate-700 border-slate-500'
     const label = status
         .replace('_', ' ')
         .replace(/\b\w/g, (c) => c.toUpperCase())
@@ -78,7 +78,7 @@ function PriorityBadge({ priority }) {
     if (!priority) return null
     const cls =
         PRIORITY_COLORS[priority] ||
-        'bg-slate-50 text-slate-700 border-slate-200'
+        'bg-slate-50 text-slate-700 border-slate-500'
     return (
         <span
             className={`inline-flex items-center rounded-full border px-2 py-0.5 text-[11px] font-semibold uppercase tracking-wide ${cls}`}
@@ -95,7 +95,7 @@ function BedFilterPanel({ selectedBedId, onSelectBed }) {
     return (
         <motion.div
             layout
-            className="flex h-full flex-col rounded-2xl border border-slate-200 bg-white/90 p-3 shadow-sm backdrop-blur-sm md:p-4"
+            className="flex h-full flex-col rounded-2xl border border-slate-500 bg-white/90 p-3 shadow-sm backdrop-blur-sm md:p-4"
         >
             <div className="flex items-center justify-between gap-2 border-b border-slate-100 pb-3">
                 <div>
@@ -116,7 +116,7 @@ function BedFilterPanel({ selectedBedId, onSelectBed }) {
                     value={selectedBedId ? Number(selectedBedId) : null}
                     onChange={(bedId) => onSelectBed(bedId || null)}
                 />
-                <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50/80 px-3 py-2.5 text-xs text-slate-600">
+                <div className="rounded-xl border border-dashed border-slate-500 bg-slate-50/80 px-3 py-2.5 text-xs text-slate-600">
                     {selectedBedId ? (
                         <>
                             Showing OT cases for{' '}
@@ -158,7 +158,7 @@ function ScheduleCards({
     return (
         <motion.div
             layout
-            className="flex h-full flex-col rounded-2xl border border-slate-200 bg-slate-50/60 shadow-sm backdrop-blur-sm"
+            className="flex h-full flex-col rounded-2xl border border-slate-500 bg-slate-50/60 shadow-sm backdrop-blur-sm"
         >
             {/* Header */}
             <div className="flex items-center justify-between gap-3 border-b border-slate-100 px-3 py-3 md:px-4">
@@ -207,7 +207,7 @@ function ScheduleCards({
                     <motion.div
                         initial={{ opacity: 0, y: 8 }}
                         animate={{ opacity: 1, y: 0 }}
-                        className="mt-6 flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-200 bg-white/70 px-4 py-8 text-center"
+                        className="mt-6 flex flex-col items-center justify-center gap-2 rounded-2xl border border-dashed border-slate-500 bg-white/70 px-4 py-8 text-center"
                     >
                         <CalendarDays className="h-6 w-6 text-slate-400" />
                         <p className="text-sm font-medium text-slate-700">
@@ -270,7 +270,7 @@ function ScheduleCards({
                                     animate={{ opacity: 1, y: 0 }}
                                     exit={{ opacity: 0, y: -8 }}
                                     transition={{ duration: 0.2 }}
-                                    className="group rounded-2xl border border-slate-200 bg-white px-3 py-3 text-sm shadow-sm ring-1 ring-transparent transition hover:border-sky-200 hover:shadow-md hover:ring-sky-100 md:px-4 md:py-4"
+                                    className="group rounded-2xl border border-slate-500 bg-white px-3 py-3 text-sm shadow-sm ring-1 ring-transparent transition hover:border-sky-200 hover:shadow-md hover:ring-sky-100 md:px-4 md:py-4"
                                 >
                                     {/* Row 1: Time + badges */}
                                     <div className="flex flex-wrap items-center justify-between gap-2">
@@ -367,7 +367,7 @@ function ScheduleCards({
                                         <div className="flex flex-col gap-2 md:flex-row md:gap-2">
                                             <button
                                                 type="button"
-                                                className="inline-flex items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 hover:border-sky-400 hover:text-sky-800"
+                                                className="inline-flex items-center justify-center gap-1.5 rounded-full border border-slate-500 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 hover:border-sky-400 hover:text-sky-800"
                                                 onClick={() => onEdit(s)}
                                             >
                                                 Edit
@@ -377,7 +377,7 @@ function ScheduleCards({
                                                 type="button"
                                                 onClick={() => onOpenCase(s)}
                                                 className={`inline-flex items-center justify-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ${s.case_id
-                                                    ? 'border-slate-200 bg-white text-slate-900 hover:border-sky-400 hover:text-sky-800'
+                                                    ? 'border-slate-500 bg-white text-slate-900 hover:border-sky-400 hover:text-sky-800'
                                                     : 'border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700'
                                                     }`}
                                             >
@@ -623,7 +623,7 @@ function ScheduleModal({
                                             </label>
                                             <input
                                                 type="date"
-                                                className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                                className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-2 text-sm text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                                 value={form.date}
                                                 onChange={(e) =>
                                                     handleChange('date', e.target.value)
@@ -635,7 +635,7 @@ function ScheduleModal({
                                                 Priority
                                             </label>
                                             <select
-                                                className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                                className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-2 text-sm text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                                 value={form.priority}
                                                 onChange={(e) =>
                                                     handleChange('priority', e.target.value)
@@ -655,7 +655,7 @@ function ScheduleModal({
                                             </label>
                                             <input
                                                 type="time"
-                                                className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                                className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-2 text-sm text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                                 value={form.planned_start_time}
                                                 onChange={(e) =>
                                                     handleChange(
@@ -671,7 +671,7 @@ function ScheduleModal({
                                             </label>
                                             <input
                                                 type="time"
-                                                className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                                className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-2 text-sm text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                                 value={form.planned_end_time}
                                                 onChange={(e) =>
                                                     handleChange(
@@ -704,7 +704,7 @@ function ScheduleModal({
                                             </label>
                                             <input
                                                 type="number"
-                                                className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                                className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-2 text-sm text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                                 value={form.admission_id}
                                                 onChange={(e) =>
                                                     handleChange(
@@ -767,7 +767,7 @@ function ScheduleModal({
                                         </label>
                                         <textarea
                                             rows={2}
-                                            className="w-full resize-none rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                            className="w-full resize-none rounded-lg border border-slate-500 bg-white px-2.5 py-2 text-sm text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                             value={form.procedure_name}
                                             onChange={(e) =>
                                                 handleChange(
@@ -785,7 +785,7 @@ function ScheduleModal({
                                                 Side
                                             </label>
                                             <select
-                                                className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                                className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-2 text-sm text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                                 value={form.side}
                                                 onChange={(e) =>
                                                     handleChange('side', e.target.value)
@@ -836,7 +836,7 @@ function ScheduleModal({
                                         </label>
                                         <textarea
                                             rows={2}
-                                            className="w-full resize-none rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-sm text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                            className="w-full resize-none rounded-lg border border-slate-500 bg-white px-2.5 py-2 text-sm text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                             value={form.notes}
                                             onChange={(e) =>
                                                 handleChange('notes', e.target.value)
@@ -859,7 +859,7 @@ function ScheduleModal({
                                 <button
                                     type="button"
                                     onClick={onClose}
-                                    className="inline-flex items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-50"
+                                    className="inline-flex items-center justify-center gap-1.5 rounded-full border border-slate-500 bg-white px-3.5 py-1.5 text-xs font-semibold text-slate-800 hover:bg-slate-50"
                                     disabled={submitting}
                                 >
                                     Cancel
@@ -954,7 +954,7 @@ function ProcedurePicker({ primaryId, additionalIds, onChange }) {
                     <Search className="pointer-events-none absolute left-2 top-1.5 h-3.5 w-3.5 text-slate-400" />
                     <input
                         type="text"
-                        className="w-full rounded-lg border border-slate-200 bg-white pl-7 pr-1.5 py-1.5 text-[11px] text-slate-800 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                        className="w-full rounded-lg border border-slate-500 bg-white pl-7 pr-1.5 py-1.5 text-[11px] text-slate-800 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                         placeholder="Search..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
@@ -962,7 +962,7 @@ function ProcedurePicker({ primaryId, additionalIds, onChange }) {
                 </div>
             </div>
 
-            <div className="space-y-2 rounded-xl border border-slate-200 bg-slate-50/80 p-2">
+            <div className="space-y-2 rounded-xl border border-slate-500 bg-slate-50/80 p-2">
                 {loading && (
                     <div className="text-[11px] text-slate-500">
                         Loading procedures...
@@ -983,7 +983,7 @@ function ProcedurePicker({ primaryId, additionalIds, onChange }) {
                                 Primary procedure
                             </div>
                             <select
-                                className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-[11px] text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                 value={primaryId || ''}
                                 onChange={(e) => handlePrimaryChange(e.target.value)}
                             >
@@ -1170,7 +1170,7 @@ export default function OtTheatreSchedulePage() {
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.18 }}
-                    className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white/90 px-3 py-3 shadow-sm md:px-4 md:py-4"
+                    className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-500 bg-white/90 px-3 py-3 shadow-sm md:px-4 md:py-4"
                 >
                     <div className="space-y-1">
                         <h1 className="text-base font-semibold text-slate-900 md:text-lg">
@@ -1183,7 +1183,7 @@ export default function OtTheatreSchedulePage() {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2">
-                        <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50/80 px-3 py-1.5">
+                        <div className="flex items-center gap-2 rounded-full border border-slate-500 bg-slate-50/80 px-3 py-1.5">
                             <CalendarDays className="h-4 w-4 text-slate-500" />
                             <input
                                 type="date"
@@ -1195,7 +1195,7 @@ export default function OtTheatreSchedulePage() {
                         <button
                             type="button"
                             onClick={loadSchedule}
-                            className="inline-flex items-center justify-center gap-1.5 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 hover:border-sky-400 hover:text-sky-800"
+                            className="inline-flex items-center justify-center gap-1.5 rounded-full border border-slate-500 bg-white px-3 py-1.5 text-xs font-semibold text-slate-800 hover:border-sky-400 hover:text-sky-800"
                         >
                             <RefreshCcw className="h-3.5 w-3.5" />
                             Refresh

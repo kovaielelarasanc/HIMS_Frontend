@@ -254,7 +254,7 @@ export default function BrandingAndTemplates() {
                 </div>
             </div>
 
-            <Card className="border border-slate-200 rounded-2xl shadow-sm bg-white">
+            <Card className="border border-slate-500 rounded-2xl shadow-sm bg-white">
                 <CardHeader className="pb-2">
                     <CardTitle className="text-sm font-semibold text-slate-900">
                         Global Branding &amp; PDF Settings
@@ -421,7 +421,7 @@ export default function BrandingAndTemplates() {
                                             <img
                                                 src={branding.logo_url}
                                                 alt="Logo preview"
-                                                className="h-8 w-auto rounded-sm border border-slate-200 bg-white"
+                                                className="h-8 w-auto rounded-sm border border-slate-500 bg-white"
                                             />
                                         )}
                                         <span className="text-xs text-slate-500">
@@ -455,7 +455,7 @@ export default function BrandingAndTemplates() {
                                                 <img
                                                     src={branding.logo_url}
                                                     alt="Logo"
-                                                    className="h-8 w-auto rounded-sm border border-slate-200 bg-white mb-1"
+                                                    className="h-8 w-auto rounded-sm border border-slate-500 bg-white mb-1"
                                                 />
                                             )}
                                             <label className="w-full">
@@ -490,7 +490,7 @@ export default function BrandingAndTemplates() {
                                                 <img
                                                     src={branding.login_logo_url}
                                                     alt="Login logo"
-                                                    className="h-8 w-auto rounded-sm border border-slate-200 bg-white mb-1"
+                                                    className="h-8 w-auto rounded-sm border border-slate-500 bg-white mb-1"
                                                 />
                                             )}
                                             <label className="w-full">
@@ -525,7 +525,7 @@ export default function BrandingAndTemplates() {
                                                 <img
                                                     src={branding.favicon_url}
                                                     alt="Favicon"
-                                                    className="h-6 w-6 rounded-sm border border-slate-200 bg-white mb-1"
+                                                    className="h-6 w-6 rounded-sm border border-slate-500 bg-white mb-1"
                                                 />
                                             )}
                                             <label className="w-full">
@@ -562,7 +562,7 @@ export default function BrandingAndTemplates() {
                                                 <img
                                                     src={branding.pdf_header_url}
                                                     alt="PDF header"
-                                                    className="h-12 w-auto rounded-sm border border-slate-200 bg-white mb-1"
+                                                    className="h-12 w-auto rounded-sm border border-slate-500 bg-white mb-1"
                                                 />
                                             )}
                                             <label className="w-full">
@@ -597,7 +597,7 @@ export default function BrandingAndTemplates() {
                                                 <img
                                                     src={branding.pdf_footer_url}
                                                     alt="PDF footer"
-                                                    className="h-12 w-auto rounded-sm border border-slate-200 bg-white mb-1"
+                                                    className="h-12 w-auto rounded-sm border border-slate-500 bg-white mb-1"
                                                 />
                                             )}
                                             <label className="w-full">

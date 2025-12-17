@@ -28,7 +28,7 @@ const fromSel = (v) => (v === NONE ? '' : v)
 
 function GlassShell({ children }) {
   return (
-    <div className="rounded-[28px] border border-slate-200/70 bg-gradient-to-b from-white to-slate-50 shadow-[0_18px_50px_rgba(2,6,23,0.08)] overflow-hidden">
+    <div className="rounded-[28px] border border-slate-500/70 bg-gradient-to-b from-white to-slate-50 shadow-[0_18px_50px_rgba(2,6,23,0.08)] overflow-hidden">
       {children}
     </div>
   )
@@ -42,7 +42,7 @@ function KpiTile({ label, children, tone = 'default' }) {
       ? 'border-emerald-200 bg-emerald-50/70'
       : tone === 'amber'
         ? 'border-amber-200 bg-amber-50/70'
-        : 'border-slate-200'
+        : 'border-slate-500'
   return (
     <div className={`${base} ${toneCls}`}>
       <div className="text-[11px] text-slate-500">{label}</div>
@@ -53,7 +53,7 @@ function KpiTile({ label, children, tone = 'default' }) {
 
 function Segmented({ value, onChange, items }) {
   return (
-    <div className="inline-flex rounded-full border border-slate-200 bg-white/70 backdrop-blur p-1">
+    <div className="inline-flex rounded-full border border-slate-500 bg-white/70 backdrop-blur p-1">
       {items.map((it) => {
         const active = it.value === value
         return (
@@ -184,7 +184,7 @@ export default function SupplierStatementScreen() {
 
   if (!canView) {
     return (
-      <Card className="rounded-3xl border-slate-200 shadow-sm">
+      <Card className="rounded-3xl border-slate-500 shadow-sm">
         <CardHeader className="space-y-1">
           <CardTitle className="text-sm font-semibold text-slate-900">Supplier Statement</CardTitle>
           <p className="text-xs text-slate-500">Permission required.</p>
@@ -205,7 +205,7 @@ export default function SupplierStatementScreen() {
   return (
     <GlassShell>
       {/* Premium header */}
-      <div className="px-4 sm:px-6 py-4 bg-white/70 backdrop-blur-xl border-b border-slate-200/60">
+      <div className="px-4 sm:px-6 py-4 bg-white/70 backdrop-blur-xl border-b border-slate-500/60">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-1">
             <div className="text-base sm:text-lg font-semibold text-slate-900">
@@ -223,7 +223,7 @@ export default function SupplierStatementScreen() {
 
           <div className="flex flex-col sm:flex-row sm:items-center gap-2">
             <Select value={toSel(supplierId)} onValueChange={(v) => setSupplierId(fromSel(v))}>
-              <SelectTrigger className="h-10 bg-white rounded-full w-full sm:w-80 border-slate-200">
+              <SelectTrigger className="h-10 bg-white rounded-full w-full sm:w-80 border-slate-500">
                 <SelectValue placeholder="Select supplier" />
               </SelectTrigger>
               <SelectContent>
@@ -249,7 +249,7 @@ export default function SupplierStatementScreen() {
             <Button
               size="sm"
               variant="outline"
-              className="h-10 rounded-full gap-2 border-slate-200 bg-white/70 backdrop-blur"
+              className="h-10 rounded-full gap-2 border-slate-500 bg-white/70 backdrop-blur"
               disabled={!supplierId || !canExport}
               title={!canExport ? 'No permission to export' : undefined}
               onClick={() =>
@@ -286,7 +286,7 @@ export default function SupplierStatementScreen() {
           <div className="relative w-full sm:max-w-md">
             <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
             <Input
-              className="h-10 pl-9 bg-white rounded-full border-slate-200"
+              className="h-10 pl-9 bg-white rounded-full border-slate-500"
               placeholder="Search invoice / GRN / method / ref / remark…"
               value={q}
               onChange={(e) => setQ(e.target.value)}
@@ -316,7 +316,7 @@ export default function SupplierStatementScreen() {
 
         {/* Content */}
         {!busy && !supplierId && (
-          <div className="rounded-3xl border border-slate-200 bg-white/80 backdrop-blur p-4 text-sm text-slate-500">
+          <div className="rounded-3xl border border-slate-500 bg-white/80 backdrop-blur p-4 text-sm text-slate-500">
             Select a supplier to load statement.
           </div>
         )}
@@ -329,8 +329,8 @@ export default function SupplierStatementScreen() {
             ].join(' ')}
           >
             {(view === 'both' || view === 'invoices') && (
-              <div className="rounded-3xl border border-slate-200 bg-white/85 backdrop-blur overflow-hidden">
-                <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <div className="rounded-3xl border border-slate-500 bg-white/85 backdrop-blur overflow-hidden">
+                <div className="px-4 py-3 bg-slate-50 border-b border-slate-500 flex items-center justify-between">
                   <div className="text-sm font-semibold text-slate-800">Invoices</div>
                   <div className="text-xs text-slate-500">
                     {filteredInvoices.length} item(s)
@@ -378,7 +378,7 @@ export default function SupplierStatementScreen() {
                     {/* Mobile cards */}
                     <div className="md:hidden max-h-[520px] overflow-auto p-3 space-y-2">
                       {filteredInvoices.slice(0, 50).map((inv) => (
-                        <div key={inv.id} className="rounded-3xl border border-slate-200 bg-white p-4">
+                        <div key={inv.id} className="rounded-3xl border border-slate-500 bg-white p-4">
                           <div className="font-semibold text-slate-900">
                             {inv.invoice_number || inv.grn_number || `#${inv.id}`}
                           </div>
@@ -408,8 +408,8 @@ export default function SupplierStatementScreen() {
             )}
 
             {(view === 'both' || view === 'payments') && (
-              <div className="rounded-3xl border border-slate-200 bg-white/85 backdrop-blur overflow-hidden">
-                <div className="px-4 py-3 bg-slate-50 border-b border-slate-200 flex items-center justify-between">
+              <div className="rounded-3xl border border-slate-500 bg-white/85 backdrop-blur overflow-hidden">
+                <div className="px-4 py-3 bg-slate-50 border-b border-slate-500 flex items-center justify-between">
                   <div className="text-sm font-semibold text-slate-800">Payments</div>
                   <div className="text-xs text-slate-500">
                     {filteredPayments.length} item(s)
@@ -449,11 +449,11 @@ export default function SupplierStatementScreen() {
         )}
 
         {/* Mobile sticky actions */}
-        <div className="sm:hidden sticky bottom-0 -mx-4 px-4 py-3 bg-white/70 backdrop-blur-xl border-t border-slate-200/60 flex items-center gap-2">
+        <div className="sm:hidden sticky bottom-0 -mx-4 px-4 py-3 bg-white/70 backdrop-blur-xl border-t border-slate-500/60 flex items-center gap-2">
           <Button
             size="sm"
             variant="outline"
-            className="h-11 rounded-full w-full border-slate-200 bg-white"
+            className="h-11 rounded-full w-full border-slate-500 bg-white"
             onClick={load}
             disabled={!supplierId || busy}
           >

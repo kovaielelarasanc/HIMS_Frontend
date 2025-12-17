@@ -485,7 +485,7 @@ export default function Dashboard() {
                     <motion.div
                         className={cn(
                             "flex flex-col md:flex-row md:items-start md:justify-between gap-3",
-                            "rounded-2xl border border-slate-200/70 bg-white/90 backdrop-blur-sm p-3 md:p-5 shadow-sm"
+                            "rounded-2xl border border-slate-500/70 bg-white/90 backdrop-blur-sm p-3 md:p-5 shadow-sm"
                         )}
                     >
                         <div className="space-y-2 md:max-w-md">
@@ -513,7 +513,7 @@ export default function Dashboard() {
                                     {capabilityChips.map((chip) => (
                                         <span
                                             key={chip.key}
-                                            className="inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-200 px-2 py-0.5 text-[10px] text-slate-700"
+                                            className="inline-flex items-center gap-1 rounded-full bg-slate-100 border border-slate-500 px-2 py-0.5 text-[10px] text-slate-700"
                                         >
                                             <span className="flex h-4 w-4 items-center justify-center rounded-full bg-white shadow-inner">
                                                 <chip.icon className="w-3 h-3" />
@@ -557,7 +557,7 @@ export default function Dashboard() {
                                             "px-2.5 py-1 rounded-full text-[10px] font-medium border transition-colors",
                                             activePreset === p.key
                                                 ? "bg-sky-600 text-white border-sky-600 shadow-sm"
-                                                : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                                                : "bg-white text-slate-700 border-slate-500 hover:bg-slate-50"
                                         )}
                                     >
                                         {p.label}
@@ -567,7 +567,7 @@ export default function Dashboard() {
 
                             {/* Date range + refresh */}
                             <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                                <div className="flex flex-1 items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-2 shadow-inner">
+                                <div className="flex flex-1 items-center gap-2 rounded-xl border border-slate-500 bg-white px-2.5 py-2 shadow-inner">
                                     <Calendar className="w-4 h-4 text-slate-500 shrink-0" />
                                     <div className="flex flex-col gap-1 w-full text-[11px] text-slate-700 sm:flex-row sm:items-center">
                                         <div className="flex items-center gap-1 w-full">
@@ -576,7 +576,7 @@ export default function Dashboard() {
                                                 type="date"
                                                 value={dateFrom}
                                                 onChange={handleDateChange(setDateFrom)}
-                                                className="w-full border border-slate-200 bg-slate-50 rounded px-1.5 py-0.5 text-[11px] text-slate-800 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                                className="w-full border border-slate-500 bg-slate-50 rounded px-1.5 py-0.5 text-[11px] text-slate-800 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                             />
                                         </div>
                                         <div className="flex items-center gap-1 w-full">
@@ -585,7 +585,7 @@ export default function Dashboard() {
                                                 type="date"
                                                 value={dateTo}
                                                 onChange={handleDateChange(setDateTo)}
-                                                className="w-full border border-slate-200 bg-slate-50 rounded px-1.5 py-0.5 text-[11px] text-slate-800 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                                className="w-full border border-slate-500 bg-slate-50 rounded px-1.5 py-0.5 text-[11px] text-slate-800 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                             />
                                         </div>
                                     </div>
@@ -629,7 +629,7 @@ export default function Dashboard() {
                     {/* AT A GLANCE STRIP */}
                     {!isLoading && data && quickPills.length > 0 && (
                         <motion.div
-                            className="rounded-2xl border border-slate-200 bg-white px-2.5 py-3 shadow-sm"
+                            className="rounded-2xl border border-slate-500 bg-white px-2.5 py-3 shadow-sm"
                             variants={blockVariants}
                             initial="hidden"
                             animate="visible"
@@ -1029,7 +1029,7 @@ function MetricWidgetCard({ widget }) {
     return (
         <Card
             className={cn(
-                "rounded-2xl shadow-sm overflow-hidden border border-slate-200 bg-white",
+                "rounded-2xl shadow-sm overflow-hidden border border-slate-500 bg-white",
                 "hover:border-sky-200 transition-colors"
             )}
         >
@@ -1040,7 +1040,7 @@ function MetricWidgetCard({ widget }) {
                 </CardTitle>
                 <Badge
                     variant="outline"
-                    className="text-[9px] uppercase tracking-wide border-slate-200 text-slate-500"
+                    className="text-[9px] uppercase tracking-wide border-slate-500 text-slate-500"
                 >
                     {widget.code}
                 </Badge>
@@ -1072,7 +1072,7 @@ function ChartWidgetCard({ widget }) {
             { label: "Available", value: d.available || 0 },
         ];
         return (
-            <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
+            <Card className="rounded-2xl shadow-sm border border-slate-500 bg-white">
                 <CardHeader className="pb-2 flex flex-row items-center justify-between">
                     <CardTitle className="text-base font-semibold text-slate-800">
                         {widget.title}
@@ -1128,7 +1128,7 @@ function ChartWidgetCard({ widget }) {
     if (chartType === "pie") {
         const data = Array.isArray(widget.data) ? widget.data : [];
         return (
-            <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
+            <Card className="rounded-2xl shadow-sm border border-slate-500 bg-white">
                 <CardHeader className="pb-2 flex flex-row items-center justify-between">
                     <CardTitle className="text-base font-semibold text-slate-800">
                         {widget.title}
@@ -1184,7 +1184,7 @@ function ChartWidgetCard({ widget }) {
         const xKey = widget.config?.x_key || "label";
 
         return (
-            <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
+            <Card className="rounded-2xl shadow-sm border border-slate-500 bg-white">
                 <CardHeader className="pb-2">
                     <CardTitle className="text-base font-semibold text-slate-800">
                         {widget.title}
@@ -1245,7 +1245,7 @@ function ChartWidgetCard({ widget }) {
             : [];
 
     return (
-        <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
+        <Card className="rounded-2xl shadow-sm border border-slate-500 bg-white">
             <CardHeader className="pb-2 flex flex-row items-center justify-between">
                 <CardTitle className="text-base font-semibold text-slate-800">
                     {widget.title}
@@ -1299,7 +1299,7 @@ function ListWidgetCard({ widget }) {
         widget.config?.columns || (rows[0] ? Object.keys(rows[0]) : []);
 
     return (
-        <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
+        <Card className="rounded-2xl shadow-sm border border-slate-500 bg-white">
             <CardHeader className="pb-2 flex flex-row items-center justify-between">
                 <CardTitle className="text-base font-semibold text-slate-800">
                     {widget.title}
@@ -1317,7 +1317,7 @@ function ListWidgetCard({ widget }) {
                             <div
                                 key={idx}
                                 className={cn(
-                                    "rounded-xl border border-slate-200 bg-slate-50/60 px-3 py-2.5",
+                                    "rounded-xl border border-slate-500 bg-slate-50/60 px-3 py-2.5",
                                     "flex flex-col gap-1 text-xs md:text-sm"
                                 )}
                             >

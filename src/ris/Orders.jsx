@@ -130,7 +130,7 @@ function GlassModal({ open, title, subtitle, onClose, children, maxWidth = 'max-
                     <button
                         type="button"
                         onClick={onClose}
-                        className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-white/70 text-slate-700 hover:bg-white"
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/50 bg-white/70 text-slate-700 hover:bg-white"
                     >
                         <X className="h-4 w-4" />
                     </button>
@@ -167,7 +167,7 @@ function GlassSheet({ open, title, subtitle, onClose, children }) {
                     <button
                         type="button"
                         onClick={onClose}
-                        className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/10 bg-white/70 text-slate-700 hover:bg-white"
+                        className="inline-flex h-10 w-10 items-center justify-center rounded-2xl border border-black/50 bg-white/70 text-slate-700 hover:bg-white"
                     >
                         <X className="h-4 w-4" />
                     </button>
@@ -463,7 +463,7 @@ export default function RisOrders() {
     return (
         <div className="min-h-[calc(100vh-40px)] text-slate-900">
             {/* Background (Apple-ish) */}
-            <div className="relative overflow-hidden rounded-[28px] border border-slate-200 bg-slate-50 p-3 md:p-5">
+            <div className="relative overflow-hidden rounded-[28px] border border-slate-500 bg-slate-50 p-3 md:p-5">
                 <div className="pointer-events-none absolute -top-24 left-1/2 h-72 w-[820px] -translate-x-1/2 rounded-full bg-sky-200/40 blur-3xl" />
                 <div className="pointer-events-none absolute -bottom-28 left-10 h-72 w-72 rounded-full bg-emerald-200/35 blur-3xl" />
                 <div className="pointer-events-none absolute -bottom-28 right-10 h-72 w-72 rounded-full bg-purple-200/30 blur-3xl" />
@@ -498,7 +498,7 @@ export default function RisOrders() {
                                 <StatPill label="Total" value={stats.total} />
                                 <StatPill label="Pending" value={stats.pending} tone="amber" />
                                 <StatPill label="Urgent/STAT" value={stats.urgent} tone="rose" />
-                                <div className="ml-1 inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-1.5">
+                                <div className="ml-1 inline-flex items-center gap-2 rounded-full border border-black/50 bg-white/70 px-3 py-1.5">
                                     <input
                                         type="checkbox"
                                         checked={autoRefresh}
@@ -517,7 +517,7 @@ export default function RisOrders() {
                                     <input
                                         ref={searchRef}
                                         className={cx(
-                                            'h-10 w-full rounded-2xl border border-black/10 bg-white/70 pl-10 pr-3 text-[13px]',
+                                            'h-10 w-full rounded-2xl border border-black/50 bg-white/70 pl-10 pr-3 text-[13px]',
                                             'outline-none ring-0 focus:border-sky-400 focus:ring-2 focus:ring-sky-200/60',
                                         )}
                                         placeholder="Search test / UHID / name / order…   ( / to focus )"
@@ -528,7 +528,7 @@ export default function RisOrders() {
 
                                 <button
                                     type="button"
-                                    className="inline-flex h-10 items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 text-[12px] font-semibold text-slate-800 hover:bg-white"
+                                    className="inline-flex h-10 items-center gap-2 rounded-2xl border border-black/50 bg-white/70 px-3 text-[12px] font-semibold text-slate-800 hover:bg-white"
                                     onClick={() => load()}
                                     title="Refresh"
                                 >
@@ -537,7 +537,7 @@ export default function RisOrders() {
 
                                 <button
                                     type="button"
-                                    className="inline-flex h-10 items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 text-[12px] font-semibold text-slate-800 hover:bg-white md:hidden"
+                                    className="inline-flex h-10 items-center gap-2 rounded-2xl border border-black/50 bg-white/70 px-3 text-[12px] font-semibold text-slate-800 hover:bg-white md:hidden"
                                     onClick={() => setOpenFilters(true)}
                                 >
                                     <Filter className="h-4 w-4" />
@@ -569,7 +569,7 @@ export default function RisOrders() {
                                 <div className="flex flex-wrap items-center gap-2">
                                     {/* Saved views */}
                                     <select
-                                        className="h-9 rounded-2xl border border-black/10 bg-white/70 px-3 text-[12px] outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-200/60"
+                                        className="h-9 rounded-2xl border border-black/50 bg-white/70 px-3 text-[12px] outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-200/60"
                                         value={activeViewId}
                                         onChange={(e) => {
                                             const id = e.target.value
@@ -587,7 +587,7 @@ export default function RisOrders() {
 
                                     <button
                                         type="button"
-                                        className="h-9 rounded-2xl border border-black/10 bg-white/70 px-3 text-[12px] font-semibold text-slate-800 hover:bg-white"
+                                        className="h-9 rounded-2xl border border-black/50 bg-white/70 px-3 text-[12px] font-semibold text-slate-800 hover:bg-white"
                                         onClick={saveCurrentView}
                                     >
                                         Save view
@@ -595,7 +595,7 @@ export default function RisOrders() {
 
                                     <button
                                         type="button"
-                                        className="h-9 rounded-2xl border border-black/10 bg-white/70 px-3 text-[12px] font-semibold text-slate-800 hover:bg-white"
+                                        className="h-9 rounded-2xl border border-black/50 bg-white/70 px-3 text-[12px] font-semibold text-slate-800 hover:bg-white"
                                         onClick={exportCsv}
                                     >
                                         <span className="inline-flex items-center gap-2">
@@ -604,7 +604,7 @@ export default function RisOrders() {
                                         </span>
                                     </button>
 
-                                    <div className="inline-flex h-9 overflow-hidden rounded-2xl border border-black/10 bg-white/70">
+                                    <div className="inline-flex h-9 overflow-hidden rounded-2xl border border-black/50 bg-white/70">
                                         <button
                                             type="button"
                                             className={cx(
@@ -680,7 +680,7 @@ export default function RisOrders() {
                                 <div className="flex items-center gap-2">
                                     <button
                                         type="button"
-                                        className="hidden h-9 items-center gap-2 rounded-2xl border border-black/10 bg-white/70 px-3 text-[12px] font-semibold text-slate-800 hover:bg-white md:inline-flex"
+                                        className="hidden h-9 items-center gap-2 rounded-2xl border border-black/50 bg-white/70 px-3 text-[12px] font-semibold text-slate-800 hover:bg-white md:inline-flex"
                                         onClick={() => setOpenFilters(true)}
                                     >
                                         <SlidersHorizontal className="h-4 w-4" />
@@ -689,7 +689,7 @@ export default function RisOrders() {
 
                                     <button
                                         type="button"
-                                        className="h-9 rounded-2xl border border-black/10 bg-white/70 px-3 text-[12px] font-semibold text-slate-800 hover:bg-white"
+                                        className="h-9 rounded-2xl border border-black/50 bg-white/70 px-3 text-[12px] font-semibold text-slate-800 hover:bg-white"
                                         onClick={() => clearFilters()}
                                     >
                                         Clear
@@ -742,7 +742,7 @@ export default function RisOrders() {
                     <div className="mt-3 flex justify-end gap-2">
                         <button
                             type="button"
-                            className="h-10 rounded-2xl border border-black/10 bg-white/70 px-4 text-[12px] font-semibold text-slate-800 hover:bg-white"
+                            className="h-10 rounded-2xl border border-black/50 bg-white/70 px-4 text-[12px] font-semibold text-slate-800 hover:bg-white"
                             onClick={() => setOpenFilters(false)}
                         >
                             Done
@@ -780,7 +780,7 @@ function StatPill({ label, value, tone = 'slate' }) {
             ? 'border-amber-200 bg-amber-50 text-amber-800'
             : tone === 'rose'
                 ? 'border-rose-200 bg-rose-50 text-rose-800'
-                : 'border-slate-200 bg-slate-50 text-slate-800'
+                : 'border-slate-500 bg-slate-50 text-slate-800'
     return (
         <span className={cx('inline-flex items-center gap-2 rounded-full border px-3 py-1.5', styles)}>
             <span className="text-[11px]">{label}</span>
@@ -791,7 +791,7 @@ function StatPill({ label, value, tone = 'slate' }) {
 
 function QuickChips({ onPick }) {
     const chip =
-        'inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-1.5 text-[11px] font-semibold text-slate-800 hover:bg-white'
+        'inline-flex items-center gap-2 rounded-full border border-black/50 bg-white/70 px-3 py-1.5 text-[11px] font-semibold text-slate-800 hover:bg-white'
     return (
         <div className="flex flex-wrap items-center gap-2">
             <button type="button" className={chip} onClick={() => onPick({ datePreset: 'today' })}>
@@ -839,7 +839,7 @@ function FiltersPanel({
     onClear,
 }) {
     const box =
-        'rounded-[22px] border border-black/10 bg-white/70 p-3 shadow-sm ring-1 ring-black/5 supports-[backdrop-filter]:bg-white/55 supports-[backdrop-filter]:backdrop-blur-2xl'
+        'rounded-[22px] border border-black/50 bg-white/70 p-3 shadow-sm ring-1 ring-black/5 supports-[backdrop-filter]:bg-white/55 supports-[backdrop-filter]:backdrop-blur-2xl'
 
     return (
         <div className="space-y-3">
@@ -872,7 +872,7 @@ function FiltersPanel({
                             <span className="w-14 text-[11px] text-slate-600">From</span>
                             <input
                                 type="date"
-                                className="h-9 flex-1 rounded-2xl border border-black/10 bg-white/70 px-3 text-[12px] outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-200/60"
+                                className="h-9 flex-1 rounded-2xl border border-black/50 bg-white/70 px-3 text-[12px] outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-200/60"
                                 value={fromDate}
                                 onChange={(e) => setFromDate(e.target.value)}
                             />
@@ -881,7 +881,7 @@ function FiltersPanel({
                             <span className="w-14 text-[11px] text-slate-600">To</span>
                             <input
                                 type="date"
-                                className="h-9 flex-1 rounded-2xl border border-black/10 bg-white/70 px-3 text-[12px] outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-200/60"
+                                className="h-9 flex-1 rounded-2xl border border-black/50 bg-white/70 px-3 text-[12px] outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-200/60"
                                 value={toDate}
                                 onChange={(e) => setToDate(e.target.value)}
                             />
@@ -946,7 +946,7 @@ function FiltersPanel({
                 <div className="text-[13px] font-semibold text-slate-900">Sort</div>
                 <div className="mt-2 flex flex-col gap-2">
                     <select
-                        className="h-9 rounded-2xl border border-black/10 bg-white/70 px-3 text-[12px] outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-200/60"
+                        className="h-9 rounded-2xl border border-black/50 bg-white/70 px-3 text-[12px] outline-none focus:border-sky-400 focus:ring-2 focus:ring-sky-200/60"
                         value={sortKey}
                         onChange={(e) => setSortKey(e.target.value)}
                     >
@@ -956,7 +956,7 @@ function FiltersPanel({
                         <option value="modality">Modality</option>
                     </select>
 
-                    <div className="inline-flex h-9 overflow-hidden rounded-2xl border border-black/10 bg-white/70">
+                    <div className="inline-flex h-9 overflow-hidden rounded-2xl border border-black/50 bg-white/70">
                         <button
                             type="button"
                             className={cx('flex-1 text-[12px] font-semibold', sortDir === 'desc' ? 'bg-white text-slate-900' : 'text-slate-700 hover:bg-white/70')}
@@ -977,7 +977,7 @@ function FiltersPanel({
 
             <button
                 type="button"
-                className="h-10 w-full rounded-2xl border border-black/10 bg-white/70 text-[12px] font-semibold text-slate-800 hover:bg-white"
+                className="h-10 w-full rounded-2xl border border-black/50 bg-white/70 text-[12px] font-semibold text-slate-800 hover:bg-white"
                 onClick={onClear}
             >
                 Clear all filters
@@ -995,7 +995,7 @@ function Pill({ active, children, onClick }) {
                 'rounded-full border px-3 py-1.5 text-[11px] font-semibold transition',
                 active
                     ? 'border-slate-900 bg-slate-900 text-white shadow-sm'
-                    : 'border-black/10 bg-white/70 text-slate-800 hover:bg-white',
+                    : 'border-black/50 bg-white/70 text-slate-800 hover:bg-white',
             )}
         >
             {children}
@@ -1045,7 +1045,7 @@ function TableList({ rows }) {
                                 <td className="px-4 py-3 text-right">
                                     <Link
                                         to={`/ris/orders/${o.id}`}
-                                        className="inline-flex h-9 items-center justify-center rounded-2xl border border-black/10 bg-white/70 px-3 text-[12px] font-semibold text-slate-800 hover:bg-white"
+                                        className="inline-flex h-9 items-center justify-center rounded-2xl border border-black/50 bg-white/70 px-3 text-[12px] font-semibold text-slate-800 hover:bg-white"
                                     >
                                         View
                                     </Link>
@@ -1063,7 +1063,7 @@ function CardsList({ rows }) {
     return (
         <div className="p-3">
             {!rows.length ? (
-                <div className="rounded-2xl border border-dashed border-black/10 bg-white/40 p-8 text-center text-[13px] text-slate-600">
+                <div className="rounded-2xl border border-dashed border-black/50 bg-white/40 p-8 text-center text-[13px] text-slate-600">
                     No orders found.
                 </div>
             ) : (
@@ -1071,7 +1071,7 @@ function CardsList({ rows }) {
                     {rows.map((o) => (
                         <div
                             key={o.id}
-                            className="rounded-[22px] border border-black/10 bg-white/70 p-3 shadow-sm ring-1 ring-black/5 supports-[backdrop-filter]:bg-white/55 supports-[backdrop-filter]:backdrop-blur-2xl"
+                            className="rounded-[22px] border border-black/50 bg-white/70 p-3 shadow-sm ring-1 ring-black/5 supports-[backdrop-filter]:bg-white/55 supports-[backdrop-filter]:backdrop-blur-2xl"
                         >
                             <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
@@ -1091,7 +1091,7 @@ function CardsList({ rows }) {
 
                                 <Link
                                     to={`/ris/orders/${o.id}`}
-                                    className="inline-flex h-9 shrink-0 items-center justify-center rounded-2xl border border-black/10 bg-white/70 px-3 text-[12px] font-semibold text-slate-800 hover:bg-white"
+                                    className="inline-flex h-9 shrink-0 items-center justify-center rounded-2xl border border-black/50 bg-white/70 px-3 text-[12px] font-semibold text-slate-800 hover:bg-white"
                                 >
                                     View
                                 </Link>
@@ -1106,7 +1106,7 @@ function CardsList({ rows }) {
 
 function SkeletonRows() {
     const Row = () => (
-        <div className="flex items-center gap-3 rounded-2xl border border-black/10 bg-white/60 p-3">
+        <div className="flex items-center gap-3 rounded-2xl border border-black/50 bg-white/60 p-3">
             <div className="h-9 w-24 rounded-xl bg-slate-200/60" />
             <div className="h-9 w-40 rounded-xl bg-slate-200/60" />
             <div className="h-9 w-20 rounded-xl bg-slate-200/60" />

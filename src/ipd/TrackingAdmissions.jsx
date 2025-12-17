@@ -32,13 +32,13 @@ function cx(...xs) {
 const UI = {
     page: 'min-h-[calc(100vh-4rem)] w-full bg-gradient-to-b from-slate-50 via-white to-slate-50',
     glass:
-        'rounded-3xl border border-black/10 bg-white/75 backdrop-blur-xl shadow-[0_12px_35px_rgba(2,6,23,0.10)]',
+        'rounded-3xl border border-black/50 bg-white/75 backdrop-blur-xl shadow-[0_12px_35px_rgba(2,6,23,0.10)]',
     chip:
-        'inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700',
+        'inline-flex items-center gap-2 rounded-full border border-black/50 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700',
     chipBtn:
-        'inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/85 px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-black/[0.03] active:scale-[0.99] transition disabled:opacity-60',
+        'inline-flex items-center gap-2 rounded-full border border-black/50 bg-white/85 px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-black/[0.03] active:scale-[0.99] transition disabled:opacity-60',
     input:
-        'h-11 w-full rounded-2xl border border-black/10 bg-white/85 px-3 text-[12px] font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-100 focus:border-sky-500',
+        'h-11 w-full rounded-2xl border border-black/50 bg-white/85 px-3 text-[12px] font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-100 focus:border-sky-500',
 }
 
 function prettyDateTime(v) {
@@ -59,15 +59,34 @@ function prettyTime(d) {
     }
 }
 
-const code = (id) => `ADM-${String(id).padStart(6, '0')}`
+/**
+ * ✅ Always prefer backend-driven admission code:
+ * - display_code (recommended)
+ * - admission_code / admission_no / ipd_no / ip_uhid (fallbacks)
+ * - finally fallback to legacy "ADM-000123" so UI never breaks
+ */
+const admissionCode = (r) => {
+    const raw =
+        r?.display_code ||
+        r?.admission_code ||
+        r?.admission_no ||
+        r?.ipd_no ||
+        r?.ip_uhid
+
+    if (raw) return String(raw)
+
+    const id = r?.id
+    if (id === null || id === undefined) return '—'
+    return `ADM-${String(id).padStart(6, '0')}`
+}
 
 function bedStateBadgeClass(state) {
-    if (!state) return 'border-slate-200 bg-slate-50 text-slate-700'
+    if (!state) return 'border-slate-500 bg-slate-50 text-slate-700'
     if (state === 'vacant') return 'border-emerald-200 bg-emerald-50 text-emerald-800'
     if (state === 'occupied') return 'border-rose-200 bg-rose-50 text-rose-800'
     if (state === 'reserved') return 'border-amber-200 bg-amber-50 text-amber-900'
     if (state === 'preoccupied') return 'border-sky-200 bg-sky-50 text-sky-900'
-    return 'border-slate-200 bg-slate-50 text-slate-700'
+    return 'border-slate-500 bg-slate-50 text-slate-700'
 }
 
 function StatCard({ label, value, icon: Icon, tone = 'slate' }) {
@@ -82,7 +101,7 @@ function StatCard({ label, value, icon: Icon, tone = 'slate' }) {
                         ? 'bg-rose-50 text-rose-900 border-rose-200'
                         : tone === 'sky'
                             ? 'bg-sky-50 text-sky-900 border-sky-200'
-                            : 'bg-white/80 text-slate-900 border-black/10'
+                            : 'bg-white/80 text-slate-900 border-black/50'
 
     return (
         <div className={cx('rounded-3xl border px-4 py-3', toneCls)}>
@@ -92,7 +111,7 @@ function StatCard({ label, value, icon: Icon, tone = 'slate' }) {
                     <div className="mt-1 text-[20px] font-semibold tracking-tight tabular-nums">{value}</div>
                 </div>
                 {Icon ? (
-                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-black/10 bg-white/30">
+                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-black/50 bg-white/30">
                         <Icon className="h-5 w-5 opacity-80" />
                     </div>
                 ) : null}
@@ -123,7 +142,7 @@ function Segmented({ value, onChange }) {
                             'whitespace-nowrap rounded-full border px-3 py-1.5 text-[11px] font-semibold transition',
                             active
                                 ? 'border-slate-900 bg-slate-900 text-white shadow-sm'
-                                : 'border-black/10 bg-white/75 text-slate-700 hover:bg-black/[0.03]',
+                                : 'border-black/50 bg-white/75 text-slate-700 hover:bg-black/[0.03]',
                         )}
                     >
                         {opt.label}
@@ -226,7 +245,7 @@ export default function TrackingAdmissions() {
         if (!q) return list
 
         return list.filter((r) => {
-            const admCode = code(r.id).toLowerCase()
+            const admCode = admissionCode(r).toLowerCase()
             const patientLabel = (pmap[r.patient_id] || `P-${r.patient_id}`).toLowerCase()
             const bedCode = (bedsById[r.current_bed_id]?.code || '').toLowerCase()
             return admCode.includes(q) || patientLabel.includes(q) || bedCode.includes(q)
@@ -248,26 +267,29 @@ export default function TrackingAdmissions() {
     const disableNext = page >= totalPages || loading
 
     // ---- Fetch patient UHID for current page only (smart caching) ----
-    const ensurePatientUhids = useCallback(async (pids) => {
-        const uniq = [...new Set(pids)].filter(Boolean)
-        const missing = uniq.filter((pid) => !pmap[pid])
-        if (missing.length === 0) return
+    const ensurePatientUhids = useCallback(
+        async (pids) => {
+            const uniq = [...new Set(pids)].filter(Boolean)
+            const missing = uniq.filter((pid) => !pmap[pid])
+            if (missing.length === 0) return
 
-        const local = {}
-        await Promise.all(
-            missing.map(async (pid) => {
-                try {
-                    const { data } = await getPatient(pid)
-                    local[pid] = data?.uhid || `P-${pid}`
-                } catch {
-                    local[pid] = `P-${pid}`
-                }
-            }),
-        )
+            const local = {}
+            await Promise.all(
+                missing.map(async (pid) => {
+                    try {
+                        const { data } = await getPatient(pid)
+                        local[pid] = data?.uhid || `P-${pid}`
+                    } catch {
+                        local[pid] = `P-${pid}`
+                    }
+                }),
+            )
 
-        if (!aliveRef.current) return
-        setPmap((prev) => ({ ...prev, ...local }))
-    }, [pmap])
+            if (!aliveRef.current) return
+            setPmap((prev) => ({ ...prev, ...local }))
+        },
+        [pmap],
+    )
 
     useEffect(() => {
         const pids = pageRows.map((r) => r.patient_id)
@@ -322,7 +344,7 @@ export default function TrackingAdmissions() {
                                 </div>
 
                                 <div className="mt-3 flex items-start gap-3">
-                                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-3xl bg-black/[0.04] border border-black/10">
+                                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-3xl bg-black/[0.04] border border-black/50">
                                         <BedDouble className="h-5 w-5 text-slate-700" />
                                     </div>
                                     <div className="min-w-0">
@@ -404,7 +426,7 @@ export default function TrackingAdmissions() {
 
                 {/* CONTROLS + LIST */}
                 <Card className={cx(UI.glass, 'overflow-hidden')}>
-                    <CardHeader className="border-b border-black/10 bg-white/60 backdrop-blur-xl">
+                    <CardHeader className="border-b border-black/50 bg-white/60 backdrop-blur-xl">
                         <div className="flex flex-col gap-4">
                             <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                                 <div className="grid w-full gap-3 md:grid-cols-[2fr,1.2fr]">
@@ -414,21 +436,22 @@ export default function TrackingAdmissions() {
                                             Active Admissions
                                         </CardTitle>
                                         <CardDescription className="text-[12px] text-slate-600">
-                                            Search by admission code, UHID, or bed code. Filter by bed state.
+                                            Search by IP admission code, UHID, or bed code. Filter by bed state.
                                         </CardDescription>
 
                                         <div className="mt-3 relative">
                                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                                             <input
                                                 className={cx(UI.input, 'pl-10')}
-                                                placeholder="Search ADM-000123 / UHID / Bed…"
+                                                placeholder="Search IP code / UHID / Bed…"
                                                 value={search}
                                                 onChange={(e) => setSearch(e.target.value)}
                                             />
                                         </div>
 
                                         <p className="mt-1 text-[11px] text-slate-500">
-                                            Tip: Type <span className="font-semibold">ADM-</span> or a bed code like <span className="font-semibold">W2-R1-B03</span>.
+                                            Tip: Type an IP code like <span className="font-semibold">NHIP16122025000001</span> or a bed code like{' '}
+                                            <span className="font-semibold">W2-R1-B03</span>.
                                         </p>
                                     </div>
 
@@ -440,7 +463,7 @@ export default function TrackingAdmissions() {
                                             </div>
                                             <Badge
                                                 variant="outline"
-                                                className="rounded-full border-black/10 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700"
+                                                className="rounded-full border-black/50 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700"
                                             >
                                                 {filteredRows.length === 0 ? '0' : `${fromN}-${toN}`} / {filteredRows.length}
                                             </Badge>
@@ -450,7 +473,7 @@ export default function TrackingAdmissions() {
                                             <Button
                                                 type="button"
                                                 variant="outline"
-                                                className="h-11 rounded-2xl border-black/10 bg-white/85 font-semibold w-full"
+                                                className="h-11 rounded-2xl border-black/50 bg-white/85 font-semibold w-full"
                                                 onClick={() => {
                                                     setSearch('')
                                                     setBedStateFilter('all')
@@ -465,7 +488,11 @@ export default function TrackingAdmissions() {
                                                 onClick={() => loadData()}
                                                 disabled={loading}
                                             >
-                                                {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCcw className="mr-2 h-4 w-4" />}
+                                                {loading ? (
+                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                                ) : (
+                                                    <RefreshCcw className="mr-2 h-4 w-4" />
+                                                )}
                                                 Refresh
                                             </Button>
                                         </div>
@@ -481,7 +508,7 @@ export default function TrackingAdmissions() {
                                 </div>
                                 <Badge
                                     variant="outline"
-                                    className="rounded-full border-black/10 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700"
+                                    className="rounded-full border-black/50 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700"
                                 >
                                     Page <span className="ml-1 tabular-nums">{page}</span> / {totalPages}
                                 </Badge>
@@ -503,7 +530,7 @@ export default function TrackingAdmissions() {
                         {loading && (
                             <div className="space-y-2">
                                 {[0, 1, 2, 3].map((i) => (
-                                    <div key={i} className="rounded-3xl border border-black/10 bg-white/70 backdrop-blur px-4 py-3">
+                                    <div key={i} className="rounded-3xl border border-black/50 bg-white/70 backdrop-blur px-4 py-3">
                                         <div className="flex items-center justify-between gap-3">
                                             <div className="flex-1 space-y-2">
                                                 <Skeleton className="h-4 w-40 rounded-xl" />
@@ -519,7 +546,7 @@ export default function TrackingAdmissions() {
                         {/* Empty */}
                         {!loading && pageRows.length === 0 && (
                             <div className="rounded-3xl border border-dashed border-black/20 bg-black/[0.02] px-6 py-10 text-center">
-                                <div className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-3xl border border-black/10 bg-white/60">
+                                <div className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-3xl border border-black/50 bg-white/60">
                                     <AlertCircle className="h-5 w-5 text-slate-600" />
                                 </div>
                                 <div className="text-sm font-semibold text-slate-900">No active admissions found</div>
@@ -530,7 +557,7 @@ export default function TrackingAdmissions() {
                         {/* Desktop table */}
                         {!loading && pageRows.length > 0 && (
                             <>
-                                <div className="hidden md:block overflow-x-auto rounded-3xl border border-black/10 bg-white/70">
+                                <div className="hidden md:block overflow-x-auto rounded-3xl border border-black/50 bg-white/70">
                                     <table className="min-w-full text-sm">
                                         <thead>
                                             <tr className="bg-white/70 text-[11px] uppercase tracking-wide text-slate-500">
@@ -551,7 +578,7 @@ export default function TrackingAdmissions() {
                                                     <tr key={r.id} className="border-t border-black/5 hover:bg-black/[0.02]">
                                                         <td className="px-4 py-3">
                                                             <span className="inline-flex items-center rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white tabular-nums">
-                                                                {code(r.id)}
+                                                                {admissionCode(r)}
                                                             </span>
                                                         </td>
                                                         <td className="px-4 py-3 text-slate-800">
@@ -600,11 +627,11 @@ export default function TrackingAdmissions() {
                                                     animate={{ opacity: 1, y: 0 }}
                                                     exit={{ opacity: 0, y: -6 }}
                                                     transition={{ duration: 0.14 }}
-                                                    className="rounded-3xl border border-black/10 bg-white/80 backdrop-blur px-4 py-3 shadow-[0_10px_24px_rgba(2,6,23,0.08)]"
+                                                    className="rounded-3xl border border-black/50 bg-white/80 backdrop-blur px-4 py-3 shadow-[0_10px_24px_rgba(2,6,23,0.08)]"
                                                 >
                                                     <div className="flex items-center justify-between gap-2">
                                                         <span className="inline-flex items-center rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white tabular-nums">
-                                                            {code(r.id)}
+                                                            {admissionCode(r)}
                                                         </span>
                                                         <Link
                                                             to={`/ipd/admission/${r.id}`}

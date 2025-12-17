@@ -186,7 +186,7 @@ function OperationNotesTab({ caseId }) {
     return (
         <form
             onSubmit={handleSubmit}
-            className="space-y-3 rounded-2xl border border-slate-200 bg-white/90 px-3 py-3 shadow-sm md:px-4 md:py-4"
+            className="space-y-3 rounded-2xl border border-slate-500 bg-white/90 px-3 py-3 shadow-sm md:px-4 md:py-4"
         >
             {/* Header */}
             <motion.div
@@ -287,7 +287,7 @@ function OperationNotesTab({ caseId }) {
                             <span className="text-[11px] font-semibold text-slate-700">Approx. blood loss (ml)</span>
                             <input
                                 type="number"
-                                className="h-9 w-full rounded-md border border-slate-200 bg-slate-50 px-3 text-[12px] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                                className="h-9 w-full rounded-md border border-slate-500 bg-slate-50 px-3 text-[12px] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
                                 value={form.blood_loss_ml}
                                 disabled={!canEdit}
                                 onChange={(e) => handleChange('blood_loss_ml', e.target.value)}
@@ -329,7 +329,7 @@ function TextArea({ label, value, onChange, rows = 2, disabled }) {
             <span className="text-[11px] font-semibold text-slate-700">{label}</span>
             <textarea
                 rows={rows}
-                className="w-full resize-none rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full resize-none rounded-md border border-slate-500 bg-slate-50 px-3 py-2 text-[12px] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
                 value={value ?? ''}
                 disabled={disabled}
                 onChange={(e) => onChange(e.target.value)}

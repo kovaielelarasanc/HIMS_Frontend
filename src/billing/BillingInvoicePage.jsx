@@ -479,7 +479,7 @@ export default function BillingInvoicePage() {
                             type="button"
                             onClick={handleSaveHeader}
                             disabled={savingHeader}
-                            className="rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
+                            className="rounded-xl border border-slate-500 bg-white px-4 py-2 text-sm font-bold text-slate-700 hover:bg-slate-50 disabled:opacity-60"
                         >
                             {savingHeader ? 'Saving…' : 'Save Header'}
                         </button>
@@ -532,7 +532,7 @@ export default function BillingInvoicePage() {
                             value={billingType}
                             onChange={(e) => setBillingType(e.target.value)}
                             disabled={locked}
-                            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                            className="mt-1 w-full rounded-xl border border-slate-500 px-3 py-2 text-sm"
                         >
                             {BILLING_TYPES.map((bt) => (
                                 <option key={bt.value} value={bt.value}>
@@ -548,7 +548,7 @@ export default function BillingInvoicePage() {
                             value={consultantId}
                             onChange={(e) => setConsultantId(e.target.value)}
                             disabled={locked}
-                            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                            className="mt-1 w-full rounded-xl border border-slate-500 px-3 py-2 text-sm"
                         >
                             <option value="">— None —</option>
                             {(masters.doctors || []).map((d) => (
@@ -565,7 +565,7 @@ export default function BillingInvoicePage() {
                             value={providerId}
                             onChange={(e) => setProviderId(e.target.value)}
                             disabled={locked}
-                            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                            className="mt-1 w-full rounded-xl border border-slate-500 px-3 py-2 text-sm"
                         >
                             <option value="">— Self / Cash —</option>
                             {(masters.credit_providers || []).map((p) => (
@@ -582,7 +582,7 @@ export default function BillingInvoicePage() {
                             value={remarks}
                             onChange={(e) => setRemarks(e.target.value)}
                             disabled={locked}
-                            className="mt-1 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm min-h-[84px]"
+                            className="mt-1 w-full rounded-xl border border-slate-500 px-3 py-2 text-sm min-h-[84px]"
                             placeholder="Any note"
                         />
                     </div>
@@ -605,14 +605,14 @@ export default function BillingInvoicePage() {
                                 type="number"
                                 value={autoAdmissionId}
                                 onChange={(e) => setAutoAdmissionId(e.target.value)}
-                                className="w-28 rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                className="w-28 rounded-xl border border-slate-500 px-3 py-2 text-sm"
                                 placeholder="Admission ID"
                                 disabled={locked}
                             />
                             <select
                                 value={autoBedMode}
                                 onChange={(e) => setAutoBedMode(e.target.value)}
-                                className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                className="rounded-xl border border-slate-500 px-3 py-2 text-sm"
                                 disabled={locked}
                             >
                                 <option value="daily">Daily</option>
@@ -623,7 +623,7 @@ export default function BillingInvoicePage() {
                                 type="number"
                                 value={autoOtCaseId}
                                 onChange={(e) => setAutoOtCaseId(e.target.value)}
-                                className="w-28 rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                className="w-28 rounded-xl border border-slate-500 px-3 py-2 text-sm"
                                 placeholder="OT Case ID"
                                 disabled={locked}
                             />
@@ -670,7 +670,7 @@ export default function BillingInvoicePage() {
                                                 min="1"
                                                 value={it.quantity}
                                                 onChange={(e) => handleUpdateLine(it, { quantity: Number(e.target.value) || 1 })}
-                                                className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-right"
+                                                className="w-20 rounded-lg border border-slate-500 px-2 py-1 text-right"
                                                 disabled={locked || it.is_voided}
                                             />
                                         </td>
@@ -681,7 +681,7 @@ export default function BillingInvoicePage() {
                                                 step="0.01"
                                                 value={it.unit_price}
                                                 onChange={(e) => handleUpdateLine(it, { unit_price: Number(e.target.value) || 0 })}
-                                                className="w-24 rounded-lg border border-slate-200 px-2 py-1 text-right"
+                                                className="w-24 rounded-lg border border-slate-500 px-2 py-1 text-right"
                                                 disabled={locked || it.is_voided}
                                             />
                                         </td>
@@ -692,7 +692,7 @@ export default function BillingInvoicePage() {
                                                 step="0.1"
                                                 value={it.tax_rate}
                                                 onChange={(e) => handleUpdateLine(it, { tax_rate: Number(e.target.value) || 0 })}
-                                                className="w-20 rounded-lg border border-slate-200 px-2 py-1 text-right"
+                                                className="w-20 rounded-lg border border-slate-500 px-2 py-1 text-right"
                                                 disabled={locked || it.is_voided}
                                             />
                                         </td>
@@ -726,7 +726,7 @@ export default function BillingInvoicePage() {
                                 value={manualDesc}
                                 onChange={(e) => setManualDesc(e.target.value)}
                                 placeholder="Description (e.g., Dressing charges)"
-                                className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                className="rounded-xl border border-slate-500 px-3 py-2 text-sm"
                                 disabled={locked}
                             />
                             <input
@@ -734,7 +734,7 @@ export default function BillingInvoicePage() {
                                 min="1"
                                 value={manualQty}
                                 onChange={(e) => setManualQty(e.target.value)}
-                                className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                className="rounded-xl border border-slate-500 px-3 py-2 text-sm"
                                 disabled={locked}
                             />
                             <input
@@ -743,7 +743,7 @@ export default function BillingInvoicePage() {
                                 value={manualPrice}
                                 onChange={(e) => setManualPrice(e.target.value)}
                                 placeholder="Unit Price"
-                                className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                className="rounded-xl border border-slate-500 px-3 py-2 text-sm"
                                 disabled={locked}
                             />
                             <input
@@ -752,7 +752,7 @@ export default function BillingInvoicePage() {
                                 value={manualTax}
                                 onChange={(e) => setManualTax(e.target.value)}
                                 placeholder="GST%"
-                                className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                className="rounded-xl border border-slate-500 px-3 py-2 text-sm"
                                 disabled={locked}
                             />
                             <button
@@ -774,7 +774,7 @@ export default function BillingInvoicePage() {
                             <select
                                 value={serviceType}
                                 onChange={(e) => setServiceType(e.target.value)}
-                                className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                className="rounded-xl border border-slate-500 px-3 py-2 text-sm"
                                 disabled={locked}
                             >
                                 <option value="lab">Lab</option>
@@ -791,7 +791,7 @@ export default function BillingInvoicePage() {
                                 value={serviceRefId}
                                 onChange={(e) => setServiceRefId(e.target.value)}
                                 placeholder="Service Ref"
-                                className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                className="rounded-xl border border-slate-500 px-3 py-2 text-sm"
                                 disabled={locked}
                             />
 
@@ -799,7 +799,7 @@ export default function BillingInvoicePage() {
                                 value={serviceDesc}
                                 onChange={(e) => setServiceDesc(e.target.value)}
                                 placeholder="Description (optional)"
-                                className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                className="rounded-xl border border-slate-500 px-3 py-2 text-sm"
                                 disabled={locked}
                             />
 
@@ -809,7 +809,7 @@ export default function BillingInvoicePage() {
                                 value={servicePrice}
                                 onChange={(e) => setServicePrice(e.target.value)}
                                 placeholder="Price"
-                                className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                className="rounded-xl border border-slate-500 px-3 py-2 text-sm"
                                 disabled={locked}
                             />
 
@@ -819,7 +819,7 @@ export default function BillingInvoicePage() {
                                 value={serviceTax}
                                 onChange={(e) => setServiceTax(e.target.value)}
                                 placeholder="GST%"
-                                className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                className="rounded-xl border border-slate-500 px-3 py-2 text-sm"
                                 disabled={locked}
                             />
 
@@ -882,7 +882,7 @@ export default function BillingInvoicePage() {
                             <div className="rounded-2xl border bg-slate-50 p-3 space-y-2">
                                 <div className="text-sm font-extrabold text-slate-900">Add Payment</div>
                                 <div className="grid grid-cols-1 gap-2">
-                                    <select value={payMode} onChange={(e) => setPayMode(e.target.value)} className="rounded-xl border border-slate-200 px-3 py-2 text-sm">
+                                    <select value={payMode} onChange={(e) => setPayMode(e.target.value)} className="rounded-xl border border-slate-500 px-3 py-2 text-sm">
                                         {PAYMENT_MODES.map((m) => (
                                             <option key={m} value={m}>{m.toUpperCase()}</option>
                                         ))}
@@ -894,14 +894,14 @@ export default function BillingInvoicePage() {
                                         value={payAmount}
                                         onChange={(e) => setPayAmount(e.target.value)}
                                         placeholder="Amount"
-                                        className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                        className="rounded-xl border border-slate-500 px-3 py-2 text-sm"
                                     />
 
                                     <input
                                         value={payRef}
                                         onChange={(e) => setPayRef(e.target.value)}
                                         placeholder="Reference (optional)"
-                                        className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                        className="rounded-xl border border-slate-500 px-3 py-2 text-sm"
                                     />
 
                                     <button type="button" onClick={handleAddPayment} className="rounded-xl bg-indigo-600 px-4 py-2 text-sm font-extrabold text-white hover:bg-indigo-700">
@@ -925,7 +925,7 @@ export default function BillingInvoicePage() {
                             <button
                                 type="button"
                                 onClick={() => loadAdvances(invoice.patient_id)}
-                                className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-extrabold text-slate-700 hover:bg-slate-100"
+                                className="rounded-xl border border-slate-500 bg-slate-50 px-4 py-2 text-sm font-extrabold text-slate-700 hover:bg-slate-100"
                             >
                                 Refresh
                             </button>
@@ -945,7 +945,7 @@ export default function BillingInvoicePage() {
                                     value={applyAmt}
                                     onChange={(e) => setApplyAmt(e.target.value)}
                                     placeholder="Apply partial amount (e.g., 500)"
-                                    className="rounded-xl border border-slate-200 px-3 py-2 text-sm"
+                                    className="rounded-xl border border-slate-500 px-3 py-2 text-sm"
                                 />
                                 <button
                                     type="button"

@@ -198,8 +198,8 @@ export function deleteOtSchedule(id) {
 }
 
 export function closeOtCase(caseId, payload) {
-  // payload: { outcome: string, actual_end_time?: string, icu_required?: boolean, immediate_postop_condition?: string }
-  return API.post(`/ot/cases/${caseId}/close`, payload)
+    // payload: { outcome: string, actual_end_time?: string, icu_required?: boolean, immediate_postop_condition?: string }
+    return API.post(`/ot/cases/${caseId}/close`, payload)
 }
 // ============================================================
 //  OT CASES
@@ -653,5 +653,68 @@ export function deleteBloodTransfusion(transfusionId) {
 
 
 
+export async function openOtCasePdfInNewTab(caseId) {
+    const res = await API.get(`/ot/cases/${caseId}/pdf`, {
+        params: { disposition: 'inline' },
+        responseType: 'blob',
+    })
+    const blob = new Blob([res.data], { type: 'application/pdf' })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank', 'noopener,noreferrer')
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+}
 
+export async function downloadOtCasePdf(caseId, filename = 'ot-case.pdf') {
+    const res = await API.get(`/ot/cases/${caseId}/pdf`, {
+        params: { disposition: 'attachment' },
+        responseType: 'blob',
+    })
+    const blob = new Blob([res.data], { type: 'application/pdf' })
+    const url = URL.createObjectURL(blob)
 
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+
+    setTimeout(() => URL.revokeObjectURL(url), 10_000)
+}
+
+export async function openPatientOtHistoryPdfInNewTab(patientId) {
+    const res = await API.get(`/ot/patients/${patientId}/history.pdf`, {
+        params: { disposition: 'inline' },
+        responseType: 'blob',
+    })
+    const blob = new Blob([res.data], { type: 'application/pdf' })
+    const url = URL.createObjectURL(blob)
+    window.open(url, '_blank', 'noopener,noreferrer')
+    setTimeout(() => URL.revokeObjectURL(url), 60_000)
+}
+
+export async function downloadPatientOtHistoryPdf(patientId, filename = 'patient-ot-history.pdf') {
+    const res = await API.get(`/ot/patients/${patientId}/history.pdf`, {
+        params: { disposition: 'attachment' },
+        responseType: 'blob',
+    })
+    const blob = new Blob([res.data], { type: 'application/pdf' })
+    const url = URL.createObjectURL(blob)
+
+    const a = document.createElement('a')
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+
+    setTimeout(() => URL.revokeObjectURL(url), 10_000)
+}
+
+export function getOtCasePdfBlob(caseId, disposition = 'attachment') {
+    return API.get(`/ot/cases/${caseId}/pdf`, {
+        params: { disposition },
+        responseType: 'blob',
+        headers: { Accept: 'application/pdf' },
+    })
+}

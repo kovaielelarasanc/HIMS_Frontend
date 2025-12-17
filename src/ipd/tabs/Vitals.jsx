@@ -139,7 +139,7 @@ export default function Vitals({ admissionId, canWrite }) {
                 </div>
 
                 {lastVital && (
-                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                    <div className="rounded-xl border border-slate-500 bg-slate-50 px-3 py-2 text-xs text-slate-700">
                         <div className="font-medium text-[11px] uppercase tracking-wide text-slate-500">
                             Last recorded
                         </div>
@@ -147,19 +147,19 @@ export default function Vitals({ admissionId, canWrite }) {
                             {formatDateTime(lastVital.recorded_at)}
                         </div>
                         <div className="mt-1 flex flex-wrap gap-2 text-[11px]">
-                            <span className="rounded-full bg-white px-2 py-0.5 border border-slate-200">
+                            <span className="rounded-full bg-white px-2 py-0.5 border border-slate-500">
                                 BP:{' '}
                                 {[lastVital.bp_systolic, lastVital.bp_diastolic]
                                     .filter(Boolean)
                                     .join('/') || '—'}
                             </span>
-                            <span className="rounded-full bg-white px-2 py-0.5 border border-slate-200">
+                            <span className="rounded-full bg-white px-2 py-0.5 border border-slate-500">
                                 Temp: {lastVital.temp_c ?? '—'} °C
                             </span>
-                            <span className="rounded-full bg-white px-2 py-0.5 border border-slate-200">
+                            <span className="rounded-full bg-white px-2 py-0.5 border border-slate-500">
                                 SpO₂: {lastVital.spo2 ?? '—'} %
                             </span>
-                            <span className="rounded-full bg-white px-2 py-0.5 border border-slate-200">
+                            <span className="rounded-full bg-white px-2 py-0.5 border border-slate-500">
                                 Pulse: {lastVital.pulse ?? '—'} /min
                             </span>
                         </div>
@@ -177,7 +177,7 @@ export default function Vitals({ admissionId, canWrite }) {
             {canPost && (
                 <form
                     onSubmit={handleSubmit}
-                    className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm space-y-3"
+                    className="rounded-2xl border border-slate-500 bg-white p-4 shadow-sm space-y-3"
                 >
                     <div className="flex items-center justify-between gap-2">
                         <h3 className="text-sm font-medium text-slate-900">
@@ -195,7 +195,7 @@ export default function Vitals({ admissionId, canWrite }) {
                             </label>
                             <input
                                 type="datetime-local"
-                                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-900 outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                                className="w-full rounded-lg border border-slate-500 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-900 outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                                 value={form.recorded_at}
                                 onChange={e =>
                                     updateField('recorded_at', e.target.value)
@@ -209,7 +209,7 @@ export default function Vitals({ admissionId, canWrite }) {
                             </label>
                             <input
                                 type="number"
-                                className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                                className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                                 placeholder="mmHg"
                                 value={form.bp_systolic}
                                 onChange={e =>
@@ -224,7 +224,7 @@ export default function Vitals({ admissionId, canWrite }) {
                             </label>
                             <input
                                 type="number"
-                                className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                                className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                                 placeholder="mmHg"
                                 value={form.bp_diastolic}
                                 onChange={e =>
@@ -240,7 +240,7 @@ export default function Vitals({ admissionId, canWrite }) {
                             <input
                                 type="number"
                                 step="0.1"
-                                className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                                className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                                 placeholder="°C"
                                 value={form.temp_c}
                                 onChange={e =>
@@ -255,7 +255,7 @@ export default function Vitals({ admissionId, canWrite }) {
                             </label>
                             <input
                                 type="number"
-                                className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                                className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                                 placeholder="breaths/min"
                                 value={form.rr}
                                 onChange={e =>
@@ -270,7 +270,7 @@ export default function Vitals({ admissionId, canWrite }) {
                             </label>
                             <input
                                 type="number"
-                                className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                                className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                                 placeholder="%"
                                 value={form.spo2}
                                 onChange={e =>
@@ -285,7 +285,7 @@ export default function Vitals({ admissionId, canWrite }) {
                             </label>
                             <input
                                 type="number"
-                                className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                                className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                                 placeholder="/min"
                                 value={form.pulse}
                                 onChange={e =>
@@ -316,7 +316,7 @@ export default function Vitals({ admissionId, canWrite }) {
             )}
 
             {/* Table */}
-            <div className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden">
+            <div className="rounded-2xl border border-slate-500 bg-white shadow-sm overflow-hidden">
                 <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2">
                     <div className="text-xs font-medium text-slate-700">
                         Vitals history

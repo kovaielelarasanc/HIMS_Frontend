@@ -855,7 +855,7 @@ function MedicationsTab({ admissionId, canWrite = true }) {
                             <button
                                 type="button"
                                 onClick={saveMeta}
-                                className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
+                                className="rounded-full border border-slate-500 px-3 py-1 text-xs text-slate-700 hover:bg-slate-50"
                             >
                                 Save diet
                             </button>
@@ -1238,7 +1238,7 @@ function MedicationsTab({ admissionId, canWrite = true }) {
                             <button
                                 type="button"
                                 onClick={resetMedForm}
-                                className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                                className="rounded-full border border-slate-500 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50"
                             >
                                 Clear
                             </button>

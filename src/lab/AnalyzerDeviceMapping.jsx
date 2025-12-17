@@ -121,7 +121,7 @@ function ActiveBadge({ active }) {
         )
     }
     return (
-        <span className="inline-flex items-center rounded-full bg-slate-50 text-slate-600 border border-slate-200 px-2 py-0.5 text-[11px] font-semibold">
+        <span className="inline-flex items-center rounded-full bg-slate-50 text-slate-600 border border-slate-500 px-2 py-0.5 text-[11px] font-semibold">
             Inactive
         </span>
     )
@@ -178,7 +178,7 @@ function LisTestPicker({ value, onChange }) {
                     value={query}
                     onChange={(e) => handleSearch(e.target.value)}
                 />
-                <div className="border border-slate-200 rounded-lg bg-slate-50/60 px-2 py-1 text-[11px] text-slate-600">
+                <div className="border border-slate-500 rounded-lg bg-slate-50/60 px-2 py-1 text-[11px] text-slate-600">
                     Current: <span className="font-semibold">{selectedLabel}</span>
                 </div>
             </div>
@@ -186,7 +186,7 @@ function LisTestPicker({ value, onChange }) {
                 <div className="mt-1 text-[11px] text-slate-500">Searching…</div>
             )}
             {!loading && options.length > 0 && (
-                <div className="mt-1 max-h-40 overflow-auto rounded-lg border border-slate-200 bg-white shadow-sm">
+                <div className="mt-1 max-h-40 overflow-auto rounded-lg border border-slate-500 bg-white shadow-sm">
                     {options.map((t) => (
                         <button
                             key={t.id}
@@ -210,7 +210,7 @@ function LisTestPicker({ value, onChange }) {
                     ))}
                 </div>
             )}
-            <div className="pt-2 border-t border-dashed border-slate-200 mt-2">
+            <div className="pt-2 border-t border-dashed border-slate-500 mt-2">
                 <Label className="text-[11px] font-medium text-slate-600">
                     Or manual LIS Test ID
                 </Label>
@@ -479,7 +479,7 @@ export default function AnalyzerDeviceMapping() {
             {/* Header */}
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div className="space-y-1">
-                    <div className="inline-flex items-center gap-2 rounded-full bg-slate-50 px-3 py-1 border border-slate-200 text-xs font-semibold text-slate-700">
+                    <div className="inline-flex items-center gap-2 rounded-full bg-slate-50 px-3 py-1 border border-slate-500 text-xs font-semibold text-slate-700">
                         <Settings2 className="w-3.5 h-3.5" />
                         Analyzer Device Mapping
                     </div>
@@ -508,7 +508,7 @@ export default function AnalyzerDeviceMapping() {
             </div>
 
             {/* Filters / Device select */}
-            <Card className="border-slate-200 shadow-sm">
+            <Card className="border-slate-500 shadow-sm">
                 <CardHeader className="pb-3">
                     <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                         <div>
@@ -552,7 +552,7 @@ export default function AnalyzerDeviceMapping() {
                             ) : (
                                 <div className="relative">
                                     <select
-                                        className="block w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs md:text-sm font-medium text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 appearance-none pr-8"
+                                        className="block w-full rounded-lg border border-slate-500 bg-white px-3 py-2.5 text-xs md:text-sm font-medium text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 appearance-none pr-8"
                                         value={selectedDeviceId || ''}
                                         onChange={(e) =>
                                             setSelectedDeviceId(
@@ -633,7 +633,7 @@ export default function AnalyzerDeviceMapping() {
             </Card>
 
             {/* Mapping table */}
-            <Card className="border-slate-200 shadow-sm">
+            <Card className="border-slate-500 shadow-sm">
                 <CardHeader className="pb-2 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                     <div>
                         <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -655,7 +655,7 @@ export default function AnalyzerDeviceMapping() {
                     <div className="hidden md:block overflow-x-auto">
                         <table className="min-w-full text-xs border-collapse">
                             <thead>
-                                <tr className="border-b border-slate-200 bg-slate-50">
+                                <tr className="border-b border-slate-500 bg-slate-50">
                                     <th className="px-3 py-2 text-left font-semibold text-slate-700">
                                         Device Test Code
                                     </th>
@@ -806,7 +806,7 @@ export default function AnalyzerDeviceMapping() {
                             Array.from({ length: 4 }).map((_, idx) => (
                                 <Card
                                     key={idx}
-                                    className="border-slate-200 shadow-sm rounded-xl"
+                                    className="border-slate-500 shadow-sm rounded-xl"
                                 >
                                     <CardContent className="p-3 space-y-2">
                                         <Skeleton className="h-4 w-32" />
@@ -826,7 +826,7 @@ export default function AnalyzerDeviceMapping() {
                             filteredChannels.map((ch) => (
                                 <Card
                                     key={ch.id}
-                                    className="border-slate-200 shadow-sm rounded-xl"
+                                    className="border-slate-500 shadow-sm rounded-xl"
                                 >
                                     <CardContent className="p-3 space-y-2">
                                         <div className="flex items-start justify-between gap-2">

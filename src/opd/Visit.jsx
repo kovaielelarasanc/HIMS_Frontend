@@ -40,13 +40,13 @@ function cx(...xs) {
 const UI = {
     page: 'min-h-[calc(100vh-4rem)] w-full bg-gradient-to-b from-slate-50 via-white to-slate-50',
     glass:
-        'rounded-3xl border border-black/10 bg-white/75 backdrop-blur-xl shadow-[0_12px_35px_rgba(2,6,23,0.10)]',
+        'rounded-3xl border border-black/50 bg-white/75 backdrop-blur-xl shadow-[0_12px_35px_rgba(2,6,23,0.10)]',
     chip:
-        'inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700',
+        'inline-flex items-center gap-2 rounded-full border border-black/50 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700',
     chipBtn:
-        'inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/85 px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-black/[0.03] active:scale-[0.99] transition disabled:opacity-60',
+        'inline-flex items-center gap-2 rounded-full border border-black/50 bg-white/85 px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-black/[0.03] active:scale-[0.99] transition disabled:opacity-60',
     input:
-        'h-11 w-full rounded-2xl border border-black/10 bg-white/85 px-3 text-[12px] font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-500',
+        'h-11 w-full rounded-2xl border border-black/50 bg-white/85 px-3 text-[12px] font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-500',
 }
 
 const TABS = [
@@ -72,7 +72,7 @@ function prettyDateTime(iso) {
 function VitalsPill({ label, value }) {
     if (value === null || value === undefined || value === '') return null
     return (
-        <span className="inline-flex items-center rounded-full border border-black/10 bg-white/85 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+        <span className="inline-flex items-center rounded-full border border-black/50 bg-white/85 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
             <span className="text-slate-500">{label}:</span>
             <span className="ml-1 tabular-nums text-slate-900">{value}</span>
         </span>
@@ -198,7 +198,7 @@ export default function Visit({ currentUser }) {
                                 </div>
 
                                 <div className="mt-3 flex items-start gap-3">
-                                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-3xl bg-black/[0.04] border border-black/10">
+                                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-3xl bg-black/[0.04] border border-black/50">
                                         <Stethoscope className="h-5 w-5 text-slate-700" />
                                     </div>
 
@@ -267,13 +267,13 @@ export default function Visit({ currentUser }) {
 
                         {/* vitals strip */}
                         {!loading && data?.current_vitals && (
-                            <div className="mt-5 rounded-3xl border border-black/10 bg-white/70 backdrop-blur px-4 py-3">
+                            <div className="mt-5 rounded-3xl border border-black/50 bg-white/70 backdrop-blur px-4 py-3">
                                 <div className="flex items-center justify-between gap-2">
                                     <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 inline-flex items-center gap-2">
                                         <HeartPulse className="h-4 w-4 text-slate-500" />
                                         Latest vitals
                                     </div>
-                                    <Badge variant="outline" className="rounded-full border-black/10 bg-white/85 text-[11px] font-semibold">
+                                    <Badge variant="outline" className="rounded-full border-black/50 bg-white/85 text-[11px] font-semibold">
                                         Live
                                     </Badge>
                                 </div>
@@ -315,7 +315,7 @@ export default function Visit({ currentUser }) {
                                             'whitespace-nowrap inline-flex items-center gap-2 rounded-full border px-4 py-2 text-[12px] font-semibold transition',
                                             active
                                                 ? 'border-slate-900 bg-slate-900 text-white shadow-sm'
-                                                : 'border-black/10 bg-white/75 text-slate-700 hover:bg-black/[0.03]',
+                                                : 'border-black/50 bg-white/75 text-slate-700 hover:bg-black/[0.03]',
                                         )}
                                     >
                                         <Icon className="h-4 w-4" />
@@ -357,7 +357,7 @@ export default function Visit({ currentUser }) {
                                 className="space-y-4"
                             >
                                 <Card className={cx(UI.glass)}>
-                                    <CardHeader className="border-b border-black/10 bg-white/60 backdrop-blur-xl">
+                                    <CardHeader className="border-b border-black/50 bg-white/60 backdrop-blur-xl">
                                         <CardTitle className="text-base font-semibold text-slate-900">Quick Orders</CardTitle>
                                         <CardDescription className="text-[12px] text-slate-600">
                                             Place lab / radiology / pharmacy orders quickly for this visit.
@@ -388,7 +388,7 @@ export default function Visit({ currentUser }) {
                                 className="space-y-4"
                             >
                                 <Card className={cx(UI.glass)}>
-                                    <CardHeader className="border-b border-black/10 bg-white/60 backdrop-blur-xl">
+                                    <CardHeader className="border-b border-black/50 bg-white/60 backdrop-blur-xl">
                                         <CardTitle className="text-base font-semibold text-slate-900">
                                             Clinical Notes (SOAP)
                                         </CardTitle>
@@ -406,7 +406,7 @@ export default function Visit({ currentUser }) {
                                                 <Textarea
                                                     value={form.chief_complaint}
                                                     onChange={(e) => onField('chief_complaint', e.target.value)}
-                                                    className="min-h-[90px] rounded-3xl border-black/10 bg-white/85 text-[13px]"
+                                                    className="min-h-[90px] rounded-3xl border-black/50 bg-white/85 text-[13px]"
                                                 />
                                             </div>
 
@@ -417,7 +417,7 @@ export default function Visit({ currentUser }) {
                                                 <Textarea
                                                     value={form.symptoms}
                                                     onChange={(e) => onField('symptoms', e.target.value)}
-                                                    className="min-h-[90px] rounded-3xl border-black/10 bg-white/85 text-[13px]"
+                                                    className="min-h-[90px] rounded-3xl border-black/50 bg-white/85 text-[13px]"
                                                 />
                                             </div>
                                         </div>
@@ -432,7 +432,7 @@ export default function Visit({ currentUser }) {
                                                 <Textarea
                                                     value={form.soap_subjective}
                                                     onChange={(e) => onField('soap_subjective', e.target.value)}
-                                                    className="min-h-[130px] rounded-3xl border-black/10 bg-white/85 text-[13px]"
+                                                    className="min-h-[130px] rounded-3xl border-black/50 bg-white/85 text-[13px]"
                                                 />
                                             </div>
 
@@ -443,7 +443,7 @@ export default function Visit({ currentUser }) {
                                                 <Textarea
                                                     value={form.soap_objective}
                                                     onChange={(e) => onField('soap_objective', e.target.value)}
-                                                    className="min-h-[130px] rounded-3xl border-black/10 bg-white/85 text-[13px]"
+                                                    className="min-h-[130px] rounded-3xl border-black/50 bg-white/85 text-[13px]"
                                                 />
                                             </div>
                                         </div>
@@ -456,7 +456,7 @@ export default function Visit({ currentUser }) {
                                                 <Textarea
                                                     value={form.soap_assessment}
                                                     onChange={(e) => onField('soap_assessment', e.target.value)}
-                                                    className="min-h-[130px] rounded-3xl border-black/10 bg-white/85 text-[13px]"
+                                                    className="min-h-[130px] rounded-3xl border-black/50 bg-white/85 text-[13px]"
                                                 />
                                             </div>
 
@@ -467,12 +467,12 @@ export default function Visit({ currentUser }) {
                                                 <Textarea
                                                     value={form.plan}
                                                     onChange={(e) => onField('plan', e.target.value)}
-                                                    className="min-h-[130px] rounded-3xl border-black/10 bg-white/85 text-[13px]"
+                                                    className="min-h-[130px] rounded-3xl border-black/50 bg-white/85 text-[13px]"
                                                 />
                                             </div>
                                         </div>
 
-                                        <div className="flex items-center justify-between gap-2 rounded-3xl border border-black/10 bg-white/70 px-4 py-3">
+                                        <div className="flex items-center justify-between gap-2 rounded-3xl border border-black/50 bg-white/70 px-4 py-3">
                                             <div className="text-[12px] text-slate-600 inline-flex items-center gap-2">
                                                 <NotebookPen className="h-4 w-4 text-slate-500" />
                                                 Tip: keep sentences short and add key negatives.
@@ -504,7 +504,7 @@ export default function Visit({ currentUser }) {
                                 className="space-y-4"
                             >
                                 <Card className={cx(UI.glass)}>
-                                    <CardHeader className="border-b border-black/10 bg-white/60 backdrop-blur-xl">
+                                    <CardHeader className="border-b border-black/50 bg-white/60 backdrop-blur-xl">
                                         <CardTitle className="text-base font-semibold text-slate-900">Follow-Up</CardTitle>
                                         <CardDescription className="text-[12px] text-slate-600">
                                             Create a follow-up reminder for continuity of care.
@@ -521,7 +521,7 @@ export default function Visit({ currentUser }) {
                                                     type="date"
                                                     value={fuDate}
                                                     onChange={(e) => setFuDate(e.target.value)}
-                                                    className="h-11 rounded-2xl border-black/10 bg-white/85 text-[12px] font-semibold"
+                                                    className="h-11 rounded-2xl border-black/50 bg-white/85 text-[12px] font-semibold"
                                                 />
                                             </div>
 
@@ -533,7 +533,7 @@ export default function Visit({ currentUser }) {
                                                     value={fuNote}
                                                     onChange={(e) => setFuNote(e.target.value)}
                                                     placeholder="Review in 2 weeks / discuss reports…"
-                                                    className="h-11 rounded-2xl border-black/10 bg-white/85 text-[12px] font-semibold"
+                                                    className="h-11 rounded-2xl border-black/50 bg-white/85 text-[12px] font-semibold"
                                                 />
                                             </div>
 
@@ -548,7 +548,7 @@ export default function Visit({ currentUser }) {
                                             </Button>
                                         </div>
 
-                                        <div className="rounded-3xl border border-black/10 bg-white/70 px-4 py-3 text-[12px] text-slate-600 inline-flex items-center gap-2">
+                                        <div className="rounded-3xl border border-black/50 bg-white/70 px-4 py-3 text-[12px] text-slate-600 inline-flex items-center gap-2">
                                             <Stethoscope className="h-4 w-4 text-slate-500" />
                                             Follow-up will appear in OPD → Follow-ups module and can be scheduled into appointments.
                                         </div>

@@ -216,7 +216,7 @@ function CountsTab({ caseId }) {
             <input
                 type="number"
                 inputMode="numeric"
-                className="h-9 w-full rounded-md border border-slate-200 bg-slate-50 px-3 text-[12px] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                className="h-9 w-full rounded-md border border-slate-500 bg-slate-50 px-3 text-[12px] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
                 value={form[field]}
                 disabled={!canEdit}
                 onChange={(e) => handleChange(field, e.target.value)}
@@ -227,7 +227,7 @@ function CountsTab({ caseId }) {
     return (
         <form
             onSubmit={handleSubmit}
-            className="space-y-3 rounded-2xl border border-slate-200 bg-white/90 px-3 py-3 shadow-sm md:px-4 md:py-4"
+            className="space-y-3 rounded-2xl border border-slate-500 bg-white/90 px-3 py-3 shadow-sm md:px-4 md:py-4"
         >
             <motion.div
                 initial={{ opacity: 0, y: 6 }}
@@ -266,7 +266,7 @@ function CountsTab({ caseId }) {
                 </div>
             ) : (
                 <>
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-3">
+                    <div className="rounded-2xl border border-slate-500 bg-slate-50/60 p-3">
                         <div className="mb-2 text-[11px] font-semibold text-slate-700">
                             Sponges
                         </div>
@@ -277,7 +277,7 @@ function CountsTab({ caseId }) {
                         </div>
                     </div>
 
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-3">
+                    <div className="rounded-2xl border border-slate-500 bg-slate-50/60 p-3">
                         <div className="mb-2 text-[11px] font-semibold text-slate-700">
                             Instruments & Needles
                         </div>
@@ -297,7 +297,7 @@ function CountsTab({ caseId }) {
                         </span>
                         <textarea
                             rows={2}
-                            className="w-full resize-none rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                            className="w-full resize-none rounded-md border border-slate-500 bg-slate-50 px-3 py-2 text-[12px] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
                             value={form.discrepancy_text}
                             disabled={!canEdit}
                             onChange={(e) => handleChange('discrepancy_text', e.target.value)}
@@ -305,7 +305,7 @@ function CountsTab({ caseId }) {
                         />
                     </div>
 
-                    <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-800">
+                    <label className="flex cursor-pointer items-center gap-2 rounded-xl border border-slate-500 bg-slate-50 px-3 py-2 text-[11px] text-slate-800">
                         <input
                             type="checkbox"
                             className="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500 disabled:cursor-not-allowed disabled:opacity-60"
@@ -325,7 +325,7 @@ function CountsTab({ caseId }) {
                             </span>
                             <input
                                 type="text"
-                                className="h-9 w-full rounded-md border border-slate-200 bg-slate-50 px-3 text-[12px] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                                className="h-9 w-full rounded-md border border-slate-500 bg-slate-50 px-3 text-[12px] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
                                 value={form.resolved_by}
                                 disabled={!canEdit}
                                 onChange={(e) => handleChange('resolved_by', e.target.value)}
@@ -339,7 +339,7 @@ function CountsTab({ caseId }) {
                             </span>
                             <textarea
                                 rows={2}
-                                className="w-full resize-none rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                                className="w-full resize-none rounded-md border border-slate-500 bg-slate-50 px-3 py-2 text-[12px] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
                                 value={form.notes}
                                 disabled={!canEdit}
                                 onChange={(e) => handleChange('notes', e.target.value)}

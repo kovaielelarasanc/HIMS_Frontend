@@ -39,13 +39,13 @@ function cx(...xs) {
 const UI = {
     page: 'min-h-[calc(100vh-4rem)] w-full bg-gradient-to-b from-slate-50 via-white to-slate-50',
     glass:
-        'rounded-3xl border border-black/10 bg-white/75 backdrop-blur-xl shadow-[0_12px_35px_rgba(2,6,23,0.10)]',
+        'rounded-3xl border border-black/50 bg-white/75 backdrop-blur-xl shadow-[0_12px_35px_rgba(2,6,23,0.10)]',
     chip:
-        'inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700',
+        'inline-flex items-center gap-2 rounded-full border border-black/50 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700',
     chipBtn:
-        'inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/85 px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-black/[0.03] active:scale-[0.99] transition disabled:opacity-60',
+        'inline-flex items-center gap-2 rounded-full border border-black/50 bg-white/85 px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-black/[0.03] active:scale-[0.99] transition disabled:opacity-60',
     input:
-        'h-11 w-full rounded-2xl border border-black/10 bg-white/85 px-3 text-[12px] font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-100 focus:border-sky-500',
+        'h-11 w-full rounded-2xl border border-black/50 bg-white/85 px-3 text-[12px] font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-100 focus:border-sky-500',
 }
 
 function prettyTime(d) {
@@ -98,7 +98,7 @@ function Toast({ kind = 'success', title, message, onClose }) {
                 S.border,
             )}
         >
-            <div className={cx('mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-black/10', S.bg)}>
+            <div className={cx('mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-black/50', S.bg)}>
                 <S.Icon className={cx('h-5 w-5', S.text)} />
             </div>
 
@@ -108,7 +108,7 @@ function Toast({ kind = 'success', title, message, onClose }) {
             </div>
 
             <button
-                className="ml-auto inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-black/10 bg-white/70 hover:bg-black/[0.04]"
+                className="ml-auto inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-black/50 bg-white/70 hover:bg-black/[0.04]"
                 onClick={onClose}
                 aria-label="Close"
                 type="button"
@@ -129,7 +129,7 @@ function StatCard({ label, value, icon: Icon, tone = 'slate' }) {
                     ? 'bg-amber-50 text-amber-900 border-amber-200'
                     : tone === 'sky'
                         ? 'bg-sky-50 text-sky-900 border-sky-200'
-                        : 'bg-white/80 text-slate-900 border-black/10'
+                        : 'bg-white/80 text-slate-900 border-black/50'
 
     return (
         <div className={cx('rounded-3xl border px-4 py-3', toneCls)}>
@@ -139,7 +139,7 @@ function StatCard({ label, value, icon: Icon, tone = 'slate' }) {
                     <div className="mt-1 text-[20px] font-semibold tracking-tight tabular-nums">{value}</div>
                 </div>
                 {Icon ? (
-                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-black/10 bg-white/30">
+                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-black/50 bg-white/30">
                         <Icon className="h-5 w-5 opacity-80" />
                     </div>
                 ) : null}
@@ -407,7 +407,7 @@ export default function Admissions() {
                                 </div>
 
                                 <div className="mt-3 flex items-start gap-3">
-                                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-3xl bg-black/[0.04] border border-black/10">
+                                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-3xl bg-black/[0.04] border border-black/50">
                                         <BedDouble className="h-5 w-5 text-slate-700" />
                                     </div>
                                     <div className="min-w-0">
@@ -498,7 +498,7 @@ export default function Admissions() {
                     fallback={
                         <div className={cx(UI.glass, 'p-5')}>
                             <div className="flex items-start gap-3">
-                                <div className="inline-flex h-11 w-11 items-center justify-center rounded-3xl border border-black/10 bg-amber-50">
+                                <div className="inline-flex h-11 w-11 items-center justify-center rounded-3xl border border-black/50 bg-amber-50">
                                     <AlertTriangle className="h-5 w-5 text-amber-800" />
                                 </div>
                                 <div>
@@ -517,7 +517,7 @@ export default function Admissions() {
                         <div className="space-y-4">
                             {/* Patient */}
                             <Card className={cx(UI.glass, 'overflow-hidden')}>
-                                <CardHeader className="border-b border-black/10 bg-white/60 backdrop-blur-xl">
+                                <CardHeader className="border-b border-black/50 bg-white/60 backdrop-blur-xl">
                                     <CardTitle className="text-base md:text-lg font-semibold text-slate-900">
                                         Step 1 — Patient
                                     </CardTitle>
@@ -528,7 +528,7 @@ export default function Admissions() {
                                 <CardContent className="pt-4 space-y-3">
                                     <PatientPagedPicker value={patientId ?? undefined} onChange={setPatientId} />
                                     {isPosInt(patientId) && (
-                                        <div className="rounded-3xl border border-black/10 bg-white/80 px-4 py-3 text-[12px] text-slate-600">
+                                        <div className="rounded-3xl border border-black/50 bg-white/80 px-4 py-3 text-[12px] text-slate-600">
                                             Tip: Duplicate active admission is blocked automatically.
                                         </div>
                                     )}
@@ -537,7 +537,7 @@ export default function Admissions() {
 
                             {/* Doctor */}
                             <Card className={cx(UI.glass, 'overflow-hidden')}>
-                                <CardHeader className="border-b border-black/10 bg-white/60 backdrop-blur-xl">
+                                <CardHeader className="border-b border-black/50 bg-white/60 backdrop-blur-xl">
                                     <CardTitle className="text-base md:text-lg font-semibold text-slate-900">
                                         Step 2 — Primary doctor
                                     </CardTitle>
@@ -559,7 +559,7 @@ export default function Admissions() {
 
                             {/* Bed */}
                             <Card className={cx(UI.glass, 'overflow-hidden')}>
-                                <CardHeader className="border-b border-black/10 bg-white/60 backdrop-blur-xl">
+                                <CardHeader className="border-b border-black/50 bg-white/60 backdrop-blur-xl">
                                     <div className="flex items-start justify-between gap-3">
                                         <div>
                                             <CardTitle className="text-base md:text-lg font-semibold text-slate-900">
@@ -597,7 +597,7 @@ export default function Admissions() {
                                     )}
 
                                     {selectedBed && (
-                                        <div className="rounded-3xl border border-black/10 bg-white/80 px-4 py-3">
+                                        <div className="rounded-3xl border border-black/50 bg-white/80 px-4 py-3">
                                             <div className="flex flex-wrap items-center gap-2">
                                                 <span className="text-[12px] font-semibold text-slate-900">
                                                     Selected: {selectedBed.code}
@@ -609,7 +609,7 @@ export default function Admissions() {
                                                             ? 'border-emerald-200 bg-emerald-50 text-emerald-800'
                                                             : selectedBed.state === 'reserved'
                                                                 ? 'border-amber-200 bg-amber-50 text-amber-900'
-                                                                : 'border-slate-200 bg-slate-100 text-slate-700',
+                                                                : 'border-slate-500 bg-slate-100 text-slate-700',
                                                     )}
                                                 >
                                                     {selectedBed.state}
@@ -633,7 +633,7 @@ export default function Admissions() {
                         <div className="space-y-4">
                             {/* Admission details */}
                             <Card className={cx(UI.glass, 'overflow-hidden')}>
-                                <CardHeader className="border-b border-black/10 bg-white/60 backdrop-blur-xl">
+                                <CardHeader className="border-b border-black/50 bg-white/60 backdrop-blur-xl">
                                     <CardTitle className="text-base md:text-lg font-semibold text-slate-900">
                                         Admission details
                                     </CardTitle>
@@ -744,7 +744,7 @@ export default function Admissions() {
                                             <div className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
                                                 Clinical notes
                                             </div>
-                                            <Badge variant="outline" className="rounded-full border-black/10 bg-white/85 text-[11px]">
+                                            <Badge variant="outline" className="rounded-full border-black/50 bg-white/85 text-[11px]">
                                                 <Stethoscope className="mr-1 h-3.5 w-3.5" />
                                                 Optional
                                             </Badge>
@@ -758,13 +758,13 @@ export default function Admissions() {
                                                 placeholder="Preliminary diagnosis"
                                             />
                                             <Textarea
-                                                className="min-h-[92px] rounded-2xl border border-black/10 bg-white/85 text-[12px] font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-100 focus:border-sky-500"
+                                                className="min-h-[92px] rounded-2xl border border-black/50 bg-white/85 text-[12px] font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-100 focus:border-sky-500"
                                                 value={form.history}
                                                 onChange={(e) => setForm((p) => ({ ...p, history: e.target.value }))}
                                                 placeholder="Short history (complaints, duration, relevant past history)…"
                                             />
                                             <Textarea
-                                                className="min-h-[92px] rounded-2xl border border-black/10 bg-white/85 text-[12px] font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-100 focus:border-sky-500"
+                                                className="min-h-[92px] rounded-2xl border border-black/50 bg-white/85 text-[12px] font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-sky-100 focus:border-sky-500"
                                                 value={form.care_plan}
                                                 onChange={(e) => setForm((p) => ({ ...p, care_plan: e.target.value }))}
                                                 placeholder="Care plan (initial orders / monitoring / consults)…"
@@ -785,7 +785,7 @@ export default function Admissions() {
                                         <Button
                                             type="button"
                                             variant="outline"
-                                            className="h-11 rounded-2xl border-black/10 bg-white/85 font-semibold"
+                                            className="h-11 rounded-2xl border-black/50 bg-white/85 font-semibold"
                                             onClick={resetForm}
                                             disabled={loading}
                                         >

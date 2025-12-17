@@ -1394,7 +1394,7 @@ function TextInput({ label, value, onChange, placeholder, disabled = false }) {
         <label className="flex flex-col gap-1">
             <span className="text-[11px] font-semibold text-slate-600">{label}</span>
             <input
-                className="h-9 rounded-md border border-slate-200 bg-slate-50 px-3 text-[12px] text-slate-900 outline-none ring-0 transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                className="h-9 rounded-md border border-slate-500 bg-slate-50 px-3 text-[12px] text-slate-900 outline-none ring-0 transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
                 value={value ?? ''}
                 placeholder={placeholder}
                 onChange={(e) => onChange(e.target.value)}
@@ -1409,7 +1409,7 @@ function Textarea({ label, value, onChange, placeholder, disabled = false }) {
         <label className="flex flex-col gap-1">
             <span className="text-[11px] font-semibold text-slate-600">{label}</span>
             <textarea
-                className="min-h-[70px] rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-[12px] text-slate-900 outline-none ring-0 transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                className="min-h-[70px] rounded-md border border-slate-500 bg-slate-50 px-3 py-2 text-[12px] text-slate-900 outline-none ring-0 transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
                 value={value ?? ''}
                 placeholder={placeholder}
                 onChange={(e) => onChange(e.target.value)}
@@ -1439,7 +1439,7 @@ function Select({ label, value, onChange, options, disabled = false }) {
         <label className="flex flex-col gap-1">
             <span className="text-[11px] font-semibold text-slate-600">{label}</span>
             <select
-                className="h-9 rounded-md border border-slate-200 bg-slate-50 px-3 text-[12px] text-slate-900 outline-none ring-0 transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                className="h-9 rounded-md border border-slate-500 bg-slate-50 px-3 text-[12px] text-slate-900 outline-none ring-0 transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
                 value={value ?? ''}
                 onChange={(e) => onChange(e.target.value)}
                 disabled={disabled}

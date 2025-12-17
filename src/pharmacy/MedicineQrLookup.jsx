@@ -205,7 +205,7 @@ export default function MedicineQrLookup() {
                 </div>
 
                 {/* Search + camera toggle */}
-                <Card className="rounded-2xl border-slate-200 shadow-sm">
+                <Card className="rounded-2xl border-slate-500 shadow-sm">
                     <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                         <div>
                             <CardTitle className="text-base font-semibold text-slate-900">
@@ -291,7 +291,7 @@ export default function MedicineQrLookup() {
 
                         {/* Camera area */}
                         {useCamera && (
-                            <div className="mt-3 rounded-2xl border border-dashed border-slate-200 bg-slate-100/60 px-3 py-3">
+                            <div className="mt-3 rounded-2xl border border-dashed border-slate-500 bg-slate-100/60 px-3 py-3">
                                 <p className="mb-2 flex items-center gap-2 text-xs text-slate-600">
                                     <Camera className="h-3 w-3" />
                                     Point your medicine QR code at the camera. Once decoded, the
@@ -315,7 +315,7 @@ export default function MedicineQrLookup() {
 
                 {/* Result card */}
                 {item && (
-                    <Card className="rounded-2xl border-slate-200 shadow-sm">
+                    <Card className="rounded-2xl border-slate-500 shadow-sm">
                         <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
                             <div className="space-y-1">
                                 <CardTitle className="flex items-center gap-2 text-lg">
@@ -345,7 +345,7 @@ export default function MedicineQrLookup() {
 
                             {qrImageUrl && (
                                 <div className="flex flex-col items-center gap-2">
-                                    <div className="rounded-xl border border-slate-200 bg-white p-2">
+                                    <div className="rounded-xl border border-slate-500 bg-white p-2">
                                         <img
                                             src={qrImageUrl}
                                             alt={`QR for ${item.name}`}
@@ -410,7 +410,7 @@ export default function MedicineQrLookup() {
 
 function DetailBox({ label, value }) {
     return (
-        <div className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5">
+        <div className="rounded-2xl border border-slate-500 bg-white px-3 py-2.5">
             <p className="text-[11px] font-medium uppercase tracking-wide text-slate-500">
                 {label}
             </p>

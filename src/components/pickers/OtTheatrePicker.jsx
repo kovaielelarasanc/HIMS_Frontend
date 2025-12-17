@@ -38,19 +38,19 @@ export default function OtTheatrePicker({ label = 'OT Theatre', value, onChange 
             <label className="text-xs font-medium text-slate-700">
                 {label} <span className="text-rose-500">*</span>
             </label>
-            <div className="space-y-1 rounded-xl border border-slate-200 bg-slate-50/60 p-2">
+            <div className="space-y-1 rounded-xl border border-slate-500 bg-slate-50/60 p-2">
                 <div className="relative">
                     <Search className="pointer-events-none absolute left-2 top-1.5 h-3.5 w-3.5 text-slate-400" />
                     <input
                         type="text"
-                        className="w-full rounded-lg border border-slate-200 bg-white pl-7 pr-2 py-1.5 text-[11px] text-slate-800 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                        className="w-full rounded-lg border border-slate-500 bg-white pl-7 pr-2 py-1.5 text-[11px] text-slate-800 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                         placeholder="Search OT..."
                         value={search}
                         onChange={(e) => setSearch(e.target.value)}
                     />
                 </div>
                 <select
-                    className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                    className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-[11px] text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                     value={value || ''}
                     onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}
                 >

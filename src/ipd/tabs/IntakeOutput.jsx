@@ -190,7 +190,7 @@ export default function IntakeOutput({ admissionId }) {
                     </p>
                 </div>
 
-                <div className="flex flex-col gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-800">
+                <div className="flex flex-col gap-2 rounded-2xl border border-slate-500 bg-slate-50 px-3 py-2 text-xs text-slate-800">
                     <div className="flex items-center justify-between gap-3">
                         <span className="font-medium text-[11px] uppercase tracking-wide text-slate-500">
                             Today&apos;s 24-hr balance
@@ -245,7 +245,7 @@ export default function IntakeOutput({ admissionId }) {
                             {['Morning', 'Evening', 'Night'].map(shift => (
                                 <div
                                     key={shift}
-                                    className="rounded-lg border border-slate-200 bg-white px-1.5 py-1"
+                                    className="rounded-lg border border-slate-500 bg-white px-1.5 py-1"
                                 >
                                     <div className="font-medium text-[10px]">
                                         {shift}
@@ -277,7 +277,7 @@ export default function IntakeOutput({ admissionId }) {
             <PermGate anyOf={['ipd.nursing']}>
                 <form
                     onSubmit={handleSubmit}
-                    className="space-y-3 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm"
+                    className="space-y-3 rounded-2xl border border-slate-500 bg-white p-4 shadow-sm"
                 >
                     <div className="flex items-center justify-between gap-2">
                         <h3 className="text-sm font-medium text-slate-900">
@@ -295,7 +295,7 @@ export default function IntakeOutput({ admissionId }) {
                             </label>
                             <input
                                 type="datetime-local"
-                                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-900 outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                                className="w-full rounded-lg border border-slate-500 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-900 outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                                 value={form.recorded_at}
                                 onChange={e =>
                                     updateField('recorded_at', e.target.value)
@@ -309,7 +309,7 @@ export default function IntakeOutput({ admissionId }) {
                             </label>
                             <input
                                 type="number"
-                                className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                                className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                                 placeholder="Oral / IV / Blood"
                                 value={form.intake_ml}
                                 onChange={e =>
@@ -324,7 +324,7 @@ export default function IntakeOutput({ admissionId }) {
                             </label>
                             <input
                                 type="number"
-                                className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                                className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                                 placeholder="Foley / voided"
                                 value={form.urine_ml}
                                 onChange={e =>
@@ -339,7 +339,7 @@ export default function IntakeOutput({ admissionId }) {
                             </label>
                             <input
                                 type="number"
-                                className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                                className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                                 placeholder="Abdominal / chest"
                                 value={form.drains_ml}
                                 onChange={e =>
@@ -354,7 +354,7 @@ export default function IntakeOutput({ admissionId }) {
                             </label>
                             <input
                                 type="number"
-                                className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                                className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                                 placeholder="Number of times"
                                 value={form.stools_count}
                                 onChange={e =>
@@ -368,7 +368,7 @@ export default function IntakeOutput({ admissionId }) {
                                 Remarks / Description
                             </label>
                             <input
-                                className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
+                                className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
                                 placeholder="RL, NS, Water, Urine via Foley, Abdominal drain..."
                                 value={form.remarks}
                                 onChange={e =>
@@ -397,7 +397,7 @@ export default function IntakeOutput({ admissionId }) {
             </PermGate>
 
             {/* History table */}
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="overflow-hidden rounded-2xl border border-slate-500 bg-white shadow-sm">
                 <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2 text-xs">
                     <div className="font-medium text-slate-700">
                         I/O history

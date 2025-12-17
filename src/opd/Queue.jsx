@@ -69,13 +69,13 @@ function cx(...xs) {
 const UI = {
     page: 'min-h-[calc(100vh-4rem)] w-full bg-gradient-to-b from-slate-50 via-white to-slate-50',
     glass:
-        'rounded-3xl border border-black/10 bg-white/75 backdrop-blur-xl shadow-[0_12px_35px_rgba(2,6,23,0.10)]',
+        'rounded-3xl border border-black/50 bg-white/75 backdrop-blur-xl shadow-[0_12px_35px_rgba(2,6,23,0.10)]',
     chip:
-        'inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700',
+        'inline-flex items-center gap-2 rounded-full border border-black/50 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700',
     chipBtn:
         'inline-flex items-center gap-2 rounded-full border bg-green-900 px-3 py-1.5 text-[11px] font-semibold text-white hover:text-black hover:bg-black/[0.03] active:scale-[0.99] transition',
     input:
-        'h-11 w-full rounded-2xl border border-black/10 bg-white/85 px-3 text-[12px] font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-500',
+        'h-11 w-full rounded-2xl border border-black/50 bg-white/85 px-3 text-[12px] font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-500',
 }
 
 function prettyDate(d) {
@@ -121,7 +121,7 @@ function statusPill(status) {
     const base = 'rounded-full border px-2.5 py-1 text-[11px] font-semibold'
     switch (status) {
         case 'booked':
-            return cx(base, 'border-slate-200 bg-slate-50 text-slate-700')
+            return cx(base, 'border-slate-500 bg-slate-50 text-slate-700')
         case 'checked_in':
             return cx(base, 'border-sky-200 bg-sky-50 text-sky-800')
         case 'in_progress':
@@ -131,9 +131,9 @@ function statusPill(status) {
         case 'no_show':
             return cx(base, 'border-rose-200 bg-rose-50 text-rose-800')
         case 'cancelled':
-            return cx(base, 'border-slate-200 bg-slate-100 text-slate-600')
+            return cx(base, 'border-slate-500 bg-slate-100 text-slate-600')
         default:
-            return cx(base, 'border-slate-200 bg-slate-50 text-slate-700')
+            return cx(base, 'border-slate-500 bg-slate-50 text-slate-700')
     }
 }
 
@@ -147,7 +147,7 @@ function StatCard({ label, value, icon: Icon, tone = 'slate' }) {
                     ? 'bg-sky-50 text-sky-900 border-sky-200'
                     : tone === 'rose'
                         ? 'bg-rose-50 text-rose-900 border-rose-200'
-                        : 'bg-white/80 text-slate-900 border-black/10'
+                        : 'bg-white/80 text-slate-900 border-black/50'
 
     return (
         <div className={cx('rounded-3xl border px-4 py-3', toneCls)}>
@@ -161,7 +161,7 @@ function StatCard({ label, value, icon: Icon, tone = 'slate' }) {
                     </div>
                 </div>
                 {Icon && (
-                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-black/10 bg-white/30">
+                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-black/50 bg-white/30">
                         <Icon className="h-5 w-5 opacity-80" />
                     </div>
                 )}
@@ -184,7 +184,7 @@ function Segmented({ value, onChange }) {
                             'whitespace-nowrap rounded-full border px-3 py-1.5 text-[11px] font-semibold transition',
                             active
                                 ? 'border-slate-900 bg-slate-900 text-white shadow-sm'
-                                : 'border-black/10 bg-white/75 text-slate-700 hover:bg-black/[0.03]',
+                                : 'border-black/50 bg-white/75 text-slate-700 hover:bg-black/[0.03]',
                         )}
                     >
                         {opt.label}
@@ -382,7 +382,7 @@ export default function Queue() {
                                 </div>
 
                                 <div className="mt-3 flex items-start gap-3">
-                                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-3xl bg-black/[0.04] border border-black/10">
+                                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-3xl bg-black/[0.04] border border-black/50">
                                         <Stethoscope className="h-5 w-5 text-slate-700" />
                                     </div>
                                     <div className="min-w-0">
@@ -460,7 +460,7 @@ export default function Queue() {
 
                 {/* CONTROLS + LIST */}
                 <Card className={cx(UI.glass, 'overflow-hidden')}>
-                    <CardHeader className="border-b border-black/10 bg-white/60 backdrop-blur-xl">
+                    <CardHeader className="border-b border-black/50 bg-white/60 backdrop-blur-xl">
                         <div className="flex flex-col gap-4">
                             <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                                 <div className="grid w-full gap-3 md:grid-cols-[2fr,1.1fr]">
@@ -474,7 +474,7 @@ export default function Queue() {
 
                                         <div
                                             className={cx(
-                                                'mt-3 rounded-2xl border border-black/10 bg-white/85 px-3 py-2',
+                                                'mt-3 rounded-2xl border border-black/50 bg-white/85 px-3 py-2',
                                                 myOnly && 'opacity-70 pointer-events-none',
                                             )}
                                             title={myOnly ? 'My appointments is ON (doctor locked)' : 'Select doctor'}
@@ -499,7 +499,7 @@ export default function Queue() {
                                             type="date"
                                             value={date}
                                             onChange={(e) => setDate(e.target.value)}
-                                            className="h-11 rounded-2xl border-black/10 bg-white/85 text-[12px] font-semibold"
+                                            className="h-11 rounded-2xl border-black/50 bg-white/85 text-[12px] font-semibold"
                                         />
 
                                         <div className="relative">
@@ -518,7 +518,7 @@ export default function Queue() {
                                     <Button
                                         type="button"
                                         variant="outline"
-                                        className="h-11 rounded-2xl border-black/10 bg-white/85 font-semibold"
+                                        className="h-11 rounded-2xl border-black/50 bg-white/85 font-semibold"
                                         onClick={() => {
                                             setSearchTerm('')
                                             setStatusFilter('active')
@@ -546,7 +546,7 @@ export default function Queue() {
                                 <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Status</div>
                                 <Badge
                                     variant="outline"
-                                    className="rounded-full border-black/10 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700"
+                                    className="rounded-full border-black/50 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700"
                                 >
                                     Showing <span className="ml-1 tabular-nums">{sortedRows.length}</span>
                                 </Badge>
@@ -559,7 +559,7 @@ export default function Queue() {
                     <CardContent className="pt-4">
                         {!hasSelection && (
                             <div className="rounded-3xl border border-dashed border-black/20 bg-black/[0.02] px-6 py-10 text-center">
-                                <div className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-3xl border border-black/10 bg-white/60">
+                                <div className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-3xl border border-black/50 bg-white/60">
                                     <Stethoscope className="h-5 w-5 text-slate-600" />
                                 </div>
                                 <div className="text-sm font-semibold text-slate-900">Select doctor & date to view queue</div>
@@ -572,7 +572,7 @@ export default function Queue() {
                         {hasSelection && loading && (
                             <div className="space-y-3 py-3">
                                 {[0, 1, 2, 3].map((i) => (
-                                    <div key={i} className="rounded-3xl border border-black/10 bg-white/70 backdrop-blur px-4 py-3">
+                                    <div key={i} className="rounded-3xl border border-black/50 bg-white/70 backdrop-blur px-4 py-3">
                                         <div className="flex items-center justify-between gap-3">
                                             <div className="flex-1 space-y-2">
                                                 <Skeleton className="h-4 w-44 rounded-xl" />
@@ -590,7 +590,7 @@ export default function Queue() {
 
                         {hasSelection && !loading && sortedRows.length === 0 && (
                             <div className="rounded-3xl border border-dashed border-black/20 bg-black/[0.02] px-6 py-10 text-center">
-                                <div className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-3xl border border-black/10 bg-white/60">
+                                <div className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-3xl border border-black/50 bg-white/60">
                                     <Clock className="h-5 w-5 text-slate-600" />
                                 </div>
                                 <div className="text-sm font-semibold text-slate-900">No appointments found</div>
@@ -621,7 +621,7 @@ export default function Queue() {
                                                     animate={{ opacity: 1, y: 0 }}
                                                     exit={{ opacity: 0, y: -6 }}
                                                     transition={{ duration: 0.14 }}
-                                                    className="rounded-3xl border border-black/10 bg-white/80 backdrop-blur px-4 py-3 shadow-[0_10px_24px_rgba(2,6,23,0.08)]"
+                                                    className="rounded-3xl border border-black/50 bg-white/80 backdrop-blur px-4 py-3 shadow-[0_10px_24px_rgba(2,6,23,0.08)]"
                                                 >
                                                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                                                         {/* LEFT */}
@@ -636,7 +636,7 @@ export default function Queue() {
                                                                 </span>
 
                                                                 {waiting && (
-                                                                    <span className="inline-flex items-center gap-1 rounded-full border border-black/10 bg-white/85 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+                                                                    <span className="inline-flex items-center gap-1 rounded-full border border-black/50 bg-white/85 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
                                                                         <Clock className="h-3.5 w-3.5 text-slate-500" />
                                                                         Waiting <span className="tabular-nums">{waiting}</span>
                                                                     </span>
@@ -644,7 +644,7 @@ export default function Queue() {
                                                             </div>
 
                                                             <div className="mt-2 flex items-start gap-3 min-w-0">
-                                                                <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-3xl border border-black/10 bg-black/[0.03] text-[12px] font-semibold text-slate-800">
+                                                                <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-3xl border border-black/50 bg-black/[0.03] text-[12px] font-semibold text-slate-800">
                                                                     {initials}
                                                                 </div>
 
@@ -700,7 +700,7 @@ export default function Queue() {
                                                                     <Button
                                                                         size="sm"
                                                                         variant="outline"
-                                                                        className="h-10 rounded-2xl border-black/10 bg-white/85 font-semibold"
+                                                                        className="h-10 rounded-2xl border-black/50 bg-white/85 font-semibold"
                                                                         onClick={() => changeStatus(row, 'no_show')}
                                                                     >
                                                                         <XCircle className="mr-2 h-4 w-4" />
@@ -735,7 +735,7 @@ export default function Queue() {
                                                                 <Button
                                                                     size="sm"
                                                                     variant="outline"
-                                                                    className="h-10 rounded-2xl border-black/10 bg-white/85 font-semibold"
+                                                                    className="h-10 rounded-2xl border-black/50 bg-white/85 font-semibold"
                                                                     onClick={() => navigate(`/opd/visit/${row.visit_id}`)}
                                                                 >
                                                                     Open visit

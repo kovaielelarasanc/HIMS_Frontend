@@ -443,13 +443,13 @@ const GROUPS = [
         icon: CalendarDays,
         reqAny: ['ot.schedule.view'],
       },
-      {
-        key: 'ot-logs',
-        label: 'OT Logs / Register',
-        to: '/ot/logs',
-        icon: ClipboardList,
-        reqAny: ['ot.cases.view', 'ot.cases.create', 'ipd.view'],
-      },
+      // {
+      //   key: 'ot-logs',
+      //   label: 'OT Logs / Register',
+      //   to: '/ot/logs',
+      //   icon: ClipboardList,
+      //   reqAny: ['ot.cases.view', 'ot.cases.create', 'ipd.view'],
+      // },
     ],
   },
 
@@ -664,26 +664,7 @@ export default function Sidebar() {
               effectiveCollapsed ? 'flex flex-col items-center gap-2' : 'flex items-center gap-2 min-w-0'
             }
           >
-            {branding?.logo_url && !effectiveCollapsed ? (
-              <img
-                src={branding.logo_url}
-                alt="Logo"
-                className="h-8 w-auto rounded-md border border-slate-200 bg-white"
-              />
-            ) : (
-              <div
-                className={
-                  effectiveCollapsed
-                    ? 'grid h-9 w-9 place-items-center rounded-2xl ring-1'
-                    : 'grid h-8 w-8 place-items-center rounded-xl ring-1'
-                }
-                style={{ backgroundColor: iconBgColor, borderColor: activeBorder }}
-              >
-                <span className="text-xs font-bold" style={{ color: iconColor }}>
-                  {initials}
-                </span>
-              </div>
-            )}
+            
 
             {!effectiveCollapsed && (
               <div className="truncate">
@@ -836,7 +817,7 @@ export default function Sidebar() {
 
                 {/* Desktop flyout */}
                 {isFlyoutOpen ? (
-                  <div className="absolute left-full top-0 ml-2 z-[60] hidden md:block w-72 rounded-2xl border border-slate-200 bg-white shadow-2xl overflow-hidden">
+                  <div className="absolute left-full top-0 ml-2 z-[60] hidden md:block w-72 rounded-2xl border border-slate-500 bg-white shadow-2xl overflow-hidden">
                     <div className="px-3 py-2 border-b bg-slate-50">
                       <div className="text-xs font-black text-slate-900">{group.label}</div>
                       <div className="text-[10px] text-slate-500">Select a page</div>
@@ -862,7 +843,7 @@ export default function Sidebar() {
                                   : { color: '#0f172a' }
                               }
                             >
-                              <span className="grid h-8 w-8 place-items-center rounded-xl border border-slate-200 bg-white">
+                              <span className="grid h-8 w-8 place-items-center rounded-xl border border-slate-500 bg-white">
                                 <Ico className="h-[18px] w-[18px]" style={{ color: iconColor }} />
                               </span>
                               <div className="min-w-0">
@@ -877,7 +858,7 @@ export default function Sidebar() {
                     <div className="px-3 py-2 border-t bg-white flex justify-end">
                       <button
                         onClick={() => setFlyoutKey(null)}
-                        className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-slate-50"
+                        className="rounded-xl border border-slate-500 bg-white px-3 py-1.5 text-[11px] font-bold text-slate-700 hover:bg-slate-50"
                       >
                         Close
                       </button>

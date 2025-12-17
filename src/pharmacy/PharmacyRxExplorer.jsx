@@ -308,7 +308,7 @@ export default function PharmacyRxExplorer() {
                 </div>
             </div>
 
-            <Card className="border-slate-200 rounded-2xl shadow-sm">
+            <Card className="border-slate-500 rounded-2xl shadow-sm">
                 <CardHeader className="pb-2">
                     <div className="flex flex-col gap-3 sm:gap-4">
                         {/* Top row: filters */}
@@ -485,7 +485,7 @@ export default function PharmacyRxExplorer() {
                                     Location
                                 </span>
                                 <select
-                                    className="h-8 rounded-xl border border-slate-200 bg-white px-2 text-[11px] text-slate-700"
+                                    className="h-8 rounded-xl border border-slate-500 bg-white px-2 text-[11px] text-slate-700"
                                     value={locationId}
                                     onChange={(e) => setLocationId(e.target.value)}
                                 >
@@ -711,7 +711,7 @@ export default function PharmacyRxExplorer() {
                                     <div className="flex-1 rounded-2xl border border-slate-100 bg-slate-50/60 p-2 sm:p-3 overflow-y-auto max-h-[360px]">
                                         <table className="w-full text-[11px]">
                                             <thead>
-                                                <tr className="border-b border-slate-200 text-[10px] uppercase tracking-wide text-slate-500">
+                                                <tr className="border-b border-slate-500 text-[10px] uppercase tracking-wide text-slate-500">
                                                     <th className="py-1.5 pr-2 text-left font-medium">
                                                         Item
                                                     </th>
@@ -764,7 +764,7 @@ export default function PharmacyRxExplorer() {
                                                                 {rem}
                                                             </td>
                                                             <td className="py-1.5 pl-2 align-top text-[10px]">
-                                                                <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 border border-slate-200 text-slate-700">
+                                                                <span className="inline-flex items-center gap-1 rounded-full bg-white px-2 py-0.5 border border-slate-500 text-slate-700">
                                                                     <span className="h-1.5 w-1.5 rounded-full bg-slate-400" />
                                                                     {ln.status}
                                                                 </span>

@@ -9,13 +9,10 @@ export function fetchEmrTimeline({ patient_id, uhid, date_from, date_to, types }
     let typesParam
 
     if (Array.isArray(types)) {
-        // If we get an array, join it
         typesParam = types.length ? types.join(',') : undefined
     } else if (typeof types === 'string') {
-        // If we already got a comma-separated string, just pass it through
         typesParam = types || undefined
     } else {
-        // Nothing passed
         typesParam = undefined
     }
 
@@ -31,12 +28,10 @@ export function fetchEmrTimeline({ patient_id, uhid, date_from, date_to, types }
 }
 
 export function exportEmrPdfJson(payload) {
-    // payload = { patient_id, date_from?, date_to?, sections, consent_required? }
     return API.post('/emr/export/pdf-json', payload, { responseType: 'blob' })
 }
 
 export function exportEmrPdfMultipart(formData) {
-    // formData has: patient_id, date_from?, date_to?, sections?, consent_required?, letterhead?
     return API.post('/emr/export/pdf', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
         responseType: 'blob',

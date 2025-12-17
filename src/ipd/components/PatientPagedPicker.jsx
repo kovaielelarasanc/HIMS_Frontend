@@ -93,7 +93,7 @@ export default function PatientPagedPicker({ value, onChange }) {
             <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                 <input
-                    className="w-full rounded-2xl border border-slate-200 bg-white px-9 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                    className="w-full rounded-2xl border border-slate-500 bg-white px-9 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 shadow-sm outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
                     placeholder="Search by UHID, name, phone, email…"
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
@@ -101,7 +101,7 @@ export default function PatientPagedPicker({ value, onChange }) {
             </div>
 
             {/* Result table */}
-            <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="overflow-hidden rounded-2xl border border-slate-500 bg-white shadow-sm">
                 <div className="overflow-x-auto">
                     <table className="min-w-full text-sm">
                         <thead>
@@ -119,7 +119,7 @@ export default function PatientPagedPicker({ value, onChange }) {
                                         colSpan={4}
                                         className="px-4 py-6 text-center text-sm text-slate-500"
                                     >
-                                        <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1.5 text-xs text-slate-600">
+                                        <span className="inline-flex items-center gap-2 rounded-full border border-slate-500 px-3 py-1.5 text-xs text-slate-600">
                                             <Loader2 className="h-4 w-4 animate-spin" />
                                             Loading patients…
                                         </span>
@@ -201,7 +201,7 @@ export default function PatientPagedPicker({ value, onChange }) {
                 <div className="flex flex-col items-center justify-between gap-3 border-t border-slate-100 px-4 py-3 text-xs text-slate-600 sm:flex-row">
                     <button
                         type="button"
-                        className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1.5 font-medium shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="inline-flex items-center gap-1 rounded-full border border-slate-500 px-3 py-1.5 font-medium shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                         onClick={() => setPage((p) => Math.max(0, p - 1))}
                         disabled={disabledPrev}
                     >
@@ -215,7 +215,7 @@ export default function PatientPagedPicker({ value, onChange }) {
 
                     <button
                         type="button"
-                        className="inline-flex items-center gap-1 rounded-full border border-slate-200 px-3 py-1.5 font-medium shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        className="inline-flex items-center gap-1 rounded-full border border-slate-500 px-3 py-1.5 font-medium shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
                         onClick={() => setPage((p) => Math.min(pages - 1, p + 1))}
                         disabled={disabledNext}
                     >

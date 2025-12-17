@@ -239,7 +239,7 @@ export default function DischargeMedsTab({ admissionId, canWrite = true }) {
                                         type="button"
                                         key={f}
                                         onClick={() => handleQuickFreq(f)}
-                                        className="rounded-full border border-slate-200 px-2 py-[1px] text-[10px] text-slate-600 hover:bg-slate-100"
+                                        className="rounded-full border border-slate-500 px-2 py-[1px] text-[10px] text-slate-600 hover:bg-slate-100"
                                     >
                                         {f}
                                     </button>
@@ -266,7 +266,7 @@ export default function DischargeMedsTab({ admissionId, canWrite = true }) {
                                         type="button"
                                         key={d}
                                         onClick={() => handleQuickDuration(d)}
-                                        className="rounded-full border border-slate-200 px-2 py-[1px] text-[10px] text-slate-600 hover:bg-slate-100"
+                                        className="rounded-full border border-slate-500 px-2 py-[1px] text-[10px] text-slate-600 hover:bg-slate-100"
                                     >
                                         {d}d
                                     </button>
@@ -292,7 +292,7 @@ export default function DischargeMedsTab({ admissionId, canWrite = true }) {
                         <button
                             type="button"
                             onClick={resetForm}
-                            className="rounded-full border border-slate-200 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50"
+                            className="rounded-full border border-slate-500 px-3 py-1 text-xs text-slate-600 hover:bg-slate-50"
                         >
                             Clear
                         </button>

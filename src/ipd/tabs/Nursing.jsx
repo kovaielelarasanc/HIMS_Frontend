@@ -264,7 +264,7 @@ export default function Nursing({ admissionId, canWrite }) {
             )}
 
             {/* Latest Vitals Snapshot */}
-            <div className="rounded-2xl border border-slate-200 bg-slate-50/80 p-3 md:p-4">
+            <div className="rounded-2xl border border-slate-500 bg-slate-50/80 p-3 md:p-4">
                 <div className="mb-2 flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
                         <HeartPulse className="h-4 w-4 text-slate-700" />
@@ -342,7 +342,7 @@ export default function Nursing({ admissionId, canWrite }) {
                         </div>
                     </div>
                 ) : (
-                    <div className="rounded-lg border border-dashed border-slate-200 bg-white px-3 py-2 text-xs text-slate-500">
+                    <div className="rounded-lg border border-dashed border-slate-500 bg-white px-3 py-2 text-xs text-slate-500">
                         No vitals recorded yet for this admission. Vitals should be entered
                         in the Vitals tab – nursing notes will automatically link to the
                         latest record.
@@ -354,7 +354,7 @@ export default function Nursing({ admissionId, canWrite }) {
             {canPost && (
                 <form
                     onSubmit={handleSubmit}
-                    className="rounded-2xl border border-slate-200 bg-white p-3 shadow-sm md:p-4"
+                    className="rounded-2xl border border-slate-500 bg-white p-3 shadow-sm md:p-4"
                 >
                     <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
                         <div className="flex items-center gap-2">
@@ -370,7 +370,7 @@ export default function Nursing({ admissionId, canWrite }) {
                                     Note type
                                 </label>
                                 <select
-                                    className="rounded-full border border-slate-200 bg-slate-50 px-2 py-1 text-[11px] text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300"
+                                    className="rounded-full border border-slate-500 bg-slate-50 px-2 py-1 text-[11px] text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300"
                                     value={form.note_type}
                                     onChange={handleChange('note_type')}
                                 >
@@ -401,7 +401,7 @@ export default function Nursing({ admissionId, canWrite }) {
                             </label>
                             <input
                                 type="datetime-local"
-                                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300"
+                                className="w-full rounded-lg border border-slate-500 bg-slate-50 px-2 py-1.5 text-xs text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300"
                                 value={form.entry_time}
                                 onChange={handleChange('entry_time')}
                             />
@@ -416,7 +416,7 @@ export default function Nursing({ admissionId, canWrite }) {
                                 Patient condition
                             </label>
                             <select
-                                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300"
+                                className="w-full rounded-lg border border-slate-500 bg-slate-50 px-2 py-1.5 text-xs text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300"
                                 value={form.patient_condition}
                                 onChange={handleChange('patient_condition')}
                             >
@@ -435,7 +435,7 @@ export default function Nursing({ admissionId, canWrite }) {
                                 Wound status
                             </label>
                             <select
-                                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300"
+                                className="w-full rounded-lg border border-slate-500 bg-slate-50 px-2 py-1.5 text-xs text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300"
                                 value={form.wound_status}
                                 onChange={handleChange('wound_status')}
                             >
@@ -454,7 +454,7 @@ export default function Nursing({ admissionId, canWrite }) {
                                 Oxygen support
                             </label>
                             <select
-                                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300"
+                                className="w-full rounded-lg border border-slate-500 bg-slate-50 px-2 py-1.5 text-xs text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300"
                                 value={form.oxygen_support}
                                 onChange={handleChange('oxygen_support')}
                             >
@@ -473,7 +473,7 @@ export default function Nursing({ admissionId, canWrite }) {
                                 Urine output
                             </label>
                             <input
-                                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300"
+                                className="w-full rounded-lg border border-slate-500 bg-slate-50 px-2 py-1.5 text-xs text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300"
                                 placeholder="E.g. 200 ml clear in last 4 hrs; catheter in situ"
                                 value={form.urine_output}
                                 onChange={handleChange('urine_output')}
@@ -486,7 +486,7 @@ export default function Nursing({ admissionId, canWrite }) {
                                 Drains / Tubes
                             </label>
                             <select
-                                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300"
+                                className="w-full rounded-lg border border-slate-500 bg-slate-50 px-2 py-1.5 text-xs text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300"
                                 value={form.drains_tubes}
                                 onChange={handleChange('drains_tubes')}
                             >
@@ -504,7 +504,7 @@ export default function Nursing({ admissionId, canWrite }) {
                                 Pain score
                             </label>
                             <input
-                                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300"
+                                className="w-full rounded-lg border border-slate-500 bg-slate-50 px-2 py-1.5 text-xs text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300"
                                 placeholder="E.g. 3/10 on VAS"
                                 value={form.pain_score}
                                 onChange={handleChange('pain_score')}
@@ -516,7 +516,7 @@ export default function Nursing({ admissionId, canWrite }) {
                                 Shift
                             </label>
                             <select
-                                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300"
+                                className="w-full rounded-lg border border-slate-500 bg-slate-50 px-2 py-1.5 text-xs text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300"
                                 value={form.shift}
                                 onChange={handleChange('shift')}
                             >
@@ -532,7 +532,7 @@ export default function Nursing({ admissionId, canWrite }) {
                                 Significant events
                             </label>
                             <textarea
-                                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300"
+                                className="w-full rounded-lg border border-slate-500 bg-slate-50 px-2 py-1.5 text-xs text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300"
                                 rows={2}
                                 placeholder="Shifting, fall, vomiting, seizure, desaturation, transfusion…"
                                 value={form.significant_events}
@@ -545,7 +545,7 @@ export default function Nursing({ admissionId, canWrite }) {
                                 Nursing interventions
                             </label>
                             <textarea
-                                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300"
+                                className="w-full rounded-lg border border-slate-500 bg-slate-50 px-2 py-1.5 text-xs text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300"
                                 rows={2}
                                 placeholder="Medications given, oxygen started, IV fluids, dressing, catheter care…"
                                 value={form.nursing_interventions}
@@ -558,7 +558,7 @@ export default function Nursing({ admissionId, canWrite }) {
                                 Patient response / progress
                             </label>
                             <textarea
-                                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300"
+                                className="w-full rounded-lg border border-slate-500 bg-slate-50 px-2 py-1.5 text-xs text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300"
                                 rows={2}
                                 placeholder="Improved / no change / worsened, tolerance to interventions…"
                                 value={form.response_progress}
@@ -571,7 +571,7 @@ export default function Nursing({ admissionId, canWrite }) {
                                 Handover note
                             </label>
                             <textarea
-                                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300"
+                                className="w-full rounded-lg border border-slate-500 bg-slate-50 px-2 py-1.5 text-xs text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300"
                                 rows={2}
                                 placeholder="What next nurse must watch / continue…"
                                 value={form.handover_note}
@@ -584,7 +584,7 @@ export default function Nursing({ admissionId, canWrite }) {
                                 Other findings
                             </label>
                             <textarea
-                                className="w-full rounded-lg border border-slate-200 bg-slate-50 px-2 py-1.5 text-xs text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300"
+                                className="w-full rounded-lg border border-slate-500 bg-slate-50 px-2 py-1.5 text-xs text-slate-800 focus:border-sky-400 focus:outline-none focus:ring-1 focus:ring-sky-300"
                                 rows={2}
                                 placeholder="Any other clinical observations…"
                                 value={form.other_findings}
@@ -694,7 +694,7 @@ export default function Nursing({ admissionId, canWrite }) {
             )}
 
             {/* Notes list */}
-            <div className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+            <div className="rounded-2xl border border-slate-500 bg-white shadow-sm">
                 <div className="flex items-center justify-between px-3 py-2 md:px-4">
                     <div className="flex items-center gap-2">
                         <ClipboardList className="h-4 w-4 text-slate-700" />

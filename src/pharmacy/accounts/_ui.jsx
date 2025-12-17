@@ -41,7 +41,7 @@ export function StatusBadge({ inv }) {
         )
     }
     return (
-        <Badge className="bg-slate-100 text-slate-800 border border-slate-200">
+        <Badge className="bg-slate-100 text-slate-800 border border-slate-500">
             Unpaid
         </Badge>
     )

@@ -270,7 +270,7 @@ export default function Users() {
         <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
           <Badge
             variant="outline"
-            className="rounded-full border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium tracking-wide text-slate-700"
+            className="rounded-full border-slate-500 bg-white px-2.5 py-1 text-[11px] font-medium tracking-wide text-slate-700"
           >
             Admin · User management
           </Badge>
@@ -344,7 +344,7 @@ export default function Users() {
 
         {/* Listing card with toolbar + grid */}
         <motion.div {...fadeIn}>
-          <Card className="rounded-3xl border-slate-200 bg-white shadow-sm">
+          <Card className="rounded-3xl border-slate-500 bg-white shadow-sm">
             <CardHeader className="border-b border-slate-100 pb-3">
               {/* Toolbar row */}
               <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
@@ -367,7 +367,7 @@ export default function Users() {
                       value={q}
                       onChange={(e) => setQ(e.target.value)}
                       placeholder="Search by name or email"
-                      className="w-full rounded-xl border border-slate-200 bg-slate-50 pl-8 pr-3 py-1.5 text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-500"
+                      className="w-full rounded-xl border border-slate-500 bg-slate-50 pl-8 pr-3 py-1.5 text-xs sm:text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-500"
                     />
                   </div>
 
@@ -387,7 +387,7 @@ export default function Users() {
 
               {/* Filter chips row */}
               <div className="mt-3 flex flex-wrap items-center gap-2">
-                <div className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[10px] font-medium text-slate-600">
+                <div className="inline-flex items-center gap-1 rounded-full border border-slate-500 bg-white px-2.5 py-1 text-[10px] font-medium text-slate-600">
                   <Filter className="h-3 w-3" />
                   <span>Filter</span>
                 </div>
@@ -439,7 +439,7 @@ export default function Users() {
                         key={u.id}
                         whileHover={{ y: -2, scale: 1.01 }}
                         transition={{ duration: 0.15, ease: 'easeOut' }}
-                        className="flex flex-col justify-between rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-3.5 shadow-sm"
+                        className="flex flex-col justify-between rounded-2xl border border-slate-500 bg-slate-50 px-3.5 py-3.5 shadow-sm"
                       >
                         {/* Header row with avatar + name */}
                         <div className="flex items-start justify-between gap-2">
@@ -512,7 +512,7 @@ export default function Users() {
                               type="button"
                               variant="outline"
                               size="sm"
-                              className="flex-1 h-8 rounded-full border-slate-200 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
+                              className="flex-1 h-8 rounded-full border-slate-500 text-[11px] font-semibold text-slate-700 hover:bg-slate-50"
                               onClick={() => openEditModal(u)}
                             >
                               Edit
@@ -600,7 +600,7 @@ function CardGridSkeleton() {
       {[0, 1, 2, 3, 4, 5].map((i) => (
         <div
           key={i}
-          className="rounded-2xl border border-slate-200 bg-slate-50 px-3.5 py-3.5 shadow-sm"
+          className="rounded-2xl border border-slate-500 bg-slate-50 px-3.5 py-3.5 shadow-sm"
         >
           <div className="flex items-start gap-3">
             <Skeleton className="h-9 w-9 rounded-full bg-slate-100" />
@@ -673,7 +673,7 @@ function ResponsiveUserModal({
           <button
             type="button"
             onClick={onClose}
-            className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 hover:bg-slate-100"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full border border-slate-500 bg-white text-slate-500 hover:bg-slate-100"
           >
             <X className="h-3.5 w-3.5" />
           </button>
@@ -688,7 +688,7 @@ function ResponsiveUserModal({
               onChange={(e) => setForm({ ...form, name: e.target.value })}
               required
               disabled={!canEditOrCreate}
-              className="h-9 rounded-xl border-slate-200 bg-slate-50 text-sm text-slate-900 focus-visible:ring-2 focus-visible:ring-teal-100 focus-visible:border-teal-500"
+              className="h-9 rounded-xl border-slate-500 bg-slate-50 text-sm text-slate-900 focus-visible:ring-2 focus-visible:ring-teal-100 focus-visible:border-teal-500"
             />
             <Input
               placeholder="Email"
@@ -697,7 +697,7 @@ function ResponsiveUserModal({
               onChange={(e) => setForm({ ...form, email: e.target.value })}
               required
               disabled={!canEditOrCreate}
-              className="h-9 rounded-xl border-slate-200 bg-slate-50 text-sm text-slate-900 focus-visible:ring-2 focus-visible:ring-teal-100 focus-visible:border-teal-500"
+              className="h-9 rounded-xl border-slate-500 bg-slate-50 text-sm text-slate-900 focus-visible:ring-2 focus-visible:ring-teal-100 focus-visible:border-teal-500"
             />
           </div>
 
@@ -708,7 +708,7 @@ function ResponsiveUserModal({
             onChange={(e) => setForm({ ...form, password: e.target.value })}
             required={!editId}
             disabled={!canEditOrCreate}
-            className="h-9 rounded-xl border-slate-200 bg-slate-50 text-sm text-slate-900 focus-visible:ring-2 focus-visible:ring-teal-100 focus-visible:border-teal-500"
+            className="h-9 rounded-xl border-slate-500 bg-slate-50 text-sm text-slate-900 focus-visible:ring-2 focus-visible:ring-teal-100 focus-visible:border-teal-500"
           />
 
           {/* Department */}
@@ -720,7 +720,7 @@ function ResponsiveUserModal({
                 setForm({ ...form, department_id: e.target.value })
               }
               disabled={!canEditOrCreate}
-              className="h-9 w-full rounded-xl border border-slate-200 bg-slate-50 px-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-500"
+              className="h-9 w-full rounded-xl border border-slate-500 bg-slate-50 px-2 text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-500"
             >
               <option value="">No department</option>
               {depts.map((d) => (
@@ -736,7 +736,7 @@ function ResponsiveUserModal({
             <label
               className={`inline-flex flex-1 min-w-[150px] cursor-pointer items-center gap-2 rounded-2xl border px-3 py-2 transition-colors ${form.is_doctor
                   ? 'border-emerald-300 bg-emerald-50'
-                  : 'border-slate-200 bg-white hover:bg-slate-50'
+                  : 'border-slate-500 bg-white hover:bg-slate-50'
                 }`}
             >
               <input
@@ -757,7 +757,7 @@ function ResponsiveUserModal({
             <label
               className={`inline-flex flex-1 min-w-[150px] cursor-pointer items-center gap-2 rounded-2xl border px-3 py-2 transition-colors ${form.is_active
                   ? 'border-slate-300 bg-slate-50'
-                  : 'border-slate-200 bg-white hover:bg-slate-50'
+                  : 'border-slate-500 bg-white hover:bg-slate-50'
                 }`}
             >
               <input
@@ -790,7 +790,7 @@ function ResponsiveUserModal({
                   key={r.id}
                   className={`flex cursor-pointer items-center gap-2 rounded-2xl border px-2.5 py-2 text-[11px] transition-colors ${form.role_ids.includes(r.id)
                       ? 'border-slate-300 bg-white'
-                      : 'border-slate-200 bg-slate-50 hover:bg-white'
+                      : 'border-slate-500 bg-slate-50 hover:bg-white'
                     }`}
                 >
                   <input
@@ -816,7 +816,7 @@ function ResponsiveUserModal({
             <Button
               type="button"
               variant="outline"
-              className="rounded-full border-slate-200 text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50"
+              className="rounded-full border-slate-500 text-xs sm:text-sm font-semibold text-slate-700 hover:bg-slate-50"
               onClick={onClose}
             >
               Cancel

@@ -290,20 +290,20 @@ export default function MIS() {
                     initial="hidden"
                     animate="visible"
                 >
-                    <div className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-slate-800 shadow-sm">
+                    <div className="inline-flex items-center gap-2 rounded-full border border-slate-500 bg-white px-3 py-1.5 text-slate-800 shadow-sm">
                         <FileSpreadsheet className="w-4 h-4" />
                         <span className="font-medium">MIS · Management Information System</span>
                     </div>
 
                     <div className="flex items-center gap-1.5 text-slate-500 text-[11px]">
                         <span className="inline-flex h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                        <span className="inline-flex md:hidden rounded-full bg-white px-2 py-0.5 uppercase tracking-wide border border-slate-200">
+                        <span className="inline-flex md:hidden rounded-full bg-white px-2 py-0.5 uppercase tracking-wide border border-slate-500">
                             Mobile view
                         </span>
-                        <span className="hidden md:inline-flex lg:hidden rounded-full bg-white px-2 py-0.5 uppercase tracking-wide border border-slate-200">
+                        <span className="hidden md:inline-flex lg:hidden rounded-full bg-white px-2 py-0.5 uppercase tracking-wide border border-slate-500">
                             Tablet / Laptop
                         </span>
-                        <span className="hidden lg:inline-flex rounded-full bg-white px-2 py-0.5 uppercase tracking-wide border border-slate-200">
+                        <span className="hidden lg:inline-flex rounded-full bg-white px-2 py-0.5 uppercase tracking-wide border border-slate-500">
                             Desktop workspace
                         </span>
                     </div>
@@ -433,7 +433,7 @@ export default function MIS() {
                     {/* LEFT: CONTROL PANEL (sticky on desktop) */}
                     <div className="space-y-3 lg:space-y-4 lg:sticky lg:top-24 self-start">
                         {/* Report & Dates */}
-                        <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                        <Card className="rounded-2xl border border-slate-500 bg-white shadow-sm">
                             <CardHeader className="pb-2 flex flex-row items-center justify-between gap-2">
                                 <div className="flex items-center gap-2">
                                     <div className="h-8 w-8 rounded-xl bg-teal-600 text-white flex items-center justify-center">
@@ -471,10 +471,10 @@ export default function MIS() {
                                                 setResult(null);
                                             }}
                                         >
-                                            <SelectTrigger className="h-9 rounded-xl border-slate-200 bg-white text-xs text-slate-900 focus:ring-teal-200">
+                                            <SelectTrigger className="h-9 rounded-xl border-slate-500 bg-white text-xs text-slate-900 focus:ring-teal-200">
                                                 <SelectValue placeholder="Select report" />
                                             </SelectTrigger>
-                                            <SelectContent className="bg-white border-slate-200 text-slate-900 max-h-72">
+                                            <SelectContent className="bg-white border-slate-500 text-slate-900 max-h-72">
                                                 {definitions.map((def) => (
                                                     <SelectItem
                                                         key={def.code}
@@ -510,7 +510,7 @@ export default function MIS() {
                                                     "px-3 py-1 rounded-full text-[11px] font-medium border transition-colors",
                                                     activePreset === p.key
                                                         ? "bg-blue-600 text-white border-blue-600"
-                                                        : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                                                        : "bg-white text-slate-700 border-slate-500 hover:bg-slate-50"
                                                 )}
                                             >
                                                 {p.label}
@@ -525,7 +525,7 @@ export default function MIS() {
                                         Custom date range
                                     </span>
                                     <div className="flex flex-col gap-2">
-                                        <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-2.5 py-2">
+                                        <div className="flex items-center gap-2 rounded-xl border border-slate-500 bg-white px-2.5 py-2">
                                             <Calendar className="w-4 h-4 text-slate-500 shrink-0" />
                                             <div className="flex flex-col gap-2 w-full text-xs text-slate-800">
                                                 <div className="flex items-center gap-2 w-full">
@@ -536,7 +536,7 @@ export default function MIS() {
                                                         type="date"
                                                         value={dateFrom}
                                                         onChange={handleDateChange(setDateFrom)}
-                                                        className="h-8 w-full rounded-lg border-slate-200 bg-slate-50 text-xs text-slate-900"
+                                                        className="h-8 w-full rounded-lg border-slate-500 bg-slate-50 text-xs text-slate-900"
                                                     />
                                                 </div>
                                                 <div className="flex items-center gap-2 w-full">
@@ -547,7 +547,7 @@ export default function MIS() {
                                                         type="date"
                                                         value={dateTo}
                                                         onChange={handleDateChange(setDateTo)}
-                                                        className="h-8 w-full rounded-lg border-slate-200 bg-slate-50 text-xs text-slate-900"
+                                                        className="h-8 w-full rounded-lg border-slate-500 bg-slate-50 text-xs text-slate-900"
                                                     />
                                                 </div>
                                             </div>
@@ -583,7 +583,7 @@ export default function MIS() {
                         {activeDefinition &&
                             Array.isArray(activeDefinition.filters) &&
                             activeDefinition.filters.length > 0 && (
-                                <Card className="rounded-2xl border border-slate-200 bg-white shadow-sm">
+                                <Card className="rounded-2xl border border-slate-500 bg-white shadow-sm">
                                     <CardHeader className="pb-2 flex flex-row items-center justify-between gap-2">
                                         <CardTitle className="text-sm font-semibold text-slate-900 flex items-center gap-2">
                                             <Filter className="w-4 h-4 text-slate-500" />
@@ -619,12 +619,12 @@ export default function MIS() {
                                                                     handleFilterChange(f.key, val)
                                                                 }
                                                             >
-                                                                <SelectTrigger className="h-9 rounded-xl border-slate-200 bg-slate-50 text-xs text-slate-900">
+                                                                <SelectTrigger className="h-9 rounded-xl border-slate-500 bg-slate-50 text-xs text-slate-900">
                                                                     <SelectValue
                                                                         placeholder={`All ${f.label.toLowerCase()}`}
                                                                     />
                                                                 </SelectTrigger>
-                                                                <SelectContent className="bg-white border-slate-200 text-slate-900 max-h-64">
+                                                                <SelectContent className="bg-white border-slate-500 text-slate-900 max-h-64">
                                                                     <SelectItem
                                                                         value="__ALL__"
                                                                         className="text-xs text-slate-500"
@@ -665,7 +665,7 @@ export default function MIS() {
                                                                 handleFilterChange(f.key, e.target.value)
                                                             }
                                                             placeholder={`Filter by ${f.label.toLowerCase()}`}
-                                                            className="h-9 rounded-xl border-slate-200 bg-slate-50 text-xs text-slate-900 placeholder:text-slate-400"
+                                                            className="h-9 rounded-xl border-slate-500 bg-slate-50 text-xs text-slate-900 placeholder:text-slate-400"
                                                         />
                                                     </div>
                                                 );
@@ -682,7 +682,7 @@ export default function MIS() {
                         {!loadingReport && !result && (
                             <Card className="rounded-2xl border border-dashed border-slate-300 bg-white shadow-none">
                                 <CardContent className="py-10 px-4 sm:px-8 flex flex-col items-center justify-center text-center gap-3">
-                                    <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200 mb-1">
+                                    <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center border border-slate-500 mb-1">
                                         <BarChart3 className="w-6 h-6 text-slate-700" />
                                     </div>
                                     <h2 className="text-base md:text-lg font-semibold text-slate-900">
@@ -725,14 +725,14 @@ export default function MIS() {
                             >
                                 <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
                                     {/* MOBILE: sticky dropdown for sections */}
-                                    <div className="sticky top-[4.25rem] z-10 mb-2 bg-slate-50/95 backdrop-blur-sm border-b border-slate-200/80 pb-2 md:hidden">
+                                    <div className="sticky top-[4.25rem] z-10 mb-2 bg-slate-50/95 backdrop-blur-sm border-b border-slate-500/80 pb-2 md:hidden">
                                         <div className="flex flex-col gap-1">
                                             <span className="text-[11px] text-slate-600 font-medium">
                                                 Section
                                             </span>
                                             <div className="relative">
                                                 <select
-                                                    className="w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-500"
+                                                    className="w-full rounded-2xl border border-slate-500 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-500"
                                                     value={activeTab}
                                                     onChange={(e) => setActiveTab(e.target.value)}
                                                 >
@@ -748,7 +748,7 @@ export default function MIS() {
 
                                     {/* DESKTOP/TABLET TABS LIST */}
                                     <div className="hidden md:flex md:flex-row md:items-center md:justify-between gap-2 mb-2">
-                                        <TabsList className="flex flex-nowrap overflow-x-auto gap-1 rounded-full bg-slate-100 p-1 border border-slate-200">
+                                        <TabsList className="flex flex-nowrap overflow-x-auto gap-1 rounded-full bg-slate-100 p-1 border border-slate-500">
                                             {tabOptions.map((tab) => (
                                                 <TabsTrigger
                                                     key={tab.value}
@@ -776,7 +776,7 @@ export default function MIS() {
                                         {summaryCards.length > 0 && (
                                             <section className="space-y-2">
                                                 <h2 className="text-sm font-semibold text-slate-900 flex items-center gap-2">
-                                                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+                                                    <span className="inline-flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-slate-700 border border-slate-500">
                                                         <BarChart3 className="w-3 h-3" />
                                                     </span>
                                                     Key indicators
@@ -862,7 +862,7 @@ function SummaryCard({ card }) {
             whileHover={{ y: -2, scale: 1.01 }}
             transition={{ type: "spring", stiffness: 240, damping: 22 }}
             className={cn(
-                "rounded-2xl border border-slate-200 bg-white px-4 py-3 shadow-sm",
+                "rounded-2xl border border-slate-500 bg-white px-4 py-3 shadow-sm",
                 "flex flex-col gap-1.5"
             )}
         >
@@ -900,12 +900,12 @@ function MISChartCard({ chart }) {
                 : [];
 
         return (
-            <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
+            <Card className="rounded-2xl shadow-sm border border-slate-500 bg-white">
                 <CardHeader className="pb-2 flex flex-row items-center justify-between">
                     <CardTitle className="text-base font-semibold text-slate-900">
                         {chart.title}
                     </CardTitle>
-                    <span className="rounded-full bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600 border border-slate-200">
+                    <span className="rounded-full bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600 border border-slate-500">
                         Distribution
                     </span>
                 </CardHeader>
@@ -958,12 +958,12 @@ function MISChartCard({ chart }) {
             : [];
 
     return (
-        <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
+        <Card className="rounded-2xl shadow-sm border border-slate-500 bg-white">
             <CardHeader className="pb-2 flex flex-row items-center justify-between">
                 <CardTitle className="text-base font-semibold text-slate-900">
                     {chart.title}
                 </CardTitle>
-                <span className="rounded-full bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600 border border-slate-200">
+                <span className="rounded-full bg-slate-50 px-2 py-0.5 text-[11px] text-slate-600 border border-slate-500">
                     {config?.label || "Trend"}
                 </span>
             </CardHeader>
@@ -1030,7 +1030,7 @@ function DetailListCard({ table }) {
 
     if (rows.length === 0) {
         return (
-            <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
+            <Card className="rounded-2xl shadow-sm border border-slate-500 bg-white">
                 <CardContent className="py-6 flex items-center justify-center">
                     <p className="text-sm text-slate-500">No records found.</p>
                 </CardContent>
@@ -1095,7 +1095,7 @@ function DetailListCard({ table }) {
     };
 
     return (
-        <Card className="rounded-2xl shadow-sm border border-slate-200 bg-white">
+        <Card className="rounded-2xl shadow-sm border border-slate-500 bg-white">
             <CardContent className="py-3 flex flex-col gap-3 max-h-[520px] md:max-h-[560px] overflow-hidden">
                 {/* Search + filters + primary button bar (listing spec) */}
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
@@ -1109,7 +1109,7 @@ function DetailListCard({ table }) {
                                 value={searchTerm}
                                 onChange={(e) => setSearchTerm(e.target.value)}
                                 placeholder="Search in records"
-                                className="w-full rounded-xl border border-slate-200 bg-white pl-9 pr-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-500"
+                                className="w-full rounded-xl border border-slate-500 bg-white pl-9 pr-3 py-2 text-sm text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-500"
                             />
                         </div>
 
@@ -1150,14 +1150,14 @@ function DetailListCard({ table }) {
                 <div className="mt-1 flex-1 overflow-y-auto pr-1.5">
                     {/* Desktop: table layout */}
                     <div className="hidden md:block">
-                        <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                        <div className="overflow-x-auto rounded-2xl border border-slate-500">
                             <table className="min-w-full text-xs md:text-sm bg-white">
                                 <thead className="bg-slate-50 sticky top-0 z-10">
                                     <tr>
                                         {columns.map((col) => (
                                             <th
                                                 key={col}
-                                                className="px-3 py-2 text-left text-[11px] font-medium uppercase tracking-wide text-slate-600 border-b border-slate-200"
+                                                className="px-3 py-2 text-left text-[11px] font-medium uppercase tracking-wide text-slate-600 border-b border-slate-500"
                                             >
                                                 {col.replace(/_/g, " ")}
                                             </th>
@@ -1200,7 +1200,7 @@ function DetailListCard({ table }) {
                                     animate={{ opacity: 1, y: 0 }}
                                     exit={{ opacity: 0, y: -6 }}
                                     transition={{ duration: 0.2, ease: "easeOut" }}
-                                    className="rounded-2xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm flex flex-col gap-1"
+                                    className="rounded-2xl border border-slate-500 bg-white px-3 py-2.5 shadow-sm flex flex-col gap-1"
                                 >
                                     {columns.map((col, ci) => (
                                         <div

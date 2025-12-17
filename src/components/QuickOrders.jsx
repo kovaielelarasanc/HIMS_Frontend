@@ -751,7 +751,7 @@ function QuickOrders({
     return (
         <>
             <motion.div className="w-full" {...fadeIn}>
-                <Card className="border-slate-200 shadow-sm bg-white/90 backdrop-blur-sm">
+                <Card className="border-slate-500 shadow-sm bg-white/90 backdrop-blur-sm">
                     <CardHeader className="flex flex-col gap-2 border-b border-slate-100 pb-3">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
                             <div className="flex items-center gap-2">
@@ -863,7 +863,7 @@ function QuickOrders({
                                                         />
                                                     </div>
                                                     {showLabDropdown && (labOptions.length > 0 || labSearching) && (
-                                                        <div className="absolute z-20 mt-1 w-full rounded-xl border border-slate-200 bg-white shadow-lg max-h-52 overflow-auto text-xs">
+                                                        <div className="absolute z-20 mt-1 w-full rounded-xl border border-slate-500 bg-white shadow-lg max-h-52 overflow-auto text-xs">
                                                             {labSearching && (
                                                                 <div className="px-3 py-2 flex items-center gap-2 text-slate-500">
                                                                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -927,7 +927,7 @@ function QuickOrders({
                                             </div>
 
                                             {labSelectedTests.length > 0 && (
-                                                <ScrollArea className="max-h-32 rounded-md border border-slate-200 bg-slate-50/60 p-2">
+                                                <ScrollArea className="max-h-32 rounded-md border border-slate-500 bg-slate-50/60 p-2">
                                                     <ul className="space-y-1.5 text-xs">
                                                         {labSelectedTests.map(t => (
                                                             <li
@@ -1005,7 +1005,7 @@ function QuickOrders({
                                                         />
                                                     </div>
                                                     {showRisDropdown && (risOptions.length > 0 || risSearching) && (
-                                                        <div className="absolute z-20 mt-1 w-full rounded-xl border border-slate-200 bg-white shadow-lg max-h-52 overflow-auto text-xs">
+                                                        <div className="absolute z-20 mt-1 w-full rounded-xl border border-slate-500 bg-white shadow-lg max-h-52 overflow-auto text-xs">
                                                             {risSearching && (
                                                                 <div className="px-3 py-2 flex items-center gap-2 text-slate-500">
                                                                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1074,7 +1074,7 @@ function QuickOrders({
                                             </div>
 
                                             {risSelectedTests.length > 0 && (
-                                                <ScrollArea className="max-h-32 rounded-md border border-slate-200 bg-slate-50/60 p-2">
+                                                <ScrollArea className="max-h-32 rounded-md border border-slate-500 bg-slate-50/60 p-2">
                                                     <ul className="space-y-1.5 text-xs">
                                                         {risSelectedTests.map(t => (
                                                             <li
@@ -1153,7 +1153,7 @@ function QuickOrders({
                                                     />
                                                 </div>
                                                 {showRxDropdown && (rxOptions.length > 0 || rxSearching) && (
-                                                    <div className="absolute z-20 mt-1 w-full rounded-xl border border-slate-200 bg-white shadow-lg max-h-52 overflow-auto text-xs">
+                                                    <div className="absolute z-20 mt-1 w-full rounded-xl border border-slate-500 bg-white shadow-lg max-h-52 overflow-auto text-xs">
                                                         {rxSearching && (
                                                             <div className="px-3 py-2 flex items-center gap-2 text-slate-500">
                                                                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1263,7 +1263,7 @@ function QuickOrders({
                                             </div>
 
                                             {rxLines.length > 0 && (
-                                                <div className="border border-slate-200 rounded-xl bg-slate-50/60 overflow-hidden">
+                                                <div className="border border-slate-500 rounded-xl bg-slate-50/60 overflow-hidden">
                                                     <ScrollArea className="max-h-40">
                                                         <table className="w-full text-[11px]">
                                                             <thead className="bg-slate-100 text-slate-600">
@@ -1411,7 +1411,7 @@ function QuickOrders({
                                                 </div>
                                                 {showOtDropdown &&
                                                     (otProcedureOptions.length > 0 || otProcedureSearching) && (
-                                                        <div className="absolute z-20 mt-1 w-full rounded-xl border border-slate-200 bg-white shadow-lg max-h-52 overflow-auto text-xs">
+                                                        <div className="absolute z-20 mt-1 w-full rounded-xl border border-slate-500 bg-white shadow-lg max-h-52 overflow-auto text-xs">
                                                             {otProcedureSearching && (
                                                                 <div className="px-3 py-2 flex items-center gap-2 text-slate-500">
                                                                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1454,7 +1454,7 @@ function QuickOrders({
                                                         Side
                                                     </label>
                                                     <select
-                                                        className="w-full rounded-lg border border-slate-200 bg-white px-2.5 py-2 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
+                                                        className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-2 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
                                                         value={otSide}
                                                         onChange={e => setOtSide(e.target.value)}
                                                     >
@@ -1550,7 +1550,7 @@ function QuickOrders({
                                 </div>
 
                                 {/* LAB SUMMARY */}
-                                <Card className="border-slate-200 bg-slate-50/70">
+                                <Card className="border-slate-500 bg-slate-50/70">
                                     <CardHeader className="py-2.5 px-3 flex flex-row items-center justify-between">
                                         <div className="flex items-center gap-2">
                                             <FlaskConical className="h-4 w-4 text-sky-600" />
@@ -1594,7 +1594,7 @@ function QuickOrders({
                                 </Card>
 
                                 {/* RIS SUMMARY */}
-                                <Card className="border-slate-200 bg-slate-50/70">
+                                <Card className="border-slate-500 bg-slate-50/70">
                                     <CardHeader className="py-2.5 px-3 flex flex-row items-center justify-between">
                                         <div className="flex items-center gap-2">
                                             <Radio className="h-4 w-4 text-indigo-600" />
@@ -1638,7 +1638,7 @@ function QuickOrders({
                                 </Card>
 
                                 {/* RX SUMMARY */}
-                                <Card className="border-slate-200 bg-slate-50/70">
+                                <Card className="border-slate-500 bg-slate-50/70">
                                     <CardHeader className="py-2.5 px-3 flex flex-row items-center justify-between">
                                         <div className="flex items-center gap-2">
                                             <Pill className="h-4 w-4 text-emerald-600" />
@@ -1683,7 +1683,7 @@ function QuickOrders({
 
                                 {/* OT SUMMARY (IPD only) */}
                                 {ctx === 'ipd' && (
-                                    <Card className="border-slate-200 bg-slate-50/70">
+                                    <Card className="border-slate-500 bg-slate-50/70">
                                         <CardHeader className="py-2.5 px-3 flex flex-row items-center justify-between">
                                             <div className="flex items-center gap-2">
                                                 <ScissorsLineDashed className="h-4 w-4 text-amber-600" />

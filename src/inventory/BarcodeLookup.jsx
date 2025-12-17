@@ -167,7 +167,7 @@ export default function BarcodeLookup() {
                 </div>
 
                 {/* SEARCH / SCAN CARD */}
-                <Card className="rounded-3xl border-slate-200 bg-white shadow-sm">
+                <Card className="rounded-3xl border-slate-500 bg-white shadow-sm">
                     <CardHeader className="pb-3">
                         <CardTitle className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between text-slate-900">
                             <div className="flex items-center gap-2">
@@ -198,7 +198,7 @@ export default function BarcodeLookup() {
                                         onChange={(e) => setBarcode(e.target.value)}
                                         onKeyDown={handleKeyDown}
                                         placeholder="Scan or type the barcode / QR number (e.g. MD_1001)"
-                                        className="w-full rounded-2xl border border-slate-200 bg-slate-50 pl-9 pr-3 py-2 text-sm text-slate-800 shadow-none focus-visible:ring-2 focus-visible:ring-teal-100 focus-visible:border-teal-500"
+                                        className="w-full rounded-2xl border border-slate-500 bg-slate-50 pl-9 pr-3 py-2 text-sm text-slate-800 shadow-none focus-visible:ring-2 focus-visible:ring-teal-100 focus-visible:border-teal-500"
                                         autoFocus
                                     />
                                 </div>
@@ -222,7 +222,7 @@ export default function BarcodeLookup() {
 
                 {/* LOADING STATE */}
                 {loading && (
-                    <Card className="rounded-3xl border-slate-200 bg-white shadow-sm">
+                    <Card className="rounded-3xl border-slate-500 bg-white shadow-sm">
                         <CardContent className="p-4 md:p-6 space-y-4">
                             <Skeleton className="h-6 w-2/3 rounded-xl" />
                             <Skeleton className="h-4 w-1/3 rounded-xl" />
@@ -239,7 +239,7 @@ export default function BarcodeLookup() {
                 {showEmptyState && (
                     <Card className="rounded-3xl border-dashed border-slate-300 bg-white shadow-none">
                         <CardContent className="p-6 flex flex-col items-center justify-center text-center gap-3">
-                            <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center border border-slate-200">
+                            <div className="h-12 w-12 rounded-full bg-slate-100 flex items-center justify-center border border-slate-500">
                                 <AlertCircle className="w-6 h-6 text-slate-600" />
                             </div>
                             <h2 className="text-sm md:text-base font-semibold text-slate-900">
@@ -259,7 +259,7 @@ export default function BarcodeLookup() {
 
                 {/* RESULT CARD */}
                 {!loading && item && (
-                    <Card className="rounded-3xl border-slate-200 bg-white shadow-sm overflow-hidden">
+                    <Card className="rounded-3xl border-slate-500 bg-white shadow-sm overflow-hidden">
                         <CardContent className="p-4 md:p-6 space-y-4">
                             <div className="flex flex-col md:flex-row gap-4 md:gap-8">
                                 {/* Left: main text */}
@@ -305,7 +305,7 @@ export default function BarcodeLookup() {
 
                                 {/* Right: barcode image + download */}
                                 <div className="w-full md:w-64 lg:w-72 flex flex-col items-center gap-3">
-                                    <div className="w-full h-32 md:h-36 rounded-2xl border border-dashed border-slate-200 bg-slate-50 flex items-center justify-center">
+                                    <div className="w-full h-32 md:h-36 rounded-2xl border border-dashed border-slate-500 bg-slate-50 flex items-center justify-center">
                                         {fetchingBarcode && (
                                             <Skeleton className="w-40 h-20 rounded-md" />
                                         )}
@@ -325,7 +325,7 @@ export default function BarcodeLookup() {
                                     <Button
                                         type="button"
                                         variant="outline"
-                                        className="w-full rounded-full text-sm font-semibold border-slate-200"
+                                        className="w-full rounded-full text-sm font-semibold border-slate-500"
                                         onClick={handleDownloadBarcode}
                                     >
                                         <Download className="w-4 h-4 mr-2" />
@@ -394,7 +394,7 @@ export default function BarcodeLookup() {
 
 function InfoTile({ label, icon, value }) {
     return (
-        <div className="rounded-2xl border border-slate-200 bg-white px-4 py-3 flex flex-col gap-1">
+        <div className="rounded-2xl border border-slate-500 bg-white px-4 py-3 flex flex-col gap-1">
             <div className="flex items-center gap-2 text-[11px] font-medium text-slate-500 uppercase tracking-wide">
                 <span className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-slate-100 text-slate-600">
                     {icon}

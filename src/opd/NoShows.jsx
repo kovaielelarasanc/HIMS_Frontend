@@ -36,13 +36,13 @@ function cx(...xs) {
 const UI = {
     page: 'min-h-[calc(100vh-4rem)] w-full bg-gradient-to-b from-slate-50 via-white to-slate-50',
     glass:
-        'rounded-3xl border border-black/10 bg-white/75 backdrop-blur-xl shadow-[0_12px_35px_rgba(2,6,23,0.10)]',
+        'rounded-3xl border border-black/50 bg-white/75 backdrop-blur-xl shadow-[0_12px_35px_rgba(2,6,23,0.10)]',
     chip:
-        'inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700',
+        'inline-flex items-center gap-2 rounded-full border border-black/50 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700',
     chipBtn:
         'inline-flex items-center gap-2 rounded-full border bg-green-900 px-3 py-1.5 text-[11px] font-semibold text-white hover:text-black hover:bg-black/[0.03] active:scale-[0.99] transition',
     input:
-        'h-11 w-full rounded-2xl border border-black/10 bg-white/85 px-3 text-[12px] font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-500',
+        'h-11 w-full rounded-2xl border border-black/50 bg-white/85 px-3 text-[12px] font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-500',
 }
 
 function prettyDate(d) {
@@ -65,7 +65,7 @@ function StatCard({ label, value, icon: Icon, tone = 'slate' }) {
             ? 'bg-slate-900 text-white border-slate-900'
             : tone === 'rose'
                 ? 'bg-rose-50 text-rose-900 border-rose-200'
-                : 'bg-white/80 text-slate-900 border-black/10'
+                : 'bg-white/80 text-slate-900 border-black/50'
 
     return (
         <div className={cx('rounded-3xl border px-4 py-3', toneCls)}>
@@ -75,7 +75,7 @@ function StatCard({ label, value, icon: Icon, tone = 'slate' }) {
                     <div className="mt-1 text-[20px] font-semibold tracking-tight tabular-nums">{value}</div>
                 </div>
                 {Icon ? (
-                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-black/10 bg-white/30">
+                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-2xl border border-black/50 bg-white/30">
                         <Icon className="h-5 w-5 opacity-80" />
                     </div>
                 ) : null}
@@ -242,7 +242,7 @@ export default function NoShow() {
                                 </div>
 
                                 <div className="mt-3 flex items-start gap-3">
-                                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-3xl bg-black/[0.04] border border-black/10">
+                                    <div className="inline-flex h-11 w-11 items-center justify-center rounded-3xl bg-black/[0.04] border border-black/50">
                                         <RotateCcw className="h-5 w-5 text-slate-700" />
                                     </div>
                                     <div className="min-w-0">
@@ -318,7 +318,7 @@ export default function NoShow() {
 
                 {/* CONTROLS + LIST */}
                 <Card className={cx(UI.glass, 'overflow-hidden')}>
-                    <CardHeader className="border-b border-black/10 bg-white/60 backdrop-blur-xl">
+                    <CardHeader className="border-b border-black/50 bg-white/60 backdrop-blur-xl">
                         <div className="flex flex-col gap-4">
                             <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                                 <div className="grid w-full gap-3 md:grid-cols-[2fr,1.1fr]">
@@ -332,7 +332,7 @@ export default function NoShow() {
 
                                         <div
                                             className={cx(
-                                                'mt-3 rounded-2xl border border-black/10 bg-white/85 px-3 py-2',
+                                                'mt-3 rounded-2xl border border-black/50 bg-white/85 px-3 py-2',
                                                 myOnly && 'opacity-70 pointer-events-none',
                                             )}
                                             title={myOnly ? 'My no-shows is ON (doctor locked)' : 'Select doctor'}
@@ -357,7 +357,7 @@ export default function NoShow() {
                                             type="date"
                                             value={date}
                                             onChange={(e) => setDate(e.target.value)}
-                                            className="h-11 rounded-2xl border-black/10 bg-white/85 text-[12px] font-semibold"
+                                            className="h-11 rounded-2xl border-black/50 bg-white/85 text-[12px] font-semibold"
                                         />
 
                                         <div className="relative">
@@ -376,7 +376,7 @@ export default function NoShow() {
                                     <Button
                                         type="button"
                                         variant="outline"
-                                        className="h-11 rounded-2xl border-black/10 bg-white/85 font-semibold"
+                                        className="h-11 rounded-2xl border-black/50 bg-white/85 font-semibold"
                                         onClick={() => setSearchTerm('')}
                                         disabled={!hasSelection}
                                     >
@@ -402,7 +402,7 @@ export default function NoShow() {
                     <CardContent className="pt-4">
                         {!hasSelection && (
                             <div className="rounded-3xl border border-dashed border-black/20 bg-black/[0.02] px-6 py-10 text-center">
-                                <div className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-3xl border border-black/10 bg-white/60">
+                                <div className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-3xl border border-black/50 bg-white/60">
                                     <AlertCircle className="h-5 w-5 text-slate-600" />
                                 </div>
                                 <div className="text-sm font-semibold text-slate-900">Select doctor & date</div>
@@ -415,7 +415,7 @@ export default function NoShow() {
                         {hasSelection && loading && (
                             <div className="space-y-3 py-3">
                                 {[0, 1, 2, 3].map((i) => (
-                                    <div key={i} className="rounded-3xl border border-black/10 bg-white/70 backdrop-blur px-4 py-3">
+                                    <div key={i} className="rounded-3xl border border-black/50 bg-white/70 backdrop-blur px-4 py-3">
                                         <div className="flex items-center justify-between gap-3">
                                             <div className="flex-1 space-y-2">
                                                 <Skeleton className="h-4 w-44 rounded-xl" />
@@ -430,7 +430,7 @@ export default function NoShow() {
 
                         {hasSelection && !loading && filteredRows.length === 0 && (
                             <div className="rounded-3xl border border-dashed border-black/20 bg-black/[0.02] px-6 py-10 text-center">
-                                <div className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-3xl border border-black/10 bg-white/60">
+                                <div className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-3xl border border-black/50 bg-white/60">
                                     <Clock className="h-5 w-5 text-slate-600" />
                                 </div>
                                 <div className="text-sm font-semibold text-slate-900">No no-shows found</div>
@@ -458,7 +458,7 @@ export default function NoShow() {
                                                     animate={{ opacity: 1, y: 0 }}
                                                     exit={{ opacity: 0, y: -6 }}
                                                     transition={{ duration: 0.14 }}
-                                                    className="rounded-3xl border border-black/10 bg-white/80 backdrop-blur px-4 py-3 shadow-[0_10px_24px_rgba(2,6,23,0.08)]"
+                                                    className="rounded-3xl border border-black/50 bg-white/80 backdrop-blur px-4 py-3 shadow-[0_10px_24px_rgba(2,6,23,0.08)]"
                                                 >
                                                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                                                         {/* LEFT */}
@@ -474,7 +474,7 @@ export default function NoShow() {
                                                             </div>
 
                                                             <div className="mt-2 flex items-start gap-3 min-w-0">
-                                                                <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-3xl border border-black/10 bg-black/[0.03] text-[12px] font-semibold text-slate-800">
+                                                                <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-3xl border border-black/50 bg-black/[0.03] text-[12px] font-semibold text-slate-800">
                                                                     {initials}
                                                                 </div>
 
@@ -519,7 +519,7 @@ export default function NoShow() {
                 {/* Reschedule panel */}
                 {target && (
                     <Card className={cx(UI.glass, 'overflow-hidden')}>
-                        <CardHeader className="border-b border-black/10 bg-white/60 backdrop-blur-xl">
+                        <CardHeader className="border-b border-black/50 bg-white/60 backdrop-blur-xl">
                             <div className="flex items-center justify-between gap-3">
                                 <div>
                                     <CardTitle className="text-base font-semibold">Reschedule No-show</CardTitle>

@@ -110,7 +110,7 @@ function StatusBadge({ status }) {
   const v = map[status] ?? {
     label: status || 'Unknown',
     className:
-      'bg-slate-50 text-slate-800 border border-slate-200 dark:bg-slate-900 dark:text-slate-200',
+      'bg-slate-50 text-slate-800 border border-slate-500 dark:bg-slate-900 dark:text-slate-200',
   }
 
   return (
@@ -389,7 +389,7 @@ export default function AnalyzerStagingResults() {
       </div>
 
       {/* Filters Card */}
-      <Card className="border-slate-200 shadow-sm">
+      <Card className="border-slate-500 shadow-sm">
         <CardHeader className="pb-3">
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
             <div>
@@ -429,7 +429,7 @@ export default function AnalyzerStagingResults() {
               ) : (
                 <div className="relative">
                   <select
-                    className="block w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-xs md:text-sm font-medium text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 appearance-none pr-8"
+                    className="block w-full rounded-lg border border-slate-500 bg-white px-3 py-2.5 text-xs md:text-sm font-medium text-slate-800 shadow-sm focus:outline-none focus:ring-2 focus:ring-sky-500 focus:border-sky-500 appearance-none pr-8"
                     value={selectedDeviceId || ''}
                     onChange={(e) =>
                       setSelectedDeviceId(
@@ -520,7 +520,7 @@ export default function AnalyzerStagingResults() {
       </Card>
 
       {/* Results */}
-      <Card className="border-slate-200 shadow-sm">
+      <Card className="border-slate-500 shadow-sm">
         <CardHeader className="pb-2 flex flex-col gap-1 md:flex-row md:items-center md:justify-between">
           <div>
             <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -557,7 +557,7 @@ export default function AnalyzerStagingResults() {
           <div className="hidden md:block overflow-x-auto">
             <table className="min-w-full text-xs border-collapse">
               <thead>
-                <tr className="border-b border-slate-200 bg-slate-50">
+                <tr className="border-b border-slate-500 bg-slate-50">
                   <th className="px-3 py-2 text-left font-semibold text-slate-700">
                     Sample ID
                   </th>
@@ -722,7 +722,7 @@ export default function AnalyzerStagingResults() {
               Array.from({ length: 4 }).map((_, idx) => (
                 <Card
                   key={idx}
-                  className="border-slate-200 shadow-sm rounded-xl"
+                  className="border-slate-500 shadow-sm rounded-xl"
                 >
                   <CardContent className="p-3 space-y-2">
                     <Skeleton className="h-4 w-32" />
@@ -742,7 +742,7 @@ export default function AnalyzerStagingResults() {
               filteredRows.map((row) => (
                 <Card
                   key={row.id}
-                  className="border-slate-200 shadow-sm rounded-xl"
+                  className="border-slate-500 shadow-sm rounded-xl"
                 >
                   <CardContent className="p-3 space-y-2">
                     <div className="flex items-start justify-between gap-2">

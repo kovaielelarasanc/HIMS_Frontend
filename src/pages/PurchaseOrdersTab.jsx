@@ -251,7 +251,7 @@ export default function PurchaseOrdersTab() {
 
     return (
         <>
-            <Card className="rounded-3xl border-slate-200 shadow-sm">
+            <Card className="rounded-3xl border-slate-500 shadow-sm">
                 <CardHeader className="flex flex-row items-center justify-between gap-3">
                     <div>
                         <CardTitle className="text-sm font-semibold text-slate-900 flex items-center gap-2">
@@ -319,7 +319,7 @@ export default function PurchaseOrdersTab() {
                     </div>
 
                     {/* Desktop table */}
-                    <div className="hidden sm:block border border-slate-200 rounded-2xl overflow-hidden bg-white">
+                    <div className="hidden sm:block border border-slate-500 rounded-2xl overflow-hidden bg-white">
                         <div className="grid grid-cols-[1.1fr,1.2fr,1.2fr,0.9fr,1.2fr] px-3 py-2 text-xs font-semibold text-slate-500 bg-slate-50">
                             <span>PO number</span>
                             <span>Supplier</span>
@@ -467,7 +467,7 @@ export default function PurchaseOrdersTab() {
                                 const loc = po.location || locationsMap.get(po.location_id)
 
                                 return (
-                                    <div key={po.id} className="rounded-2xl border border-slate-200 bg-white p-3">
+                                    <div key={po.id} className="rounded-2xl border border-slate-500 bg-white p-3">
                                         <div className="flex items-start justify-between gap-2">
                                             <div>
                                                 <div className="text-sm font-semibold text-slate-900">{po.po_number}</div>
@@ -888,12 +888,12 @@ function PurchaseOrderSheet({ open, onOpenChange, suppliers, locations, initialP
                     {/* BODY */}
                     <div ref={scrollRef} className="flex-1 overflow-auto p-5 space-y-4 bg-slate-50">
                         {/* TOP DETAILS (more free space) */}
-                        <div className="rounded-3xl border border-slate-200 bg-white p-4">
+                        <div className="rounded-3xl border border-slate-500 bg-white p-4">
                             <div className="grid gap-3 sm:grid-cols-2">
                                 <div className="space-y-1.5">
                                     <Label>Supplier</Label>
                                     <select
-                                        className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-slate-200"
+                                        className="h-11 w-full rounded-2xl border border-slate-500 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-slate-200"
                                         value={supplierId}
                                         onChange={(e) => setSupplierId(e.target.value)}
                                     >
@@ -909,7 +909,7 @@ function PurchaseOrderSheet({ open, onOpenChange, suppliers, locations, initialP
                                 <div className="space-y-1.5">
                                     <Label>Receiving location</Label>
                                     <select
-                                        className="h-11 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-slate-200"
+                                        className="h-11 w-full rounded-2xl border border-slate-500 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-slate-200"
                                         value={locationId}
                                         onChange={(e) => setLocationId(e.target.value)}
                                     >
@@ -955,9 +955,9 @@ function PurchaseOrderSheet({ open, onOpenChange, suppliers, locations, initialP
                         </div>
 
                         {/* ITEMS */}
-                        <div className="rounded-3xl border border-slate-200 bg-white">
+                        <div className="rounded-3xl border border-slate-500 bg-white">
                             {/* Sticky add bar (always visible) */}
-                            <div className="sticky top-0 z-30 bg-white rounded-t-3xl border-b border-slate-200 p-4">
+                            <div className="sticky top-0 z-30 bg-white rounded-t-3xl border-b border-slate-500 p-4">
                                 <div className="flex items-center justify-between gap-2">
                                     <div>
                                         <div className="text-sm font-semibold text-slate-900">Add items</div>
@@ -990,7 +990,7 @@ function PurchaseOrderSheet({ open, onOpenChange, suppliers, locations, initialP
 
                                     {/* Dropdown results */}
                                     {itemResults.length > 0 ? (
-                                        <div className="absolute left-0 right-0 mt-2 rounded-2xl border border-slate-200 bg-white shadow-lg overflow-hidden z-50">
+                                        <div className="absolute left-0 right-0 mt-2 rounded-2xl border border-slate-500 bg-white shadow-lg overflow-hidden z-50">
                                             <div className="max-h-72 overflow-auto divide-y">
                                                 {itemResults.map((it) => (
                                                     <button
@@ -1018,7 +1018,7 @@ function PurchaseOrderSheet({ open, onOpenChange, suppliers, locations, initialP
                                         No items added yet. Use the search box above.
                                     </div>
                                 ) : (
-                                    <div className="border border-slate-200 rounded-2xl overflow-hidden">
+                                    <div className="border border-slate-500 rounded-2xl overflow-hidden">
                                         <div className="grid grid-cols-[2.2fr,0.9fr,0.9fr,0.8fr,1fr,0.5fr] bg-slate-50 px-3 py-2 text-xs font-semibold text-slate-600">
                                             <div>Item</div>
                                             <div className="text-right">Qty</div>
@@ -1113,7 +1113,7 @@ function PurchaseOrderSheet({ open, onOpenChange, suppliers, locations, initialP
                                             <div
                                                 key={l.key}
                                                 ref={(el) => (rowRefs.current[l.key] = el)}
-                                                className={`rounded-2xl border border-slate-200 p-3 ${lastAddedKey === l.key ? 'bg-emerald-50/40' : 'bg-white'
+                                                className={`rounded-2xl border border-slate-500 p-3 ${lastAddedKey === l.key ? 'bg-emerald-50/40' : 'bg-white'
                                                     }`}
                                             >
                                                 <div className="flex items-start justify-between gap-2">
@@ -1159,7 +1159,7 @@ function PurchaseOrderSheet({ open, onOpenChange, suppliers, locations, initialP
                                                     </div>
                                                     <div className="space-y-1">
                                                         <Label className="text-[11px]">Est total</Label>
-                                                        <div className="h-11 rounded-2xl border border-slate-200 bg-slate-50 px-3 flex items-center font-semibold">
+                                                        <div className="h-11 rounded-2xl border border-slate-500 bg-slate-50 px-3 flex items-center font-semibold">
                                                             ₹{money(est)}
                                                         </div>
                                                     </div>

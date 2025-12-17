@@ -27,7 +27,7 @@ const fromSel = (v) => (v === NONE ? '' : v)
 
 function GlassShell({ children }) {
   return (
-    <div className="rounded-[28px] border border-slate-200/70 bg-gradient-to-b from-white to-slate-50 shadow-[0_18px_50px_rgba(2,6,23,0.08)] overflow-hidden">
+    <div className="rounded-[28px] border border-slate-500/70 bg-gradient-to-b from-white to-slate-50 shadow-[0_18px_50px_rgba(2,6,23,0.08)] overflow-hidden">
       {children}
     </div>
   )
@@ -35,7 +35,7 @@ function GlassShell({ children }) {
 
 function KpiTile({ label, children }) {
   return (
-    <div className="rounded-3xl border border-slate-200 bg-white/80 backdrop-blur p-3">
+    <div className="rounded-3xl border border-slate-500 bg-white/80 backdrop-blur p-3">
       <div className="text-[11px] text-slate-500">{label}</div>
       <div className="mt-1 text-base font-semibold text-slate-900 leading-none">{children}</div>
     </div>
@@ -233,7 +233,7 @@ export default function SupplierPaymentsScreen() {
 
   if (!canView) {
     return (
-      <Card className="rounded-3xl border-slate-200 shadow-sm">
+      <Card className="rounded-3xl border-slate-500 shadow-sm">
         <CardHeader className="space-y-1">
           <CardTitle className="text-sm font-semibold text-slate-900">Supplier Payments</CardTitle>
           <p className="text-xs text-slate-500">Permission required.</p>
@@ -257,7 +257,7 @@ export default function SupplierPaymentsScreen() {
   return (
     <GlassShell>
       {/* Glass header */}
-      <div className="px-4 sm:px-6 py-4 bg-white/70 backdrop-blur-xl border-b border-slate-200/60">
+      <div className="px-4 sm:px-6 py-4 bg-white/70 backdrop-blur-xl border-b border-slate-500/60">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
           <div className="space-y-1">
             <div className="flex items-center gap-2">
@@ -286,7 +286,7 @@ export default function SupplierPaymentsScreen() {
             <Button
               size="sm"
               variant="outline"
-              className="h-10 rounded-full gap-2 border-slate-200 bg-white/70 backdrop-blur"
+              className="h-10 rounded-full gap-2 border-slate-500 bg-white/70 backdrop-blur"
               onClick={loadPending}
               disabled={!supplierId}
             >
@@ -320,7 +320,7 @@ export default function SupplierPaymentsScreen() {
           <div className="lg:col-span-4">
             <div className="text-[11px] text-slate-500 mb-1">Supplier</div>
             <Select value={toSel(supplierId)} onValueChange={(v) => setSupplierId(fromSel(v))}>
-              <SelectTrigger className="h-10 bg-white rounded-full border-slate-200">
+              <SelectTrigger className="h-10 bg-white rounded-full border-slate-500">
                 <SelectValue placeholder="Select supplier" />
               </SelectTrigger>
               <SelectContent>
@@ -339,7 +339,7 @@ export default function SupplierPaymentsScreen() {
             <div className="relative">
               <Search className="w-4 h-4 absolute left-3 top-3 text-slate-400" />
               <Input
-                className="h-10 pl-9 bg-white rounded-full border-slate-200"
+                className="h-10 pl-9 bg-white rounded-full border-slate-500"
                 placeholder="Search invoice / GRN / date…"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
@@ -349,7 +349,7 @@ export default function SupplierPaymentsScreen() {
         </div>
 
         {/* Desktop table */}
-        <div className="hidden md:block rounded-3xl border border-slate-200 bg-white/80 backdrop-blur overflow-hidden">
+        <div className="hidden md:block rounded-3xl border border-slate-500 bg-white/80 backdrop-blur overflow-hidden">
           <div className="grid grid-cols-[0.25fr,1.2fr,1.1fr,0.9fr,0.9fr,0.8fr] px-4 py-2 text-xs font-semibold text-slate-500 bg-slate-50">
             <span />
             <span>Invoice</span>
@@ -403,16 +403,16 @@ export default function SupplierPaymentsScreen() {
               <Skeleton className="h-24 w-full rounded-3xl" />
             </div>
           ) : !supplierId ? (
-            <div className="rounded-3xl border border-slate-200 bg-white/80 backdrop-blur p-4 text-sm text-slate-500">
+            <div className="rounded-3xl border border-slate-500 bg-white/80 backdrop-blur p-4 text-sm text-slate-500">
               Select a supplier to view pending invoices.
             </div>
           ) : filtered.length === 0 ? (
-            <div className="rounded-3xl border border-slate-200 bg-white/80 backdrop-blur p-4 text-sm text-slate-500">
+            <div className="rounded-3xl border border-slate-500 bg-white/80 backdrop-blur p-4 text-sm text-slate-500">
               No unpaid/partial invoices.
             </div>
           ) : (
             filtered.map((inv) => (
-              <div key={inv.id} className="rounded-3xl border border-slate-200 bg-white/85 backdrop-blur p-4">
+              <div key={inv.id} className="rounded-3xl border border-slate-500 bg-white/85 backdrop-blur p-4">
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
                     <div className="font-semibold text-slate-900 truncate">
@@ -431,11 +431,11 @@ export default function SupplierPaymentsScreen() {
                 </div>
 
                 <div className="mt-3 grid grid-cols-2 gap-2 text-sm">
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="rounded-2xl border border-slate-500 bg-slate-50 p-3">
                     <div className="text-[11px] text-slate-500">Amount</div>
                     <div className="font-semibold"><Money value={inv.invoice_amount} /></div>
                   </div>
-                  <div className="rounded-2xl border border-slate-200 bg-slate-50 p-3">
+                  <div className="rounded-2xl border border-slate-500 bg-slate-50 p-3">
                     <div className="text-[11px] text-slate-500">Outstanding</div>
                     <div className="font-semibold"><Money value={inv.outstanding_amount} /></div>
                   </div>
@@ -452,11 +452,11 @@ export default function SupplierPaymentsScreen() {
         </div>
 
         {/* Mobile sticky actions (iOS style) */}
-        <div className="md:hidden sticky bottom-0 -mx-4 px-4 py-3 bg-white/70 backdrop-blur-xl border-t border-slate-200/60 flex items-center gap-2">
+        <div className="md:hidden sticky bottom-0 -mx-4 px-4 py-3 bg-white/70 backdrop-blur-xl border-t border-slate-500/60 flex items-center gap-2">
           <Button
             size="sm"
             variant="outline"
-            className="h-11 rounded-full w-full border-slate-200 bg-white"
+            className="h-11 rounded-full w-full border-slate-500 bg-white"
             onClick={loadPending}
             disabled={!supplierId}
           >
@@ -476,7 +476,7 @@ export default function SupplierPaymentsScreen() {
 
         {/* Payment modal (premium sheet) */}
         <Dialog open={open} onOpenChange={(v) => (canManage ? setOpen(v) : null)}>
-          <DialogContent className="sm:max-w-3xl w-[calc(100vw-20px)] sm:w-full rounded-[28px] bg-white/90 backdrop-blur-xl border-slate-200 max-h-[85vh] overflow-y-auto">
+          <DialogContent className="sm:max-w-3xl w-[calc(100vw-20px)] sm:w-full rounded-[28px] bg-white/90 backdrop-blur-xl border-slate-500 max-h-[85vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle className="text-base">Record Payment</DialogTitle>
             </DialogHeader>
@@ -496,7 +496,7 @@ export default function SupplierPaymentsScreen() {
                     <div className="text-xs text-slate-500">Payment date</div>
                     <Input
                       type="date"
-                      className="h-10 bg-white rounded-full border-slate-200"
+                      className="h-10 bg-white rounded-full border-slate-500"
                       value={pay.payment_date}
                       onChange={(e) => setPay((s) => ({ ...s, payment_date: e.target.value }))}
                     />
@@ -505,7 +505,7 @@ export default function SupplierPaymentsScreen() {
                   <div className="space-y-1.5">
                     <div className="text-xs text-slate-500">Method</div>
                     <Select value={pay.payment_method} onValueChange={(v) => setPay((s) => ({ ...s, payment_method: v }))}>
-                      <SelectTrigger className="h-10 bg-white rounded-full border-slate-200">
+                      <SelectTrigger className="h-10 bg-white rounded-full border-slate-500">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -520,7 +520,7 @@ export default function SupplierPaymentsScreen() {
                   <div className="space-y-1.5">
                     <div className="text-xs text-slate-500">Reference No</div>
                     <Input
-                      className="h-10 bg-white rounded-full border-slate-200"
+                      className="h-10 bg-white rounded-full border-slate-500"
                       value={pay.reference_no}
                       onChange={(e) => setPay((s) => ({ ...s, reference_no: e.target.value }))}
                     />
@@ -529,7 +529,7 @@ export default function SupplierPaymentsScreen() {
                   <div className="space-y-1.5 sm:col-span-2">
                     <div className="text-xs text-slate-500">Remarks</div>
                     <Input
-                      className="h-10 bg-white rounded-full border-slate-200"
+                      className="h-10 bg-white rounded-full border-slate-500"
                       value={pay.remarks}
                       onChange={(e) => setPay((s) => ({ ...s, remarks: e.target.value }))}
                     />
@@ -540,7 +540,7 @@ export default function SupplierPaymentsScreen() {
                     <Input
                       type="number"
                       step="0.01"
-                      className="h-10 bg-white rounded-full border-slate-200"
+                      className="h-10 bg-white rounded-full border-slate-500"
                       value={pay.amount}
                       onChange={(e) => setPay((s) => ({ ...s, amount: e.target.value }))}
                     />
@@ -548,7 +548,7 @@ export default function SupplierPaymentsScreen() {
                 </div>
 
                 {/* Allocation card */}
-                <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-4">
+                <div className="rounded-3xl border border-slate-500 bg-slate-50/70 p-4">
                   <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="font-semibold text-slate-900">Allocation</div>
 
@@ -576,7 +576,7 @@ export default function SupplierPaymentsScreen() {
                   </div>
 
                   {!pay.auto_allocate && (
-                    <div className="mt-3 max-h-[240px] overflow-auto rounded-2xl border border-slate-200 bg-white">
+                    <div className="mt-3 max-h-[240px] overflow-auto rounded-2xl border border-slate-500 bg-white">
                       <div className="grid grid-cols-[0.2fr,1.4fr,0.8fr,0.8fr] px-3 py-2 text-xs font-semibold text-slate-500 bg-slate-50 sticky top-0">
                         <span />
                         <span>Invoice</span>
@@ -601,7 +601,7 @@ export default function SupplierPaymentsScreen() {
                                 disabled={!checked}
                                 type="number"
                                 step="0.01"
-                                className="h-9 bg-white rounded-full border-slate-200"
+                                className="h-9 bg-white rounded-full border-slate-500"
                                 value={checked ? String(selected[inv.id] ?? '') : ''}
                                 onChange={(e) => {
                                   const v = Number(e.target.value || 0)

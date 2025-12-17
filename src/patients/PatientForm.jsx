@@ -214,10 +214,6 @@ function PatientFormModalInner({ onClose, onSaved, initialPatient, lookups }) {
             patient_type: (v) => !!String(v || '').trim(),
             marital_status: (v) => !!String(v || '').trim(),
             phone: (v) => isPhone10(v),
-            email: (v) => isEmail(v),
-            ref_source: (v) => !!String(v || '').trim(),
-            ref_doctor_id: (v) => !!String(v || '').trim(), // "__NA__" counts as selected
-            ref_details: (v) => !!String(v || '').trim(),
         }),
         []
     )
@@ -316,14 +312,14 @@ function PatientFormModalInner({ onClose, onSaved, initialPatient, lookups }) {
     const inputCls = (k) =>
         [
             base,
-            fieldErrors[k] ? 'border-rose-300' : 'border-slate-200',
+            fieldErrors[k] ? 'border-rose-300' : 'border-slate-500',
             `focus:ring-4`,
         ].join(' ')
 
     const textareaCls = (k) =>
         [
             textareaBase,
-            fieldErrors[k] ? 'border-rose-300' : 'border-slate-200',
+            fieldErrors[k] ? 'border-rose-300' : 'border-slate-500',
             `focus:ring-4`,
         ].join(' ')
 
@@ -343,7 +339,7 @@ function PatientFormModalInner({ onClose, onSaved, initialPatient, lookups }) {
         >
             {/* 90% width, super clean */}
             <div
-                className="relative w-[90vw] max-w-[1120px] max-h-[90vh] overflow-hidden rounded-[28px] border border-slate-200 bg-white shadow-[0_40px_120px_-80px_rgba(0,0,0,.50)]"
+                className="relative w-[90vw] max-w-[1120px] max-h-[90vh] overflow-hidden rounded-[28px] border border-slate-500 bg-white shadow-[0_40px_120px_-80px_rgba(0,0,0,.50)]"
                 onMouseDown={(e) => e.stopPropagation()}
             >
                 {/* Close (no header bar) */}
@@ -351,7 +347,7 @@ function PatientFormModalInner({ onClose, onSaved, initialPatient, lookups }) {
                     type="button"
                     onClick={onClose}
                     disabled={saving}
-                    className="absolute right-4 top-4 h-10 w-10 rounded-2xl border border-slate-200 bg-white hover:bg-slate-50 grid place-items-center transition disabled:opacity-60"
+                    className="absolute right-4 top-4 h-10 w-10 rounded-2xl border border-slate-500 bg-white hover:bg-slate-50 grid place-items-center transition disabled:opacity-60"
                     title="Close"
                 >
                     <X className="h-5 w-5 text-slate-700" />
@@ -359,7 +355,7 @@ function PatientFormModalInner({ onClose, onSaved, initialPatient, lookups }) {
 
                 {/* Floating actions (no footer bar) */}
                 <div className="absolute right-4 bottom-4 z-10 flex items-center gap-2">
-                    <div className="hidden sm:flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/90 backdrop-blur px-3 py-2">
+                    <div className="hidden sm:flex items-center gap-2 rounded-2xl border border-slate-500 bg-white/90 backdrop-blur px-3 py-2">
                         <div className="text-[12px] font-semibold text-slate-700">
                             Mandatory {completion.okCount}/{completion.total}
                         </div>
@@ -394,7 +390,7 @@ function PatientFormModalInner({ onClose, onSaved, initialPatient, lookups }) {
                             <div className="text-[20px] sm:text-[22px] font-semibold tracking-tight text-slate-900">
                                 {mode === 'create' ? 'Patient Registration' : 'Edit Patient'}
                                 {initialPatient?.uhid ? (
-                                    <span className="ml-2 align-middle inline-flex font-mono text-[11px] px-2 py-0.5 rounded-full border border-slate-200 bg-white text-slate-700">
+                                    <span className="ml-2 align-middle inline-flex font-mono text-[11px] px-2 py-0.5 rounded-full border border-slate-500 bg-white text-slate-700">
                                         UHID: {initialPatient.uhid}
                                     </span>
                                 ) : null}
@@ -531,23 +527,25 @@ function PatientFormModalInner({ onClose, onSaved, initialPatient, lookups }) {
                                     />
                                 </Field>
 
-                                <Field label="Email *" state={state('email')}>
+                                <Field label="Email">
                                     <input
                                         type="email"
                                         value={form.email}
                                         onChange={handleChange('email')}
                                         onBlur={() => markTouched('email')}
-                                        className={inputCls('email')}
-                                        placeholder="patient@mail.com"
-                                        style={{ ...(touched.email ? focusStyle : null) }}
+                                        className={inputCls('__ok')}
+                                        placeholder="Optional"
                                     />
                                     <Err
                                         text={
                                             fieldErrors.email ||
-                                            (touched.email && !isEmail(form.email) ? 'Enter valid email' : '')
+                                            (touched.email && String(form.email || '').trim() && !isEmail(form.email)
+                                                ? 'Enter valid email'
+                                                : '')
                                         }
                                     />
                                 </Field>
+
 
                                 <Field label="Reference Source *" state={state('ref_source')}>
                                     <select
@@ -567,7 +565,7 @@ function PatientFormModalInner({ onClose, onSaved, initialPatient, lookups }) {
                                     <Err text={fieldErrors.ref_source} />
                                 </Field>
 
-                                <Field label="Referring Doctor *" state={state('ref_doctor_id')}>
+                                <Field label="Referring Doctor " >
                                     <select
                                         value={form.ref_doctor_id || ''}
                                         onChange={handleChange('ref_doctor_id')}
@@ -587,7 +585,7 @@ function PatientFormModalInner({ onClose, onSaved, initialPatient, lookups }) {
                                     <Err text={fieldErrors.ref_doctor_id} />
                                 </Field>
 
-                                <Field label="Reference Details *" state={state('ref_details')} className="sm:col-span-2 lg:col-span-3">
+                                <Field label="Reference Details" className="sm:col-span-2 lg:col-span-3">
                                     <textarea
                                         value={form.ref_details}
                                         onChange={handleChange('ref_details')}
@@ -775,8 +773,8 @@ function PatientFormModalInner({ onClose, onSaved, initialPatient, lookups }) {
 
 function Section({ title, children }) {
     return (
-        <div className="rounded-[26px] border border-slate-200 bg-white">
-            <div className="px-5 sm:px-6 py-4 border-b border-slate-200">
+        <div className="rounded-[26px] border border-slate-500 bg-white">
+            <div className="px-5 sm:px-6 py-4 border-b border-slate-500">
                 <div className="text-[14px] font-semibold text-slate-900">{title}</div>
                 <div className="mt-0.5 text-[12px] text-slate-600">Keep it clean. Mandatory first.</div>
             </div>
@@ -787,7 +785,7 @@ function Section({ title, children }) {
 
 function Disclosure({ open, onToggle, title, subtitle, children }) {
     return (
-        <div className="rounded-[22px] border border-slate-200 bg-white overflow-hidden">
+        <div className="rounded-[22px] border border-slate-500 bg-white overflow-hidden">
             <button
                 type="button"
                 onClick={onToggle}

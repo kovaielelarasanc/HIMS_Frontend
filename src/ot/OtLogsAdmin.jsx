@@ -77,7 +77,7 @@ export default function OtLogsAdmin() {
                     )}
                 </div>
 
-                <div className="inline-flex rounded-full border border-slate-200 bg-slate-50 p-1 text-xs">
+                <div className="inline-flex rounded-full border border-slate-500 bg-slate-50 p-1 text-xs">
                     <button
                         type="button"
                         onClick={() => setTab('cleaning')}
@@ -268,7 +268,7 @@ function CleaningLogsSection({ theatreOptions, theatresLoading }) {
                 </div>
 
                 {/* Filters */}
-                <div className="mb-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+                <div className="mb-3 rounded-2xl border border-slate-500 bg-slate-50 px-3 py-2">
                     <div className="mb-1 flex items-center gap-2 text-[11px] font-medium text-slate-600">
                         <Filter className="h-3 w-3" />
                         Filters
@@ -279,7 +279,7 @@ function CleaningLogsSection({ theatreOptions, theatresLoading }) {
                                 Theatre
                             </label>
                             <select
-                                className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px]"
+                                className="w-full rounded-lg border border-slate-500 bg-white px-2 py-1 text-[11px]"
                                 value={filters.theatreId}
                                 onChange={(e) =>
                                     setFilters((f) => ({ ...f, theatreId: e.target.value }))
@@ -302,7 +302,7 @@ function CleaningLogsSection({ theatreOptions, theatresLoading }) {
                             <label className="text-[11px] text-slate-600">Case ID</label>
                             <input
                                 type="number"
-                                className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px]"
+                                className="w-full rounded-lg border border-slate-500 bg-white px-2 py-1 text-[11px]"
                                 value={filters.caseId}
                                 onChange={(e) =>
                                     setFilters((f) => ({ ...f, caseId: e.target.value }))
@@ -313,7 +313,7 @@ function CleaningLogsSection({ theatreOptions, theatresLoading }) {
                             <label className="text-[11px] text-slate-600">Date</label>
                             <input
                                 type="date"
-                                className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px]"
+                                className="w-full rounded-lg border border-slate-500 bg-white px-2 py-1 text-[11px]"
                                 value={filters.date}
                                 onChange={(e) =>
                                     setFilters((f) => ({ ...f, date: e.target.value }))
@@ -324,7 +324,7 @@ function CleaningLogsSection({ theatreOptions, theatresLoading }) {
                             <label className="text-[11px] text-slate-600">From</label>
                             <input
                                 type="date"
-                                className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px]"
+                                className="w-full rounded-lg border border-slate-500 bg-white px-2 py-1 text-[11px]"
                                 value={filters.fromDate}
                                 onChange={(e) =>
                                     setFilters((f) => ({ ...f, fromDate: e.target.value }))
@@ -335,7 +335,7 @@ function CleaningLogsSection({ theatreOptions, theatresLoading }) {
                             <label className="text-[11px] text-slate-600">To</label>
                             <input
                                 type="date"
-                                className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px]"
+                                className="w-full rounded-lg border border-slate-500 bg-white px-2 py-1 text-[11px]"
                                 value={filters.toDate}
                                 onChange={(e) =>
                                     setFilters((f) => ({ ...f, toDate: e.target.value }))
@@ -346,7 +346,7 @@ function CleaningLogsSection({ theatreOptions, theatresLoading }) {
 
                     <div className="mt-2 flex flex-wrap items-center gap-2">
                         <select
-                            className="w-full max-w-xs rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px]"
+                            className="w-full max-w-xs rounded-lg border border-slate-500 bg-white px-2 py-1 text-[11px]"
                             value={filters.session}
                             onChange={(e) =>
                                 setFilters((f) => ({ ...f, session: e.target.value }))
@@ -377,7 +377,7 @@ function CleaningLogsSection({ theatreOptions, theatresLoading }) {
                                     session: '',
                                 })
                             }
-                            className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] text-slate-500 hover:bg-slate-100"
+                            className="rounded-lg border border-slate-500 bg-slate-50 px-3 py-1 text-[11px] text-slate-500 hover:bg-slate-100"
                         >
                             Clear
                         </button>
@@ -521,7 +521,7 @@ function CleaningLogModal({ initial, onClose, onSave, saving, theatreOptions }) 
                                 Theatre *
                             </label>
                             <select
-                                className="w-full rounded-lg border border-slate-200 px-2 py-1 text-[11px]"
+                                className="w-full rounded-lg border border-slate-500 px-2 py-1 text-[11px]"
                                 value={form.theatre_id}
                                 required
                                 onChange={(e) => handleChange('theatre_id', e.target.value)}
@@ -540,7 +540,7 @@ function CleaningLogModal({ initial, onClose, onSave, saving, theatreOptions }) 
                             </label>
                             <input
                                 type="date"
-                                className="w-full rounded-lg border border-slate-200 px-2 py-1 text-[11px]"
+                                className="w-full rounded-lg border border-slate-500 px-2 py-1 text-[11px]"
                                 value={form.date}
                                 required
                                 onChange={(e) => handleChange('date', e.target.value)}
@@ -554,7 +554,7 @@ function CleaningLogModal({ initial, onClose, onSave, saving, theatreOptions }) 
                                 Session
                             </label>
                             <select
-                                className="w-full rounded-lg border border-slate-200 px-2 py-1 text-[11px]"
+                                className="w-full rounded-lg border border-slate-500 px-2 py-1 text-[11px]"
                                 value={form.session}
                                 onChange={(e) => handleChange('session', e.target.value)}
                             >
@@ -571,7 +571,7 @@ function CleaningLogModal({ initial, onClose, onSave, saving, theatreOptions }) 
                             </label>
                             <input
                                 type="number"
-                                className="w-full rounded-lg border border-slate-200 px-2 py-1 text-[11px]"
+                                className="w-full rounded-lg border border-slate-500 px-2 py-1 text-[11px]"
                                 value={form.case_id}
                                 onChange={(e) => handleChange('case_id', e.target.value)}
                             />
@@ -584,7 +584,7 @@ function CleaningLogModal({ initial, onClose, onSave, saving, theatreOptions }) 
                         </label>
                         <input
                             type="text"
-                            className="w-full rounded-lg border border-slate-200 px-2 py-1 text-[11px]"
+                            className="w-full rounded-lg border border-slate-500 px-2 py-1 text-[11px]"
                             placeholder="Mopping, fumigation, UV, etc."
                             value={form.method}
                             required
@@ -598,7 +598,7 @@ function CleaningLogModal({ initial, onClose, onSave, saving, theatreOptions }) 
                         </label>
                         <input
                             type="number"
-                            className="w-full rounded-lg border border-slate-200 px-2 py-1 text-[11px]"
+                            className="w-full rounded-lg border border-slate-500 px-2 py-1 text-[11px]"
                             value={form.done_by_user_id}
                             required
                             onChange={(e) =>
@@ -613,7 +613,7 @@ function CleaningLogModal({ initial, onClose, onSave, saving, theatreOptions }) 
                         </label>
                         <textarea
                             rows={2}
-                            className="w-full rounded-lg border border-slate-200 px-2 py-1 text-[11px]"
+                            className="w-full rounded-lg border border-slate-500 px-2 py-1 text-[11px]"
                             value={form.remarks}
                             onChange={(e) => handleChange('remarks', e.target.value)}
                         />
@@ -623,7 +623,7 @@ function CleaningLogModal({ initial, onClose, onSave, saving, theatreOptions }) 
                         <button
                             type="button"
                             onClick={onClose}
-                            className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] text-slate-600 hover:bg-slate-50"
+                            className="rounded-xl border border-slate-500 bg-white px-3 py-1.5 text-[11px] text-slate-600 hover:bg-slate-50"
                         >
                             Cancel
                         </button>
@@ -800,7 +800,7 @@ function EnvironmentLogsSection({ theatreOptions, theatresLoading }) {
                 </div>
 
                 {/* Filters */}
-                <div className="mb-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+                <div className="mb-3 rounded-2xl border border-slate-500 bg-slate-50 px-3 py-2">
                     <div className="mb-1 flex items-center gap-2 text-[11px] font-medium text-slate-600">
                         <Filter className="h-3 w-3" />
                         Filters
@@ -811,7 +811,7 @@ function EnvironmentLogsSection({ theatreOptions, theatresLoading }) {
                                 Theatre
                             </label>
                             <select
-                                className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px]"
+                                className="w-full rounded-lg border border-slate-500 bg-white px-2 py-1 text-[11px]"
                                 value={filters.theatreId}
                                 onChange={(e) =>
                                     setFilters((f) => ({ ...f, theatreId: e.target.value }))
@@ -834,7 +834,7 @@ function EnvironmentLogsSection({ theatreOptions, theatresLoading }) {
                             <label className="text-[11px] text-slate-600">Date</label>
                             <input
                                 type="date"
-                                className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px]"
+                                className="w-full rounded-lg border border-slate-500 bg-white px-2 py-1 text-[11px]"
                                 value={filters.date}
                                 onChange={(e) =>
                                     setFilters((f) => ({ ...f, date: e.target.value }))
@@ -845,7 +845,7 @@ function EnvironmentLogsSection({ theatreOptions, theatresLoading }) {
                             <label className="text-[11px] text-slate-600">From</label>
                             <input
                                 type="date"
-                                className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px]"
+                                className="w-full rounded-lg border border-slate-500 bg-white px-2 py-1 text-[11px]"
                                 value={filters.fromDate}
                                 onChange={(e) =>
                                     setFilters((f) => ({ ...f, fromDate: e.target.value }))
@@ -856,7 +856,7 @@ function EnvironmentLogsSection({ theatreOptions, theatresLoading }) {
                             <label className="text-[11px] text-slate-600">To</label>
                             <input
                                 type="date"
-                                className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-[11px]"
+                                className="w-full rounded-lg border border-slate-500 bg-white px-2 py-1 text-[11px]"
                                 value={filters.toDate}
                                 onChange={(e) =>
                                     setFilters((f) => ({ ...f, toDate: e.target.value }))
@@ -883,7 +883,7 @@ function EnvironmentLogsSection({ theatreOptions, theatresLoading }) {
                                     toDate: '',
                                 })
                             }
-                            className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-1 text-[11px] text-slate-500 hover:bg-slate-100"
+                            className="rounded-lg border border-slate-500 bg-slate-50 px-3 py-1 text-[11px] text-slate-500 hover:bg-slate-100"
                         >
                             Clear
                         </button>
@@ -1064,7 +1064,7 @@ function EnvironmentLogModal({
                                 Theatre *
                             </label>
                             <select
-                                className="w-full rounded-lg border border-slate-200 px-2 py-1 text-[11px]"
+                                className="w-full rounded-lg border border-slate-500 px-2 py-1 text-[11px]"
                                 value={form.theatre_id}
                                 required
                                 onChange={(e) => handleChange('theatre_id', e.target.value)}
@@ -1083,7 +1083,7 @@ function EnvironmentLogModal({
                             </label>
                             <input
                                 type="date"
-                                className="w-full rounded-lg border border-slate-200 px-2 py-1 text-[11px]"
+                                className="w-full rounded-lg border border-slate-500 px-2 py-1 text-[11px]"
                                 value={form.date}
                                 required
                                 onChange={(e) => handleChange('date', e.target.value)}
@@ -1097,7 +1097,7 @@ function EnvironmentLogModal({
                         </label>
                         <input
                             type="time"
-                            className="w-full rounded-lg border border-slate-200 px-2 py-1 text-[11px]"
+                            className="w-full rounded-lg border border-slate-500 px-2 py-1 text-[11px]"
                             value={form.time}
                             required
                             onChange={(e) => handleChange('time', e.target.value)}
@@ -1112,7 +1112,7 @@ function EnvironmentLogModal({
                             <input
                                 type="number"
                                 step="0.1"
-                                className="w-full rounded-lg border border-slate-200 px-2 py-1 text-[11px]"
+                                className="w-full rounded-lg border border-slate-500 px-2 py-1 text-[11px]"
                                 value={form.temperature_c}
                                 onChange={(e) =>
                                     handleChange('temperature_c', e.target.value)
@@ -1126,7 +1126,7 @@ function EnvironmentLogModal({
                             <input
                                 type="number"
                                 step="0.1"
-                                className="w-full rounded-lg border border-slate-200 px-2 py-1 text-[11px]"
+                                className="w-full rounded-lg border border-slate-500 px-2 py-1 text-[11px]"
                                 value={form.humidity_percent}
                                 onChange={(e) =>
                                     handleChange('humidity_percent', e.target.value)
@@ -1140,7 +1140,7 @@ function EnvironmentLogModal({
                             <input
                                 type="number"
                                 step="0.01"
-                                className="w-full rounded-lg border border-slate-200 px-2 py-1 text-[11px]"
+                                className="w-full rounded-lg border border-slate-500 px-2 py-1 text-[11px]"
                                 value={form.pressure_diff_pa}
                                 onChange={(e) =>
                                     handleChange('pressure_diff_pa', e.target.value)
@@ -1155,7 +1155,7 @@ function EnvironmentLogModal({
                         </label>
                         <input
                             type="number"
-                            className="w-full rounded-lg border border-slate-200 px-2 py-1 text-[11px]"
+                            className="w-full rounded-lg border border-slate-500 px-2 py-1 text-[11px]"
                             value={form.logged_by_user_id}
                             required
                             onChange={(e) =>
@@ -1168,7 +1168,7 @@ function EnvironmentLogModal({
                         <button
                             type="button"
                             onClick={onClose}
-                            className="rounded-xl border border-slate-200 bg-white px-3 py-1.5 text-[11px] text-slate-600 hover:bg-slate-50"
+                            className="rounded-xl border border-slate-500 bg-white px-3 py-1.5 text-[11px] text-slate-600 hover:bg-slate-50"
                         >
                             Cancel
                         </button>

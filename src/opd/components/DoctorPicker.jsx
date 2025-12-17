@@ -158,7 +158,7 @@ export default function DoctorPicker({
                             <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-slate-400" />
                         )}
                         <select
-                            className="input w-full rounded-2xl border border-slate-200 bg-white text-sm shadow-sm focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                            className="input w-full rounded-2xl border border-slate-500 bg-white text-sm shadow-sm focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
                             value={deptId}
                             onChange={handleDeptChange}
                             disabled={loadingDepts}
@@ -188,7 +188,7 @@ export default function DoctorPicker({
                             <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-slate-400" />
                         )}
                         <select
-                            className="input w-full rounded-2xl border border-slate-200 bg-white text-sm shadow-sm focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                            className="input w-full rounded-2xl border border-slate-500 bg-white text-sm shadow-sm focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
                             value={value || ''}
                             onChange={handleDoctorChange}
                             disabled={!deptId || loadingUsers || users.length === 0}

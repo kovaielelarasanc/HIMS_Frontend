@@ -44,21 +44,21 @@ const UI = {
     page: 'min-h-[calc(100vh-4rem)] bg-slate-50 px-3 py-4 md:px-6 md:py-6 lg:px-8',
     container: 'mx-auto max-w-6xl space-y-4 md:space-y-5 lg:space-y-6',
     card:
-        'rounded-3xl border border-black/10 bg-white/85 backdrop-blur shadow-[0_1px_2px_rgba(0,0,0,0.06)]',
+        'rounded-3xl border border-black/50 bg-white/85 backdrop-blur shadow-[0_1px_2px_rgba(0,0,0,0.06)]',
     inset:
-        'rounded-3xl border border-black/10 bg-white/90 backdrop-blur shadow-[0_1px_2px_rgba(0,0,0,0.05)]',
-    subtle: 'rounded-3xl border border-black/10 bg-black/[0.02]',
+        'rounded-3xl border border-black/50 bg-white/90 backdrop-blur shadow-[0_1px_2px_rgba(0,0,0,0.05)]',
+    subtle: 'rounded-3xl border border-black/50 bg-black/[0.02]',
     label: 'text-[11px] font-semibold text-slate-600',
     input:
-        'w-full rounded-2xl border border-black/10 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-black/20 focus:ring-2 focus:ring-black/10',
+        'w-full rounded-2xl border border-black/50 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-black/20 focus:ring-2 focus:ring-black/10',
     inputSm:
-        'w-full rounded-2xl border border-black/10 bg-white px-3 py-2 text-[13px] text-slate-900 outline-none focus:border-black/20 focus:ring-2 focus:ring-black/10',
+        'w-full rounded-2xl border border-black/50 bg-white px-3 py-2 text-[13px] text-slate-900 outline-none focus:border-black/20 focus:ring-2 focus:ring-black/10',
     btn:
         'inline-flex items-center justify-center gap-2 rounded-2xl px-3 py-2 text-sm font-semibold transition active:scale-[0.99]',
     btnOutline:
-        'inline-flex items-center justify-center gap-2 rounded-2xl px-3 py-2 text-sm font-semibold border border-black/10 bg-white hover:bg-black/[0.03] transition active:scale-[0.99]',
+        'inline-flex items-center justify-center gap-2 rounded-2xl px-3 py-2 text-sm font-semibold border border-black/50 bg-white hover:bg-black/[0.03] transition active:scale-[0.99]',
     badge:
-        'inline-flex items-center rounded-full border border-black/10 bg-black/[0.03] px-2 py-0.5 text-[11px] font-semibold text-slate-700',
+        'inline-flex items-center rounded-full border border-black/50 bg-black/[0.03] px-2 py-0.5 text-[11px] font-semibold text-slate-700',
 }
 
 /** Apple segmented control */
@@ -66,7 +66,7 @@ function Segmented({ value, onChange, options, className = '' }) {
     return (
         <div
             className={cx(
-                'inline-flex items-center rounded-2xl border border-black/10 bg-black/[0.03] p-1',
+                'inline-flex items-center rounded-2xl border border-black/50 bg-black/[0.03] p-1',
                 className
             )}
         >
@@ -80,7 +80,7 @@ function Segmented({ value, onChange, options, className = '' }) {
                         className={cx(
                             'h-9 px-3 rounded-xl text-[12px] font-semibold tracking-tight transition',
                             active
-                                ? 'bg-white text-slate-900 border border-black/10 shadow-[0_1px_2px_rgba(0,0,0,0.08)]'
+                                ? 'bg-white text-slate-900 border border-black/50 shadow-[0_1px_2px_rgba(0,0,0,0.08)]'
                                 : 'text-slate-600 hover:text-slate-800 hover:bg-white/60'
                         )}
                     >
@@ -121,7 +121,7 @@ function AppleSearch({ value, onChange, placeholder = 'Search…', className = '
 function AppleModal({ title, subtitle, onClose, children }) {
     return (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/35 backdrop-blur-sm p-0 sm:p-4">
-            <div className="w-full max-w-xl max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl border border-black/10 bg-white/90 backdrop-blur-xl shadow-[0_20px_60px_rgba(0,0,0,0.22)] px-4 py-4 sm:px-5 sm:py-5">
+            <div className="w-full max-w-xl max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl border border-black/50 bg-white/90 backdrop-blur-xl shadow-[0_20px_60px_rgba(0,0,0,0.22)] px-4 py-4 sm:px-5 sm:py-5">
                 <div className="mb-4 flex items-start justify-between gap-3">
                     <div className="min-w-0">
                         <h3 className="text-[16px] sm:text-[18px] font-semibold text-slate-900 tracking-tight">
@@ -152,9 +152,9 @@ function AppleModal({ title, subtitle, onClose, children }) {
 /** macOS list shell */
 function AppleListShell({ title, right, children }) {
     return (
-        <div className="overflow-hidden rounded-3xl border border-black/10 bg-white/85 backdrop-blur">
+        <div className="overflow-hidden rounded-3xl border border-black/50 bg-white/85 backdrop-blur">
             {(title || right) && (
-                <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-black/10 bg-white/80 backdrop-blur">
+                <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-black/50 bg-white/80 backdrop-blur">
                     <div className="text-[12px] font-semibold text-slate-700 tracking-tight">
                         {title}
                     </div>
@@ -237,7 +237,7 @@ function AppleListRow({
             )}
         >
             <div className="flex items-start gap-3">
-                <div className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-black/[0.04] border border-black/10 text-[11px] font-semibold text-slate-600">
+                <div className="mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-black/[0.04] border border-black/50 text-[11px] font-semibold text-slate-600">
                     {index}
                 </div>
 
@@ -281,7 +281,7 @@ function SkeletonRow() {
 
 function EmptyState({ title, subtitle }) {
     return (
-        <div className="rounded-3xl border border-black/10 bg-white/80 p-6 text-center text-slate-600">
+        <div className="rounded-3xl border border-black/50 bg-white/80 p-6 text-center text-slate-600">
             <div className="mx-auto h-12 w-12 rounded-3xl bg-black/[0.04] grid place-items-center">
                 <Building2 className="h-6 w-6 text-slate-400" />
             </div>
@@ -444,7 +444,7 @@ export default function Departments() {
                 <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
                     <Badge
                         variant="outline"
-                        className="rounded-full border-slate-200 bg-white px-2.5 py-1 text-[11px] font-medium tracking-wide text-slate-700"
+                        className="rounded-full border-slate-500 bg-white px-2.5 py-1 text-[11px] font-medium tracking-wide text-slate-700"
                     >
                         Admin · Departments
                     </Badge>

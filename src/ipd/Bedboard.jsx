@@ -73,7 +73,7 @@ export default function BedBoard() {
                         ? 'bg-amber-50 text-amber-700 border-amber-200'
                         : s === 'preoccupied'
                             ? 'bg-sky-50 text-sky-700 border-sky-200'
-                            : 'bg-slate-50 text-slate-700 border-slate-200'
+                            : 'bg-slate-50 text-slate-700 border-slate-500'
 
         return (
             <span
@@ -93,7 +93,7 @@ export default function BedBoard() {
             return 'border-amber-200 bg-amber-50/70'
         if (state === 'preoccupied')
             return 'border-sky-200 bg-sky-50/70'
-        return 'border-slate-200 bg-white'
+        return 'border-slate-500 bg-white'
     }
 
     const quickAction = (id, code, action) => {
@@ -227,12 +227,12 @@ export default function BedBoard() {
 
             <div className="mx-auto max-w-6xl space-y-4">
                 {/* Search + refresh */}
-                <div className="flex flex-col gap-3 rounded-2xl border border-slate-200 bg-white p-3 shadow-sm md:flex-row md:items-center md:justify-between">
+                <div className="flex flex-col gap-3 rounded-2xl border border-slate-500 bg-white p-3 shadow-sm md:flex-row md:items-center md:justify-between">
                     <div className="w-full md:max-w-md">
                         <div className="relative">
                             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
                             <input
-                                className="w-full rounded-2xl border border-slate-200 bg-white px-9 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                                className="w-full rounded-2xl border border-slate-500 bg-white px-9 py-2 text-sm text-slate-900 placeholder:text-slate-400 outline-none transition focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
                                 placeholder="Search by ward, room, bed code or state (vacant, occupied, reserved)…"
                                 value={search}
                                 onChange={(e) => setSearch(e.target.value)}
@@ -246,7 +246,7 @@ export default function BedBoard() {
                     </div>
 
                     <div className="flex flex-wrap items-center justify-between gap-3 md:justify-end">
-                        <div className="flex items-center gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1.5 text-[11px] text-slate-700">
+                        <div className="flex items-center gap-2 rounded-xl border border-slate-500 bg-slate-50 px-3 py-1.5 text-[11px] text-slate-700">
                             <BedDouble className="h-3.5 w-3.5 text-slate-500" />
                             <span>
                                 Total beds:{' '}
@@ -258,7 +258,7 @@ export default function BedBoard() {
                         <button
                             type="button"
                             onClick={load}
-                            className="inline-flex items-center gap-1 rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="inline-flex items-center gap-1 rounded-full border border-slate-500 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
                             disabled={loading}
                         >
                             {loading ? (
@@ -280,8 +280,8 @@ export default function BedBoard() {
                 )}
 
                 {loading && !beds.length && (
-                    <div className="flex items-center justify-center rounded-2xl border border-slate-200 bg-white px-4 py-10 text-sm text-slate-600 shadow-sm">
-                        <span className="inline-flex items-center gap-2 rounded-full border border-slate-200 px-3 py-1.5 text-xs">
+                    <div className="flex items-center justify-center rounded-2xl border border-slate-500 bg-white px-4 py-10 text-sm text-slate-600 shadow-sm">
+                        <span className="inline-flex items-center gap-2 rounded-full border border-slate-500 px-3 py-1.5 text-xs">
                             <Loader2 className="h-4 w-4 animate-spin text-slate-500" />
                             Loading bedboard…
                         </span>
@@ -296,7 +296,7 @@ export default function BedBoard() {
                             .map((w) => (
                                 <div
                                     key={w.id}
-                                    className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm"
+                                    className="overflow-hidden rounded-2xl border border-slate-500 bg-white shadow-sm"
                                 >
                                     {/* Ward header */}
                                     <div className="flex items-center gap-2 border-b border-slate-100 bg-slate-50 px-3 py-2 text-sm font-semibold text-slate-900">
@@ -358,7 +358,7 @@ export default function BedBoard() {
 
                                                     {/* Beds for this room */}
                                                     {bedsForRoom.length === 0 ? (
-                                                        <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-3 py-3 text-xs text-slate-500">
+                                                        <div className="rounded-xl border border-dashed border-slate-500 bg-slate-50 px-3 py-3 text-xs text-slate-500">
                                                             No beds match your search in this room.
                                                         </div>
                                                     ) : (
@@ -445,7 +445,7 @@ export default function BedBoard() {
                             ))}
 
                         {!loading && filteredWardIds.length === 0 && (
-                            <div className="rounded-2xl border border-slate-200 bg-white px-4 py-8 text-center text-sm text-slate-500 shadow-sm">
+                            <div className="rounded-2xl border border-slate-500 bg-white px-4 py-8 text-center text-sm text-slate-500 shadow-sm">
                                 No beds match your search. Try clearing the filter or
                                 searching with a different ward, room or bed code.
                             </div>
@@ -477,7 +477,7 @@ export default function BedBoard() {
                                 </label>
                                 <input
                                     type="datetime-local"
-                                    className="input w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                                    className="input w-full rounded-xl border border-slate-500 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
                                     value={dialog.dt}
                                     onChange={(e) =>
                                         setDialog((d) => ({
@@ -494,7 +494,7 @@ export default function BedBoard() {
                                 Note (optional)
                             </label>
                             <input
-                                className="input w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
+                                className="input w-full rounded-xl border border-slate-500 bg-white px-3 py-2 text-sm focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
                                 placeholder="Reason for change, patient reference, etc."
                                 value={dialog.note}
                                 onChange={(e) =>

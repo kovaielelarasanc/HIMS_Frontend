@@ -47,23 +47,23 @@ const UI = {
     page: 'bg-slate-50 min-h-full',
     container: 'mx-auto w-full max-w-6xl px-3 sm:px-5 py-4',
     card:
-        'rounded-3xl border border-black/10 bg-white/85 backdrop-blur shadow-[0_1px_2px_rgba(0,0,0,0.06)]',
+        'rounded-3xl border border-black/50 bg-white/85 backdrop-blur shadow-[0_1px_2px_rgba(0,0,0,0.06)]',
     insetCard:
-        'rounded-3xl border border-black/10 bg-white/90 backdrop-blur shadow-[0_1px_2px_rgba(0,0,0,0.05)]',
-    subtle: 'rounded-3xl border border-black/10 bg-black/[0.02]',
+        'rounded-3xl border border-black/50 bg-white/90 backdrop-blur shadow-[0_1px_2px_rgba(0,0,0,0.05)]',
+    subtle: 'rounded-3xl border border-black/50 bg-black/[0.02]',
     label: 'text-[11px] font-semibold text-slate-600',
     input:
-        'w-full rounded-2xl border border-black/10 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-black/20 focus:ring-2 focus:ring-black/10',
+        'w-full rounded-2xl border border-black/50 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-black/20 focus:ring-2 focus:ring-black/10',
     inputSm:
-        'w-full rounded-2xl border border-black/10 bg-white px-3 py-2 text-[13px] text-slate-900 outline-none focus:border-black/20 focus:ring-2 focus:ring-black/10',
+        'w-full rounded-2xl border border-black/50 bg-white px-3 py-2 text-[13px] text-slate-900 outline-none focus:border-black/20 focus:ring-2 focus:ring-black/10',
     textarea:
-        'w-full rounded-2xl border border-black/10 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-black/20 focus:ring-2 focus:ring-black/10 min-h-[90px]',
+        'w-full rounded-2xl border border-black/50 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-black/20 focus:ring-2 focus:ring-black/10 min-h-[90px]',
     btn:
         'inline-flex items-center justify-center gap-2 rounded-2xl px-3 py-2 text-sm font-semibold transition active:scale-[0.99]',
     btnOutline:
-        'inline-flex items-center justify-center gap-2 rounded-2xl px-3 py-2 text-sm font-semibold border border-black/10 bg-white hover:bg-black/[0.03] transition active:scale-[0.99]',
+        'inline-flex items-center justify-center gap-2 rounded-2xl px-3 py-2 text-sm font-semibold border border-black/50 bg-white hover:bg-black/[0.03] transition active:scale-[0.99]',
     badge:
-        'inline-flex items-center rounded-full border border-black/10 bg-black/[0.03] px-2 py-0.5 text-[11px] font-semibold text-slate-700',
+        'inline-flex items-center rounded-full border border-black/50 bg-black/[0.03] px-2 py-0.5 text-[11px] font-semibold text-slate-700',
 }
 
 /** Apple segmented control */
@@ -71,7 +71,7 @@ function Segmented({ value, onChange, options, primary = '#2563eb', className = 
     return (
         <div
             className={cx(
-                'inline-flex items-center rounded-2xl border border-black/10 bg-black/[0.03] p-1',
+                'inline-flex items-center rounded-2xl border border-black/50 bg-black/[0.03] p-1',
                 className
             )}
         >
@@ -85,7 +85,7 @@ function Segmented({ value, onChange, options, primary = '#2563eb', className = 
                         className={cx(
                             'h-9 px-3 rounded-xl text-[12px] font-semibold tracking-tight transition',
                             active
-                                ? 'bg-white text-slate-900 border border-black/10 shadow-[0_1px_2px_rgba(0,0,0,0.08)]'
+                                ? 'bg-white text-slate-900 border border-black/50 shadow-[0_1px_2px_rgba(0,0,0,0.08)]'
                                 : 'text-slate-600 hover:text-slate-800 hover:bg-white/60'
                         )}
                         style={
@@ -108,7 +108,7 @@ function Segmented({ value, onChange, options, primary = '#2563eb', className = 
 /** Apple mini segmented */
 function MiniSegmented({ value, onChange, options, primary = '#2563eb' }) {
     return (
-        <div className="inline-flex items-center rounded-2xl border border-black/10 bg-black/[0.03] p-1">
+        <div className="inline-flex items-center rounded-2xl border border-black/50 bg-black/[0.03] p-1">
             {options.map((o) => {
                 const active = value === o.value
                 return (
@@ -119,7 +119,7 @@ function MiniSegmented({ value, onChange, options, primary = '#2563eb' }) {
                         className={cx(
                             'h-8 px-3 rounded-xl text-[12px] font-semibold transition',
                             active
-                                ? 'bg-white text-slate-900 border border-black/10 shadow-[0_1px_2px_rgba(0,0,0,0.08)]'
+                                ? 'bg-white text-slate-900 border border-black/50 shadow-[0_1px_2px_rgba(0,0,0,0.08)]'
                                 : 'text-slate-600 hover:text-slate-800 hover:bg-white/60'
                         )}
                         style={
@@ -165,7 +165,7 @@ function AppleSearch({ value, onChange, placeholder = 'Search…', className = '
 function AppleModal({ title, subtitle, onClose, children }) {
     return (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/35 backdrop-blur-sm p-0 sm:p-4">
-            <div className="w-full max-w-xl max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl border border-black/10 bg-white/90 backdrop-blur-xl shadow-[0_20px_60px_rgba(0,0,0,0.22)] px-4 py-4 sm:px-5 sm:py-5">
+            <div className="w-full max-w-xl max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl border border-black/50 bg-white/90 backdrop-blur-xl shadow-[0_20px_60px_rgba(0,0,0,0.22)] px-4 py-4 sm:px-5 sm:py-5">
                 <div className="mb-4 flex items-start justify-between gap-3">
                     <div className="min-w-0">
                         <h3 className="text-[16px] sm:text-[18px] font-semibold text-slate-900 tracking-tight">
@@ -194,7 +194,7 @@ function AppleModal({ title, subtitle, onClose, children }) {
 
 function EmptyState({ title, subtitle }) {
     return (
-        <div className="rounded-3xl border border-black/10 bg-white/80 p-6 text-center text-slate-600">
+        <div className="rounded-3xl border border-black/50 bg-white/80 p-6 text-center text-slate-600">
             <div className="mx-auto h-12 w-12 rounded-3xl bg-black/[0.04] grid place-items-center">
                 <Users className="h-6 w-6 text-slate-400" />
             </div>
@@ -209,9 +209,9 @@ function EmptyState({ title, subtitle }) {
 ------------------------- */
 function AppleListShell({ title, right, children }) {
     return (
-        <div className="overflow-hidden rounded-3xl border border-black/10 bg-white/85 backdrop-blur">
+        <div className="overflow-hidden rounded-3xl border border-black/50 bg-white/85 backdrop-blur">
             {(title || right) && (
-                <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-black/10 bg-white/80 backdrop-blur">
+                <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-black/50 bg-white/80 backdrop-blur">
                     <div className="text-[12px] font-semibold text-slate-700 tracking-tight">{title}</div>
                     <div className="flex items-center gap-2">{right}</div>
                 </div>
@@ -233,7 +233,7 @@ function RowPill({ dotClass, label, className = '' }) {
 function CodeBadge({ code }) {
     if (!code) return null
     return (
-        <span className="rounded-full bg-black/[0.04] border border-black/10 px-2 py-0.5 text-[11px] font-mono text-slate-700">
+        <span className="rounded-full bg-black/[0.04] border border-black/50 px-2 py-0.5 text-[11px] font-mono text-slate-700">
             {code}
         </span>
     )
@@ -599,7 +599,7 @@ function PatientTypesTab({ primary }) {
                                         className={
                                             t.is_active
                                                 ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                                                : 'border-black/10 bg-black/[0.03] text-slate-600'
+                                                : 'border-black/50 bg-black/[0.03] text-slate-600'
                                         }
                                     />
                                     <span className="text-slate-400">Sort: {t.sort_order ?? 0}</span>

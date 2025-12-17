@@ -280,7 +280,7 @@ export default function Locations() {
                         <div>
                             <Label>Type</Label>
                             <select
-                                className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm"
+                                className="w-full rounded-md border border-slate-500 bg-white px-3 py-2 text-sm"
                                 value={form.type}
                                 onChange={(e) => updateField('type', e.target.value)}
                             >

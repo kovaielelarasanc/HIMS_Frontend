@@ -266,7 +266,7 @@ function durationText(l) {
 function StatusPillSmall({ status }) {
   const s = safeUpper(status)
   let label = s || '—'
-  let cls = 'bg-slate-50 text-slate-700 border border-slate-200'
+  let cls = 'bg-slate-50 text-slate-700 border border-slate-500'
 
   if (s === 'PENDING' || s === 'NEW' || s === 'DRAFT' || s === 'ISSUED') {
     label = s === 'DRAFT' ? 'Draft' : 'Pending'
@@ -339,7 +339,7 @@ function LineCardMobile({ line, idx, onChangeQty }) {
   const remaining = num(line?.remaining_calc, 0)
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-3 space-y-2">
+    <div className="rounded-2xl border border-slate-500 bg-white p-3 space-y-2">
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
           <div className="text-[11px] text-slate-500">#{idx + 1}</div>
@@ -359,19 +359,19 @@ function LineCardMobile({ line, idx, onChangeQty }) {
       </div>
 
       <div className="grid grid-cols-2 gap-2">
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2">
+        <div className="rounded-xl border border-slate-500 bg-slate-50 px-3 py-2">
           <div className="text-[10px] text-slate-500">Prescribed</div>
           <div className="text-[11px] font-semibold text-slate-800">{String(prescribed)}</div>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-white px-3 py-2">
+        <div className="rounded-xl border border-slate-500 bg-white px-3 py-2">
           <div className="text-[10px] text-slate-500">Dispense</div>
           <Input
             type="number"
             min="0"
             value={line?.dispense_qty ?? ''}
             onChange={(e) => onChangeQty(idx, e.target.value)}
-            className="mt-1 h-8 text-[11px] text-right bg-white border-slate-200 rounded-full"
+            className="mt-1 h-8 text-[11px] text-right bg-white border-slate-500 rounded-full"
           />
         </div>
       </div>
@@ -658,11 +658,11 @@ export default function PharmacyDispense() {
   return (
     <div className="p-4 md:p-6 space-y-4">
       {/* Header */}
-      <div className="rounded-3xl border border-slate-200 bg-white shadow-sm p-4 md:p-5">
+      <div className="rounded-3xl border border-slate-500 bg-white shadow-sm p-4 md:p-5">
         <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
           <div className="space-y-1">
             <div className="inline-flex items-center gap-2">
-              <div className="h-9 w-9 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-center">
+              <div className="h-9 w-9 rounded-2xl bg-white border border-slate-500 shadow-sm flex items-center justify-center">
                 <Pill className="h-4 w-4 text-slate-700" />
               </div>
               <h1 className="text-xl md:text-2xl font-semibold text-slate-900">
@@ -676,7 +676,7 @@ export default function PharmacyDispense() {
 
           {/* Locations */}
           <div className="grid gap-2 md:grid-cols-2 md:items-end">
-            <div className="rounded-2xl border border-slate-200 bg-white p-2.5">
+            <div className="rounded-2xl border border-slate-500 bg-white p-2.5">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-xs">
                   <MapPin className="h-4 w-4 text-slate-500" />
@@ -687,7 +687,7 @@ export default function PharmacyDispense() {
                 </div>
 
                 <Select value={queueLocationId} onValueChange={(v) => setQueueLocationId(v || ALL_LOC)}>
-                  <SelectTrigger className="w-[190px] bg-white border-slate-200 rounded-full h-8 text-[11px]">
+                  <SelectTrigger className="w-[190px] bg-white border-slate-500 rounded-full h-8 text-[11px]">
                     <SelectValue placeholder="Queue location" />
                   </SelectTrigger>
                   <SelectContent>
@@ -702,7 +702,7 @@ export default function PharmacyDispense() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-200 bg-white p-2.5">
+            <div className="rounded-2xl border border-slate-500 bg-white p-2.5">
               <div className="flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 text-xs">
                   <MapPin className="h-4 w-4 text-slate-500" />
@@ -713,7 +713,7 @@ export default function PharmacyDispense() {
                 </div>
 
                 <Select value={dispenseLocationId || ''} onValueChange={(v) => setDispenseLocationId(v || '')}>
-                  <SelectTrigger className="w-[190px] bg-white border-slate-200 rounded-full h-8 text-[11px]">
+                  <SelectTrigger className="w-[190px] bg-white border-slate-500 rounded-full h-8 text-[11px]">
                     <SelectValue placeholder="Select dispense location" />
                   </SelectTrigger>
                   <SelectContent>
@@ -728,7 +728,7 @@ export default function PharmacyDispense() {
             </div>
 
             <div className="md:col-span-2 flex items-center justify-end gap-2">
-              <Button variant="outline" size="sm" className="h-9 rounded-full border-slate-200" onClick={fetchQueue}>
+              <Button variant="outline" size="sm" className="h-9 rounded-full border-slate-500" onClick={fetchQueue}>
                 <RefreshCcw className="h-4 w-4 mr-1" />
                 Refresh
               </Button>
@@ -738,7 +738,7 @@ export default function PharmacyDispense() {
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
-        <TabsList className="rounded-full bg-white border border-slate-200 p-1">
+        <TabsList className="rounded-full bg-white border border-slate-500 p-1">
           <TabsTrigger value="queue" className="rounded-full">Dispense Queue</TabsTrigger>
           <TabsTrigger value="dispense" disabled={!selectedRx} className="rounded-full">Dispense</TabsTrigger>
         </TabsList>
@@ -747,14 +747,14 @@ export default function PharmacyDispense() {
         <TabsContent value="queue" className="space-y-3">
           <div className="grid gap-4 lg:grid-cols-[minmax(0,1.25fr)_minmax(0,1.75fr)]">
             {/* Queue */}
-            <Card className="border-slate-200 rounded-3xl shadow-sm overflow-hidden bg-white">
+            <Card className="border-slate-500 rounded-3xl shadow-sm overflow-hidden bg-white">
               <CardHeader className="pb-3">
                 <div className="flex items-start justify-between gap-3">
                   <div className="space-y-1">
                     <CardTitle className="text-sm font-semibold flex items-center gap-2">
                       <ClipboardList className="w-4 h-4 text-slate-500" />
                       Prescriptions
-                      <Badge variant="outline" className="rounded-full text-[10px] border-slate-200">
+                      <Badge variant="outline" className="rounded-full text-[10px] border-slate-500">
                         {queueLoading ? '...' : queue.length}
                       </Badge>
                     </CardTitle>
@@ -766,7 +766,7 @@ export default function PharmacyDispense() {
                   <Button
                     variant="outline"
                     size="icon"
-                    className="h-8 w-8 rounded-full border-slate-200"
+                    className="h-8 w-8 rounded-full border-slate-500"
                     onClick={fetchQueue}
                     title="Refresh"
                   >
@@ -783,17 +783,17 @@ export default function PharmacyDispense() {
                         onChange={(e) => setSearch(e.target.value)}
                         onKeyDown={(e) => { if (e.key === 'Enter') fetchQueue() }}
                         placeholder="Search UHID / patient / Rx no..."
-                        className="pl-9 h-9 text-xs bg-white border-slate-200 rounded-full"
+                        className="pl-9 h-9 text-xs bg-white border-slate-500 rounded-full"
                       />
                     </div>
-                    <Button variant="outline" className="h-9 rounded-full text-xs border-slate-200" onClick={fetchQueue}>
+                    <Button variant="outline" className="h-9 rounded-full text-xs border-slate-500" onClick={fetchQueue}>
                       Search
                     </Button>
                   </div>
 
                   <div className="flex items-center gap-2 flex-wrap">
                     <Select value={typeFilter} onValueChange={setTypeFilter}>
-                      <SelectTrigger className="w-[140px] bg-white border-slate-200 rounded-full h-8 text-[11px]">
+                      <SelectTrigger className="w-[140px] bg-white border-slate-500 rounded-full h-8 text-[11px]">
                         <SelectValue placeholder="Type" />
                       </SelectTrigger>
                       <SelectContent>
@@ -804,7 +804,7 @@ export default function PharmacyDispense() {
                     </Select>
 
                     <Select value={statusFilter} onValueChange={setStatusFilter}>
-                      <SelectTrigger className="w-[160px] bg-white border-slate-200 rounded-full h-8 text-[11px]">
+                      <SelectTrigger className="w-[160px] bg-white border-slate-500 rounded-full h-8 text-[11px]">
                         <SelectValue placeholder="Status" />
                       </SelectTrigger>
                       <SelectContent>
@@ -815,7 +815,7 @@ export default function PharmacyDispense() {
                       </SelectContent>
                     </Select>
 
-                    <Badge variant="outline" className="border-slate-200 text-[10px] px-2 py-1 rounded-full">
+                    <Badge variant="outline" className="border-slate-500 text-[10px] px-2 py-1 rounded-full">
                       Dispense at: <span className="ml-1 text-slate-700 font-medium">{currentDispenseLocationName}</span>
                     </Badge>
                   </div>
@@ -823,7 +823,7 @@ export default function PharmacyDispense() {
               </CardHeader>
 
               <CardContent className="pt-0">
-                <div className="border border-slate-200 rounded-2xl overflow-hidden bg-white">
+                <div className="border border-slate-500 rounded-2xl overflow-hidden bg-white">
                   <ScrollArea className="max-h-[520px]">
                     <table className="w-full text-xs">
                       <thead className="bg-slate-50/80 sticky top-0 z-10">
@@ -867,7 +867,7 @@ export default function PharmacyDispense() {
                           return (
                             <tr
                               key={row.id}
-                              className="border-t border-slate-200 hover:bg-slate-50 cursor-pointer"
+                              className="border-t border-slate-500 hover:bg-slate-50 cursor-pointer"
                               onClick={() => handleSelectRx(row, { openPreview: true })}
                             >
                               <td className="px-3 py-2 align-middle">
@@ -879,7 +879,7 @@ export default function PharmacyDispense() {
 
                               <td className="px-3 py-2 align-middle">
                                 <div className="flex items-center gap-2">
-                                  <div className="w-8 h-8 rounded-2xl bg-white border border-slate-200 flex items-center justify-center">
+                                  <div className="w-8 h-8 rounded-2xl bg-white border border-slate-500 flex items-center justify-center">
                                     <User className="w-4 h-4 text-slate-600" />
                                   </div>
                                   <div className="min-w-0">
@@ -891,7 +891,7 @@ export default function PharmacyDispense() {
 
                               <td className="px-3 py-2 align-middle">
                                 <div className="flex flex-col gap-1">
-                                  <Badge variant="outline" className="border-slate-200 text-[10px] px-2 py-0.5 rounded-full w-max">
+                                  <Badge variant="outline" className="border-slate-500 text-[10px] px-2 py-0.5 rounded-full w-max">
                                     {getRxType(row)}
                                   </Badge>
                                   {!!doctorName && (
@@ -926,7 +926,7 @@ export default function PharmacyDispense() {
             </Card>
 
             {/* Selected Rx panel */}
-            <Card className="border-slate-200 rounded-3xl shadow-sm overflow-hidden bg-white">
+            <Card className="border-slate-500 rounded-3xl shadow-sm overflow-hidden bg-white">
               <CardHeader className="pb-3">
                 <CardTitle className="text-sm font-semibold flex items-center gap-2">
                   <Pill className="w-4 h-4 text-slate-500" />
@@ -946,7 +946,7 @@ export default function PharmacyDispense() {
                   </div>
                 ) : (
                   <div className="space-y-3 text-xs">
-                    <div className="rounded-2xl border border-slate-200 bg-white p-3">
+                    <div className="rounded-2xl border border-slate-500 bg-white p-3">
                       <div className="flex items-start justify-between gap-2">
                         <div className="min-w-0">
                           <div className="font-semibold text-slate-900 truncate">{getPatientName(selectedRx)}</div>
@@ -985,7 +985,7 @@ export default function PharmacyDispense() {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-9 rounded-full gap-1 border-slate-200"
+                        className="h-9 rounded-full gap-1 border-slate-500"
                         onClick={() => selectedRx?.id && openPharmacyPrescriptionPdfInNewTab(selectedRx.id)}
                       >
                         <FileText className="h-4 w-4" />
@@ -995,7 +995,7 @@ export default function PharmacyDispense() {
                       <Button
                         size="sm"
                         variant="outline"
-                        className="h-9 rounded-full border-slate-200"
+                        className="h-9 rounded-full border-slate-500"
                         onClick={() => {
                           setTab('dispense')
                           setPreviewOpen(false)
@@ -1025,11 +1025,11 @@ export default function PharmacyDispense() {
 
           {/* Preview Dialog */}
           <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-            <DialogContent className="sm:max-w-4xl w-[calc(100vw-22px)] rounded-3xl bg-white border-slate-200 max-h-[85vh] overflow-y-auto">
+            <DialogContent className="sm:max-w-4xl w-[calc(100vw-22px)] rounded-3xl bg-white border-slate-500 max-h-[85vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
-                    <div className="h-9 w-9 rounded-2xl bg-white border border-slate-200 shadow-sm flex items-center justify-center">
+                    <div className="h-9 w-9 rounded-2xl bg-white border border-slate-500 shadow-sm flex items-center justify-center">
                       <Pill className="h-4 w-4 text-slate-700" />
                     </div>
                     <div>
@@ -1051,13 +1051,13 @@ export default function PharmacyDispense() {
               ) : (
                 <div className="space-y-3">
                   <div className="grid gap-2 md:grid-cols-3">
-                    <div className="rounded-2xl border border-slate-200 bg-white p-3">
+                    <div className="rounded-2xl border border-slate-500 bg-white p-3">
                       <div className="text-[11px] text-slate-500">Patient</div>
                       <div className="mt-1 font-semibold text-slate-900">{getPatientName(selectedRx)}</div>
                       <div className="text-[11px] text-slate-500">UHID: {getPatientUhid(selectedRx) || '—'}</div>
                     </div>
 
-                    <div className="rounded-2xl border border-slate-200 bg-white p-3">
+                    <div className="rounded-2xl border border-slate-500 bg-white p-3">
                       <div className="text-[11px] text-slate-500">Doctor</div>
                       <div className="mt-1 font-semibold text-slate-900">{getDoctorName(selectedRx) || '—'}</div>
                       <div className="text-[11px] text-slate-500">
@@ -1065,21 +1065,21 @@ export default function PharmacyDispense() {
                       </div>
                     </div>
 
-                    <div className="rounded-2xl border border-slate-200 bg-white p-3">
+                    <div className="rounded-2xl border border-slate-500 bg-white p-3">
                       <div className="text-[11px] text-slate-500">Dispense location</div>
                       <div className="mt-1 font-semibold text-slate-900">{currentDispenseLocationName}</div>
                     </div>
                   </div>
 
-                  <div className="rounded-3xl border border-slate-200 bg-white overflow-hidden">
+                  <div className="rounded-3xl border border-slate-500 bg-white overflow-hidden">
                     <div className="px-3 py-2 bg-slate-50 text-xs font-semibold text-slate-600 flex items-center justify-between">
                       <span>Medicines</span>
                       <div className="flex items-center gap-2">
-                        <Button size="sm" variant="outline" className="h-8 rounded-full border-slate-200 text-xs" onClick={fillAllToRemaining}>
+                        <Button size="sm" variant="outline" className="h-8 rounded-full border-slate-500 text-xs" onClick={fillAllToRemaining}>
                           <Wand2 className="h-4 w-4 mr-1" />
                           Fill remaining
                         </Button>
-                        <Button size="sm" variant="outline" className="h-8 rounded-full border-slate-200 text-xs" onClick={clearAllDispenseQty}>
+                        <Button size="sm" variant="outline" className="h-8 rounded-full border-slate-500 text-xs" onClick={clearAllDispenseQty}>
                           Clear
                         </Button>
                       </div>
@@ -1111,7 +1111,7 @@ export default function PharmacyDispense() {
                             <tr><td colSpan={5} className="px-3 py-6 text-center text-slate-500">No lines found.</td></tr>
                           ) : (
                             selectedLines.map((l, idx) => (
-                              <tr key={getLineId(l) || idx} className="border-t border-slate-200">
+                              <tr key={getLineId(l) || idx} className="border-t border-slate-500">
                                 <td className="px-3 py-2 align-top text-slate-500">{idx + 1}</td>
                                 <td className="px-3 py-2 align-top">
                                   <div className="flex flex-col">
@@ -1127,7 +1127,7 @@ export default function PharmacyDispense() {
                                     min="0"
                                     value={l.dispense_qty ?? ''}
                                     onChange={(e) => handleChangeDispenseQty(idx, e.target.value)}
-                                    className="h-8 w-24 ml-auto text-[11px] text-right bg-white border-slate-200 rounded-full"
+                                    className="h-8 w-24 ml-auto text-[11px] text-right bg-white border-slate-500 rounded-full"
                                   />
                                 </td>
                               </tr>
@@ -1139,7 +1139,7 @@ export default function PharmacyDispense() {
                   </div>
 
                   <div className="flex items-center justify-end gap-2">
-                    <Button variant="outline" className="h-9 rounded-full border-slate-200" onClick={() => openPharmacyPrescriptionPdfInNewTab(selectedRx.id)}>
+                    <Button variant="outline" className="h-9 rounded-full border-slate-500" onClick={() => openPharmacyPrescriptionPdfInNewTab(selectedRx.id)}>
                       <FileText className="h-4 w-4 mr-1" />
                       Rx PDF
                     </Button>
@@ -1157,13 +1157,13 @@ export default function PharmacyDispense() {
         {/* DISPENSE TAB */}
         <TabsContent value="dispense">
           {!selectedRx ? (
-            <Card className="border-slate-200 rounded-3xl shadow-sm bg-white">
+            <Card className="border-slate-500 rounded-3xl shadow-sm bg-white">
               <CardContent className="py-10 text-center text-sm text-slate-500">
                 Select a prescription from the queue first.
               </CardContent>
             </Card>
           ) : (
-            <Card className="border-slate-200 rounded-3xl shadow-sm bg-white overflow-hidden">
+            <Card className="border-slate-500 rounded-3xl shadow-sm bg-white overflow-hidden">
               <CardHeader className="pb-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                 <div className="space-y-1">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2">
@@ -1182,15 +1182,15 @@ export default function PharmacyDispense() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <Button variant="outline" size="sm" className="h-9 px-4 rounded-full border-slate-200" onClick={() => openPharmacyPrescriptionPdfInNewTab(selectedRx.id)}>
+                  <Button variant="outline" size="sm" className="h-9 px-4 rounded-full border-slate-500" onClick={() => openPharmacyPrescriptionPdfInNewTab(selectedRx.id)}>
                     <FileText className="w-4 h-4 mr-1" />
                     Rx PDF
                   </Button>
-                  <Button variant="outline" size="sm" className="h-9 px-4 rounded-full border-slate-200" onClick={fillAllToRemaining}>
+                  <Button variant="outline" size="sm" className="h-9 px-4 rounded-full border-slate-500" onClick={fillAllToRemaining}>
                     <Wand2 className="w-4 h-4 mr-1" />
                     Fill remaining
                   </Button>
-                  <Button variant="outline" size="sm" className="h-9 px-4 rounded-full border-slate-200" onClick={clearAllDispenseQty}>
+                  <Button variant="outline" size="sm" className="h-9 px-4 rounded-full border-slate-500" onClick={clearAllDispenseQty}>
                     Clear
                   </Button>
                   <Button variant="ghost" size="sm" className="h-9 px-4 rounded-full" onClick={() => setTab('queue')}>
@@ -1210,7 +1210,7 @@ export default function PharmacyDispense() {
                   )}
                 </div>
 
-                <div className="sticky bottom-0 bg-white border border-slate-200 rounded-2xl p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
+                <div className="sticky bottom-0 bg-white border border-slate-500 rounded-2xl p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
                   <div className="text-[11px] text-slate-500">
                     Dispense at:{' '}
                     <span className="font-medium text-slate-700">{currentDispenseLocationName}</span>
@@ -1218,7 +1218,7 @@ export default function PharmacyDispense() {
                   </div>
 
                   <div className="flex items-center gap-2 justify-end">
-                    <Button size="sm" variant="outline" className="h-9 rounded-full border-slate-200" onClick={() => setPreviewOpen(true)}>
+                    <Button size="sm" variant="outline" className="h-9 rounded-full border-slate-500" onClick={() => setPreviewOpen(true)}>
                       Preview
                     </Button>
 

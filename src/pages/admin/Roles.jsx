@@ -33,17 +33,17 @@ const fadeIn = {
 
 const UI = {
   glass:
-    'rounded-3xl border border-black/10 bg-white/75 backdrop-blur-xl shadow-[0_12px_35px_rgba(2,6,23,0.10)]',
+    'rounded-3xl border border-black/50 bg-white/75 backdrop-blur-xl shadow-[0_12px_35px_rgba(2,6,23,0.10)]',
   glassSoft:
-    'rounded-3xl border border-black/10 bg-white/70 backdrop-blur-xl shadow-[0_6px_22px_rgba(2,6,23,0.08)]',
+    'rounded-3xl border border-black/50 bg-white/70 backdrop-blur-xl shadow-[0_6px_22px_rgba(2,6,23,0.08)]',
   chip:
-    'inline-flex items-center rounded-full border border-black/10 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700',
+    'inline-flex items-center rounded-full border border-black/50 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700',
   chipBtn:
-    'inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/85 px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-black/[0.03] active:scale-[0.99] transition',
+    'inline-flex items-center gap-2 rounded-full border border-black/50 bg-white/85 px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-black/[0.03] active:scale-[0.99] transition',
   input:
-    'w-full rounded-2xl border border-black/10 bg-white/85 px-3 py-2 text-[12px] font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-500',
+    'w-full rounded-2xl border border-black/50 bg-white/85 px-3 py-2 text-[12px] font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-500',
   pill:
-    'inline-flex items-center rounded-full border border-black/10 bg-black/[0.03] px-2.5 py-0.5 text-[11px] font-semibold text-slate-700',
+    'inline-flex items-center rounded-full border border-black/50 bg-black/[0.03] px-2.5 py-0.5 text-[11px] font-semibold text-slate-700',
 }
 
 function cx(...xs) {
@@ -353,10 +353,10 @@ export default function Roles() {
     return (
       <div className="min-h-[calc(100vh-4rem)] bg-slate-50 px-4 py-5 md:px-8 md:py-8">
         <div className="space-y-4">
-          <div className="relative overflow-hidden rounded-3xl border border-black/10 bg-white/70 backdrop-blur-xl shadow-[0_10px_32px_rgba(2,6,23,0.12)]">
+          <div className="relative overflow-hidden rounded-3xl border border-black/50 bg-white/70 backdrop-blur-xl shadow-[0_10px_32px_rgba(2,6,23,0.12)]">
             <div className="absolute inset-0 opacity-70 bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.18),_transparent_55%)]" />
             <div className="relative px-6 py-6 md:px-8 md:py-7 flex items-center gap-3">
-              <div className="inline-flex h-11 w-11 items-center justify-center rounded-3xl bg-black/[0.04] border border-black/10">
+              <div className="inline-flex h-11 w-11 items-center justify-center rounded-3xl bg-black/[0.04] border border-black/50">
                 <ShieldCheck className="w-6 h-6 text-slate-700" />
               </div>
               <div>
@@ -400,7 +400,7 @@ export default function Roles() {
         <div className="flex flex-wrap items-center justify-between gap-3">
           <Badge
             variant="outline"
-            className="rounded-full border-black/10 bg-white/80 px-3 py-1 text-[11px] font-semibold tracking-wide text-slate-700"
+            className="rounded-full border-black/50 bg-white/80 px-3 py-1 text-[11px] font-semibold tracking-wide text-slate-700"
           >
             Admin · Roles & permissions
           </Badge>
@@ -418,15 +418,15 @@ export default function Roles() {
             <div className="absolute inset-0 opacity-60 bg-[radial-gradient(circle_at_top,_rgba(13,148,136,0.18),_transparent_60%)]" />
             <div className="relative px-5 py-5 md:px-7 md:py-6 flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
               <div className="min-w-0">
-                <div className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/70 px-3 py-1 text-[11px] font-semibold text-slate-700">
-                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-black/[0.04] border border-black/10">
+                <div className="inline-flex items-center gap-2 rounded-full border border-black/50 bg-white/70 px-3 py-1 text-[11px] font-semibold text-slate-700">
+                  <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-black/[0.04] border border-black/50">
                     <ShieldCheck className="h-3.5 w-3.5 text-slate-700" />
                   </span>
                   Centralised access control
                 </div>
 
                 <div className="mt-3 flex items-start gap-3">
-                  <div className="inline-flex h-11 w-11 items-center justify-center rounded-3xl bg-black/[0.04] border border-black/10">
+                  <div className="inline-flex h-11 w-11 items-center justify-center rounded-3xl bg-black/[0.04] border border-black/50">
                     <KeyRound className="h-5 w-5 text-slate-700" />
                   </div>
                   <div className="min-w-0">
@@ -477,8 +477,8 @@ export default function Roles() {
 
         {/* List */}
         <motion.div {...fadeIn}>
-          <Card className={cx('rounded-3xl border-black/10 bg-white/75 backdrop-blur-xl')}>
-            <CardHeader className="border-b border-black/10 pb-4">
+          <Card className={cx('rounded-3xl border-black/50 bg-white/75 backdrop-blur-xl')}>
+            <CardHeader className="border-b border-black/50 pb-4">
               <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                 <div>
                   <CardTitle className="text-base md:text-lg font-semibold text-slate-900">
@@ -528,7 +528,7 @@ export default function Roles() {
                       'inline-flex items-center rounded-full px-3 py-1.5 text-[11px] font-semibold transition border',
                       filterChip === chip.key
                         ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                        : 'bg-white/80 text-slate-700 border-black/10 hover:bg-black/[0.03]'
+                        : 'bg-white/80 text-slate-700 border-black/50 hover:bg-black/[0.03]'
                     )}
                   >
                     {chip.label}
@@ -543,7 +543,7 @@ export default function Roles() {
                   {[0, 1, 2, 3].map((i) => (
                     <div
                       key={i}
-                      className="flex items-center justify-between gap-3 rounded-2xl border border-black/10 bg-white/70 px-4 py-3"
+                      className="flex items-center justify-between gap-3 rounded-2xl border border-black/50 bg-white/70 px-4 py-3"
                     >
                       <div className="flex-1 space-y-2">
                         <Skeleton className="h-3.5 w-1/3 rounded-full bg-slate-100" />
@@ -557,7 +557,7 @@ export default function Roles() {
                 <>
                   {/* Desktop */}
                   <div className="hidden md:block">
-                    <div className="overflow-x-auto rounded-3xl border border-black/10 bg-white/70">
+                    <div className="overflow-x-auto rounded-3xl border border-black/50 bg-white/70">
                       <table className="min-w-full text-sm">
                         <thead className="bg-black/[0.02] text-[11px] font-semibold text-slate-600 uppercase tracking-wide">
                           <tr>
@@ -583,7 +583,7 @@ export default function Roles() {
                               </td>
                               <td className="p-3 align-top">
                                 {(r.permission_ids?.length || 0) === 0 ? (
-                                  <span className="inline-flex items-center rounded-full bg-black/[0.03] px-3 py-1 text-[11px] font-semibold text-slate-700 border border-black/10">
+                                  <span className="inline-flex items-center rounded-full bg-black/[0.03] px-3 py-1 text-[11px] font-semibold text-slate-700 border border-black/50">
                                     No permissions
                                   </span>
                                 ) : (
@@ -632,12 +632,12 @@ export default function Roles() {
                     {filteredRoles.map((r, i) => (
                       <div
                         key={r.id}
-                        className="rounded-3xl border border-black/10 bg-white/75 backdrop-blur px-4 py-4 shadow-[0_8px_24px_rgba(2,6,23,0.10)]"
+                        className="rounded-3xl border border-black/50 bg-white/75 backdrop-blur px-4 py-4 shadow-[0_8px_24px_rgba(2,6,23,0.10)]"
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div className="min-w-0">
                             <div className="flex items-center gap-2">
-                              <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-black/[0.04] border border-black/10 text-[11px] font-semibold text-slate-700">
+                              <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-black/[0.04] border border-black/50 text-[11px] font-semibold text-slate-700">
                                 {i + 1}
                               </span>
                               <div className="font-semibold text-slate-900">{r.name}</div>
@@ -941,12 +941,12 @@ function RoleModal({
           >
             <div className="h-full flex flex-col min-h-0">
               {/* Sticky header */}
-              <div className="sticky top-0 z-30 border-b border-black/10 bg-white/80 backdrop-blur-xl">
+              <div className="sticky top-0 z-30 border-b border-black/50 bg-white/80 backdrop-blur-xl">
                 <div className="px-4 md:px-8 py-4">
                   <div className="flex items-start justify-between gap-3">
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-black/[0.04] border border-black/10">
+                        <div className="inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-black/[0.04] border border-black/50">
                           <KeyRound className="h-5 w-5 text-slate-700" />
                         </div>
                         <div className="min-w-0">
@@ -965,7 +965,7 @@ function RoleModal({
                       <button
                         type="button"
                         onClick={() => setDetailsOpen((v) => !v)}
-                        className="h-10 px-3 rounded-2xl border border-black/10 bg-white/85 text-[12px] font-semibold text-slate-700 hover:bg-black/[0.03] inline-flex items-center gap-2"
+                        className="h-10 px-3 rounded-2xl border border-black/50 bg-white/85 text-[12px] font-semibold text-slate-700 hover:bg-black/[0.03] inline-flex items-center gap-2"
                         disabled={editorDisabled}
                         title="Toggle role details"
                       >
@@ -981,7 +981,7 @@ function RoleModal({
                       <button
                         type="button"
                         onClick={() => setFiltersOpen((v) => !v)}
-                        className="h-10 px-3 rounded-2xl border border-black/10 bg-white/85 text-[12px] font-semibold text-slate-700 hover:bg-black/[0.03] inline-flex items-center gap-2"
+                        className="h-10 px-3 rounded-2xl border border-black/50 bg-white/85 text-[12px] font-semibold text-slate-700 hover:bg-black/[0.03] inline-flex items-center gap-2"
                         disabled={editorDisabled}
                         title="Toggle permission filters"
                       >
@@ -1049,7 +1049,7 @@ function RoleModal({
                               }
                               placeholder="e.g., OPD Doctor, IPD Nurse"
                               disabled={editorDisabled}
-                              className="h-11 rounded-2xl border-black/10 bg-white/85"
+                              className="h-11 rounded-2xl border-black/50 bg-white/85"
                               required
                             />
                           </div>
@@ -1065,7 +1065,7 @@ function RoleModal({
                               }
                               placeholder="Optional short description"
                               disabled={editorDisabled}
-                              className="h-11 rounded-2xl border-black/10 bg-white/85"
+                              className="h-11 rounded-2xl border-black/50 bg-white/85"
                             />
                           </div>
                         </div>
@@ -1079,7 +1079,7 @@ function RoleModal({
                         transition={{ duration: 0.18 }}
                         className="mt-4"
                       >
-                        <div className="rounded-2xl border border-black/10 bg-black/[0.02] px-3 py-2 text-[12px] text-slate-700 flex flex-wrap items-center gap-2">
+                        <div className="rounded-2xl border border-black/50 bg-black/[0.02] px-3 py-2 text-[12px] text-slate-700 flex flex-wrap items-center gap-2">
                           <span className="font-semibold">Role:</span>
                           <span className="font-semibold text-slate-900">
                             {form.name?.trim() ? form.name : 'Untitled role'}
@@ -1187,7 +1187,7 @@ function RoleModal({
                                   'inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-[11px] font-semibold transition',
                                   presetKey === k
                                     ? 'bg-blue-600 text-white border-blue-600 shadow-sm'
-                                    : 'bg-white/85 text-slate-700 border-black/10 hover:bg-black/[0.03]'
+                                    : 'bg-white/85 text-slate-700 border-black/50 hover:bg-black/[0.03]'
                                 )}
                                 disabled={editorDisabled}
                                 title={p.description}
@@ -1210,7 +1210,7 @@ function RoleModal({
                                 key={m.key}
                                 type="button"
                                 onClick={() => jumpToModule(m.key)}
-                                className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700 hover:bg-black/[0.03]"
+                                className="inline-flex items-center gap-2 rounded-full border border-black/50 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700 hover:bg-black/[0.03]"
                                 disabled={editorDisabled}
                                 title="Jump / filter to module"
                               >
@@ -1241,7 +1241,7 @@ function RoleModal({
                                 type="button"
                                 onClick={() => setShowSelectedOnly((v) => !v)}
                                 className={cx(
-                                  'h-10 px-3 rounded-2xl border border-black/10 bg-white/85 text-[12px] font-semibold text-slate-700 hover:bg-black/[0.03] inline-flex items-center gap-2',
+                                  'h-10 px-3 rounded-2xl border border-black/50 bg-white/85 text-[12px] font-semibold text-slate-700 hover:bg-black/[0.03] inline-flex items-center gap-2',
                                   showSelectedOnly && 'bg-black/[0.04]'
                                 )}
                                 disabled={editorDisabled}
@@ -1280,7 +1280,7 @@ function RoleModal({
                         transition={{ duration: 0.18 }}
                         className="mt-3"
                       >
-                        <div className="rounded-2xl border border-black/10 bg-black/[0.02] px-3 py-2 text-[12px] text-slate-700">
+                        <div className="rounded-2xl border border-black/50 bg-black/[0.02] px-3 py-2 text-[12px] text-slate-700">
                           Filters collapsed.
                         </div>
                       </motion.div>
@@ -1293,7 +1293,7 @@ function RoleModal({
               <div className="flex-1 min-h-0 overflow-y-auto px-4 md:px-8 py-4">
                 {visiblePerms.length === 0 ? (
                   <div className={cx(UI.glass, 'p-8 text-center')}>
-                    <div className="mx-auto h-12 w-12 rounded-3xl bg-black/[0.04] border border-black/10 grid place-items-center">
+                    <div className="mx-auto h-12 w-12 rounded-3xl bg-black/[0.04] border border-black/50 grid place-items-center">
                       <KeyRound className="h-6 w-6 text-slate-400" />
                     </div>
                     <div className="mt-3 font-semibold text-slate-900">
@@ -1320,12 +1320,12 @@ function RoleModal({
                         return (
                           <div
                             key={moduleKey}
-                            className="rounded-3xl border border-black/10 bg-white/75 backdrop-blur overflow-hidden shadow-[0_10px_28px_rgba(2,6,23,0.10)]"
+                            className="rounded-3xl border border-black/50 bg-white/75 backdrop-blur overflow-hidden shadow-[0_10px_28px_rgba(2,6,23,0.10)]"
                           >
                             <button
                               type="button"
                               onClick={() => toggleModuleOpen(moduleKey)}
-                              className="w-full px-4 py-3 border-b border-black/10 bg-white/70 text-left"
+                              className="w-full px-4 py-3 border-b border-black/50 bg-white/70 text-left"
                             >
                               <div className="flex items-start justify-between gap-3">
                                 <div className="min-w-0">
@@ -1346,7 +1346,7 @@ function RoleModal({
                                 <div className="flex items-center gap-2">
                                   <div
                                     className={cx(
-                                      'h-9 w-9 rounded-full border border-black/10 bg-white/85 grid place-items-center',
+                                      'h-9 w-9 rounded-full border border-black/50 bg-white/85 grid place-items-center',
                                       openNow && 'bg-black/[0.03]'
                                     )}
                                   >
@@ -1417,7 +1417,7 @@ function RoleModal({
                                       <label
                                         key={p.id}
                                         className={cx(
-                                          'flex items-start gap-2 rounded-2xl border border-black/10 bg-white/85 px-3 py-2 transition',
+                                          'flex items-start gap-2 rounded-2xl border border-black/50 bg-white/85 px-3 py-2 transition',
                                           checked &&
                                           'shadow-[0_6px_18px_rgba(2,6,23,0.10)]'
                                         )}
@@ -1467,7 +1467,7 @@ function ActionPill({ label, state, disabled, onClick }) {
       ? 'bg-emerald-600 text-white border-emerald-600'
       : state === 'some'
         ? 'bg-amber-50 text-amber-800 border-amber-200'
-        : 'bg-white/85 text-slate-700 border-black/10 hover:bg-black/[0.03]'
+        : 'bg-white/85 text-slate-700 border-black/50 hover:bg-black/[0.03]'
 
   return (
     <button
