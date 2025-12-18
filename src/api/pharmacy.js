@@ -303,3 +303,15 @@ export function downloadPharmacyBillPdf(saleId) {
         responseType: 'blob', // important for binary PDF
     })
 }
+
+
+
+
+
+export function getPharmacyPrescriptionDetails(id) {
+  return API.get(`/pharmacy/prescriptions/${id}`)
+}
+
+export function fetchPharmacyPrescriptionPdf(id) {
+  return API.get(`/pharmacy/prescriptions/${id}/pdf`, { responseType: 'blob' })
+}

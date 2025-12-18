@@ -1,6 +1,8 @@
 // FILE: frontend/src/opd/NoShow.jsx
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
+import { motion, AnimatePresence } from 'framer-motion'
 
 import { listNoShowAppointments, rescheduleAppointment } from '../api/opd'
 import DoctorPicker from './components/DoctorPicker'
@@ -13,6 +15,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Separator } from '@/components/ui/separator'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
 
 import {
     AlertCircle,
@@ -22,10 +25,10 @@ import {
     RefreshCcw,
     RotateCcw,
     Search,
-    User,
     User2,
+    X,
+    Loader2,
 } from 'lucide-react'
-import { motion, AnimatePresence } from 'framer-motion'
 
 const todayStr = () => new Date().toISOString().slice(0, 10)
 
@@ -40,7 +43,7 @@ const UI = {
     chip:
         'inline-flex items-center gap-2 rounded-full border border-black/50 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700',
     chipBtn:
-        'inline-flex items-center gap-2 rounded-full border bg-green-900 px-3 py-1.5 text-[11px] font-semibold text-white hover:text-black hover:bg-black/[0.03] active:scale-[0.99] transition',
+        'inline-flex items-center gap-2 rounded-full border border-black/50 bg-slate-900 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-slate-800 active:scale-[0.99] transition',
     input:
         'h-11 w-full rounded-2xl border border-black/50 bg-white/85 px-3 text-[12px] font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-500',
 }
@@ -84,8 +87,63 @@ function StatCard({ label, value, icon: Icon, tone = 'slate' }) {
     )
 }
 
+function AppleDialog({ open, onOpenChange, title, subtitle, right, children }) {
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent
+                className={cx(
+                    'p-0 overflow-hidden border border-black/50 bg-white/75 backdrop-blur-xl',
+                    'shadow-[0_18px_55px_rgba(2,6,23,0.18)]',
+                    '!left-0 !right-0 !bottom-0 !top-auto !translate-x-0 !translate-y-0',
+                    'w-screen h-[100dvh] rounded-t-3xl rounded-b-none',
+                    'sm:!left-1/2 sm:!top-1/2 sm:!bottom-auto sm:!-translate-x-1/2 sm:!-translate-y-1/2',
+                    'sm:w-[92vw] sm:max-w-3xl sm:h-[80vh] sm:rounded-3xl',
+                    'data-[state=open]:animate-in data-[state=closed]:animate-out',
+                    'data-[state=open]:duration-200 data-[state=closed]:duration-150',
+                    'data-[state=open]:slide-in-from-bottom-10 data-[state=closed]:slide-out-to-bottom-10',
+                    'sm:data-[state=open]:zoom-in-95 sm:data-[state=closed]:zoom-out-95',
+                )}
+            >
+                <div className="relative">
+                    <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(244,63,94,0.14),_transparent_60%)] opacity-60" />
+
+                    <div className="relative sm:hidden pt-3">
+                        <div className="mx-auto h-1.5 w-12 rounded-full bg-black/15" />
+                    </div>
+
+                    <div className="relative border-b border-black/50 bg-white/55 backdrop-blur-xl">
+                        <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6">
+                            <div className="min-w-0">
+                                <div className="text-[12px] font-semibold tracking-tight text-slate-900 truncate">{title}</div>
+                                {subtitle ? <div className="mt-0.5 text-[11px] text-slate-600 truncate">{subtitle}</div> : null}
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                                {right}
+                                <button
+                                    type="button"
+                                    onClick={() => onOpenChange(false)}
+                                    className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-black/50 bg-white/75 hover:bg-black/[0.03] transition"
+                                    title="Close"
+                                >
+                                    <X className="h-4 w-4 text-slate-700" />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <ScrollArea className="h-[calc(100dvh-72px)] sm:h-[calc(80vh-56px)]">
+                        <div className="p-4 sm:p-6 pb-[env(safe-area-inset-bottom)]">{children}</div>
+                    </ScrollArea>
+                </div>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
 export default function NoShow() {
     const { user } = useAuth() || {}
+    const navigate = useNavigate()
 
     const [doctorId, setDoctorId] = useState(null)
     const [doctorMeta, setDoctorMeta] = useState(null)
@@ -96,7 +154,6 @@ export default function NoShow() {
 
     const [searchTerm, setSearchTerm] = useState('')
 
-    // ✅ Common toggle (anyone can click); uses logged-in user.id
     const [myOnly, setMyOnly] = useState(false)
     const prevDoctorRef = useRef({ id: null, meta: null })
 
@@ -105,23 +162,11 @@ export default function NoShow() {
     const [newTime, setNewTime] = useState('')
     const [saving, setSaving] = useState(false)
 
-    // lock rule: myOnly needs user + date, else doctor + date
     const hasSelection = Boolean(date) && (myOnly ? Boolean(user?.id) : Boolean(doctorId))
+    const effectiveDoctorId = myOnly ? user?.id : doctorId
 
     const load = useCallback(async () => {
-        if (!date) {
-            setRows([])
-            return
-        }
-
-        // if myOnly ON, we need a logged in user
-        if (myOnly && !user?.id) {
-            setRows([])
-            return
-        }
-
-        // if myOnly OFF, doctor selection required
-        if (!myOnly && !doctorId) {
+        if (!date || !hasSelection || !effectiveDoctorId) {
             setRows([])
             return
         }
@@ -130,8 +175,12 @@ export default function NoShow() {
             setLoading(true)
             const params = {
                 for_date: date,
-                doctor_id: myOnly ? user.id : doctorId,
+                // ✅ compatibility: send both keys
+                doctor_user_id: Number(effectiveDoctorId),
+                doctor_id: Number(effectiveDoctorId),
             }
+            if (user?.department_id) params.department_id = user.department_id
+
             const { data } = await listNoShowAppointments(params)
             setRows(Array.isArray(data) ? data : [])
         } catch (e) {
@@ -140,30 +189,27 @@ export default function NoShow() {
         } finally {
             setLoading(false)
         }
-    }, [date, doctorId, myOnly, user])
+    }, [date, hasSelection, effectiveDoctorId, user])
 
     useEffect(() => {
         load()
     }, [load])
 
     const handleDoctorChange = (id, meta) => {
-        if (myOnly) return // lock picker when myOnly ON
+        if (myOnly) return
         setDoctorId(id)
         setDoctorMeta(meta || null)
     }
 
     const toggleMyOnly = () => {
-        if (!user?.id) {
-            toast.error('No logged-in user found')
-            return
-        }
+        if (!user?.id) return toast.error('No logged-in user found')
 
         setMyOnly((v) => {
             const next = !v
             if (next) {
                 prevDoctorRef.current = { id: doctorId, meta: doctorMeta }
                 setDoctorId(user.id)
-                setDoctorMeta((m) => m || { name: user?.name || user?.full_name || 'My no-shows' })
+                setDoctorMeta({ name: user?.name || user?.full_name || 'My no-shows' })
                 toast.success('Showing my no-show appointments')
             } else {
                 const prev = prevDoctorRef.current || {}
@@ -181,25 +227,27 @@ export default function NoShow() {
         setNewTime(row.slot_start)
     }
 
-    const saveReschedule = async (e) => {
-        e.preventDefault()
+    const doReschedule = async ({ openQueueAfter = false } = {}) => {
         if (!target) return
-        if (!newDate || !newTime) {
-            toast.error('Select date and time')
-            return
-        }
+        if (!newDate || !newTime) return toast.error('Select date and time')
+
         try {
             setSaving(true)
             await rescheduleAppointment(target.id, {
                 date: newDate,
                 slot_start: newTime,
-                create_new: true, // keep old as history
+                create_new: true,
             })
             toast.success('No-show rescheduled as new appointment')
             setTarget(null)
             await load()
-        } catch {
-            // handled globally
+
+            if (openQueueAfter) {
+                const doc = target?.doctor_id || effectiveDoctorId
+                if (doc && newDate) {
+                    navigate('/opd/queue', { state: { doctorId: doc, date: newDate } })
+                }
+            }
         } finally {
             setSaving(false)
         }
@@ -236,9 +284,7 @@ export default function NoShow() {
                                         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-rose-500 opacity-75" />
                                         <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-rose-500" />
                                     </span>
-                                    <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-rose-700">
-                                        No-show Recovery
-                                    </span>
+                                    <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-rose-700">No-show Recovery</span>
                                 </div>
 
                                 <div className="mt-3 flex items-start gap-3">
@@ -246,12 +292,8 @@ export default function NoShow() {
                                         <RotateCcw className="h-5 w-5 text-slate-700" />
                                     </div>
                                     <div className="min-w-0">
-                                        <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900">
-                                            No-show Appointments
-                                        </h1>
-                                        <p className="mt-1 text-sm text-slate-600">
-                                            Recover missed visits by creating a fresh appointment quickly.
-                                        </p>
+                                        <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900">No-show Appointments</h1>
+                                        <p className="mt-1 text-sm text-slate-600">Recover missed visits by creating a fresh appointment quickly.</p>
 
                                         <div className="mt-2 flex flex-wrap items-center gap-2">
                                             <span className={UI.chip}>
@@ -272,15 +314,12 @@ export default function NoShow() {
                                                 Total <span className="ml-1 tabular-nums">{total}</span>
                                             </span>
 
-                                            {/* ✅ common toggle */}
                                             <button
                                                 type="button"
                                                 onClick={toggleMyOnly}
-                                                className={cx(
-                                                    UI.chipBtn,
-                                                    myOnly && 'bg-slate-900 text-white border-slate-900 hover:text-slate-100 hover:bg-slate-800',
-                                                )}
+                                                className={cx(UI.chipBtn, myOnly && 'bg-slate-900')}
                                                 title="Show only logged-in user's no-shows"
+                                                disabled={!user?.id}
                                             >
                                                 {myOnly ? <Lock className="h-4 w-4" /> : <User2 className="h-4 w-4" />}
                                                 My no-shows
@@ -291,13 +330,7 @@ export default function NoShow() {
                             </div>
 
                             <div className="flex items-center gap-2 md:justify-end">
-                                <button
-                                    type="button"
-                                    onClick={load}
-                                    className={UI.chipBtn}
-                                    disabled={loading || !hasSelection}
-                                    title="Refresh"
-                                >
+                                <button type="button" onClick={load} className={UI.chipBtn} disabled={loading || !hasSelection} title="Refresh">
                                     <RefreshCcw className={cx('h-4 w-4', loading && 'animate-spin')} />
                                     Refresh
                                 </button>
@@ -323,18 +356,11 @@ export default function NoShow() {
                             <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
                                 <div className="grid w-full gap-3 md:grid-cols-[2fr,1.1fr]">
                                     <div>
-                                        <CardTitle className="text-base md:text-lg font-semibold text-slate-900">
-                                            No-show List
-                                        </CardTitle>
-                                        <CardDescription className="text-[12px] text-slate-600">
-                                            Select doctor + date, then reschedule missed visits.
-                                        </CardDescription>
+                                        <CardTitle className="text-base md:text-lg font-semibold text-slate-900">No-show List</CardTitle>
+                                        <CardDescription className="text-[12px] text-slate-600">Select doctor + date, then reschedule missed visits.</CardDescription>
 
                                         <div
-                                            className={cx(
-                                                'mt-3 rounded-2xl border border-black/50 bg-white/85 px-3 py-2',
-                                                myOnly && 'opacity-70 pointer-events-none',
-                                            )}
+                                            className={cx('mt-3 rounded-2xl border border-black/50 bg-white/85 px-3 py-2', myOnly && 'opacity-70 pointer-events-none')}
                                             title={myOnly ? 'My no-shows is ON (doctor locked)' : 'Select doctor'}
                                         >
                                             <DoctorPicker value={doctorId} onChange={handleDoctorChange} autoSelectCurrentDoctor />
@@ -343,7 +369,7 @@ export default function NoShow() {
                                         {myOnly && (
                                             <p className="mt-1 text-[11px] text-slate-500 inline-flex items-center gap-1">
                                                 <Lock className="h-3.5 w-3.5" />
-                                                Showing logged-in user’s no-shows only
+                                                doctor_user_id = your user id
                                             </p>
                                         )}
                                     </div>
@@ -406,9 +432,7 @@ export default function NoShow() {
                                     <AlertCircle className="h-5 w-5 text-slate-600" />
                                 </div>
                                 <div className="text-sm font-semibold text-slate-900">Select doctor & date</div>
-                                <p className="mt-1 text-[12px] text-slate-500">
-                                    Or turn on <span className="font-semibold">My no-shows</span> if you want your own list.
-                                </p>
+                                <p className="mt-1 text-[12px] text-slate-500">Or enable My no-shows.</p>
                             </div>
                         )}
 
@@ -461,7 +485,6 @@ export default function NoShow() {
                                                     className="rounded-3xl border border-black/50 bg-white/80 backdrop-blur px-4 py-3 shadow-[0_10px_24px_rgba(2,6,23,0.08)]"
                                                 >
                                                     <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                                                        {/* LEFT */}
                                                         <div className="min-w-0">
                                                             <div className="flex flex-wrap items-center gap-2">
                                                                 <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white tabular-nums">
@@ -480,9 +503,7 @@ export default function NoShow() {
 
                                                                 <div className="min-w-0">
                                                                     <div className="flex flex-wrap items-center gap-2">
-                                                                        <div className="truncate text-[14px] font-semibold text-slate-900">
-                                                                            {r.patient_name || '—'}
-                                                                        </div>
+                                                                        <div className="truncate text-[14px] font-semibold text-slate-900">{r.patient_name || '—'}</div>
                                                                         <div className="text-[11px] text-slate-500">
                                                                             UHID <span className="font-semibold text-slate-700">{r.uhid || '—'}</span>
                                                                         </div>
@@ -490,17 +511,18 @@ export default function NoShow() {
 
                                                                     <div className="mt-1 text-[11px] text-slate-500">
                                                                         {r.department_name} · Dr. {r.doctor_name} · Purpose:{' '}
-                                                                        <span className="font-semibold text-slate-700">
-                                                                            {r.purpose || 'Consultation'}
-                                                                        </span>
+                                                                        <span className="font-semibold text-slate-700">{r.purpose || 'Consultation'}</span>
                                                                     </div>
                                                                 </div>
                                                             </div>
                                                         </div>
 
-                                                        {/* RIGHT */}
-                                                        <div className="flex flex-wrap items-center justify-end gap-2 text-xs">
-                                                            <Button size="sm" className="h-10 rounded-2xl font-semibold gap-2" onClick={() => openReschedule(r)}>
+                                                        <div className="flex flex-wrap items-center justify-end gap-2">
+                                                            <Button
+                                                                size="sm"
+                                                                className="h-10 rounded-2xl font-semibold gap-2 bg-slate-900 hover:bg-slate-800 text-white"
+                                                                onClick={() => openReschedule(r)}
+                                                            >
                                                                 <RotateCcw className="h-4 w-4" />
                                                                 Reschedule
                                                             </Button>
@@ -516,31 +538,55 @@ export default function NoShow() {
                     </CardContent>
                 </Card>
 
-                {/* Reschedule panel */}
-                {target && (
-                    <Card className={cx(UI.glass, 'overflow-hidden')}>
-                        <CardHeader className="border-b border-black/50 bg-white/60 backdrop-blur-xl">
-                            <div className="flex items-center justify-between gap-3">
-                                <div>
-                                    <CardTitle className="text-base font-semibold">Reschedule No-show</CardTitle>
-                                    <CardDescription className="text-[12px]">
-                                        {target.patient_name} · UHID {target.uhid} · Dr. {target.doctor_name}
-                                    </CardDescription>
-                                </div>
-                                <Button
-                                    type="button"
-                                    variant="ghost"
-                                    size="sm"
-                                    className="text-xs text-slate-500"
-                                    onClick={() => setTarget(null)}
-                                >
-                                    Close
-                                </Button>
-                            </div>
-                        </CardHeader>
+                {/* ✅ Apple Reschedule Dialog */}
+                <AppleDialog
+                    open={Boolean(target)}
+                    onOpenChange={(v) => {
+                        if (!v) setTarget(null)
+                    }}
+                    title="Reschedule No-show"
+                    subtitle={target ? `${target.patient_name} · UHID ${target.uhid} · Dr. ${target.doctor_name}` : ''}
+                    right={
+                        <>
+                            <Button
+                                type="button"
+                                disabled={saving}
+                                variant="outline"
+                                className="h-9 rounded-2xl border-black/50 bg-white/85 text-[12px] font-semibold"
+                                onClick={() => doReschedule({ openQueueAfter: false })}
+                            >
+                                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                Create
+                            </Button>
 
-                        <CardContent className="pt-4">
-                            <form onSubmit={saveReschedule} className="grid gap-3 md:grid-cols-[1fr,1fr,auto] md:items-end text-sm">
+                            <Button
+                                type="button"
+                                disabled={saving}
+                                className="h-9 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold"
+                                onClick={() => doReschedule({ openQueueAfter: true })}
+                            >
+                                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                                Create & open queue
+                            </Button>
+                        </>
+                    }
+                >
+                    {target ? (
+                        <div className="space-y-4">
+                            <div className="rounded-3xl border border-black/50 bg-white/80 p-4">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <span className={UI.chip}>
+                                        <CalendarDays className="h-3.5 w-3.5" />
+                                        Old: {prettyDate(target.date)} · {target.slot_start}
+                                    </span>
+                                    <span className={UI.chip}>
+                                        <AlertCircle className="h-3.5 w-3.5 text-rose-600" />
+                                        No-show
+                                    </span>
+                                </div>
+                            </div>
+
+                            <div className="grid gap-3 md:grid-cols-2">
                                 <div className="space-y-1">
                                     <label className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500">
                                         <CalendarDays className="h-3.5 w-3.5" />
@@ -557,13 +603,13 @@ export default function NoShow() {
                                     <Input type="time" value={newTime} onChange={(e) => setNewTime(e.target.value)} className="h-11 rounded-2xl" />
                                 </div>
 
-                                <Button type="submit" disabled={saving} className="h-11 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-semibold">
-                                    {saving ? 'Rescheduling…' : 'Create new appointment'}
-                                </Button>
-                            </form>
-                        </CardContent>
-                    </Card>
-                )}
+                                <div className="md:col-span-2 text-[12px] text-slate-500">
+                                    This creates a fresh appointment (keeps the old no-show as history).
+                                </div>
+                            </div>
+                        </div>
+                    ) : null}
+                </AppleDialog>
             </div>
         </div>
     )

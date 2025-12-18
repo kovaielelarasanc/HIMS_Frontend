@@ -1,13 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+// FILE: frontend/src/opd/Triage.jsx
+import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
+import { useLocation, useNavigate } from 'react-router-dom'
 import { toast } from 'sonner'
 import { motion, AnimatePresence } from 'framer-motion'
-import {
-    fetchQueue,
-    recordVitals,
-    fetchLatestVitals,
-    fetchVitalsHistory,
-} from '../api/opd'
+
+import { fetchQueue, recordVitals, fetchLatestVitals, fetchVitalsHistory } from '../api/opd'
 import DoctorPicker from './components/DoctorPicker'
+import { useAuth } from '../store/authStore'
 
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -38,10 +37,13 @@ import {
     TrendingUp,
     TrendingDown,
     Minus,
+    CalendarDays,
+    Clock,
+    Lock,
+    Building2,
 } from 'lucide-react'
 
 /* ----------------------------- Helpers ----------------------------- */
-
 const todayStr = () => new Date().toISOString().slice(0, 10)
 
 const resetFormObj = {
@@ -69,8 +71,20 @@ const niceDT = (iso) => {
     return d.toLocaleString()
 }
 
-function cx(...xs) {
-    return xs.filter(Boolean).join(' ')
+function cx(...xs) { return xs.filter(Boolean).join(' ') }
+
+function prettyDate(d) {
+    if (!d) return ''
+    try {
+        return new Date(d).toLocaleDateString('en-IN', {
+            weekday: 'short',
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+        })
+    } catch {
+        return d
+    }
 }
 
 function computeBMI(heightCm, weightKg) {
@@ -138,29 +152,51 @@ function vitalsSeverity(v) {
     return { level, label, reasons }
 }
 
-/* ----------------------------- UI Tokens ----------------------------- */
+const TRIAGE_STATUS = [
+    { key: 'active', label: 'Active' },
+    { key: 'all', label: 'All' },
+    { key: 'booked', label: 'Booked' },
+    { key: 'checked_in', label: 'Checked-in' },
+    { key: 'in_progress', label: 'In progress' },
+    { key: 'completed', label: 'Completed' },
+    { key: 'no_show', label: 'No-show' },
+    { key: 'cancelled', label: 'Cancelled' },
+]
 
+function statusPill(status) {
+    const base = 'rounded-full border px-2.5 py-1 text-[11px] font-semibold'
+    switch (status) {
+        case 'booked':
+            return cx(base, 'border-slate-500 bg-slate-50 text-slate-700')
+        case 'checked_in':
+            return cx(base, 'border-sky-200 bg-sky-50 text-sky-800')
+        case 'in_progress':
+            return cx(base, 'border-amber-200 bg-amber-50 text-amber-800')
+        case 'completed':
+            return cx(base, 'border-emerald-200 bg-emerald-50 text-emerald-800')
+        case 'no_show':
+            return cx(base, 'border-rose-200 bg-rose-50 text-rose-800')
+        case 'cancelled':
+            return cx(base, 'border-slate-500 bg-slate-100 text-slate-600')
+        default:
+            return cx(base, 'border-slate-500 bg-slate-50 text-slate-700')
+    }
+}
+
+/* ----------------------------- UI Tokens ----------------------------- */
 const UI = {
     pageBg: 'bg-[radial-gradient(circle_at_top,_rgba(13,148,136,0.10),_transparent_55%)]',
-    glass:
-        'rounded-3xl border border-black/50 bg-white/75 backdrop-blur-xl shadow-[0_12px_35px_rgba(2,6,23,0.10)]',
-    glassSoft:
-        'rounded-3xl border border-black/50 bg-white/70 backdrop-blur-xl shadow-[0_6px_22px_rgba(2,6,23,0.08)]',
-    chip:
-        'inline-flex items-center rounded-full border border-black/50 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700',
-    input:
-        'w-full rounded-2xl border border-black/50 bg-white/85 px-3 py-2 text-[12px] font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-500',
+    glass: 'rounded-3xl border border-black/50 bg-white/75 backdrop-blur-xl shadow-[0_12px_35px_rgba(2,6,23,0.10)]',
+    glassSoft: 'rounded-3xl border border-black/50 bg-white/70 backdrop-blur-xl shadow-[0_6px_22px_rgba(2,6,23,0.08)]',
+    chip: 'inline-flex items-center gap-2 rounded-full border border-black/50 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700',
+    chipBtn: 'inline-flex items-center gap-2 rounded-full border border-black/50 bg-slate-900 px-3 py-1.5 text-[11px] font-semibold text-white hover:bg-slate-800 active:scale-[0.99] transition',
+    input: 'w-full rounded-2xl border border-black/50 bg-white/85 px-3 py-2 text-[12px] font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-500',
 }
 
 /* ----------------------------- Sparkline + Trends ----------------------------- */
-
 function safeSeries(historyAsc, pick) {
     const out = []
-    for (const h of historyAsc || []) {
-        const v = pick(h)
-        const n = num(v)
-        out.push(n)
-    }
+    for (const h of historyAsc || []) out.push(num(pick(h)))
     return out
 }
 
@@ -220,18 +256,9 @@ function Sparkline({ series, series2, height = 28 }) {
     const p2 = buildPath(s2)
 
     return (
-        <svg
-            width={w}
-            height={h}
-            viewBox={`0 0 ${w} ${h}`}
-            className="rounded-2xl border border-black/50 bg-white/85"
-            aria-hidden="true"
-        >
-            {/* subtle baseline */}
+        <svg width={w} height={h} viewBox={`0 0 ${w} ${h}`} className="rounded-2xl border border-black/50 bg-white/85" aria-hidden="true">
             <path d={`M ${pad} ${h - pad} L ${w - pad} ${h - pad}`} stroke="currentColor" opacity="0.10" strokeWidth="1" />
-            {/* line 2 (e.g., BP dia) */}
             {p2 ? <path d={p2} fill="none" stroke="currentColor" opacity="0.35" strokeWidth="2" strokeLinecap="round" /> : null}
-            {/* line 1 */}
             {p1 ? <path d={p1} fill="none" stroke="currentColor" opacity="0.75" strokeWidth="2.2" strokeLinecap="round" /> : null}
         </svg>
     )
@@ -259,37 +286,86 @@ function TrendTile({ title, value, unit, dir, deltaText, children }) {
         <div className="rounded-3xl border border-black/50 bg-white/75 backdrop-blur px-4 py-3 shadow-[0_10px_24px_rgba(2,6,23,0.08)]">
             <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                    <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                        {title}
-                    </div>
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">{title}</div>
                     <div className="mt-1 flex items-end gap-2">
-                        <div className="text-[20px] font-semibold tracking-tight text-slate-900 tabular-nums">
-                            {value ?? '—'}
-                        </div>
+                        <div className="text-[20px] font-semibold tracking-tight text-slate-900 tabular-nums">{value ?? '—'}</div>
                         <div className="text-[12px] text-slate-500 pb-0.5">{unit}</div>
                     </div>
-                    <div className="mt-2">
-                        <TrendChip dir={dir} deltaText={deltaText} />
-                    </div>
+                    <div className="mt-2"><TrendChip dir={dir} deltaText={deltaText} /></div>
                 </div>
-
                 <div className="text-slate-900">{children}</div>
             </div>
         </div>
     )
 }
 
+function Segmented({ value, onChange }) {
+    return (
+        <div className="flex items-center gap-1.5 overflow-auto no-scrollbar py-1">
+            {TRIAGE_STATUS.map((opt) => {
+                const active = value === opt.key
+                return (
+                    <button
+                        key={opt.key}
+                        type="button"
+                        onClick={() => onChange(opt.key)}
+                        className={cx(
+                            'whitespace-nowrap rounded-full border px-3 py-1.5 text-[11px] font-semibold transition',
+                            active ? 'border-slate-900 bg-slate-900 text-white shadow-sm' : 'border-black/50 bg-white/75 text-slate-700 hover:bg-black/[0.03]',
+                        )}
+                    >
+                        {opt.label}
+                    </button>
+                )
+            })}
+        </div>
+    )
+}
+
+/* ----------------------------- Row helpers ----------------------------- */
+function patientName(row) {
+    return row?.patient?.name || row?.patient_name || row?.patientName || '—'
+}
+function patientUHID(row) {
+    return row?.patient?.uhid || row?.uhid || '—'
+}
+function patientPhone(row) {
+    return row?.patient?.phone || row?.phone || ''
+}
+function doctorName(row) {
+    return row?.doctor?.name || row?.doctor_name || ''
+}
+function deptName(row) {
+    return row?.department?.name || row?.department_name || ''
+}
+
 /* ----------------------------- Component ----------------------------- */
-
 export default function Triage() {
-    const [doctorId, setDoctorId] = useState(null)
-    const [date, setDate] = useState(todayStr())
+    const { user } = useAuth() || {}
+    const navigate = useNavigate()
+    const location = useLocation()
 
-    const [rows, setRows] = useState([])
-    const [loading, setLoading] = useState(false)
+    // filters
+    const [doctorId, setDoctorId] = useState(null)         // optional
+    const [deptId, setDeptId] = useState(null)             // optional (set from DoctorPicker dept selection)
+    const [doctorMeta, setDoctorMeta] = useState(null)     // {department_id, department_name, doctor_name, doctor_email}
+
+    const [date, setDate] = useState(todayStr())
+    const [statusFilter, setStatusFilter] = useState('active')
     const [q, setQ] = useState('')
 
-    // modal state
+    // “My appointments” toggle
+    const [myOnly, setMyOnly] = useState(false)
+    const prevDoctorRef = useRef({ id: null, meta: null, deptId: null })
+
+    // list
+    const [rows, setRows] = useState([])
+    const [loading, setLoading] = useState(false)
+
+    // deep-link support from Queue (open triage for a specific appointment)
+    const [autoOpenApptId, setAutoOpenApptId] = useState(null)
+
+    // modal
     const [open, setOpen] = useState(false)
     const [target, setTarget] = useState(null)
 
@@ -300,24 +376,75 @@ export default function Triage() {
 
     // prefill/meta/history
     const [vitalsLoading, setVitalsLoading] = useState(false)
-    const [vitalsMeta, setVitalsMeta] = useState(null) // { id, created_at }
+    const [vitalsMeta, setVitalsMeta] = useState(null)
     const [prefilled, setPrefilled] = useState(false)
 
     const [historyLoading, setHistoryLoading] = useState(false)
-    const [history, setHistory] = useState([]) // will store more points for charts (e.g., 14)
+    const [history, setHistory] = useState([])
 
     const contentTopRef = useRef(null)
 
-    const load = async () => {
-        if (!doctorId || !date) {
+    const hasDate = Boolean(date)
+
+    const effectiveDoctorId = myOnly ? user?.id : doctorId
+    const effectiveDeptId = myOnly ? null : (doctorId ? null : deptId) // dept filter only when doctor not selected
+
+    const handleDoctorChange = (id, meta) => {
+        if (myOnly) return
+        setDoctorId(id)
+        setDoctorMeta(meta || null)
+        setDeptId(meta?.department_id ?? null)
+    }
+
+    const toggleMyOnly = () => {
+        if (!user?.id) return toast.error('No logged-in user found')
+
+        setMyOnly((v) => {
+            const next = !v
+            if (next) {
+                prevDoctorRef.current = { id: doctorId, meta: doctorMeta, deptId }
+                setDoctorId(user.id)
+                setDoctorMeta({ doctor_name: user?.name || user?.full_name || 'Me' })
+                setDeptId(null)
+                toast.success('Showing my appointments only')
+            } else {
+                const prev = prevDoctorRef.current || {}
+                setDoctorId(prev?.id || null)
+                setDoctorMeta(prev?.meta || null)
+                setDeptId(prev?.deptId || null)
+                toast.success('Showing all / filtered triage')
+            }
+            return next
+        })
+    }
+
+    // Deep link handler (from Queue → Triage)
+    useEffect(() => {
+        const st = location?.state || null
+        if (!st) return
+
+        const d = st?.date
+        const apptId = st?.appointmentId
+
+        if (d) setDate(d)
+        if (apptId) setAutoOpenApptId(Number(apptId))
+
+        // IMPORTANT: we no longer need doctorId for deep-link because triage loads ALL by date
+        navigate(location.pathname, { replace: true, state: null })
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [])
+
+    const load = useCallback(async () => {
+        if (!hasDate) {
             setRows([])
             return
         }
         try {
             setLoading(true)
             const { data } = await fetchQueue({
-                doctor_user_id: Number(doctorId),
                 for_date: date,
+                doctor_user_id: effectiveDoctorId || undefined,
+                department_id: effectiveDeptId || undefined,
             })
             setRows(Array.isArray(data) ? data : [])
         } catch {
@@ -325,29 +452,9 @@ export default function Triage() {
         } finally {
             setLoading(false)
         }
-    }
+    }, [hasDate, date, effectiveDoctorId, effectiveDeptId])
 
-    useEffect(() => {
-        load()
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [doctorId, date])
-
-    const filteredRows = useMemo(() => {
-        const s = (q || '').trim().toLowerCase()
-        if (!s) return rows
-        return rows.filter((r) => {
-            const name = (r?.patient?.name || '').toLowerCase()
-            const uhid = (r?.patient?.uhid || '').toLowerCase()
-            const phone = (r?.patient?.phone || '').toLowerCase()
-            return name.includes(s) || uhid.includes(s) || phone.includes(s)
-        })
-    }, [rows, q])
-
-    const total = rows.length
-    const completed = rows.filter((r) => r?.has_vitals).length
-    const pending = total - completed
-
-    const onField = (name, val) => setForm((f) => ({ ...f, [name]: val }))
+    useEffect(() => { load() }, [load])
 
     const applyVitalsToForm = (data) => {
         setForm({
@@ -363,7 +470,6 @@ export default function Triage() {
         })
     }
 
-    // Fetch more points for charts, but we will still display last 3 entries list.
     const loadHistory = async (row) => {
         try {
             setHistoryLoading(true)
@@ -414,6 +520,19 @@ export default function Triage() {
         }
     }
 
+    // auto-open appointment vitals after load
+    useEffect(() => {
+        if (!autoOpenApptId) return
+        if (loading) return
+        if (open) return
+        const found = (rows || []).find((r) => Number(r?.appointment_id) === Number(autoOpenApptId))
+        if (found) {
+            openVitals(found)
+            setAutoOpenApptId(null)
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [rows, loading, autoOpenApptId])
+
     const closeModal = () => {
         setOpen(false)
         setTarget(null)
@@ -449,7 +568,6 @@ export default function Triage() {
 
         try {
             setSaving(true)
-
             const payload = {
                 appointment_id: target.appointment_id,
                 height_cm: form.height_cm ? Number(form.height_cm) : undefined,
@@ -468,45 +586,49 @@ export default function Triage() {
             toast.success(target?.has_vitals ? 'Vitals updated' : 'Vitals recorded')
             closeModal()
             await load()
-        } catch {
-            // global handler
         } finally {
             setSaving(false)
         }
     }
 
-    /* ----------------------------- Modal Computeds ----------------------------- */
-
+    /* ----------------------------- Computeds ----------------------------- */
     const severity = useMemo(() => vitalsSeverity(form), [form])
     const bmi = useMemo(() => computeBMI(form.height_cm, form.weight_kg), [form.height_cm, form.weight_kg])
     const bmiInfo = useMemo(() => bmiLabel(bmi), [bmi])
 
     const severityUI = useMemo(() => {
-        if (severity.level === 2) {
-            return {
-                icon: ShieldAlert,
-                pill: 'border-rose-200 bg-rose-50 text-rose-700',
-                dot: 'bg-rose-500',
-            }
-        }
-        if (severity.level === 1) {
-            return {
-                icon: AlertTriangle,
-                pill: 'border-amber-200 bg-amber-50 text-amber-800',
-                dot: 'bg-amber-500',
-            }
-        }
-        return {
-            icon: CheckCircle2,
-            pill: 'border-emerald-200 bg-emerald-50 text-emerald-700',
-            dot: 'bg-emerald-500',
-        }
+        if (severity.level === 2) return { icon: ShieldAlert, pill: 'border-rose-200 bg-rose-50 text-rose-700', dot: 'bg-rose-500' }
+        if (severity.level === 1) return { icon: AlertTriangle, pill: 'border-amber-200 bg-amber-50 text-amber-800', dot: 'bg-amber-500' }
+        return { icon: CheckCircle2, pill: 'border-emerald-200 bg-emerald-50 text-emerald-700', dot: 'bg-emerald-500' }
     }, [severity.level])
 
     const SeverityIcon = severityUI.icon
     const busy = saving || loading || vitalsLoading || historyLoading
 
-    // Prepare chart series from history (sorted ASC by time for sparkline)
+    const byStatus = useMemo(() => {
+        if (statusFilter === 'all') return rows
+        if (statusFilter === 'active') return rows.filter((r) => ['booked', 'checked_in', 'in_progress'].includes(r.status))
+        return rows.filter((r) => r.status === statusFilter)
+    }, [rows, statusFilter])
+
+    const filteredRows = useMemo(() => {
+        const s = (q || '').trim().toLowerCase()
+        if (!s) return byStatus
+        return byStatus.filter((r) => {
+            const name = patientName(r).toLowerCase()
+            const uhid = patientUHID(r).toLowerCase()
+            const phone = (patientPhone(r) || '').toLowerCase()
+            const doc = (doctorName(r) || '').toLowerCase()
+            const dep = (deptName(r) || '').toLowerCase()
+            return name.includes(s) || uhid.includes(s) || phone.includes(s) || doc.includes(s) || dep.includes(s)
+        })
+    }, [byStatus, q])
+
+    const total = rows.length
+    const doneVitals = rows.filter((r) => !!r?.has_vitals).length
+    const needVitals = total - doneVitals
+
+    // Prepare chart series from history (sorted ASC)
     const historyAsc = useMemo(() => {
         const arr = Array.isArray(history) ? [...history] : []
         arr.sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime())
@@ -525,10 +647,14 @@ export default function Triage() {
     const bpSysT = useMemo(() => trendInfo(bpSysSeries), [bpSysSeries])
     const bpDiaT = useMemo(() => trendInfo(bpDiaSeries), [bpDiaSeries])
 
-    const last3Entries = useMemo(() => {
-        const desc = [...historyAsc].reverse()
-        return desc.slice(0, 3)
-    }, [historyAsc])
+    const last3Entries = useMemo(() => [...historyAsc].reverse().slice(0, 3), [historyAsc])
+
+    const filterChipLabel = useMemo(() => {
+        if (myOnly) return `${user?.name || user?.full_name || 'Me'} (Me)`
+        if (effectiveDoctorId) return doctorMeta?.doctor_name || doctorMeta?.name || 'Doctor filter'
+        if (effectiveDeptId) return doctorMeta?.department_name ? `Dept: ${doctorMeta.department_name}` : 'Department filter'
+        return 'All doctors'
+    }, [myOnly, user, effectiveDoctorId, effectiveDeptId, doctorMeta])
 
     return (
         <div className={cx('min-h-[calc(100vh-4rem)] w-full bg-slate-50', UI.pageBg)}>
@@ -536,13 +662,9 @@ export default function Triage() {
                 <div className="space-y-4 md:space-y-5">
                     {/* Top meta row */}
                     <div className="flex flex-wrap items-center justify-between gap-3">
-                        <Badge
-                            variant="outline"
-                            className="rounded-full border-black/50 bg-white/80 px-3 py-1 text-[11px] font-semibold tracking-wide text-slate-700"
-                        >
-                            OPD · Triage & Vitals
+                        <Badge variant="outline" className="rounded-full border-black/50 bg-white/80 px-3 py-1 text-[11px] font-semibold tracking-wide text-slate-700">
+                            OPD · Triage & Vitals (List-first + filters)
                         </Badge>
-
                         <div className="flex items-center gap-2 text-[11px] text-slate-500">
                             <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 shadow-sm animate-pulse" />
                             <span>Live queue</span>
@@ -559,7 +681,7 @@ export default function Triage() {
                                         <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-black/[0.04] border border-black/50">
                                             <Sparkles className="h-3.5 w-3.5 text-slate-700" />
                                         </span>
-                                        Apple-glass workflow · Single column
+                                        Apple-glass workflow · List-first
                                     </div>
 
                                     <div className="mt-3 flex items-start gap-3">
@@ -567,29 +689,51 @@ export default function Triage() {
                                             <HeartPulse className="h-5 w-5 text-slate-700" />
                                         </div>
                                         <div className="min-w-0">
-                                            <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900">
-                                                OPD Triage
-                                            </h1>
+                                            <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900">OPD Triage</h1>
                                             <p className="mt-1 text-sm text-slate-600 leading-relaxed">
-                                                Select doctor + date → tap a patient → full-screen vitals editor with trends.
+                                                Default shows all appointments for the date. Use filters to narrow to department/doctor/my-only.
                                             </p>
+
+                                            <div className="mt-2 flex flex-wrap items-center gap-2">
+                                                <span className={UI.chip}>
+                                                    <CalendarDays className="h-3.5 w-3.5" />
+                                                    {prettyDate(date)}
+                                                </span>
+
+                                                <span className={UI.chip}>
+                                                    <Stethoscope className="h-3.5 w-3.5" />
+                                                    {filterChipLabel}
+                                                </span>
+
+                                                <button
+                                                    type="button"
+                                                    onClick={toggleMyOnly}
+                                                    className={cx(UI.chipBtn, myOnly && 'bg-slate-900')}
+                                                    disabled={!user?.id}
+                                                    title="Filter by logged-in doctor_user_id"
+                                                >
+                                                    {myOnly ? <Lock className="h-4 w-4" /> : <User2 className="h-4 w-4" />}
+                                                    My appointments
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
 
-                                <div className="w-full md:w-[520px] space-y-3">
+                                <div className="w-full md:w-[560px] space-y-3">
                                     <div className={cx(UI.glassSoft, 'p-3')}>
                                         <div className="grid gap-2">
-                                            <div className="rounded-2xl border border-black/50 bg-white/75 px-3 py-2">
+                                            <div
+                                                className={cx('rounded-2xl border border-black/50 bg-white/75 px-3 py-2', myOnly && 'opacity-70 pointer-events-none')}
+                                                title={myOnly ? 'My appointments is ON (doctor locked)' : 'Optional: filter by department/doctor'}
+                                            >
                                                 <div className="flex items-center gap-2 pb-1">
                                                     <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-black/[0.04] border border-black/50">
-                                                        <Stethoscope className="h-3.5 w-3.5 text-slate-700" />
+                                                        <Building2 className="h-3.5 w-3.5 text-slate-700" />
                                                     </span>
-                                                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
-                                                        Doctor
-                                                    </span>
+                                                    <span className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Filters</span>
                                                 </div>
-                                                <DoctorPicker value={doctorId} onChange={setDoctorId} />
+                                                <DoctorPicker value={doctorId} onChange={handleDoctorChange} />
                                             </div>
 
                                             <div className="flex items-center gap-2">
@@ -608,32 +752,37 @@ export default function Triage() {
                                                     variant="outline"
                                                     className="h-10 rounded-2xl border-black/50 bg-white/85 text-[12px] font-semibold"
                                                     onClick={load}
-                                                    disabled={loading}
+                                                    disabled={loading || !hasDate}
                                                 >
                                                     <RefreshCcw className={cx('mr-2 h-4 w-4', loading && 'animate-spin')} />
                                                     Refresh
                                                 </Button>
                                             </div>
+
+                                            <Separator className="bg-black/10" />
+
+                                            <div className="flex items-center justify-between gap-3">
+                                                <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Status</div>
+                                                <span className={UI.chip}>
+                                                    Showing <span className="ml-1 tabular-nums">{filteredRows.length}</span>
+                                                </span>
+                                            </div>
+
+                                            <Segmented value={statusFilter} onChange={setStatusFilter} />
                                         </div>
                                     </div>
 
                                     <div className="flex flex-wrap items-center gap-2">
-                                        <span className={UI.chip}>
-                                            Queue <span className="ml-1 tabular-nums">{total}</span>
-                                        </span>
-                                        <span className={UI.chip}>
-                                            Completed <span className="ml-1 tabular-nums">{completed}</span>
-                                        </span>
-                                        <span className={UI.chip}>
-                                            Pending <span className="ml-1 tabular-nums">{pending}</span>
-                                        </span>
+                                        <span className={UI.chip}>Total <span className="ml-1 tabular-nums">{total}</span></span>
+                                        <span className={UI.chip}>Done <span className="ml-1 tabular-nums">{doneVitals}</span></span>
+                                        <span className={UI.chip}>Need vitals <span className="ml-1 tabular-nums">{needVitals}</span></span>
 
-                                        <div className="ml-auto relative w-full md:w-[240px]">
+                                        <div className="ml-auto relative w-full md:w-[260px]">
                                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
                                             <input
                                                 value={q}
                                                 onChange={(e) => setQ(e.target.value)}
-                                                placeholder="Search name / UHID / phone…"
+                                                placeholder="Search name / UHID / phone / doctor / dept…"
                                                 className={cx(UI.input, 'pl-10 h-10')}
                                             />
                                         </div>
@@ -643,25 +792,20 @@ export default function Triage() {
                         </div>
                     </motion.div>
 
-                    {/* Queue list (single column) */}
+                    {/* Queue list */}
                     <motion.div initial={{ opacity: 0, y: 6 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}>
                         <Card className={cx(UI.glass, 'overflow-hidden')}>
                             <CardHeader className="border-b border-black/50">
                                 <div className="flex items-start justify-between gap-3">
                                     <div>
-                                        <CardTitle className="text-base md:text-lg font-semibold text-slate-900">
-                                            Queue
-                                        </CardTitle>
+                                        <CardTitle className="text-base md:text-lg font-semibold text-slate-900">Queue</CardTitle>
                                         <CardDescription className="text-[12px] text-slate-600">
-                                            Tap a patient to open full-screen vitals entry/edit with history + trends.
+                                            Tap a patient to record / update vitals. List loads first, then filters apply.
                                         </CardDescription>
                                     </div>
 
                                     {busy && (
-                                        <Badge
-                                            variant="outline"
-                                            className="rounded-full border-black/50 bg-white/80 text-[11px] font-semibold text-slate-600"
-                                        >
+                                        <Badge variant="outline" className="rounded-full border-black/50 bg-white/80 text-[11px] font-semibold text-slate-600">
                                             <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
                                             Syncing
                                         </Badge>
@@ -670,97 +814,98 @@ export default function Triage() {
                             </CardHeader>
 
                             <CardContent className="pt-4">
-                                {!doctorId ? (
-                                    <div className="rounded-3xl border border-dashed border-black/15 bg-black/[0.02] px-5 py-7 text-center">
-                                        <div className="mx-auto h-12 w-12 rounded-3xl bg-black/[0.04] border border-black/50 grid place-items-center">
-                                            <Stethoscope className="h-6 w-6 text-slate-400" />
-                                        </div>
-                                        <div className="mt-3 font-semibold text-slate-900">Select a doctor</div>
-                                        <div className="mt-1 text-[12px] text-slate-500">
-                                            Choose doctor + date to load the OPD queue.
-                                        </div>
-                                    </div>
-                                ) : loading ? (
+                                {loading ? (
                                     <div className="space-y-2">
                                         {Array.from({ length: 7 }).map((_, i) => (
                                             <Skeleton key={i} className="h-16 w-full rounded-3xl bg-slate-100" />
                                         ))}
                                     </div>
-                                ) : rows.length === 0 ? (
+                                ) : filteredRows.length === 0 ? (
                                     <div className="rounded-3xl border border-dashed border-black/15 bg-black/[0.02] px-5 py-7 text-center">
                                         <div className="mx-auto h-12 w-12 rounded-3xl bg-black/[0.04] border border-black/50 grid place-items-center">
                                             <User2 className="h-6 w-6 text-slate-400" />
                                         </div>
                                         <div className="mt-3 font-semibold text-slate-900">No appointments</div>
-                                        <div className="mt-1 text-[12px] text-slate-500">
-                                            No queue items for this doctor/date.
-                                        </div>
+                                        <div className="mt-1 text-[12px] text-slate-500">Try changing date or clearing filters.</div>
                                     </div>
                                 ) : (
                                     <ScrollArea className="max-h-[62vh] pr-2">
                                         <div className="space-y-2">
-                                            {filteredRows.map((row) => (
-                                                <button
-                                                    key={row.appointment_id}
-                                                    type="button"
-                                                    onClick={() => openVitals(row)}
-                                                    className={cx(
-                                                        'w-full text-left rounded-3xl border border-black/50 bg-white/75 backdrop-blur px-4 py-3',
-                                                        'shadow-[0_10px_24px_rgba(2,6,23,0.08)] hover:bg-white/90 transition',
-                                                        'active:scale-[0.995]'
-                                                    )}
-                                                >
-                                                    <div className="flex items-start justify-between gap-3">
-                                                        <div className="min-w-0">
-                                                            <div className="flex flex-wrap items-center gap-2">
-                                                                <span className="inline-flex items-center rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white">
-                                                                    {row.time}
-                                                                </span>
-                                                                <div className="font-semibold text-slate-900 truncate">
-                                                                    {row?.patient?.name || '—'}
+                                            {filteredRows.map((row) => {
+                                                const pName = patientName(row)
+                                                const uhid = patientUHID(row)
+                                                const phone = patientPhone(row)
+                                                const doc = doctorName(row)
+                                                const dep = deptName(row)
+                                                return (
+                                                    <button
+                                                        key={row.appointment_id}
+                                                        type="button"
+                                                        onClick={() => openVitals(row)}
+                                                        className={cx(
+                                                            'w-full text-left rounded-3xl border border-black/50 bg-white/75 backdrop-blur px-4 py-3',
+                                                            'shadow-[0_10px_24px_rgba(2,6,23,0.08)] hover:bg-white/90 transition',
+                                                            'active:scale-[0.995]'
+                                                        )}
+                                                    >
+                                                        <div className="flex items-start justify-between gap-3">
+                                                            <div className="min-w-0">
+                                                                <div className="flex flex-wrap items-center gap-2">
+                                                                    <span className="inline-flex items-center rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white">
+                                                                        {row.time || '—'}
+                                                                    </span>
+
+                                                                    <span className={statusPill(row.status)}>{row.status}</span>
+
+                                                                    <div className="font-semibold text-slate-900 truncate">{pName}</div>
+                                                                    <div className="text-[12px] text-slate-500">UHID {uhid}</div>
                                                                 </div>
-                                                                <div className="text-[12px] text-slate-500">
-                                                                    UHID {row?.patient?.uhid || '—'}
+
+                                                                <div className="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-slate-600">
+                                                                    <span className="inline-flex items-center gap-1">
+                                                                        <User2 className="h-4 w-4 text-slate-400" />
+                                                                        {phone || 'No phone'}
+                                                                    </span>
+
+                                                                    {/* show doctor/dept when list is broad */}
+                                                                    {!effectiveDoctorId ? (
+                                                                        <span className="inline-flex items-center gap-1">
+                                                                            <Stethoscope className="h-4 w-4 text-slate-400" />
+                                                                            <span className="font-semibold text-slate-700">{doc || '—'}</span>
+                                                                            {dep ? <span className="text-slate-500">· {dep}</span> : null}
+                                                                        </span>
+                                                                    ) : null}
+
+                                                                    {!!row?.has_vitals ? (
+                                                                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 border border-emerald-200">
+                                                                            <CheckCircle2 className="h-4 w-4" />
+                                                                            Vitals recorded
+                                                                        </span>
+                                                                    ) : (
+                                                                        <span className="inline-flex items-center gap-1 rounded-full bg-black/[0.03] px-2.5 py-1 text-[11px] font-semibold text-slate-700 border border-black/50">
+                                                                            <Activity className="h-4 w-4" />
+                                                                            Not recorded
+                                                                        </span>
+                                                                    )}
                                                                 </div>
                                                             </div>
 
-                                                            <div className="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-slate-600">
-                                                                <span className="inline-flex items-center gap-1">
-                                                                    <User2 className="h-4 w-4 text-slate-400" />
-                                                                    {row?.patient?.phone || 'No phone'}
-                                                                </span>
+                                                            <div className="shrink-0 flex items-center gap-2">
+                                                                {row?.visit_id ? (
+                                                                    <span className="inline-flex items-center gap-1 rounded-full border border-black/50 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700" title="Visit already created">
+                                                                        <Clock className="h-3.5 w-3.5" />
+                                                                        Visit
+                                                                    </span>
+                                                                ) : null}
 
-                                                                {row?.has_vitals ? (
-                                                                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-700 border border-emerald-200">
-                                                                        <CheckCircle2 className="h-4 w-4" />
-                                                                        Vitals recorded
-                                                                    </span>
-                                                                ) : (
-                                                                    <span className="inline-flex items-center gap-1 rounded-full bg-black/[0.03] px-2.5 py-1 text-[11px] font-semibold text-slate-700 border border-black/50">
-                                                                        <Activity className="h-4 w-4" />
-                                                                        Not recorded
-                                                                    </span>
-                                                                )}
+                                                                <span className="inline-flex items-center rounded-full border border-black/50 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700">
+                                                                    {row?.has_vitals ? 'View / Update' : 'Record'}
+                                                                </span>
                                                             </div>
                                                         </div>
-
-                                                        <div className="shrink-0">
-                                                            <span className="inline-flex items-center rounded-full border border-black/50 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700">
-                                                                {row?.has_vitals ? 'View / Update' : 'Record'}
-                                                            </span>
-                                                        </div>
-                                                    </div>
-                                                </button>
-                                            ))}
-
-                                            {!filteredRows.length && (
-                                                <div className="rounded-3xl border border-dashed border-black/15 bg-black/[0.02] px-5 py-7 text-center">
-                                                    <div className="font-semibold text-slate-900">No matches</div>
-                                                    <div className="mt-1 text-[12px] text-slate-500">
-                                                        Try a different search.
-                                                    </div>
-                                                </div>
-                                            )}
+                                                    </button>
+                                                )
+                                            })}
                                         </div>
 
                                         <div className="h-6" />
@@ -775,19 +920,9 @@ export default function Triage() {
             {/* --------------------------- Fullscreen Vitals Modal --------------------------- */}
             <AnimatePresence>
                 {open && target && (
-                    <motion.div
-                        className="fixed inset-0 z-50"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ opacity: 0 }}
-                    >
-                        {/* Backdrop */}
-                        <div
-                            className="absolute inset-0 bg-black/35 backdrop-blur-[2px]"
-                            onClick={closeModal}
-                        />
+                    <motion.div className="fixed inset-0 z-50" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
+                        <div className="absolute inset-0 bg-black/35 backdrop-blur-[2px]" onClick={closeModal} />
 
-                        {/* Panel */}
                         <motion.div
                             className="absolute inset-0 bg-white"
                             initial={{ y: 18, opacity: 0, scale: 0.995 }}
@@ -813,20 +948,29 @@ export default function Triage() {
 
                                                     <div className="min-w-0">
                                                         <div className="text-[16px] md:text-[18px] font-semibold text-slate-900 tracking-tight truncate">
-                                                            Vitals · {target?.patient?.name || 'Patient'}
+                                                            Vitals · {patientName(target)}
                                                         </div>
                                                         <div className="mt-0.5 text-[12px] text-slate-500 flex flex-wrap items-center gap-2">
-                                                            <span>UHID {target?.patient?.uhid || '—'}</span>
+                                                            <span>UHID {patientUHID(target)}</span>
                                                             <span className="text-slate-300">•</span>
                                                             <span>Time {target?.time || '—'}</span>
+                                                            <span className="text-slate-300">•</span>
+                                                            <span className={statusPill(target?.status)}>{target?.status}</span>
+
+                                                            {(doctorName(target) || deptName(target)) && (
+                                                                <>
+                                                                    <span className="text-slate-300">•</span>
+                                                                    <span className="font-semibold text-slate-700">
+                                                                        {doctorName(target) || '—'}{deptName(target) ? ` · ${deptName(target)}` : ''}
+                                                                    </span>
+                                                                </>
+                                                            )}
+
                                                             {vitalsMeta?.created_at && (
                                                                 <>
                                                                     <span className="text-slate-300">•</span>
                                                                     <span>
-                                                                        Last:{' '}
-                                                                        <span className="font-semibold text-slate-700">
-                                                                            {niceDT(vitalsMeta.created_at)}
-                                                                        </span>
+                                                                        Last: <span className="font-semibold text-slate-700">{niceDT(vitalsMeta.created_at)}</span>
                                                                     </span>
                                                                 </>
                                                             )}
@@ -835,12 +979,7 @@ export default function Triage() {
                                                 </div>
 
                                                 <div className="mt-3 flex flex-wrap items-center gap-2">
-                                                    <span
-                                                        className={cx(
-                                                            'inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-semibold',
-                                                            severityUI.pill
-                                                        )}
-                                                    >
+                                                    <span className={cx('inline-flex items-center gap-1 rounded-full border px-3 py-1 text-[11px] font-semibold', severityUI.pill)}>
                                                         <span className={cx('h-1.5 w-1.5 rounded-full', severityUI.dot)} />
                                                         <SeverityIcon className="h-4 w-4" />
                                                         {severity.label}
@@ -909,15 +1048,11 @@ export default function Triage() {
                                     <div ref={contentTopRef} />
 
                                     <div className="grid gap-4">
-                                        {/* Trends (Apple Health style) */}
+                                        {/* Trends */}
                                         <Card className={cx(UI.glass, 'overflow-hidden')}>
                                             <CardHeader className="border-b border-black/50">
-                                                <CardTitle className="text-base md:text-lg font-semibold text-slate-900">
-                                                    Trends
-                                                </CardTitle>
-                                                <CardDescription className="text-[12px] text-slate-600">
-                                                    Mini charts + change from previous record.
-                                                </CardDescription>
+                                                <CardTitle className="text-base md:text-lg font-semibold text-slate-900">Trends</CardTitle>
+                                                <CardDescription className="text-[12px] text-slate-600">Mini charts + change from previous record.</CardDescription>
                                             </CardHeader>
 
                                             <CardContent className="pt-4">
@@ -930,54 +1065,25 @@ export default function Triage() {
                                                     </div>
                                                 ) : (
                                                     <div className="grid gap-3 md:grid-cols-2">
-                                                        <TrendTile
-                                                            title="Pulse"
-                                                            value={pulseT.current}
-                                                            unit="bpm"
-                                                            dir={pulseT.dir}
-                                                            deltaText={formatDelta(pulseT.delta, 0)}
-                                                        >
+                                                        <TrendTile title="Pulse" value={pulseT.current} unit="bpm" dir={pulseT.dir} deltaText={formatDelta(pulseT.delta, 0)}>
                                                             <Sparkline series={pulseSeries} />
                                                         </TrendTile>
 
-                                                        <TrendTile
-                                                            title="SpO₂"
-                                                            value={spo2T.current}
-                                                            unit="%"
-                                                            dir={spo2T.dir}
-                                                            deltaText={formatDelta(spo2T.delta, 0)}
-                                                        >
+                                                        <TrendTile title="SpO₂" value={spo2T.current} unit="%" dir={spo2T.dir} deltaText={formatDelta(spo2T.delta, 0)}>
                                                             <Sparkline series={spo2Series} />
                                                         </TrendTile>
 
                                                         <TrendTile
                                                             title="BP"
-                                                            value={
-                                                                bpSysT.current !== null || bpDiaT.current !== null
-                                                                    ? `${bpSysT.current ?? '—'}/${bpDiaT.current ?? '—'}`
-                                                                    : null
-                                                            }
+                                                            value={bpSysT.current !== null || bpDiaT.current !== null ? `${bpSysT.current ?? '—'}/${bpDiaT.current ?? '—'}` : null}
                                                             unit="mmHg"
-                                                            dir={
-                                                                // prefer sys direction if available, else dia
-                                                                bpSysT.dir !== 'flat' ? bpSysT.dir : bpDiaT.dir
-                                                            }
-                                                            deltaText={
-                                                                bpSysT.delta !== null || bpDiaT.delta !== null
-                                                                    ? `${formatDelta(bpSysT.delta, 0)}/${formatDelta(bpDiaT.delta, 0)}`
-                                                                    : '—'
-                                                            }
+                                                            dir={bpSysT.dir !== 'flat' ? bpSysT.dir : bpDiaT.dir}
+                                                            deltaText={bpSysT.delta !== null || bpDiaT.delta !== null ? `${formatDelta(bpSysT.delta, 0)}/${formatDelta(bpDiaT.delta, 0)}` : '—'}
                                                         >
                                                             <Sparkline series={bpSysSeries} series2={bpDiaSeries} />
                                                         </TrendTile>
 
-                                                        <TrendTile
-                                                            title="Temperature"
-                                                            value={tempT.current}
-                                                            unit="°C"
-                                                            dir={tempT.dir}
-                                                            deltaText={formatDelta(tempT.delta, 1)}
-                                                        >
+                                                        <TrendTile title="Temperature" value={tempT.current} unit="°C" dir={tempT.dir} deltaText={formatDelta(tempT.delta, 1)}>
                                                             <Sparkline series={tempSeries} />
                                                         </TrendTile>
                                                     </div>
@@ -985,139 +1091,87 @@ export default function Triage() {
                                             </CardContent>
                                         </Card>
 
-                                        {/* Vitals Form Card */}
+                                        {/* Vitals Form */}
                                         <Card className={cx(UI.glass, 'overflow-hidden')}>
                                             <CardHeader className="border-b border-black/50">
                                                 <CardTitle className="text-base md:text-lg font-semibold text-slate-900 flex items-center gap-2">
                                                     <HeartPulse className="h-5 w-5 text-slate-700" />
                                                     Vitals entry
                                                 </CardTitle>
-                                                <CardDescription className="text-[12px] text-slate-600">
-                                                    Single-column capture (fast), with BP inline and notes.
-                                                </CardDescription>
+                                                <CardDescription className="text-[12px] text-slate-600">Fast single-column capture with BP inline and notes.</CardDescription>
                                             </CardHeader>
 
                                             <CardContent className="pt-4">
                                                 <form ref={vitalsFormRef} onSubmit={saveVitals} className="space-y-4">
                                                     <Field label="Height (cm)">
-                                                        <Input
-                                                            type="number"
-                                                            inputMode="decimal"
-                                                            value={form.height_cm}
-                                                            onChange={(e) => onField('height_cm', e.target.value)}
-                                                            className="h-11 rounded-2xl border-black/50 bg-white/85"
-                                                        />
+                                                        <Input type="number" inputMode="decimal" value={form.height_cm}
+                                                            onChange={(e) => setForm((f) => ({ ...f, height_cm: e.target.value }))}
+                                                            className="h-11 rounded-2xl border-black/50 bg-white/85" />
                                                     </Field>
 
                                                     <Field label="Weight (kg)">
-                                                        <Input
-                                                            type="number"
-                                                            inputMode="decimal"
-                                                            value={form.weight_kg}
-                                                            onChange={(e) => onField('weight_kg', e.target.value)}
-                                                            className="h-11 rounded-2xl border-black/50 bg-white/85"
-                                                        />
+                                                        <Input type="number" inputMode="decimal" value={form.weight_kg}
+                                                            onChange={(e) => setForm((f) => ({ ...f, weight_kg: e.target.value }))}
+                                                            className="h-11 rounded-2xl border-black/50 bg-white/85" />
                                                     </Field>
 
-                                                    <Field
-                                                        label={
-                                                            <span className="inline-flex items-center gap-2">
-                                                                Temperature (°C) <Thermometer className="h-4 w-4 text-slate-500" />
-                                                            </span>
-                                                        }
-                                                    >
-                                                        <Input
-                                                            type="number"
-                                                            inputMode="decimal"
-                                                            value={form.temp_c}
-                                                            onChange={(e) => onField('temp_c', e.target.value)}
-                                                            className="h-11 rounded-2xl border-black/50 bg-white/85"
-                                                        />
+                                                    <Field label={<span className="inline-flex items-center gap-2">Temperature (°C) <Thermometer className="h-4 w-4 text-slate-500" /></span>}>
+                                                        <Input type="number" inputMode="decimal" value={form.temp_c}
+                                                            onChange={(e) => setForm((f) => ({ ...f, temp_c: e.target.value }))}
+                                                            className="h-11 rounded-2xl border-black/50 bg-white/85" />
                                                     </Field>
 
                                                     <Field label="Pulse (bpm)">
-                                                        <Input
-                                                            type="number"
-                                                            inputMode="numeric"
-                                                            value={form.pulse}
-                                                            onChange={(e) => onField('pulse', e.target.value)}
-                                                            className="h-11 rounded-2xl border-black/50 bg-white/85"
-                                                        />
+                                                        <Input type="number" inputMode="numeric" value={form.pulse}
+                                                            onChange={(e) => setForm((f) => ({ ...f, pulse: e.target.value }))}
+                                                            className="h-11 rounded-2xl border-black/50 bg-white/85" />
                                                     </Field>
 
                                                     <Field label="Resp. rate">
-                                                        <Input
-                                                            type="number"
-                                                            inputMode="numeric"
-                                                            value={form.resp_rate}
-                                                            onChange={(e) => onField('resp_rate', e.target.value)}
-                                                            className="h-11 rounded-2xl border-black/50 bg-white/85"
-                                                        />
+                                                        <Input type="number" inputMode="numeric" value={form.resp_rate}
+                                                            onChange={(e) => setForm((f) => ({ ...f, resp_rate: e.target.value }))}
+                                                            className="h-11 rounded-2xl border-black/50 bg-white/85" />
                                                     </Field>
 
                                                     <Field label="SpO₂ (%)">
-                                                        <Input
-                                                            type="number"
-                                                            inputMode="decimal"
-                                                            value={form.spo2}
-                                                            onChange={(e) => onField('spo2', e.target.value)}
-                                                            className="h-11 rounded-2xl border-black/50 bg-white/85"
-                                                        />
+                                                        <Input type="number" inputMode="decimal" value={form.spo2}
+                                                            onChange={(e) => setForm((f) => ({ ...f, spo2: e.target.value }))}
+                                                            className="h-11 rounded-2xl border-black/50 bg-white/85" />
                                                     </Field>
 
                                                     <Field label="BP (sys / dia)">
                                                         <div className="flex gap-2">
-                                                            <Input
-                                                                type="number"
-                                                                inputMode="numeric"
-                                                                value={form.bp_sys}
-                                                                onChange={(e) => onField('bp_sys', e.target.value)}
-                                                                placeholder="Sys"
-                                                                className="h-11 rounded-2xl border-black/50 bg-white/85"
-                                                            />
-                                                            <Input
-                                                                type="number"
-                                                                inputMode="numeric"
-                                                                value={form.bp_dia}
-                                                                onChange={(e) => onField('bp_dia', e.target.value)}
-                                                                placeholder="Dia"
-                                                                className="h-11 rounded-2xl border-black/50 bg-white/85"
-                                                            />
+                                                            <Input type="number" inputMode="numeric" value={form.bp_sys}
+                                                                onChange={(e) => setForm((f) => ({ ...f, bp_sys: e.target.value }))}
+                                                                placeholder="Sys" className="h-11 rounded-2xl border-black/50 bg-white/85" />
+                                                            <Input type="number" inputMode="numeric" value={form.bp_dia}
+                                                                onChange={(e) => setForm((f) => ({ ...f, bp_dia: e.target.value }))}
+                                                                placeholder="Dia" className="h-11 rounded-2xl border-black/50 bg-white/85" />
                                                         </div>
                                                     </Field>
 
                                                     <Field label="Notes">
-                                                        <Textarea
-                                                            value={form.notes}
-                                                            onChange={(e) => onField('notes', e.target.value)}
+                                                        <Textarea value={form.notes}
+                                                            onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
                                                             className="min-h-[100px] rounded-2xl border-black/50 bg-white/85"
-                                                            placeholder="Pain score, alerts, triage notes…"
-                                                        />
+                                                            placeholder="Pain score, alerts, triage notes…" />
                                                     </Field>
 
                                                     <Separator className="bg-black/10" />
 
                                                     <div className="flex flex-wrap items-center justify-between gap-2">
-                                                        <div className="text-[12px] text-slate-500">
-                                                            Badges update live as you type.
-                                                        </div>
-
+                                                        <div className="text-[12px] text-slate-500">Badges update live as you type.</div>
                                                         <div className="flex flex-wrap items-center gap-2">
-                                                            <Button
-                                                                type="button"
-                                                                variant="outline"
+                                                            <Button type="button" variant="outline"
                                                                 className="rounded-2xl border-black/50 bg-white/85 font-semibold"
                                                                 onClick={() => setForm({ ...resetFormObj })}
-                                                                disabled={saving || vitalsLoading}
-                                                            >
+                                                                disabled={saving || vitalsLoading}>
                                                                 Clear
                                                             </Button>
 
-                                                            <Button
-                                                                type="submit"
+                                                            <Button type="submit"
                                                                 className="rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-semibold"
-                                                                disabled={saving || vitalsLoading}
-                                                            >
+                                                                disabled={saving || vitalsLoading}>
                                                                 <Save className="h-4 w-4 mr-2" />
                                                                 {saving ? 'Saving…' : target?.has_vitals ? 'Update vitals' : 'Save vitals'}
                                                             </Button>
@@ -1127,7 +1181,7 @@ export default function Triage() {
                                             </CardContent>
                                         </Card>
 
-                                        {/* History Entries (last 3) */}
+                                        {/* History last 3 */}
                                         <Card className={cx(UI.glass, 'overflow-hidden')}>
                                             <CardHeader className="border-b border-black/50">
                                                 <div className="flex items-start justify-between gap-3">
@@ -1136,18 +1190,13 @@ export default function Triage() {
                                                             <History className="h-5 w-5 text-slate-700" />
                                                             History (last 3)
                                                         </CardTitle>
-                                                        <CardDescription className="text-[12px] text-slate-600">
-                                                            Load one entry into the form (quick compare).
-                                                        </CardDescription>
+                                                        <CardDescription className="text-[12px] text-slate-600">Load one entry into the form (quick compare).</CardDescription>
                                                     </div>
 
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
+                                                    <Button type="button" variant="outline"
                                                         className="rounded-2xl border-black/50 bg-white/85 font-semibold"
                                                         onClick={() => loadHistory(target)}
-                                                        disabled={historyLoading}
-                                                    >
+                                                        disabled={historyLoading}>
                                                         <RefreshCcw className={cx('h-4 w-4 mr-2', historyLoading && 'animate-spin')} />
                                                         Refresh
                                                     </Button>
@@ -1167,23 +1216,15 @@ export default function Triage() {
                                                             <History className="h-6 w-6 text-slate-400" />
                                                         </div>
                                                         <div className="mt-3 font-semibold text-slate-900">No history</div>
-                                                        <div className="mt-1 text-[12px] text-slate-500">
-                                                            No vitals history found.
-                                                        </div>
+                                                        <div className="mt-1 text-[12px] text-slate-500">No vitals history found.</div>
                                                     </div>
                                                 ) : (
                                                     <div className="space-y-2">
                                                         {last3Entries.map((h) => (
-                                                            <div
-                                                                key={h.id}
-                                                                className="rounded-3xl border border-black/50 bg-white/75 backdrop-blur px-4 py-3 shadow-[0_10px_24px_rgba(2,6,23,0.08)]"
-                                                            >
+                                                            <div key={h.id} className="rounded-3xl border border-black/50 bg-white/75 backdrop-blur px-4 py-3 shadow-[0_10px_24px_rgba(2,6,23,0.08)]">
                                                                 <div className="flex items-start justify-between gap-3">
                                                                     <div className="min-w-0">
-                                                                        <div className="text-[12px] text-slate-500">
-                                                                            {niceDT(h.created_at)}
-                                                                        </div>
-
+                                                                        <div className="text-[12px] text-slate-500">{niceDT(h.created_at)}</div>
                                                                         <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-semibold">
                                                                             <ChipMini label="Temp" value={toStr(h.temp_c) || '—'} />
                                                                             <ChipMini label="SpO₂" value={toStr(h.spo2) || '—'} />
@@ -1218,7 +1259,7 @@ export default function Triage() {
                                     </div>
                                 </div>
 
-                                {/* Bottom safe-area action bar */}
+                                {/* Bottom action bar */}
                                 <div className="sticky bottom-0 z-30 border-t border-black/50 bg-white/80 backdrop-blur-xl">
                                     <div className="px-4 md:px-8 py-3 flex items-center justify-between gap-2">
                                         <div className="text-[12px] text-slate-500 flex items-center gap-2">
@@ -1236,23 +1277,28 @@ export default function Triage() {
                                         </div>
 
                                         <div className="flex items-center gap-2">
-                                            <Button
-                                                type="button"
-                                                variant="outline"
+                                            {target?.visit_id ? (
+                                                <Button type="button" variant="outline"
+                                                    className="rounded-2xl border-black/50 bg-white/85 font-semibold"
+                                                    onClick={() => navigate(`/opd/visit/${target.visit_id}`)}
+                                                    disabled={saving}
+                                                    title="Open visit">
+                                                    Open visit
+                                                </Button>
+                                            ) : null}
+
+                                            <Button type="button" variant="outline"
                                                 className="rounded-2xl border-black/50 bg-white/85 font-semibold"
                                                 onClick={closeModal}
-                                                disabled={saving}
-                                            >
+                                                disabled={saving}>
                                                 Close
                                             </Button>
 
-                                            <Button
-                                                type="button"
+                                            <Button type="button"
                                                 className="rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-semibold"
                                                 onClick={() => vitalsFormRef.current?.requestSubmit?.()}
                                                 disabled={saving || vitalsLoading}
-                                                title="Save vitals"
-                                            >
+                                                title="Save vitals">
                                                 <Save className="h-4 w-4 mr-2" />
                                                 {saving ? 'Saving…' : 'Save'}
                                             </Button>
@@ -1270,7 +1316,6 @@ export default function Triage() {
 }
 
 /* ----------------------------- Small UI Bits ----------------------------- */
-
 function Field({ label, children }) {
     return (
         <div className="space-y-1.5">

@@ -15,6 +15,8 @@ import {
     searchPharmacyItems,
     createPharmacyPrescription,
     listPharmacyPrescriptions,
+    getPharmacyPrescriptionDetails,
+    fetchPharmacyPrescriptionPdf
 } from './pharmacy'
 
 import {
@@ -374,3 +376,13 @@ export async function listOtSchedulesForContext({
     return filtered.slice(0, limit)
 }
 
+
+// ✅ NEW
+export async function getRxDetails(rxId) {
+  const res = await getPharmacyPrescriptionDetails(rxId)
+  return res.data
+}
+
+export async function downloadRxPdf(rxId) {
+  return fetchPharmacyPrescriptionPdf(rxId) // returns axios blob
+}

@@ -54,7 +54,6 @@ const UI = {
         'h-11 w-full rounded-2xl border border-black/50 bg-white/85 px-3 text-[12px] font-semibold text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-500',
 }
 
-
 function prettyDate(d) {
     if (!d) return ''
     try {
@@ -155,8 +154,7 @@ function Segmented({ value, onChange }) {
     )
 }
 
-/** Apple-style full-width dialog shell */
-/** Apple-style dialog: fullscreen bottom-sheet on mobile, centered glass on desktop */
+/** Apple-style dialog */
 function AppleDialog({ open, onOpenChange, title, subtitle, right, children }) {
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
@@ -164,19 +162,12 @@ function AppleDialog({ open, onOpenChange, title, subtitle, right, children }) {
                 className={cx(
                     'p-0 overflow-hidden border border-black/50 bg-white/75 backdrop-blur-xl',
                     'shadow-[0_18px_55px_rgba(2,6,23,0.18)]',
-
-                    // ✅ MOBILE = bottom-sheet fullscreen
-                    // override shadcn default center positioning
                     '!left-0 !right-0 !bottom-0 !top-auto !translate-x-0 !translate-y-0',
                     'w-screen h-[100dvh]',
                     'rounded-t-3xl rounded-b-none',
-
-                    // ✅ DESKTOP = centered glass
                     'sm:!left-1/2 sm:!top-1/2 sm:!bottom-auto sm:!-translate-x-1/2 sm:!-translate-y-1/2',
                     'sm:w-[92vw] sm:max-w-5xl sm:h-[88vh]',
                     'sm:rounded-3xl',
-
-                    // ✅ nicer animations (tailwind-animate)
                     'data-[state=open]:animate-in data-[state=closed]:animate-out',
                     'data-[state=open]:duration-200 data-[state=closed]:duration-150',
                     'data-[state=open]:slide-in-from-bottom-10 data-[state=closed]:slide-out-to-bottom-10',
@@ -186,21 +177,15 @@ function AppleDialog({ open, onOpenChange, title, subtitle, right, children }) {
                 <div className="relative">
                     <div className="absolute inset-0 bg-[radial-gradient(circle_at_top,_rgba(14,165,233,0.12),_transparent_60%)] opacity-70" />
 
-                    {/* ✅ mobile grab handle */}
                     <div className="relative sm:hidden pt-3">
                         <div className="mx-auto h-1.5 w-12 rounded-full bg-black/15" />
                     </div>
 
-                    {/* top bar */}
                     <div className="relative border-b border-black/50 bg-white/55 backdrop-blur-xl">
                         <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-6">
                             <div className="min-w-0">
-                                <div className="text-[12px] font-semibold tracking-tight text-slate-900 truncate">
-                                    {title}
-                                </div>
-                                {subtitle ? (
-                                    <div className="mt-0.5 text-[11px] text-slate-600 truncate">{subtitle}</div>
-                                ) : null}
+                                <div className="text-[12px] font-semibold tracking-tight text-slate-900 truncate">{title}</div>
+                                {subtitle ? <div className="mt-0.5 text-[11px] text-slate-600 truncate">{subtitle}</div> : null}
                             </div>
 
                             <div className="flex items-center gap-2">
@@ -217,7 +202,6 @@ function AppleDialog({ open, onOpenChange, title, subtitle, right, children }) {
                         </div>
                     </div>
 
-                    {/* body */}
                     <ScrollArea className="h-[calc(100dvh-72px)] sm:h-[calc(88vh-56px)]">
                         <div className="p-4 sm:p-6 pb-[env(safe-area-inset-bottom)]">{children}</div>
                     </ScrollArea>
@@ -226,7 +210,6 @@ function AppleDialog({ open, onOpenChange, title, subtitle, right, children }) {
         </Dialog>
     )
 }
-
 
 export default function Followups() {
     const { user } = useAuth() || {}
@@ -241,23 +224,26 @@ export default function Followups() {
 
     const [rows, setRows] = useState([])
     const [loading, setLoading] = useState(false)
-
     const [searchTerm, setSearchTerm] = useState('')
 
-    // ✅ COMMON My Follow-ups toggle (no is_doctor check)
+    // My follow-ups toggle
     const [myOnly, setMyOnly] = useState(false)
     const prevDoctorRef = useRef({ id: null, meta: null })
 
-    // ---- Edit dialog state ----
+    // Edit dialog
     const [editTarget, setEditTarget] = useState(null)
     const [editDate, setEditDate] = useState('')
     const [editNote, setEditNote] = useState('')
     const [editSaving, setEditSaving] = useState(false)
 
-    // ---- Schedule dialog state ----
+    // Schedule dialog
     const [schedTarget, setSchedTarget] = useState(null)
     const [schedDate, setSchedDate] = useState('')
     const [schedTime, setSchedTime] = useState('')
+
+    // ✅ NEW: Free booking mode (no slot required)
+    const [freeBooking, setFreeBooking] = useState(true)
+
     const [slots, setSlots] = useState([])
     const [schedSaving, setSchedSaving] = useState(false)
     const [slotsLoading, setSlotsLoading] = useState(false)
@@ -376,13 +362,20 @@ export default function Followups() {
         const d = row.due_date
         setSchedDate(d)
         setSchedTime('')
-        await loadSlots(row, d)
+        setSlots([])
+
+        // ✅ default = Free booking (no time required)
+        setFreeBooking(true)
+
+        // do NOT load slots by default (only if doctor chooses "Set time")
+        setSlotsLoading(false)
     }
 
     const closeSchedule = () => {
         setSchedTarget(null)
         setSchedDate('')
         setSchedTime('')
+        setFreeBooking(true)
         setSlots([])
         setSlotsLoading(false)
         setSchedSaving(false)
@@ -391,18 +384,38 @@ export default function Followups() {
     const onSchedDateChange = async (e) => {
         const d = e.target.value
         setSchedDate(d)
-        if (schedTarget) await loadSlots(schedTarget, d)
+        // load slots only if time-mode is enabled
+        if (schedTarget && !freeBooking) await loadSlots(schedTarget, d)
+    }
+
+    const enableTimeMode = async () => {
+        setFreeBooking(false)
+        // lazy load slots now
+        if (schedTarget && schedDate) await loadSlots(schedTarget, schedDate)
+    }
+
+    const enableFreeMode = () => {
+        setFreeBooking(true)
+        setSchedTime('')
+        setSlots([]) // keep clean
     }
 
     const saveSchedule = async (e) => {
         e.preventDefault()
         if (!schedTarget) return
-        if (!schedTime) return toast.error('Select a time slot')
+        if (!schedDate) return toast.error('Select a date')
 
         try {
             setSchedSaving(true)
-            await scheduleFollowup(schedTarget.id, { date: schedDate || undefined, slot_start: schedTime })
-            toast.success('Follow-up scheduled')
+
+            const payload = {
+                date: schedDate || undefined,
+                // ✅ slot_start OPTIONAL: only send if time-mode and value exists
+                ...(freeBooking ? {} : (schedTime ? { slot_start: schedTime } : {})),
+            }
+
+            await scheduleFollowup(schedTarget.id, payload)
+            toast.success(freeBooking || !schedTime ? 'Follow-up confirmed (Free booking)' : 'Follow-up scheduled')
             closeSchedule()
             await load()
         } catch {
@@ -460,9 +473,7 @@ export default function Followups() {
                                         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-sky-500 opacity-75" />
                                         <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-sky-500" />
                                     </span>
-                                    <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-sky-700">
-                                        Follow-up Tracker
-                                    </span>
+                                    <span className="text-[11px] font-semibold uppercase tracking-[0.2em] text-sky-700">Follow-up Tracker</span>
                                 </div>
 
                                 <div className="mt-3 flex items-start gap-3">
@@ -470,11 +481,9 @@ export default function Followups() {
                                         <ClipboardList className="h-5 w-5 text-slate-700" />
                                     </div>
                                     <div className="min-w-0">
-                                        <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900">
-                                            OPD Follow-ups
-                                        </h1>
+                                        <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900">OPD Follow-ups</h1>
                                         <p className="mt-1 text-sm text-slate-600">
-                                            Track pending follow-ups, reschedule due dates, and confirm into OPD appointments.
+                                            Confirm follow-ups as OPD appointments — <span className="font-semibold">time is optional (Free booking)</span>.
                                         </p>
 
                                         <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -496,7 +505,6 @@ export default function Followups() {
                                                 {STATUS_LABEL[status] || status}
                                             </span>
 
-                                            {/* ✅ COMMON toggle */}
                                             <button
                                                 type="button"
                                                 onClick={toggleMyOnly}
@@ -521,13 +529,7 @@ export default function Followups() {
                             </div>
 
                             <div className="flex items-center gap-2 md:justify-end">
-                                <button
-                                    type="button"
-                                    onClick={load}
-                                    className={UI.chipBtn}
-                                    disabled={loading || !hasSelection}
-                                    title="Refresh follow-ups"
-                                >
+                                <button type="button" onClick={load} className={UI.chipBtn} disabled={loading || !hasSelection} title="Refresh follow-ups">
                                     <RefreshCcw className={cx('h-4 w-4', loading && 'animate-spin')} />
                                     Refresh
                                 </button>
@@ -556,14 +558,11 @@ export default function Followups() {
                                     <div>
                                         <CardTitle className="text-base md:text-lg font-semibold text-slate-900">Follow-ups</CardTitle>
                                         <CardDescription className="text-[12px] text-slate-600">
-                                            Filter by doctor + date range. Use “My follow-ups” for your own list.
+                                            Filter by doctor + date range. Confirm with date only (time optional).
                                         </CardDescription>
 
                                         <div
-                                            className={cx(
-                                                'mt-3 rounded-2xl border border-black/50 bg-white/85 px-3 py-2',
-                                                myOnly && 'opacity-70 pointer-events-none',
-                                            )}
+                                            className={cx('mt-3 rounded-2xl border border-black/50 bg-white/85 px-3 py-2', myOnly && 'opacity-70 pointer-events-none')}
                                             title={myOnly ? 'My follow-ups is ON (doctor locked)' : 'Select doctor (optional)'}
                                         >
                                             <DoctorPicker value={doctorId} onChange={handleDoctorChange} autoSelectCurrentDoctor />
@@ -657,16 +656,6 @@ export default function Followups() {
                     </CardHeader>
 
                     <CardContent className="pt-4">
-                        {!hasSelection && (
-                            <div className="rounded-3xl border border-dashed border-black/20 bg-black/[0.02] px-6 py-10 text-center">
-                                <div className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-3xl border border-black/50 bg-white/60">
-                                    <Stethoscope className="h-5 w-5 text-slate-600" />
-                                </div>
-                                <div className="text-sm font-semibold text-slate-900">Pick date range to view follow-ups</div>
-                                <p className="mt-1 text-[12px] text-slate-500">Set From/To dates above and refresh.</p>
-                            </div>
-                        )}
-
                         {hasSelection && loading && (
                             <div className="space-y-3 py-3">
                                 {[0, 1, 2, 3].map((i) => (
@@ -686,123 +675,127 @@ export default function Followups() {
                             </div>
                         )}
 
-                        {hasSelection && !loading && sortedRows.length === 0 && (
-                            <div className="rounded-3xl border border-dashed border-black/20 bg-black/[0.02] px-6 py-10 text-center">
-                                <div className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-3xl border border-black/50 bg-white/60">
-                                    <AlertCircle className="h-5 w-5 text-slate-600" />
-                                </div>
-                                <div className="text-sm font-semibold text-slate-900">No follow-ups found</div>
-                                <p className="mt-1 text-[12px] text-slate-500">Try changing status, doctor filter, or date range.</p>
-                            </div>
-                        )}
-
                         {hasSelection && !loading && sortedRows.length > 0 && (
                             <ScrollArea className="max-h-[62vh] pr-1">
                                 <div className="space-y-2">
                                     <AnimatePresence initial={false}>
-                                        {sortedRows.map((r) => (
-                                            <motion.div
-                                                key={r.id}
-                                                initial={{ opacity: 0, y: 6 }}
-                                                animate={{ opacity: 1, y: 0 }}
-                                                exit={{ opacity: 0, y: -6 }}
-                                                transition={{ duration: 0.14 }}
-                                                className="rounded-3xl border border-black/50 bg-white/80 backdrop-blur px-4 py-3 shadow-[0_10px_24px_rgba(2,6,23,0.08)]"
-                                            >
-                                                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                                                    {/* LEFT */}
-                                                    <div className="min-w-0">
-                                                        <div className="flex flex-wrap items-center gap-2">
-                                                            <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white tabular-nums">
-                                                                {prettyDate(r.due_date)}
-                                                            </span>
+                                        {sortedRows.map((r) => {
+                                            const apptTime =
+                                                r.slot_start || r.appointment_time || r.time || r.slot || '' // safe fallbacks
+                                            const showFree = r.status === 'scheduled' && !apptTime
 
-                                                            <span className={statusPill(r.status)}>{STATUS_LABEL[r.status] || r.status}</span>
-
-                                                            {r.appointment_id && (
-                                                                <span className={UI.chip}>
-                                                                    <Activity className="h-3.5 w-3.5" />
-                                                                    Appt <span className="tabular-nums">#{r.appointment_id}</span>
+                                            return (
+                                                <motion.div
+                                                    key={r.id}
+                                                    initial={{ opacity: 0, y: 6 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    exit={{ opacity: 0, y: -6 }}
+                                                    transition={{ duration: 0.14 }}
+                                                    className="rounded-3xl border border-black/50 bg-white/80 backdrop-blur px-4 py-3 shadow-[0_10px_24px_rgba(2,6,23,0.08)]"
+                                                >
+                                                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                                        <div className="min-w-0">
+                                                            <div className="flex flex-wrap items-center gap-2">
+                                                                <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white tabular-nums">
+                                                                    {prettyDate(r.due_date)}
                                                                 </span>
-                                                            )}
-                                                        </div>
 
-                                                        <div className="mt-2 flex items-start gap-3 min-w-0">
-                                                            <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-3xl border border-black/50 bg-black/[0.03] text-[12px] font-semibold text-slate-800">
-                                                                {(String(r.patient_name || 'P')
-                                                                    .split(' ')
-                                                                    .filter(Boolean)
-                                                                    .slice(0, 2)
-                                                                    .map((s) => s[0]?.toUpperCase())
-                                                                    .join('')) || 'P'}
+                                                                <span className={statusPill(r.status)}>{STATUS_LABEL[r.status] || r.status}</span>
+
+                                                                {apptTime ? (
+                                                                    <span className={UI.chip}>
+                                                                        <Clock className="h-3.5 w-3.5" />
+                                                                        {apptTime}
+                                                                    </span>
+                                                                ) : null}
+
+                                                                {showFree ? (
+                                                                    <span className="inline-flex items-center gap-2 rounded-full border border-emerald-200 bg-emerald-50 px-3 py-1 text-[11px] font-semibold text-emerald-800">
+                                                                        <CheckCircle2 className="h-4 w-4" />
+                                                                        Free booking
+                                                                    </span>
+                                                                ) : null}
+
+                                                                {r.appointment_id && (
+                                                                    <span className={UI.chip}>
+                                                                        <Activity className="h-3.5 w-3.5" />
+                                                                        Appt <span className="tabular-nums">#{r.appointment_id}</span>
+                                                                    </span>
+                                                                )}
                                                             </div>
 
-                                                            <div className="min-w-0">
-                                                                <div className="flex flex-wrap items-center gap-2">
-                                                                    <div className="truncate text-[14px] font-semibold text-slate-900">{r.patient_name || '—'}</div>
-                                                                    <div className="text-[11px] text-slate-500">
-                                                                        UHID <span className="font-semibold text-slate-700">{r.patient_uhid || '—'}</span>
-                                                                        {r.patient_phone ? (
-                                                                            <>
-                                                                                {' · '}
-                                                                                <span className="font-semibold text-slate-700">{r.patient_phone}</span>
-                                                                            </>
-                                                                        ) : null}
+                                                            <div className="mt-2 flex items-start gap-3 min-w-0">
+                                                                <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-3xl border border-black/50 bg-black/[0.03] text-[12px] font-semibold text-slate-800">
+                                                                    {(String(r.patient_name || 'P')
+                                                                        .split(' ')
+                                                                        .filter(Boolean)
+                                                                        .slice(0, 2)
+                                                                        .map((s) => s[0]?.toUpperCase())
+                                                                        .join('')) || 'P'}
+                                                                </div>
+
+                                                                <div className="min-w-0">
+                                                                    <div className="flex flex-wrap items-center gap-2">
+                                                                        <div className="truncate text-[14px] font-semibold text-slate-900">{r.patient_name || '—'}</div>
+                                                                        <div className="text-[11px] text-slate-500">
+                                                                            UHID <span className="font-semibold text-slate-700">{r.patient_uhid || '—'}</span>
+                                                                            {r.patient_phone ? (
+                                                                                <>
+                                                                                    {' · '}
+                                                                                    <span className="font-semibold text-slate-700">{r.patient_phone}</span>
+                                                                                </>
+                                                                            ) : null}
+                                                                        </div>
                                                                     </div>
-                                                                </div>
 
-                                                                <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                                                                    <span className="inline-flex items-center gap-1">
-                                                                        <User2 className="h-3.5 w-3.5" />
-                                                                        Dr. <span className="font-semibold text-slate-700">{r.doctor_name || '—'}</span>
-                                                                    </span>
-                                                                    <span className="text-slate-300">•</span>
-                                                                    <span>
-                                                                        Dept <span className="font-semibold text-slate-700">{r.department_name || '—'}</span>
-                                                                    </span>
-                                                                </div>
+                                                                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                                                                        <span className="inline-flex items-center gap-1">
+                                                                            <User2 className="h-3.5 w-3.5" />
+                                                                            Dr. <span className="font-semibold text-slate-700">{r.doctor_name || '—'}</span>
+                                                                        </span>
+                                                                    </div>
 
-                                                                {r.note ? <div className="mt-1 text-[11px] text-slate-600">Note: {r.note}</div> : null}
+                                                                    {r.note ? <div className="mt-1 text-[11px] text-slate-600">Note: {r.note}</div> : null}
+                                                                </div>
                                                             </div>
                                                         </div>
-                                                    </div>
 
-                                                    {/* RIGHT ACTIONS */}
-                                                    <div className="flex flex-wrap items-center justify-end gap-2">
-                                                        {r.status === 'waiting' && (
-                                                            <>
+                                                        <div className="flex flex-wrap items-center justify-end gap-2">
+                                                            {r.status === 'waiting' && (
+                                                                <>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="outline"
+                                                                        className="h-10 rounded-2xl border-black/50 bg-white/85 font-semibold"
+                                                                        onClick={() => openEdit(r)}
+                                                                    >
+                                                                        Edit
+                                                                    </Button>
+                                                                    <Button
+                                                                        size="sm"
+                                                                        className="h-10 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-semibold"
+                                                                        onClick={() => openSchedule(r)}
+                                                                    >
+                                                                        Confirm
+                                                                    </Button>
+                                                                </>
+                                                            )}
+
+                                                            {r.status === 'scheduled' && r.appointment_id ? (
                                                                 <Button
                                                                     size="sm"
                                                                     variant="outline"
                                                                     className="h-10 rounded-2xl border-black/50 bg-white/85 font-semibold"
-                                                                    onClick={() => openEdit(r)}
+                                                                    onClick={() => navigate('/opd/appointments')}
                                                                 >
-                                                                    Edit
+                                                                    Open appointments
                                                                 </Button>
-                                                                <Button
-                                                                    size="sm"
-                                                                    className="h-10 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-semibold"
-                                                                    onClick={() => openSchedule(r)}
-                                                                >
-                                                                    Schedule
-                                                                </Button>
-                                                            </>
-                                                        )}
-
-                                                        {r.status === 'scheduled' && r.appointment_id ? (
-                                                            <Button
-                                                                size="sm"
-                                                                variant="outline"
-                                                                className="h-10 rounded-2xl border-black/50 bg-white/85 font-semibold"
-                                                                onClick={() => navigate('/opd/appointments')}
-                                                            >
-                                                                Open appointments
-                                                            </Button>
-                                                        ) : null}
+                                                            ) : null}
+                                                        </div>
                                                     </div>
-                                                </div>
-                                            </motion.div>
-                                        ))}
+                                                </motion.div>
+                                            )
+                                        })}
                                     </AnimatePresence>
                                 </div>
                             </ScrollArea>
@@ -810,18 +803,14 @@ export default function Followups() {
                     </CardContent>
                 </Card>
 
-                {/* ✅ EDIT APPLE DIALOG */}
+                {/* EDIT */}
                 <AppleDialog
                     open={Boolean(editTarget)}
                     onOpenChange={(v) => {
                         if (!v) closeEdit()
                     }}
                     title="Edit Follow-up"
-                    subtitle={
-                        editTarget
-                            ? `${editTarget.patient_name} · UHID ${editTarget.patient_uhid}`
-                            : ''
-                    }
+                    subtitle={editTarget ? `${editTarget.patient_name} · UHID ${editTarget.patient_uhid}` : ''}
                     right={
                         <Button
                             type="button"
@@ -843,10 +832,6 @@ export default function Followups() {
                                         Due <span className="tabular-nums">{prettyDate(editTarget.due_date)}</span>
                                     </span>
                                     <span className={statusPill(editTarget.status)}>{STATUS_LABEL[editTarget.status] || editTarget.status}</span>
-                                    <span className={UI.chip}>
-                                        <User2 className="h-3.5 w-3.5" />
-                                        Dr. {editTarget.doctor_name || '—'}
-                                    </span>
                                 </div>
                             </div>
 
@@ -856,12 +841,7 @@ export default function Followups() {
                                         <CalendarDays className="h-3.5 w-3.5" />
                                         Due date
                                     </label>
-                                    <Input
-                                        type="date"
-                                        value={editDate}
-                                        onChange={(e) => setEditDate(e.target.value)}
-                                        className="h-11 rounded-2xl"
-                                    />
+                                    <Input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} className="h-11 rounded-2xl" />
                                 </div>
 
                                 <div className="space-y-2 md:col-span-2">
@@ -881,18 +861,14 @@ export default function Followups() {
                     ) : null}
                 </AppleDialog>
 
-                {/* ✅ SCHEDULE APPLE DIALOG */}
+                {/* SCHEDULE (Free booking) */}
                 <AppleDialog
                     open={Boolean(schedTarget)}
                     onOpenChange={(v) => {
                         if (!v) closeSchedule()
                     }}
-                    title="Schedule Follow-up"
-                    subtitle={
-                        schedTarget
-                            ? `${schedTarget.patient_name} · UHID ${schedTarget.patient_uhid} · Dr. ${schedTarget.doctor_name || '—'}`
-                            : ''
-                    }
+                    title="Confirm Follow-up"
+                    subtitle={schedTarget ? `${schedTarget.patient_name} · UHID ${schedTarget.patient_uhid} · Dr. ${schedTarget.doctor_name || '—'}` : ''}
                     right={
                         <Button
                             type="button"
@@ -907,19 +883,53 @@ export default function Followups() {
                 >
                     {schedTarget ? (
                         <div className="space-y-4">
+                            {/* mode chooser */}
                             <div className="rounded-3xl border border-black/50 bg-white/80 p-4">
-                                <div className="flex flex-wrap items-center gap-2">
-                                    <span className={UI.chip}>
-                                        <CalendarDays className="h-3.5 w-3.5" />
-                                        Due <span className="tabular-nums">{prettyDate(schedTarget.due_date)}</span>
-                                    </span>
-                                    <span className={statusPill(schedTarget.status)}>{STATUS_LABEL[schedTarget.status] || schedTarget.status}</span>
-                                    {schedTarget.appointment_id ? (
+                                <div className="flex flex-col gap-3">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={enableFreeMode}
+                                            className={cx(
+                                                'rounded-full border px-3 py-1 text-[11px] font-semibold transition',
+                                                freeBooking ? 'border-slate-900 bg-slate-900 text-white' : 'border-black/50 bg-white/75 text-slate-700',
+                                            )}
+                                        >
+                                            ✅ Free booking (No time)
+                                        </button>
+
+                                        <button
+                                            type="button"
+                                            onClick={enableTimeMode}
+                                            className={cx(
+                                                'rounded-full border px-3 py-1 text-[11px] font-semibold transition',
+                                                !freeBooking ? 'border-slate-900 bg-slate-900 text-white' : 'border-black/50 bg-white/75 text-slate-700',
+                                            )}
+                                        >
+                                            ⏱ Optional time
+                                        </button>
+
                                         <span className={UI.chip}>
-                                            <Activity className="h-3.5 w-3.5" />
-                                            Appt <span className="tabular-nums">#{schedTarget.appointment_id}</span>
+                                            <CalendarDays className="h-3.5 w-3.5" />
+                                            {prettyDate(schedTarget.due_date)}
                                         </span>
-                                    ) : null}
+
+                                        <span className={statusPill(schedTarget.status)}>{STATUS_LABEL[schedTarget.status] || schedTarget.status}</span>
+                                    </div>
+
+                                    {freeBooking ? (
+                                        <div className="flex items-start gap-2 rounded-2xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-[12px] text-emerald-900">
+                                            <CheckCircle2 className="mt-[1px] h-4 w-4" />
+                                            <span>
+                                                Free booking means: <span className="font-semibold">no slot/time is required</span>. Appointment will be created for the date and shown in queue.
+                                            </span>
+                                        </div>
+                                    ) : (
+                                        <div className="flex items-start gap-2 rounded-2xl border border-sky-200 bg-sky-50 px-3 py-2 text-[12px] text-sky-900">
+                                            <Clock className="mt-[1px] h-4 w-4" />
+                                            <span>Optional time: choose from free slots or type a custom time. (Still not mandatory.)</span>
+                                        </div>
+                                    )}
                                 </div>
                             </div>
 
@@ -930,58 +940,56 @@ export default function Followups() {
                                             <CalendarDays className="h-3.5 w-3.5" />
                                             Date
                                         </label>
-                                        <Input
-                                            type="date"
-                                            value={schedDate}
-                                            onChange={onSchedDateChange}
-                                            className="h-11 rounded-2xl"
-                                        />
+                                        <Input type="date" value={schedDate} onChange={onSchedDateChange} className="h-11 rounded-2xl" />
                                     </div>
 
-                                    <div className="space-y-2">
-                                        <label className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 flex items-center gap-1">
-                                            <Clock className="h-3.5 w-3.5" />
-                                            Time slot
-                                        </label>
+                                    {/* time block only when optional-time mode */}
+                                    {!freeBooking ? (
+                                        <div className="space-y-2">
+                                            <label className="text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500 flex items-center gap-1">
+                                                <Clock className="h-3.5 w-3.5" />
+                                                Time (optional)
+                                            </label>
 
-                                        {slotsLoading ? (
-                                            <div className="text-[12px] text-slate-500">Loading slots…</div>
-                                        ) : slots.length === 0 ? (
-                                            <div className="flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
-                                                <AlertCircle className="mt-[1px] h-4 w-4" />
-                                                <span>No free slots found. You can type a custom time.</span>
-                                            </div>
-                                        ) : (
-                                            <div className="flex flex-wrap gap-2">
-                                                {slots.map((t) => (
-                                                    <button
-                                                        key={t}
-                                                        type="button"
-                                                        onClick={() => setSchedTime(t)}
-                                                        className={cx(
-                                                            'rounded-full border px-3 py-1 text-[11px] font-semibold transition',
-                                                            schedTime === t
-                                                                ? 'border-slate-900 bg-slate-900 text-white'
-                                                                : 'border-black/50 bg-white/75 text-slate-700 hover:bg-black/[0.03]',
-                                                        )}
-                                                    >
-                                                        {t}
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        )}
+                                            {slotsLoading ? (
+                                                <div className="text-[12px] text-slate-500">Loading slots…</div>
+                                            ) : slots.length === 0 ? (
+                                                <div className="flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
+                                                    <AlertCircle className="mt-[1px] h-4 w-4" />
+                                                    <span>No free slots found. You can type time or leave empty.</span>
+                                                </div>
+                                            ) : (
+                                                <div className="flex flex-wrap gap-2">
+                                                    {slots.map((t) => (
+                                                        <button
+                                                            key={t}
+                                                            type="button"
+                                                            onClick={() => setSchedTime(t)}
+                                                            className={cx(
+                                                                'rounded-full border px-3 py-1 text-[11px] font-semibold transition',
+                                                                schedTime === t
+                                                                    ? 'border-slate-900 bg-slate-900 text-white'
+                                                                    : 'border-black/50 bg-white/75 text-slate-700 hover:bg-black/[0.03]',
+                                                            )}
+                                                        >
+                                                            {t}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
 
-                                        <Input
-                                            type="time"
-                                            value={schedTime}
-                                            onChange={(e) => setSchedTime(e.target.value)}
-                                            className="h-11 rounded-2xl"
-                                        />
+                                            <Input
+                                                type="time"
+                                                value={schedTime}
+                                                onChange={(e) => setSchedTime(e.target.value)}
+                                                className="h-11 rounded-2xl"
+                                            />
 
-                                        <p className="text-[11px] text-slate-500">
-                                            Tip: pick a slot pill or type a custom time.
-                                        </p>
-                                    </div>
+                                            <p className="text-[11px] text-slate-500">
+                                                Leave blank to still confirm as Free booking.
+                                            </p>
+                                        </div>
+                                    ) : null}
                                 </div>
                             </form>
                         </div>
