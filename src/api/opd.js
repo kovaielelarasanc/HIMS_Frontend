@@ -508,13 +508,18 @@ export function fetchOpdDashboard({ dateFrom, dateTo, doctorId } = {}) {
 
 
 export function fetchVisitPrescription(visitId) {
-    return api.get(`/opd/visits/${visitId}/prescription`)
+    return API.get(`/opd/visits/${visitId}/prescription`)
 }
 
 export function saveVisitPrescription(visitId, payload) {
-    return api.post(`/opd/visits/${visitId}/prescription`, payload)
+    return API.post(`/opd/visits/${visitId}/prescription`, payload)
 }
 
-export function fetchVisitSummaryPdf(visitId) {
-  return api.get(`/opd/visits/${visitId}/summary.pdf`, { responseType: 'blob' })
-}
+// export function fetchVisitSummaryPdf(visitId) {
+//   return API.get(`/opd/visits/${visitId}/summary.pdf`, { responseType: 'blob' })
+// }
+
+export const fetchVisitSummaryPdf = (visitId) =>
+  API.get(`/opd/visits/${visitId}/summary.pdf`, {
+    responseType: "arraybuffer", // IMPORTANT
+  })

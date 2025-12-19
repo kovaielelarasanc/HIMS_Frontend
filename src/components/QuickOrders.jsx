@@ -51,7 +51,7 @@ import {
 } from '../api/quickOrders'
 
 // ---- Core APIs for Lab & Radiology ----
-import { listLabTests, createLisOrder } from '../api/lab'
+import { listLabTests, createLisOrder, fetchLisReportPdf } from '../api/lab'
 import { listRisTests, createRisOrder } from '../api/ris'
 
 // Pharmacy inventory search
@@ -72,6 +72,20 @@ const fadeIn = {
 
 const LS_RX_TEMPLATES = 'nutryah_rx_templates_v1'
 
+const labPdfActions = async (orderId, mode) => {
+    if (!orderId) return toast.error('Invalid Lab Order ID')
+    try {
+        const res = await fetchLisReportPdf(orderId)
+        const blob = new Blob([res.data], { type: 'application/pdf' })
+
+        if (mode === 'view') openBlobInNewTab(blob)
+        if (mode === 'download') downloadBlob(blob, `lab_report_${orderId}.pdf`)
+        if (mode === 'print') printBlob(blob)
+    } catch (e) {
+        console.error(e)
+        toast.error(extractApiError(e, 'Lab PDF failed'))
+    }
+}
 // -----------------------------
 // Small UI helpers
 // -----------------------------
@@ -2042,20 +2056,38 @@ function QuickOrders({
                         <div className="mt-3 flex flex-wrap items-center gap-2">
                             {detailsType === 'lab' && detailsItem?.id && (
                                 <>
-                                    <Button type="button" variant="outline" className="h-9 rounded-xl" onClick={() => openLabPdf(detailsItem.id)}>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        className="h-9 rounded-xl"
+                                        onClick={() => labPdfActions(detailsItem.id, 'view')}
+                                    >
                                         <Eye className="h-4 w-4 mr-2" />
                                         View PDF
                                     </Button>
-                                    <Button type="button" variant="outline" className="h-9 rounded-xl" onClick={() => openLabPdf(detailsItem.id)}>
+
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        className="h-9 rounded-xl"
+                                        onClick={() => labPdfActions(detailsItem.id, 'print')}
+                                    >
                                         <Printer className="h-4 w-4 mr-2" />
                                         Print
                                     </Button>
-                                    <Button type="button" className="h-9 rounded-xl" onClick={() => openLabPdf(detailsItem.id)}>
+
+                                    <Button
+                                        type="button"
+                                        className="h-9 rounded-xl"
+                                        onClick={() => labPdfActions(detailsItem.id, 'download')}
+                                    >
                                         <Download className="h-4 w-4 mr-2" />
                                         Download
                                     </Button>
                                 </>
                             )}
+
+
 
                             {detailsType === 'rx' && detailsItem?.id && (
                                 <>

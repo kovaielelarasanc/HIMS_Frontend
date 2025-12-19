@@ -235,7 +235,7 @@ function statusMeta(status) {
 
 const UI = {
     page: "min-h-[calc(100vh-4rem)] w-full bg-gradient-to-b from-slate-50 via-white to-slate-50",
-    stickyTop: "sticky top-0 z-30",
+    stickyTop: " top-0 z-30",
     container: "px-4 py-5 md:px-8 md:py-8",
     glass:
         "rounded-3xl border border-black/10 bg-white/75 backdrop-blur-xl shadow-[0_14px_42px_rgba(2,6,23,0.08)]",

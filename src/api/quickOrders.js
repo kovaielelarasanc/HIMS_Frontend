@@ -3,6 +3,7 @@ import {
     listLabTests,
     createLisOrder,
     listLisOrders,
+    fetchLisReportPdf,
 } from './lab'
 
 import {
@@ -379,10 +380,28 @@ export async function listOtSchedulesForContext({
 
 // ✅ NEW
 export async function getRxDetails(rxId) {
-  const res = await getPharmacyPrescriptionDetails(rxId)
-  return res.data
+    const res = await getPharmacyPrescriptionDetails(rxId)
+    return res.data
 }
 
 export async function downloadRxPdf(rxId) {
-  return fetchPharmacyPrescriptionPdf(rxId) // returns axios blob
+    return fetchPharmacyPrescriptionPdf(rxId) // returns axios blob
+}
+
+// -----------------------------
+// Lab PDF (AUTH SAFE): fetch blob via Axios
+// -----------------------------
+const labPdfActions = async (orderId, mode) => {
+    if (!orderId) return toast.error('Invalid Lab Order ID')
+    try {
+        const res = await fetchLisReportPdf(orderId)
+        const blob = new Blob([res.data], { type: 'application/pdf' })
+
+        if (mode === 'view') openBlobInNewTab(blob)
+        if (mode === 'download') downloadBlob(blob, `lab_report_${orderId}.pdf`)
+        if (mode === 'print') printBlob(blob)
+    } catch (e) {
+        console.error(e)
+        toast.error(extractApiError(e, 'Lab PDF failed'))
+    }
 }

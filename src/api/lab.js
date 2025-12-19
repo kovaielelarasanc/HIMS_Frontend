@@ -61,3 +61,5 @@ export function getLisReportData(orderId) {
     return API.get(`/lab/orders/${orderId}/report-data`)
 }
 
+export const fetchLisReportPdf = (orderId) =>
+    API.get(`/lab/orders/${orderId}/report-pdf`, { responseType: 'blob' })
