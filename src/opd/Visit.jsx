@@ -8,20 +8,13 @@ import {
     fetchVisit,
     updateVisit,
     createFollowup,
-    fetchVisitPrescription,
-    saveVisitPrescription,
     fetchVisitSummaryPdf, // ✅ server PDF
+    listVisitFollowups,
 } from "../api/opd"
 
 import QuickOrders from "@/components/QuickOrders"
 
-import {
-    Card,
-    CardHeader,
-    CardTitle,
-    CardDescription,
-    CardContent,
-} from "@/components/ui/card"
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
@@ -29,12 +22,7 @@ import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
 import { Skeleton } from "@/components/ui/skeleton"
 
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-} from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
 import {
     AlertTriangle,
@@ -51,12 +39,10 @@ import {
     NotebookPen,
     Pill,
     Printer,
-    Save,
     ScanLine,
     ScrollText,
     Sparkles,
     Stethoscope,
-    Undo2,
     User2,
 } from "lucide-react"
 
@@ -67,14 +53,13 @@ function cx(...xs) {
 const UI = {
     page: "min-h-[calc(100vh-4rem)] w-full bg-gradient-to-b from-slate-50 via-white to-slate-50",
     glass:
-        "rounded-3xl border border-black/50 bg-white/75 backdrop-blur-xl shadow-[0_12px_35px_rgba(2,6,23,0.10)]",
+        "rounded-3xl border border-black/50 bg-white/75 ",
     chip:
         "inline-flex items-center gap-2 rounded-full border border-black/50 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700",
     chipBtn:
-        "inline-flex items-center gap-2 rounded-full border border-black/50 bg-white/85 px-3 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-black/[0.03] active:scale-[0.99] transition disabled:opacity-60",
+        "inline-flex items-center gap-2 rounded-full border border-black/50 bg-black/85 px-3 py-1.5 text-[11px] font-semibold text-white hover:text-black hover:bg-black/[0.03] active:scale-[0.99] transition disabled:opacity-60",
     label: "text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500",
-    textarea:
-        "min-h-[110px] rounded-3xl border-black/50 bg-white/85 text-[13px] leading-relaxed",
+    textarea: "min-h-[110px] rounded-3xl border-black/50 bg-white/85 text-[13px] leading-relaxed",
     input: "h-11 rounded-2xl border-black/50 bg-white/85 text-[12px] font-semibold",
     softBox: "rounded-3xl border border-black/50 bg-white/70 backdrop-blur px-4 py-3",
 }
@@ -85,7 +70,8 @@ const TABS = [
     { key: "dx", label: "Diagnosis", icon: Stethoscope },
     { key: "plan", label: "Plan", icon: ScrollText },
     { key: "orders", label: "Orders", icon: ClipboardList },
-    { key: "rx", label: "Prescription", icon: Pill },
+    // ✅ NEW TAB
+    { key: "followups", label: "Follow-ups", icon: CalendarDays },
     { key: "summary", label: "Summary", icon: FileText },
 ]
 
@@ -110,8 +96,7 @@ const TEMPLATES = {
 
     // PLAN
     plan_format: `Investigations:\n- \n\nTreatment:\n- \n\nAdvice:\n- \n\nFollow-up:\n- \n`,
-    advice_general:
-        `Explain red flags.\nAdequate fluids, rest.\nMedication compliance.\nReturn earlier if worsening.\n`,
+    advice_general: `Explain red flags.\nAdequate fluids, rest.\nMedication compliance.\nReturn earlier if worsening.\n`,
 }
 
 function prettyDateTime(iso) {
@@ -125,6 +110,17 @@ function prettyDateTime(iso) {
         hour: "2-digit",
         minute: "2-digit",
         hour12: true,
+    })
+}
+
+function prettyDateOnly(iso) {
+    if (!iso) return ""
+    const d = new Date(iso)
+    if (Number.isNaN(d.getTime())) return iso
+    return d.toLocaleDateString("en-IN", {
+        day: "2-digit",
+        month: "short",
+        year: "numeric",
     })
 }
 
@@ -167,7 +163,7 @@ function normalizePayload(obj) {
     return out
 }
 
-function buildSummary(data, form) {
+function buildSummary(data, form, followups = []) {
     const lines = []
     const push = (title, val) => {
         const v = (val ?? "").toString().trim()
@@ -232,6 +228,21 @@ function buildSummary(data, form) {
     push("SOAP Assessment (Legacy)", form.soap_assessment)
     push("SOAP Plan (Legacy)", form.plan)
 
+    // ✅ Follow-ups included
+    if (Array.isArray(followups) && followups.length) {
+        lines.push(`FOLLOW-UPS`)
+        const top = followups.slice(0, 12)
+        top.forEach((fu, idx) => {
+            const due = fu?.due_date ? prettyDateOnly(fu.due_date) : "—"
+            const st = (fu?.status || "—").toString().toUpperCase()
+            const note = (fu?.note || "").toString().trim()
+            const ep = fu?.source_episode_id ? ` | Source: ${fu.source_episode_id}` : ""
+            lines.push(`${idx + 1}. Due: ${due} | ${st}${ep}${note ? `\n   Note: ${note}` : ""}`)
+        })
+        if (followups.length > top.length) lines.push(`\n… and ${followups.length - top.length} more`)
+        lines.push("")
+    }
+
     return lines.join("\n")
 }
 
@@ -245,20 +256,14 @@ function ApplyModeToggle({ mode, setMode }) {
             <button
                 type="button"
                 onClick={() => setMode("insert")}
-                className={cx(
-                    UI.chipBtn,
-                    mode === "insert" ? "bg-slate-900 text-white border-slate-900" : "",
-                )}
+                className={cx(UI.chipBtn, mode === "insert" ? "bg-black text-black border-slate-900" : "")}
             >
                 Insert
             </button>
             <button
                 type="button"
                 onClick={() => setMode("append")}
-                className={cx(
-                    UI.chipBtn,
-                    mode === "append" ? "bg-slate-900 text-white border-slate-900" : "",
-                )}
+                className={cx(UI.chipBtn, mode === "append" ? "bg-slate-900 text-white border-slate-900" : "")}
             >
                 Append
             </button>
@@ -266,9 +271,97 @@ function ApplyModeToggle({ mode, setMode }) {
     )
 }
 
-function safeNum(v) {
-    const n = Number(v)
-    return Number.isFinite(n) ? n : 0
+function FollowupHistoryPanel({
+    items = [],
+    loading = false,
+    onRefresh,
+    compact = false,
+    title = "Follow-up History",
+    subtitle = "Patient-level follow-ups (latest first)",
+}) {
+    const list = compact ? (items || []).slice(0, 6) : (items || [])
+    return (
+        <div className={cx(UI.softBox, "space-y-3")}>
+            <div className="flex items-start justify-between gap-2">
+                <div>
+                    <div className="text-[12px] font-semibold text-slate-900 inline-flex items-center gap-2">
+                        <CalendarDays className="h-4 w-4 text-slate-500" />
+                        {title}
+                    </div>
+                    <div className="mt-0.5 text-[12px] text-slate-600">{subtitle}</div>
+                </div>
+
+                <Button
+                    type="button"
+                    variant="outline"
+                    className="h-10 rounded-2xl border-black/50 bg-white/85 font-semibold"
+                    onClick={onRefresh}
+                    disabled={loading}
+                >
+                    {loading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                    Refresh
+                </Button>
+            </div>
+
+            {loading ? (
+                <div className="rounded-3xl border border-black/10 bg-white/60 p-4 text-[12px] text-slate-600">
+                    Loading follow-ups…
+                </div>
+            ) : !list?.length ? (
+                <div className="rounded-3xl border border-black/10 bg-white/60 p-4 text-[12px] text-slate-600">
+                    No follow-ups yet.
+                </div>
+            ) : (
+                <div className="space-y-2">
+                    {list.map((fu) => {
+                        const due = fu?.due_date ? prettyDateOnly(fu.due_date) : "—"
+                        const created = fu?.created_at ? prettyDateTime(fu.created_at) : ""
+                        const status = (fu?.status || "—").toString().toUpperCase()
+                        const note = (fu?.note || "").toString().trim()
+                        const srcEp = fu?.source_episode_id
+
+                        return (
+                            <div
+                                key={fu.id}
+                                className="flex items-start justify-between gap-3 rounded-3xl border border-black/50 bg-white/75 px-4 py-3"
+                            >
+                                <div className="min-w-0 space-y-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                        <span className="text-[12px] font-semibold text-slate-900">
+                                            Due: <span className="tabular-nums">{due}</span>
+                                        </span>
+
+                                        <Badge className="rounded-full" variant="secondary">
+                                            {status}
+                                        </Badge>
+
+                                        {srcEp ? (
+                                            <span className="text-[11px] font-semibold text-slate-600">
+                                                Source: <span className="text-slate-900">{srcEp}</span>
+                                            </span>
+                                        ) : null}
+                                    </div>
+
+                                    {note ? (
+                                        <div className="text-[13px] leading-relaxed text-slate-700 break-words">{note}</div>
+                                    ) : (
+                                        <div className="text-[12px] text-slate-500">No note</div>
+                                    )}
+                                </div>
+
+                                <div className="shrink-0 text-right text-[11px] text-slate-500">{created}</div>
+                            </div>
+                        )
+                    })}
+                    {compact && items.length > list.length ? (
+                        <div className="text-[11px] text-slate-500">
+                            Showing {list.length} of {items.length}
+                        </div>
+                    ) : null}
+                </div>
+            )}
+        </div>
+    )
 }
 
 export default function Visit({ currentUser }) {
@@ -332,15 +425,29 @@ export default function Visit({ currentUser }) {
 
     const [applyMode, setApplyMode] = useState("insert") // insert | append
 
-    // Follow-up
+    // ✅ Follow-up create
     const [fuDate, setFuDate] = useState("")
     const [fuNote, setFuNote] = useState("")
     const [fuSaving, setFuSaving] = useState(false)
 
-    // Prescription
-    const [rxLoading, setRxLoading] = useState(false)
-    const [rxSaving, setRxSaving] = useState(false)
-    const [rx, setRx] = useState({ notes: "", items: [] })
+    // ✅ Follow-up history (patient level)
+    const [fuHistory, setFuHistory] = useState([])
+    const [fuHistoryLoading, setFuHistoryLoading] = useState(false)
+
+    const loadFollowupHistory = async ({ notify = false } = {}) => {
+        if (!visitId) return
+        try {
+            setFuHistoryLoading(true)
+            const res = await listVisitFollowups(visitId, { scope: "patient", limit: 50 })
+            setFuHistory(Array.isArray(res?.data) ? res.data : [])
+            if (notify) toast.success("Follow-up history refreshed")
+        } catch (e) {
+            setFuHistory([])
+            if (notify) toast.error("Follow-up history load failed")
+        } finally {
+            setFuHistoryLoading(false)
+        }
+    }
 
     // PDF preview
     const [pdfOpen, setPdfOpen] = useState(false)
@@ -449,26 +556,12 @@ export default function Visit({ currentUser }) {
             const d = res?.data
             setData(d)
             setFormFromData(d)
+            await loadFollowupHistory()
         } catch {
             setData(null)
+            setFuHistory([])
         } finally {
             setLoading(false)
-        }
-    }
-
-    const loadRx = async () => {
-        try {
-            setRxLoading(true)
-            const res = await fetchVisitPrescription(visitId)
-            const d = res?.data || {}
-            setRx({
-                notes: d.notes || "",
-                items: Array.isArray(d.items) ? d.items : [],
-            })
-        } catch {
-            setRx({ notes: "", items: [] })
-        } finally {
-            setRxLoading(false)
         }
     }
 
@@ -477,12 +570,6 @@ export default function Visit({ currentUser }) {
         load()
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [visitId])
-
-    useEffect(() => {
-        if (!visitId) return
-        if (activeTab === "rx") loadRx()
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [activeTab, visitId])
 
     const save = async () => {
         try {
@@ -497,16 +584,7 @@ export default function Visit({ currentUser }) {
         }
     }
 
-    const resetChanges = () => {
-        try {
-            const orig = JSON.parse(initialRef.current)
-            setForm(orig)
-            toast.message("Reverted unsaved changes")
-        } catch {
-            // ignore
-        }
-    }
-
+    // ✅ Create Follow-up (NO full reload -> doesn't wipe unsaved typing)
     const createFu = async () => {
         if (!fuDate) return toast.error("Select follow-up date")
         try {
@@ -515,7 +593,7 @@ export default function Visit({ currentUser }) {
             toast.success("Follow-up created")
             setFuDate("")
             setFuNote("")
-            await load()
+            await loadFollowupHistory()
         } catch {
             toast.error("Follow-up create failed")
         } finally {
@@ -548,53 +626,7 @@ export default function Visit({ currentUser }) {
         return data.ip_uid || undefined
     }, [data])
 
-    // Prescription helpers
-    const addRxRow = () => {
-        setRx((r) => ({
-            ...r,
-            items: [
-                ...(r.items || []),
-                { drug_name: "", strength: "", frequency: "", duration_days: 0, quantity: 0, unit_price: 0 },
-            ],
-        }))
-    }
-
-    const removeRxRow = (idx) =>
-        setRx((r) => ({ ...r, items: (r.items || []).filter((_, i) => i !== idx) }))
-
-    const onRxItem = (idx, key, val) =>
-        setRx((r) => ({
-            ...r,
-            items: (r.items || []).map((it, i) => (i === idx ? { ...it, [key]: val } : it)),
-        }))
-
-    const saveRx = async () => {
-        try {
-            setRxSaving(true)
-            const cleaned = {
-                notes: (rx.notes || "").trim() || null,
-                items: (rx.items || [])
-                    .map((it) => ({
-                        drug_name: (it.drug_name || "").trim(),
-                        strength: (it.strength || "").trim() || "",
-                        frequency: (it.frequency || "").trim() || "",
-                        duration_days: safeNum(it.duration_days),
-                        quantity: safeNum(it.quantity),
-                        unit_price: safeNum(it.unit_price),
-                    }))
-                    .filter((it) => it.drug_name),
-            }
-            await saveVisitPrescription(visitId, cleaned)
-            toast.success("Prescription saved")
-            await loadRx()
-        } catch {
-            toast.error("Prescription save failed")
-        } finally {
-            setRxSaving(false)
-        }
-    }
-
-    const summaryText = useMemo(() => buildSummary(data, form), [data, form])
+    const summaryText = useMemo(() => buildSummary(data, form, fuHistory), [data, form, fuHistory])
 
     const copySummary = async () => {
         try {
@@ -617,7 +649,6 @@ export default function Visit({ currentUser }) {
         await save()
     }
 
-    // ✅ Print PDF (new tab)
     const printPdf = async () => {
         try {
             setPdfing(true)
@@ -632,7 +663,6 @@ export default function Visit({ currentUser }) {
         }
     }
 
-    // ✅ Preview PDF (modal)
     const previewPdf = async () => {
         try {
             setPdfing(true)
@@ -667,22 +697,14 @@ export default function Visit({ currentUser }) {
             >
                 <DialogContent className="max-w-5xl w-[95vw] rounded-3xl border border-black/50 bg-white/80 backdrop-blur-xl p-0 overflow-hidden">
                     <DialogHeader className="px-5 py-4 border-b border-black/10">
-                        <DialogTitle className="text-sm font-semibold text-slate-900">
-                            Visit Summary PDF
-                        </DialogTitle>
+                        <DialogTitle className="text-sm font-semibold text-slate-900">Visit Summary PDF</DialogTitle>
                     </DialogHeader>
 
                     <div className="h-[78vh] bg-white">
                         {pdfUrl ? (
-                            <iframe
-                                title="Visit Summary PDF"
-                                src={pdfUrl}
-                                className="h-full w-full"
-                            />
+                            <iframe title="Visit Summary PDF" src={pdfUrl} className="h-full w-full" />
                         ) : (
-                            <div className="h-full w-full grid place-items-center text-sm text-slate-600">
-                                Loading…
-                            </div>
+                            <div className="h-full w-full grid place-items-center text-sm text-slate-600">Loading…</div>
                         )}
                     </div>
 
@@ -751,7 +773,7 @@ export default function Visit({ currentUser }) {
                                             Visit Workspace
                                         </h1>
                                         <p className="mt-1 text-sm text-slate-600">
-                                            Macros + templates + print-ready summary PDF.
+                                            Fast documentation + orders + follow-ups + print-ready summary PDF.
                                         </p>
 
                                         <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -769,8 +791,7 @@ export default function Visit({ currentUser }) {
 
                                                     <span className={UI.chip}>
                                                         <ClipboardSignature className="h-3.5 w-3.5" />
-                                                        Episode{" "}
-                                                        <span className="ml-1 tabular-nums">{data.episode_id}</span>
+                                                        Episode <span className="ml-1 tabular-nums">{data.episode_id}</span>
                                                     </span>
 
                                                     <span className={UI.chip}>
@@ -782,6 +803,16 @@ export default function Visit({ currentUser }) {
                                                         <Stethoscope className="h-3.5 w-3.5" />
                                                         {data.department_name} · Dr. {data.doctor_name}
                                                     </span>
+
+                                                    <button
+                                                        type="button"
+                                                        className={cx(UI.chipBtn, "bg-white/85")}
+                                                        onClick={() => setActiveTab("followups")}
+                                                        title="Open Follow-ups"
+                                                    >
+                                                        <CalendarDays className="h-4 w-4" />
+                                                        Follow-ups ({fuHistory?.length || 0})
+                                                    </button>
                                                 </>
                                             ) : null}
                                         </div>
@@ -793,45 +824,12 @@ export default function Visit({ currentUser }) {
                             <div className="flex flex-wrap items-center gap-2 md:justify-end">
                                 <button
                                     type="button"
-                                    className={cx(UI.chipBtn, "border-black/50")}
-                                    onClick={resetChanges}
-                                    disabled={!hasChanges || saving || loading}
-                                    title="Revert unsaved changes"
-                                >
-                                    <Undo2 className="h-4 w-4" />
-                                    Revert
-                                </button>
-
-                                <button
-                                    type="button"
-                                    className={cx(
-                                        UI.chipBtn,
-                                        "bg-slate-900 text-white border-slate-900 hover:bg-slate-800",
-                                    )}
-                                    onClick={save}
-                                    disabled={saving || loading || !hasChanges}
-                                    title="Save visit"
-                                >
-                                    {saving ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                        <Save className="h-4 w-4" />
-                                    )}
-                                    Save
-                                </button>
-
-                                <button
-                                    type="button"
                                     className={cx(UI.chipBtn, "bg-white/85")}
                                     onClick={previewPdf}
                                     disabled={pdfing || loading}
                                     title="Preview PDF"
                                 >
-                                    {pdfing ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                        <Eye className="h-4 w-4" />
-                                    )}
+                                    {pdfing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Eye className="h-4 w-4" />}
                                     Preview PDF
                                 </button>
 
@@ -842,11 +840,7 @@ export default function Visit({ currentUser }) {
                                     disabled={pdfing || loading}
                                     title="Print PDF"
                                 >
-                                    {pdfing ? (
-                                        <Loader2 className="h-4 w-4 animate-spin" />
-                                    ) : (
-                                        <Printer className="h-4 w-4" />
-                                    )}
+                                    {pdfing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Printer className="h-4 w-4" />}
                                     Print PDF
                                 </button>
                             </div>
@@ -871,27 +865,15 @@ export default function Visit({ currentUser }) {
                                 <div className="mt-2 flex flex-wrap gap-2">
                                     <VitalsPill
                                         label="Ht"
-                                        value={
-                                            data.current_vitals.height_cm
-                                                ? `${data.current_vitals.height_cm} cm`
-                                                : ""
-                                        }
+                                        value={data.current_vitals.height_cm ? `${data.current_vitals.height_cm} cm` : ""}
                                     />
                                     <VitalsPill
                                         label="Wt"
-                                        value={
-                                            data.current_vitals.weight_kg
-                                                ? `${data.current_vitals.weight_kg} kg`
-                                                : ""
-                                        }
+                                        value={data.current_vitals.weight_kg ? `${data.current_vitals.weight_kg} kg` : ""}
                                     />
                                     <VitalsPill
                                         label="Temp"
-                                        value={
-                                            data.current_vitals.temp_c
-                                                ? `${data.current_vitals.temp_c} °C`
-                                                : ""
-                                        }
+                                        value={data.current_vitals.temp_c ? `${data.current_vitals.temp_c} °C` : ""}
                                     />
                                     <VitalsPill
                                         label="BP"
@@ -903,18 +885,15 @@ export default function Visit({ currentUser }) {
                                     />
                                     <VitalsPill label="Pulse" value={data.current_vitals.pulse ?? ""} />
                                     <VitalsPill label="RR" value={data.current_vitals.rr ?? ""} />
-                                    <VitalsPill
-                                        label="SpO₂"
-                                        value={data.current_vitals.spo2 ? `${data.current_vitals.spo2}%` : ""}
-                                    />
+                                    <VitalsPill label="SpO₂" value={data.current_vitals.spo2 ? `${data.current_vitals.spo2}%` : ""} />
                                 </div>
                             </div>
                         )}
                     </div>
                 </motion.div>
 
-                {/* Tabs (sticky ✅ fixed) */}
-                <div className="sticky top-[4.25rem] z-20">
+                {/* Tabs */}
+                <div className="sticky top-[0.25rem] z-20">
                     <div className={cx(UI.glass, "px-3 py-2")}>
                         <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
                             <div className="flex items-center gap-2 overflow-auto">
@@ -958,9 +937,7 @@ export default function Visit({ currentUser }) {
 
                 {!loading && !data && (
                     <Card className={cx(UI.glass)}>
-                        <CardContent className="pt-6 text-sm text-rose-700">
-                            Visit not found.
-                        </CardContent>
+                        <CardContent className="pt-6 text-sm text-rose-700">Visit not found.</CardContent>
                     </Card>
                 )}
 
@@ -978,9 +955,7 @@ export default function Visit({ currentUser }) {
                             >
                                 <Card className={cx(UI.glass)}>
                                     <CardHeader className="border-b border-black/50 bg-white/60 backdrop-blur-xl">
-                                        <CardTitle className="text-base font-semibold text-slate-900">
-                                            History
-                                        </CardTitle>
+                                        <CardTitle className="text-base font-semibold text-slate-900">History</CardTitle>
                                         <CardDescription className="text-[12px] text-slate-600">
                                             Use templates for fast documentation.
                                         </CardDescription>
@@ -1136,11 +1111,7 @@ export default function Visit({ currentUser }) {
                                                 onClick={save}
                                                 disabled={saving || !hasChanges}
                                             >
-                                                {saving ? (
-                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                ) : (
-                                                    <CheckCircle2 className="mr-2 h-4 w-4" />
-                                                )}
+                                                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
                                                 Save
                                             </Button>
                                         </div>
@@ -1161,12 +1132,8 @@ export default function Visit({ currentUser }) {
                             >
                                 <Card className={cx(UI.glass)}>
                                     <CardHeader className="border-b border-black/50 bg-white/60 backdrop-blur-xl">
-                                        <CardTitle className="text-base font-semibold text-slate-900">
-                                            Examination
-                                        </CardTitle>
-                                        <CardDescription className="text-[12px] text-slate-600">
-                                            One-click normal exam macros.
-                                        </CardDescription>
+                                        <CardTitle className="text-base font-semibold text-slate-900">Examination</CardTitle>
+                                        <CardDescription className="text-[12px] text-slate-600">One-click normal exam macros.</CardDescription>
                                     </CardHeader>
 
                                     <CardContent className="pt-4 space-y-4">
@@ -1184,12 +1151,7 @@ export default function Visit({ currentUser }) {
                                                 </button>
                                                 <button
                                                     className={UI.chipBtn}
-                                                    onClick={() =>
-                                                        applyMulti({
-                                                            general_examination: TEMPLATES.exam_normal_general,
-                                                            systemic_examination: TEMPLATES.exam_normal_systemic,
-                                                        })
-                                                    }
+                                                    onClick={() => applyMulti({ general_examination: TEMPLATES.exam_normal_general, systemic_examination: TEMPLATES.exam_normal_systemic })}
                                                 >
                                                     Normal Exam (All)
                                                 </button>
@@ -1249,11 +1211,7 @@ export default function Visit({ currentUser }) {
                                                 onClick={save}
                                                 disabled={saving || !hasChanges}
                                             >
-                                                {saving ? (
-                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                ) : (
-                                                    <CheckCircle2 className="mr-2 h-4 w-4" />
-                                                )}
+                                                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
                                                 Save
                                             </Button>
                                         </div>
@@ -1274,12 +1232,8 @@ export default function Visit({ currentUser }) {
                             >
                                 <Card className={cx(UI.glass)}>
                                     <CardHeader className="border-b border-black/50 bg-white/60 backdrop-blur-xl">
-                                        <CardTitle className="text-base font-semibold text-slate-900">
-                                            Diagnosis
-                                        </CardTitle>
-                                        <CardDescription className="text-[12px] text-slate-600">
-                                            Templates for Dx formatting + ICD hints.
-                                        </CardDescription>
+                                        <CardTitle className="text-base font-semibold text-slate-900">Diagnosis</CardTitle>
+                                        <CardDescription className="text-[12px] text-slate-600">Templates for Dx formatting + ICD hints.</CardDescription>
                                     </CardHeader>
 
                                     <CardContent className="pt-4 space-y-4">
@@ -1289,14 +1243,7 @@ export default function Visit({ currentUser }) {
                                                 Templates
                                             </div>
                                             <div className="flex flex-wrap gap-2">
-                                                <button
-                                                    className={UI.chipBtn}
-                                                    onClick={() =>
-                                                        applyMulti({
-                                                            provisional_diagnosis: TEMPLATES.dx_format,
-                                                        })
-                                                    }
-                                                >
+                                                <button className={UI.chipBtn} onClick={() => applyMulti({ provisional_diagnosis: TEMPLATES.dx_format })}>
                                                     Dx format
                                                 </button>
                                                 <button className={UI.chipBtn} onClick={() => applyText("diagnosis_codes", TEMPLATES.icd_hint)}>
@@ -1351,7 +1298,7 @@ export default function Visit({ currentUser }) {
                                         <div className={cx(UI.softBox, "flex items-center justify-between gap-2")}>
                                             <div className="text-[12px] text-slate-600 inline-flex items-center gap-2">
                                                 <Stethoscope className="h-4 w-4 text-slate-500" />
-                                                Dx should match plan + orders + Rx.
+                                                Dx should match plan + orders.
                                             </div>
                                             <Button
                                                 type="button"
@@ -1359,11 +1306,7 @@ export default function Visit({ currentUser }) {
                                                 onClick={save}
                                                 disabled={saving || !hasChanges}
                                             >
-                                                {saving ? (
-                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                ) : (
-                                                    <CheckCircle2 className="mr-2 h-4 w-4" />
-                                                )}
+                                                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
                                                 Save
                                             </Button>
                                         </div>
@@ -1384,11 +1327,9 @@ export default function Visit({ currentUser }) {
                             >
                                 <Card className={cx(UI.glass)}>
                                     <CardHeader className="border-b border-black/50 bg-white/60 backdrop-blur-xl">
-                                        <CardTitle className="text-base font-semibold text-slate-900">
-                                            Plan
-                                        </CardTitle>
+                                        <CardTitle className="text-base font-semibold text-slate-900">Plan</CardTitle>
                                         <CardDescription className="text-[12px] text-slate-600">
-                                            Plan templates + follow-up creation.
+                                            Clinical plan + advice. Follow-ups are managed in the Follow-ups tab.
                                         </CardDescription>
                                     </CardHeader>
 
@@ -1399,55 +1340,36 @@ export default function Visit({ currentUser }) {
                                                 Templates
                                             </div>
                                             <div className="flex flex-wrap gap-2">
-                                                <button
-                                                    className={UI.chipBtn}
-                                                    onClick={() =>
-                                                        applyMulti({
-                                                            investigations: TEMPLATES.plan_format,
-                                                        })
-                                                    }
-                                                >
+                                                <button className={UI.chipBtn} onClick={() => applyMulti({ investigations: TEMPLATES.plan_format })}>
                                                     Plan format
                                                 </button>
                                                 <button className={UI.chipBtn} onClick={() => applyText("advice", TEMPLATES.advice_general)}>
                                                     General advice
+                                                </button>
+                                                <button className={UI.chipBtn} onClick={() => setActiveTab("followups")}>
+                                                    <CalendarDays className="h-4 w-4" />
+                                                    Go to Follow-ups
                                                 </button>
                                             </div>
                                         </div>
 
                                         <div className="grid gap-3 md:grid-cols-2">
                                             <Field label="Investigations">
-                                                <Textarea
-                                                    value={form.investigations}
-                                                    onChange={(e) => onField("investigations", e.target.value)}
-                                                    className={UI.textarea}
-                                                />
+                                                <Textarea value={form.investigations} onChange={(e) => onField("investigations", e.target.value)} className={UI.textarea} />
                                             </Field>
 
                                             <Field label="Treatment plan">
-                                                <Textarea
-                                                    value={form.treatment_plan}
-                                                    onChange={(e) => onField("treatment_plan", e.target.value)}
-                                                    className={UI.textarea}
-                                                />
+                                                <Textarea value={form.treatment_plan} onChange={(e) => onField("treatment_plan", e.target.value)} className={UI.textarea} />
                                             </Field>
                                         </div>
 
                                         <div className="grid gap-3 md:grid-cols-2">
                                             <Field label="Advice / counselling">
-                                                <Textarea
-                                                    value={form.advice}
-                                                    onChange={(e) => onField("advice", e.target.value)}
-                                                    className={UI.textarea}
-                                                />
+                                                <Textarea value={form.advice} onChange={(e) => onField("advice", e.target.value)} className={UI.textarea} />
                                             </Field>
 
                                             <Field label="Follow-up plan (clinical)">
-                                                <Textarea
-                                                    value={form.followup_plan}
-                                                    onChange={(e) => onField("followup_plan", e.target.value)}
-                                                    className={UI.textarea}
-                                                />
+                                                <Textarea value={form.followup_plan} onChange={(e) => onField("followup_plan", e.target.value)} className={UI.textarea} />
                                             </Field>
                                         </div>
 
@@ -1455,33 +1377,101 @@ export default function Visit({ currentUser }) {
 
                                         <div className="grid gap-3 md:grid-cols-2">
                                             <Field label="Referral notes (optional)">
-                                                <Textarea
-                                                    value={form.referral_notes}
-                                                    onChange={(e) => onField("referral_notes", e.target.value)}
-                                                    className={UI.textarea}
-                                                />
+                                                <Textarea value={form.referral_notes} onChange={(e) => onField("referral_notes", e.target.value)} className={UI.textarea} />
                                             </Field>
 
                                             <Field label="Procedure notes (optional)">
-                                                <Textarea
-                                                    value={form.procedure_notes}
-                                                    onChange={(e) => onField("procedure_notes", e.target.value)}
-                                                    className={UI.textarea}
-                                                />
+                                                <Textarea value={form.procedure_notes} onChange={(e) => onField("procedure_notes", e.target.value)} className={UI.textarea} />
                                             </Field>
                                         </div>
 
                                         <Field label="Counselling notes (optional)">
-                                            <Textarea
-                                                value={form.counselling_notes}
-                                                onChange={(e) => onField("counselling_notes", e.target.value)}
-                                                className={UI.textarea}
-                                            />
+                                            <Textarea value={form.counselling_notes} onChange={(e) => onField("counselling_notes", e.target.value)} className={UI.textarea} />
                                         </Field>
 
-                                        <Separator className="bg-black/10" />
+                                        <div className={cx(UI.softBox, "flex items-center justify-between gap-2")}>
+                                            <div className="text-[12px] text-slate-600 inline-flex items-center gap-2">
+                                                <ScrollText className="h-4 w-4 text-slate-500" />
+                                                Plan should match Dx + orders.
+                                            </div>
+                                            <Button
+                                                type="button"
+                                                className="h-11 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-semibold"
+                                                onClick={save}
+                                                disabled={saving || !hasChanges}
+                                            >
+                                                {saving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+                                                Save
+                                            </Button>
+                                        </div>
+                                    </CardContent>
+                                </Card>
+                            </motion.div>
+                        )}
 
-                                        {/* Follow-up create */}
+                        {/* ORDERS */}
+                        {activeTab === "orders" && (
+                            <motion.div
+                                key="orders"
+                                initial={{ opacity: 0, y: 8 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -8 }}
+                                transition={{ duration: 0.14 }}
+                                className="space-y-4"
+                            >
+                                <Card className={cx(UI.glass)}>
+                                    <CardHeader className="border-b border-black/50 bg-white/60 backdrop-blur-xl">
+                                        <CardTitle className="text-base font-semibold text-slate-900">Orders</CardTitle>
+                                        <CardDescription className="text-[12px] text-slate-600">Lab / Radiology / Pharmacy orders.</CardDescription>
+                                    </CardHeader>
+
+                                    <CardContent className="pt-4 space-y-3">
+                                        <div className="flex flex-wrap gap-2">
+                                            <span className={UI.chip}>
+                                                <Microscope className="h-3.5 w-3.5" /> Lab
+                                            </span>
+                                            <span className={UI.chip}>
+                                                <ScanLine className="h-3.5 w-3.5" /> Radiology
+                                            </span>
+                                            <span className={UI.chip}>
+                                                <Pill className="h-3.5 w-3.5" /> Pharmacy
+                                            </span>
+                                        </div>
+
+                                        <QuickOrders
+                                            patient={quickOrdersPatient}
+                                            contextType="opd"
+                                            contextId={visitId}
+                                            opNumber={quickOrdersOpNumber}
+                                            ipNumber={quickOrdersIpNumber}
+                                            currentUser={currentUser}
+                                            defaultLocationId={undefined}
+                                        />
+                                    </CardContent>
+                                </Card>
+                            </motion.div>
+                        )}
+
+                        {/* ✅ FOLLOW-UPS (NEW TAB) */}
+                        {activeTab === "followups" && (
+                            <motion.div
+                                key="followups"
+                                initial={{ opacity: 0, y: 8 }}
+                                animate={{ opacity: 1, y: 0 }}
+                                exit={{ opacity: 0, y: -8 }}
+                                transition={{ duration: 0.14 }}
+                                className="space-y-4"
+                            >
+                                <Card className={cx(UI.glass)}>
+                                    <CardHeader className="border-b border-black/50 bg-white/60 backdrop-blur-xl">
+                                        <CardTitle className="text-base font-semibold text-slate-900">Follow-ups</CardTitle>
+                                        <CardDescription className="text-[12px] text-slate-600">
+                                            Create reminders and track follow-up history (patient-level).
+                                        </CardDescription>
+                                    </CardHeader>
+
+                                    <CardContent className="pt-4 space-y-4">
+                                        {/* Create Follow-up */}
                                         <div className={cx(UI.softBox, "space-y-3")}>
                                             <div className="flex items-center justify-between gap-2">
                                                 <div className="text-[12px] font-semibold text-slate-900 inline-flex items-center gap-2">
@@ -1523,234 +1513,25 @@ export default function Visit({ currentUser }) {
                                                     onClick={createFu}
                                                     disabled={fuSaving}
                                                 >
-                                                    {fuSaving ? (
-                                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                    ) : (
-                                                        <CalendarDays className="mr-2 h-4 w-4" />
-                                                    )}
+                                                    {fuSaving ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CalendarDays className="mr-2 h-4 w-4" />}
                                                     Create
                                                 </Button>
                                             </div>
-                                        </div>
 
-                                        <div className={cx(UI.softBox, "flex items-center justify-between gap-2")}>
-                                            <div className="text-[12px] text-slate-600 inline-flex items-center gap-2">
-                                                <ScrollText className="h-4 w-4 text-slate-500" />
-                                                Plan should match Dx + orders + Rx.
+                                            <div className="text-[12px] text-slate-600">
+                                                Tip: This follow-up will also be included in the <span className="font-semibold text-slate-900">Summary</span> and your PDF.
                                             </div>
-                                            <Button
-                                                type="button"
-                                                className="h-11 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-semibold"
-                                                onClick={save}
-                                                disabled={saving || !hasChanges}
-                                            >
-                                                {saving ? (
-                                                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                ) : (
-                                                    <CheckCircle2 className="mr-2 h-4 w-4" />
-                                                )}
-                                                Save
-                                            </Button>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            </motion.div>
-                        )}
-
-                        {/* ORDERS */}
-                        {activeTab === "orders" && (
-                            <motion.div
-                                key="orders"
-                                initial={{ opacity: 0, y: 8 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -8 }}
-                                transition={{ duration: 0.14 }}
-                                className="space-y-4"
-                            >
-                                <Card className={cx(UI.glass)}>
-                                    <CardHeader className="border-b border-black/50 bg-white/60 backdrop-blur-xl">
-                                        <CardTitle className="text-base font-semibold text-slate-900">
-                                            Orders
-                                        </CardTitle>
-                                        <CardDescription className="text-[12px] text-slate-600">
-                                            Lab / Radiology / Pharmacy orders.
-                                        </CardDescription>
-                                    </CardHeader>
-
-                                    <CardContent className="pt-4 space-y-3">
-                                        <div className="flex flex-wrap gap-2">
-                                            <span className={UI.chip}>
-                                                <Microscope className="h-3.5 w-3.5" /> Lab
-                                            </span>
-                                            <span className={UI.chip}>
-                                                <ScanLine className="h-3.5 w-3.5" /> Radiology
-                                            </span>
-                                            <span className={UI.chip}>
-                                                <Pill className="h-3.5 w-3.5" /> Pharmacy
-                                            </span>
                                         </div>
 
-                                        <QuickOrders
-                                            patient={quickOrdersPatient}
-                                            contextType="opd"
-                                            contextId={visitId}
-                                            opNumber={quickOrdersOpNumber}
-                                            ipNumber={quickOrdersIpNumber}
-                                            currentUser={currentUser}
-                                            defaultLocationId={undefined}
+                                        {/* History */}
+                                        <FollowupHistoryPanel
+                                            items={fuHistory}
+                                            loading={fuHistoryLoading}
+                                            onRefresh={() => loadFollowupHistory({ notify: true })}
+                                            compact={false}
+                                            title="Follow-up History"
+                                            subtitle="Automatically updated after you create a follow-up"
                                         />
-                                    </CardContent>
-                                </Card>
-                            </motion.div>
-                        )}
-
-                        {/* PRESCRIPTION */}
-                        {activeTab === "rx" && (
-                            <motion.div
-                                key="rx"
-                                initial={{ opacity: 0, y: 8 }}
-                                animate={{ opacity: 1, y: 0 }}
-                                exit={{ opacity: 0, y: -8 }}
-                                transition={{ duration: 0.14 }}
-                                className="space-y-4"
-                            >
-                                <Card className={cx(UI.glass)}>
-                                    <CardHeader className="border-b border-black/50 bg-white/60 backdrop-blur-xl">
-                                        <CardTitle className="text-base font-semibold text-slate-900">
-                                            Prescription
-                                        </CardTitle>
-                                        <CardDescription className="text-[12px] text-slate-600">
-                                            Add medicines and save.
-                                        </CardDescription>
-                                    </CardHeader>
-
-                                    <CardContent className="pt-4 space-y-4">
-                                        {rxLoading ? (
-                                            <div className="space-y-3">
-                                                <Skeleton className="h-10 w-64 rounded-2xl" />
-                                                <Skeleton className="h-28 w-full rounded-3xl" />
-                                            </div>
-                                        ) : (
-                                            <>
-                                                <Field label="Prescription notes (optional)">
-                                                    <Textarea
-                                                        value={rx.notes}
-                                                        onChange={(e) => setRx((r) => ({ ...r, notes: e.target.value }))}
-                                                        className={UI.textarea}
-                                                    />
-                                                </Field>
-
-                                                <div className="flex items-center justify-between gap-2">
-                                                    <div className="text-[12px] font-semibold text-slate-900 inline-flex items-center gap-2">
-                                                        <Pill className="h-4 w-4 text-slate-500" />
-                                                        Medicines
-                                                    </div>
-                                                    <Button
-                                                        type="button"
-                                                        variant="outline"
-                                                        className="h-10 rounded-2xl border-black/50 bg-white/85 font-semibold"
-                                                        onClick={addRxRow}
-                                                    >
-                                                        + Add medicine
-                                                    </Button>
-                                                </div>
-
-                                                {(rx.items || []).length === 0 ? (
-                                                    <div className={cx(UI.softBox, "text-[12px] text-slate-600")}>
-                                                        No medicines added yet.
-                                                    </div>
-                                                ) : (
-                                                    <div className="space-y-3">
-                                                        {(rx.items || []).map((it, idx) => (
-                                                            <div key={idx} className="rounded-3xl border border-black/50 bg-white/70 p-3">
-                                                                <div className="grid gap-3 md:grid-cols-12 md:items-end">
-                                                                    <div className="md:col-span-4">
-                                                                        <div className={UI.label}>Drug name</div>
-                                                                        <Input
-                                                                            value={it.drug_name || ""}
-                                                                            onChange={(e) => onRxItem(idx, "drug_name", e.target.value)}
-                                                                            placeholder="e.g., Tab Paracetamol"
-                                                                            className={UI.input}
-                                                                        />
-                                                                    </div>
-
-                                                                    <div className="md:col-span-2">
-                                                                        <div className={UI.label}>Strength</div>
-                                                                        <Input
-                                                                            value={it.strength || ""}
-                                                                            onChange={(e) => onRxItem(idx, "strength", e.target.value)}
-                                                                            placeholder="500 mg"
-                                                                            className={UI.input}
-                                                                        />
-                                                                    </div>
-
-                                                                    <div className="md:col-span-3">
-                                                                        <div className={UI.label}>Frequency</div>
-                                                                        <Input
-                                                                            value={it.frequency || ""}
-                                                                            onChange={(e) => onRxItem(idx, "frequency", e.target.value)}
-                                                                            placeholder="1-0-1 / BD / TID"
-                                                                            className={UI.input}
-                                                                        />
-                                                                    </div>
-
-                                                                    <div className="md:col-span-1">
-                                                                        <div className={UI.label}>Days</div>
-                                                                        <Input
-                                                                            type="number"
-                                                                            value={it.duration_days ?? 0}
-                                                                            onChange={(e) => onRxItem(idx, "duration_days", e.target.value)}
-                                                                            className={UI.input}
-                                                                        />
-                                                                    </div>
-
-                                                                    <div className="md:col-span-1">
-                                                                        <div className={UI.label}>Qty</div>
-                                                                        <Input
-                                                                            type="number"
-                                                                            value={it.quantity ?? 0}
-                                                                            onChange={(e) => onRxItem(idx, "quantity", e.target.value)}
-                                                                            className={UI.input}
-                                                                        />
-                                                                    </div>
-
-                                                                    <div className="md:col-span-1 flex md:justify-end">
-                                                                        <Button
-                                                                            type="button"
-                                                                            variant="outline"
-                                                                            className="h-11 rounded-2xl border-black/50 bg-white/85 font-semibold"
-                                                                            onClick={() => removeRxRow(idx)}
-                                                                        >
-                                                                            Remove
-                                                                        </Button>
-                                                                    </div>
-                                                                </div>
-                                                            </div>
-                                                        ))}
-                                                    </div>
-                                                )}
-
-                                                <div className={cx(UI.softBox, "flex items-center justify-between gap-2")}>
-                                                    <div className="text-[12px] text-slate-600 inline-flex items-center gap-2">
-                                                        <ClipboardSignature className="h-4 w-4 text-slate-500" />
-                                                        Save prescription after adding medicines.
-                                                    </div>
-                                                    <Button
-                                                        type="button"
-                                                        className="h-11 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-semibold"
-                                                        onClick={saveRx}
-                                                        disabled={rxSaving}
-                                                    >
-                                                        {rxSaving ? (
-                                                            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                        ) : (
-                                                            <CheckCircle2 className="mr-2 h-4 w-4" />
-                                                        )}
-                                                        Save prescription
-                                                    </Button>
-                                                </div>
-                                            </>
-                                        )}
                                     </CardContent>
                                 </Card>
                             </motion.div>
@@ -1768,12 +1549,8 @@ export default function Visit({ currentUser }) {
                             >
                                 <Card className={cx(UI.glass)}>
                                     <CardHeader className="border-b border-black/50 bg-white/60 backdrop-blur-xl">
-                                        <CardTitle className="text-base font-semibold text-slate-900">
-                                            Summary
-                                        </CardTitle>
-                                        <CardDescription className="text-[12px] text-slate-600">
-                                            Copy or print PDF.
-                                        </CardDescription>
+                                        <CardTitle className="text-base font-semibold text-slate-900">Summary</CardTitle>
+                                        <CardDescription className="text-[12px] text-slate-600">Copy or print PDF.</CardDescription>
                                     </CardHeader>
 
                                     <CardContent className="pt-4 space-y-4">
@@ -1801,11 +1578,7 @@ export default function Visit({ currentUser }) {
                                                     onClick={previewPdf}
                                                     disabled={pdfing}
                                                 >
-                                                    {pdfing ? (
-                                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                    ) : (
-                                                        <Eye className="mr-2 h-4 w-4" />
-                                                    )}
+                                                    {pdfing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Eye className="mr-2 h-4 w-4" />}
                                                     Preview PDF
                                                 </Button>
 
@@ -1816,15 +1589,20 @@ export default function Visit({ currentUser }) {
                                                     onClick={printPdf}
                                                     disabled={pdfing}
                                                 >
-                                                    {pdfing ? (
-                                                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                                    ) : (
-                                                        <Printer className="mr-2 h-4 w-4" />
-                                                    )}
+                                                    {pdfing ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Printer className="mr-2 h-4 w-4" />}
                                                     Print PDF
                                                 </Button>
                                             </div>
                                         </div>
+
+                                        <FollowupHistoryPanel
+                                            items={fuHistory}
+                                            loading={fuHistoryLoading}
+                                            onRefresh={() => loadFollowupHistory({ notify: true })}
+                                            compact={false}
+                                            title="Follow-up Details"
+                                            subtitle="This will also be included in your server Summary PDF"
+                                        />
 
                                         <pre className="whitespace-pre-wrap rounded-3xl border border-black/50 bg-white/80 p-4 text-[12.5px] leading-relaxed text-slate-800">
                                             {summaryText}

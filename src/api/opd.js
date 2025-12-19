@@ -520,6 +520,11 @@ export function saveVisitPrescription(visitId, payload) {
 // }
 
 export const fetchVisitSummaryPdf = (visitId) =>
-  API.get(`/opd/visits/${visitId}/summary.pdf`, {
-    responseType: "arraybuffer", // IMPORTANT
-  })
+    API.get(`/opd/visits/${visitId}/summary.pdf`, {
+        responseType: "arraybuffer", // IMPORTANT
+    })
+
+export const listVisitFollowups = (visitId, { scope = "patient", limit = 50 } = {}) =>
+    API.get(`/opd/visits/${visitId}/followups`, {
+        params: { scope, limit },
+    })
