@@ -45,6 +45,7 @@ import {
   Cpu,
   BookOpenText,
   Wallet,
+  Database, // ✅ add
 } from 'lucide-react'
 
 const defaultPrimary = '#2563eb'
@@ -57,9 +58,41 @@ const makeActiveBorder = (primary) => {
   return `${primary}33`
 }
 
+// ✅ Provider code (no env)
+const PROVIDER_TENANT_CODE = 'NUTRYAH'
+
+function decodeJwtPayload(token) {
+  try {
+    if (!token) return null
+    const parts = token.split('.')
+    if (parts.length < 2) return null
+    const b64url = parts[1]
+    const b64 = b64url.replace(/-/g, '+').replace(/_/g, '/')
+    const pad = b64.length % 4 ? '='.repeat(4 - (b64.length % 4)) : ''
+    return JSON.parse(atob(b64 + pad))
+  } catch {
+    return null
+  }
+}
+
+function isProviderTenant() {
+  const token = localStorage.getItem('access_token')
+  const payload = decodeJwtPayload(token)
+
+  const tokenTcode = String(payload?.tcode || '').trim().toUpperCase()
+  const tenantCode = String(localStorage.getItem('tenant_code') || '')
+    .trim()
+    .toUpperCase()
+
+  const provider = String(PROVIDER_TENANT_CODE).trim().toUpperCase()
+  return (tokenTcode && tokenTcode === provider) || (tenantCode && tenantCode === provider)
+}
+
 /**
  * Item is visible if admin OR has ANY code in reqAny.
  * Group is visible if at least one of its items is visible.
+ *
+ * ✅ Added: providerOnly flag for provider screens.
  */
 const GROUPS = [
   {
@@ -443,13 +476,6 @@ const GROUPS = [
         icon: CalendarDays,
         reqAny: ['ot.schedule.view'],
       },
-      // {
-      //   key: 'ot-logs',
-      //   label: 'OT Logs / Register',
-      //   to: '/ot/logs',
-      //   icon: ClipboardList,
-      //   reqAny: ['ot.cases.view', 'ot.cases.create', 'ipd.view'],
-      // },
     ],
   },
 
@@ -498,6 +524,23 @@ const GROUPS = [
       },
     ],
   },
+
+  // ✅ Provider-only (added)
+  {
+    key: 'provider',
+    label: 'Provider Console',
+    icon: Database,
+    items: [
+      {
+        key: 'master-migrations',
+        label: 'Master Migrations',
+        to: '/master/migrations',
+        icon: Database,
+        reqAny: ['master.migrations.view'],
+        providerOnly: true,
+      },
+    ],
+  },
 ]
 
 export default function Sidebar() {
@@ -505,7 +548,13 @@ export default function Sidebar() {
   const modules = useAuth((s) => s.modules) || {}
   const location = useLocation()
 
-  const { sidebarCollapsed: collapsed, toggleCollapse, sidebarMobileOpen, closeMobile } = useUI()
+  const {
+    sidebarCollapsed: collapsed,
+    toggleCollapse,
+    sidebarMobileOpen,
+    closeMobile,
+  } = useUI()
+
   const { branding } = useBranding() || {}
 
   // ✅ detect desktop (md and above) so collapse works ONLY on desktop
@@ -517,7 +566,6 @@ export default function Sidebar() {
     if (typeof window === 'undefined') return
     const mq = window.matchMedia('(min-width: 768px)')
     const onChange = (e) => setIsDesktop(e.matches)
-    // safari compatibility
     if (mq.addEventListener) mq.addEventListener('change', onChange)
     else mq.addListener(onChange)
     setIsDesktop(mq.matches)
@@ -539,6 +587,8 @@ export default function Sidebar() {
 
   const orgName = (branding?.org_name || '').trim() || 'NABH HIMS'
   const orgTagline = (branding?.org_tagline || '').trim() || 'Smart • Secure • NABH-Standard'
+  const logoUrl =
+    (branding?.org_logo_url || branding?.logo_url || branding?.logo || '').toString().trim() || null
 
   const initials = useMemo(() => {
     const n = branding?.org_name?.trim()
@@ -563,6 +613,7 @@ export default function Sidebar() {
   }, [sidebarMobileOpen])
 
   const admin = !!user?.is_admin
+  const provider = useMemo(() => isProviderTenant(), [])
 
   const grantedSet = useMemo(() => {
     const fromModules = Object.values(modules)
@@ -577,28 +628,32 @@ export default function Sidebar() {
     return new Set([...(fromModules || []), ...(fromUser || [])])
   }, [modules, user])
 
-  const hasAny = (codes = []) => (admin ? true : codes.some((c) => grantedSet.has(c)))
-
-  const groups = useMemo(() => {
-    return GROUPS.map((g) => {
-      if (g.flatLink) {
-        const visible = hasAny(g.flatLink.reqAny)
-        return { ...g, _visible: visible }
-      }
-      const items = (g.items || []).map((it) => ({
-        ...it,
-        _visible: hasAny(it.reqAny),
-      }))
-      const visible = items.some((it) => it._visible)
-      return { ...g, items, _visible: visible }
-    }).filter((g) => g._visible)
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [admin, grantedSet])
+  const hasAny = (codes = []) => (admin ? true : (codes || []).some((c) => grantedSet.has(c)))
 
   const isGroupRouteActive = (g) => {
     if (g.flatLink) return location.pathname.startsWith(g.flatLink.to)
     return (g.items || []).some((it) => location.pathname.startsWith(it.to))
   }
+
+  const groups = useMemo(() => {
+    return GROUPS.map((g) => {
+      if (g.flatLink) {
+        // providerOnly on flatLink (if ever used)
+        const providerOk = g.flatLink?.providerOnly ? provider : true
+        const visible = providerOk && hasAny(g.flatLink.reqAny)
+        return { ...g, _visible: visible }
+      }
+
+      const items = (g.items || []).map((it) => {
+        const providerOk = it.providerOnly ? provider : true
+        return { ...it, _visible: providerOk && hasAny(it.reqAny) }
+      })
+
+      const visible = items.some((it) => it._visible)
+      return { ...g, items, _visible: visible }
+      // eslint-disable-next-line react-hooks/exhaustive-deps
+    }).filter((g) => g._visible)
+  }, [admin, grantedSet, provider])
 
   const [open, setOpen] = useState({})
   useEffect(() => {
@@ -629,7 +684,7 @@ export default function Sidebar() {
       <div
         onClick={closeMobile}
         className={[
-          'fixed inset-0 z-100 bg-black/35 backdrop-blur-sm transition-opacity md:hidden',
+          'fixed inset-0 z-[100] bg-black/35 backdrop-blur-sm transition-opacity md:hidden',
           sidebarMobileOpen ? 'opacity-100' : 'pointer-events-none opacity-0',
         ].join(' ')}
       />
@@ -659,17 +714,45 @@ export default function Sidebar() {
               : 'px-3 py-3 flex items-center justify-between gap-2'
           }
         >
-          <div
-            className={
-              effectiveCollapsed ? 'flex flex-col items-center gap-2' : 'flex items-center gap-2 min-w-0'
-            }
-          >
-            
+          <div className={effectiveCollapsed ? 'flex flex-col items-center gap-2' : 'flex items-center gap-2 min-w-0'}>
+            {/* ✅ Logo / Initials (was missing) */}
+            <div
+              className={[
+                'grid place-items-center rounded-2xl border shadow-sm overflow-hidden shrink-0',
+                effectiveCollapsed ? 'h-10 w-10' : 'h-10 w-10',
+              ].join(' ')}
+              style={{ backgroundColor: iconBgColor, borderColor: makeActiveBorder(primary) }}
+              title={orgName}
+            >
+              {logoUrl ? (
+                <img
+                  src={logoUrl}
+                  alt={orgName}
+                  className="h-full w-full object-cover"
+                  onError={(e) => {
+                    // fallback to initials if logo broken
+                    e.currentTarget.style.display = 'none'
+                  }}
+                />
+              ) : (
+                <span className="text-sm font-extrabold tracking-tight" style={{ color: primary }}>
+                  {initials}
+                </span>
+              )}
+            </div>
 
             {!effectiveCollapsed && (
               <div className="truncate">
-                <div className="text-xs font-semibold tracking-tight leading-snug">{orgName}</div>
-                {orgTagline ? <div className="text-[10px] leading-tight">{orgTagline}</div> : null}
+                <div className="text-xs font-semibold tracking-tight leading-snug truncate">{orgName}</div>
+                {orgTagline ? <div className="text-[10px] leading-tight text-slate-500 truncate">{orgTagline}</div> : null}
+                {/* ✅ Provider badge (only if provider tenant) */}
+                {provider ? (
+                  <div className="mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold"
+                    style={{ borderColor: activeBorder, color: primary, backgroundColor: activeBg }}
+                  >
+                    Provider
+                  </div>
+                ) : null}
               </div>
             )}
           </div>
@@ -705,7 +788,7 @@ export default function Sidebar() {
           </button>
         </div>
 
-        {/* ✅ Menu (scrollable on mobile + desktop) */}
+        {/* ✅ Menu */}
         <nav
           className="min-h-0 flex-1 overflow-y-auto no-scrollbar y-fade px-2 pb-4 pt-1 space-y-1 overscroll-contain touch-pan-y"
           style={{ WebkitOverflowScrolling: 'touch' }}
@@ -728,11 +811,7 @@ export default function Sidebar() {
                   ].join(' ')}
                   style={({ isActive }) =>
                     isActive
-                      ? {
-                        color: '#ffffff',
-                        backgroundColor: primary,
-                        boxShadow: `0 0 0 1px ${activeBorder}`,
-                      }
+                      ? { color: '#ffffff', backgroundColor: primary, boxShadow: `0 0 0 1px ${activeBorder}` }
                       : { color: sidebarTextColor }
                   }
                   title={effectiveCollapsed ? group.label : undefined}
@@ -803,7 +882,11 @@ export default function Sidebar() {
                             className="group relative flex h-9 items-center gap-2 rounded-lg px-2 text-sm leading-none transition-colors duration-200 ease-out active:scale-[0.99]"
                             style={({ isActive }) =>
                               isActive
-                                ? { color: primary, backgroundColor: activeBg, boxShadow: `0 0 0 1px ${activeBorder}` }
+                                ? {
+                                    color: primary,
+                                    backgroundColor: activeBg,
+                                    boxShadow: `0 0 0 1px ${activeBorder}`,
+                                  }
                                 : { color: sidebarTextColor }
                             }
                           >
@@ -839,7 +922,11 @@ export default function Sidebar() {
                               className="flex items-center gap-2 rounded-xl px-2.5 py-2 text-sm hover:bg-slate-50 transition"
                               style={({ isActive }) =>
                                 isActive
-                                  ? { color: primary, backgroundColor: activeBg, boxShadow: `0 0 0 1px ${activeBorder}` }
+                                  ? {
+                                      color: primary,
+                                      backgroundColor: activeBg,
+                                      boxShadow: `0 0 0 1px ${activeBorder}`,
+                                    }
                                   : { color: '#0f172a' }
                               }
                             >
