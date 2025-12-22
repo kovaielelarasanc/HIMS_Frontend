@@ -1,4 +1,4 @@
-// src/pages/Dashboard.jsx
+// FILE: src/pages/Dashboard.jsx
 import { useEffect, useMemo, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { Link } from "react-router-dom"
@@ -45,7 +45,6 @@ import { cn } from "@/lib/utils"
 
 /**
  * ✅ Adjust routes here to match your app router
- * (I kept common ones based on your modules)
  */
 const ROUTES = {
   patients: "/patients",
@@ -71,6 +70,16 @@ function addDays(base, delta) {
   const d = new Date(base)
   d.setDate(d.getDate() + delta)
   return d
+}
+
+function isFiniteNumber(x) {
+  const n = Number(x)
+  return Number.isFinite(n) ? n : 0
+}
+
+function formatINR(x) {
+  const n = isFiniteNumber(x)
+  return `₹ ${n.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`
 }
 
 // Animations (premium but subtle)
@@ -116,12 +125,19 @@ export default function Dashboard() {
   const [error, setError] = useState("")
   const [refreshKey, setRefreshKey] = useState(0)
 
-  const datesValid = Boolean(dateFrom && dateTo)
+  const datesValid = Boolean(dateFrom && dateTo && dateFrom <= dateTo)
 
   useEffect(() => {
-    if (!datesValid) {
+    if (!dateFrom || !dateTo) {
       setIsLoading(false)
       setError("")
+      setData(null)
+      return
+    }
+
+    if (dateFrom > dateTo) {
+      setIsLoading(false)
+      setError("Invalid date range: From date must be <= To date.")
       setData(null)
       return
     }
@@ -132,13 +148,13 @@ export default function Dashboard() {
       try {
         const params = { date_from: dateFrom, date_to: dateTo }
         const res = await fetchDashboardData(params)
-        setData(res.data)
+        setData(res?.data ?? null)
         setLastUpdated(new Date())
       } catch (err) {
         console.error(err)
         setError(
           err?.response?.data?.detail ||
-            "Failed to load dashboard data. Please try again."
+          "Failed to load dashboard data. Please try again."
         )
         setData(null)
       } finally {
@@ -147,7 +163,7 @@ export default function Dashboard() {
     }
 
     load()
-  }, [dateFrom, dateTo, refreshKey, datesValid])
+  }, [dateFrom, dateTo, refreshKey])
 
   const caps = data?.filters?.caps || {}
   const hasCaps = Object.keys(caps).length > 0
@@ -207,8 +223,6 @@ export default function Dashboard() {
       const first = new Date(base.getFullYear(), base.getMonth(), 1)
       setDateFrom(formatDateInputLocal(first))
       setDateTo(formatDateInputLocal(base))
-    } else {
-      // custom
     }
   }
 
@@ -235,25 +249,24 @@ export default function Dashboard() {
   const quickPills = useMemo(() => {
     if (!data) return []
 
-    const findMetric = (code) =>
-      metricWidgets.find((w) => w.code === code)?.data ?? 0
+    const findMetric = (code) => metricWidgets.find((w) => w.code === code)?.data ?? 0
 
-    const newPatients = Number(findMetric("metric_new_patients")) || 0
-    const opdVisits = Number(findMetric("metric_opd_visits")) || 0
-    const ipdAdmissions = Number(findMetric("metric_ipd_admissions")) || 0
+    const newPatients = isFiniteNumber(findMetric("metric_new_patients"))
+    const opdVisits = isFiniteNumber(findMetric("metric_opd_visits"))
+    const ipdAdmissions = isFiniteNumber(findMetric("metric_ipd_admissions"))
 
     const bedData = bedOccWidget?.data || {}
-    const occupancyPct = bedData.occupancy_pct ?? 0
+    const occupancyPct = isFiniteNumber(bedData.occupancy_pct ?? 0)
 
     const streams = revenueStreamWidget?.data || []
     const topStream =
       Array.isArray(streams) && streams.length
-        ? [...streams].sort((a, b) => (b.value || 0) - (a.value || 0))[0]
+        ? [...streams].sort((a, b) => isFiniteNumber(b.value) - isFiniteNumber(a.value))[0]
         : null
 
     const pills = []
 
-    if (caps.can_patients && metricWidgets.length) {
+    if (caps.can_patients) {
       pills.push({
         key: "patients",
         label: "New Patients",
@@ -263,7 +276,7 @@ export default function Dashboard() {
         tone: "sky",
       })
     }
-    if (caps.can_opd && metricWidgets.length) {
+    if (caps.can_opd) {
       pills.push({
         key: "opd",
         label: "OPD Visits",
@@ -273,7 +286,7 @@ export default function Dashboard() {
         tone: "emerald",
       })
     }
-    if (caps.can_ipd && metricWidgets.length) {
+    if (caps.can_ipd) {
       pills.push({
         key: "ipd",
         label: "IPD Admissions",
@@ -282,8 +295,6 @@ export default function Dashboard() {
         icon: BedDouble,
         tone: "violet",
       })
-    }
-    if (caps.can_ipd && bedOccWidget) {
       pills.push({
         key: "beds",
         label: "Bed Occupancy",
@@ -294,6 +305,7 @@ export default function Dashboard() {
         tone: "amber",
       })
     }
+
     if (
       topStream &&
       (caps.can_billing || caps.can_pharmacy || caps.can_lab || caps.can_radiology)
@@ -301,50 +313,38 @@ export default function Dashboard() {
       pills.push({
         key: "revenue",
         label: "Top Stream",
-        value: topStream.value || 0,
+        value: isFiniteNumber(topStream.value || 0),
         helper: topStream.label || "—",
         icon:
           topStream.label === "Pharmacy"
             ? Pill
             : topStream.label === "Lab"
-            ? FlaskConical
-            : topStream.label === "Radiology"
-            ? ScanLine
-            : IndianRupee,
+              ? FlaskConical
+              : topStream.label === "Radiology"
+                ? ScanLine
+                : IndianRupee,
         tone: "rose",
       })
     }
 
-    return pills.filter(Boolean)
-  }, [
-    data,
-    metricWidgets,
-    bedOccWidget,
-    revenueStreamWidget,
-    caps.can_patients,
-    caps.can_opd,
-    caps.can_ipd,
-    caps.can_billing,
-    caps.can_pharmacy,
-    caps.can_lab,
-    caps.can_radiology,
-  ])
+    return pills
+  }, [data, metricWidgets, bedOccWidget, revenueStreamWidget, caps])
 
-  // Modern “Quick Actions” (access multiple things)
+  // Quick Actions
   const quickActions = useMemo(() => {
     const findMetricValue = (code) => {
       const raw = metricWidgets.find((w) => w.code === code)?.data
-      const v =
+      return isFiniteNumber(
         typeof raw === "number"
           ? raw
           : typeof raw === "object" && raw
-          ? raw.value ?? raw.total ?? raw.amount ?? 0
-          : Number(raw || 0)
-      return Number(v || 0)
+            ? raw.value ?? raw.total ?? raw.amount ?? 0
+            : Number(raw || 0)
+      )
     }
 
     const bed = bedOccWidget?.data || {}
-    const occupancy = typeof bed.occupancy_pct === "number" ? bed.occupancy_pct : null
+    const occupancy = Number.isFinite(Number(bed.occupancy_pct)) ? Number(bed.occupancy_pct) : null
 
     const list = []
 
@@ -477,7 +477,7 @@ export default function Dashboard() {
       initial="hidden"
       animate="visible"
     >
-      {/* Premium background accents (warm + modern) */}
+      {/* Premium background accents */}
       <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
         <div className="absolute -top-24 right-0 h-56 w-56 rounded-full bg-amber-200/35 blur-3xl" />
         <div className="absolute -bottom-24 left-0 h-56 w-56 rounded-full bg-sky-200/35 blur-3xl" />
@@ -485,7 +485,7 @@ export default function Dashboard() {
       </div>
 
       <div className="mx-auto w-full max-w-7xl space-y-4">
-        {/* HEADER (Apple premium) */}
+        {/* HEADER */}
         <div className="space-y-3">
           <motion.div
             className={cn(
@@ -500,12 +500,12 @@ export default function Dashboard() {
                   <div className="flex flex-wrap items-center gap-2">
                     <div className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] font-medium text-slate-700">
                       <Sparkles className="h-3.5 w-3.5 text-amber-600" />
-                      Apple-premium dashboard
+                      NUTRYAH-premium dashboard
                       <Dot className="h-4 w-4 text-emerald-500" />
                       <span className="text-slate-600">Live</span>
                     </div>
 
-                    <div className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] text-slate-700">
+                    <div className="inline-flex items-center gap-1.5 rounded-full border border-slate-200iG200 bg-white px-2.5 py-1 text-[11px] text-slate-700">
                       <Calendar className="h-3.5 w-3.5 text-slate-500" />
                       <span className="font-medium">{rangeLabel}</span>
                     </div>
@@ -624,10 +624,9 @@ export default function Dashboard() {
               </div>
             </div>
 
-            {/* Top divider */}
             <div className="h-px w-full bg-gradient-to-r from-transparent via-slate-200/90 to-transparent" />
 
-            {/* Quick Actions (access multiple things) */}
+            {/* Quick Actions */}
             <div className="p-3 md:p-5 pt-3">
               <div className="flex items-center gap-2 mb-3">
                 <span className="inline-flex h-8 w-8 items-center justify-center rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -664,11 +663,7 @@ export default function Dashboard() {
           {/* ERROR */}
           <AnimatePresence>
             {error && (
-              <motion.div
-                initial={{ opacity: 0, y: -4 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -4 }}
-              >
+              <motion.div initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}>
                 <Alert variant="destructive">
                   <AlertCircle className="h-4 w-4 mt-0.5" />
                   <div>
@@ -680,7 +675,7 @@ export default function Dashboard() {
             )}
           </AnimatePresence>
 
-          {/* AT A GLANCE STRIP */}
+          {/* AT A GLANCE */}
           {!isLoading && data && quickPills.length > 0 && (
             <motion.div
               className={cn(
@@ -704,24 +699,8 @@ export default function Dashboard() {
           )}
         </div>
 
-        {/* NO DATE SELECTED */}
-        {!datesValid && !isLoading && !error && (
-          <Card className="rounded-3xl border border-dashed border-slate-200 bg-white/70 backdrop-blur-xl">
-            <CardContent className="py-7 flex flex-col items-center text-center gap-2">
-              <Calendar className="w-8 h-8 text-slate-400 mb-1" />
-              <p className="text-sm font-medium text-slate-700">
-                Select a date range to view dashboard data.
-              </p>
-              <p className="text-xs text-slate-500 max-w-xs">
-                Choose both <span className="font-semibold">From</span> and{" "}
-                <span className="font-semibold">To</span> dates above.
-              </p>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* LOADING (content) */}
-        {isLoading && datesValid && !data && (
+        {/* LOADING */}
+        {isLoading && dateFrom && dateTo && (
           <div className="space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
               <Skeleton className="h-24 rounded-3xl" />
@@ -736,12 +715,7 @@ export default function Dashboard() {
 
         {/* MAIN CONTENT */}
         {!isLoading && datesValid && data && (
-          <motion.div
-            variants={blockVariants}
-            initial="hidden"
-            animate="visible"
-            className="pb-4"
-          >
+          <motion.div variants={blockVariants} initial="hidden" animate="visible" className="pb-4">
             <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
               <div className="flex justify-between items-center mb-2">
                 <TabsList
@@ -767,7 +741,7 @@ export default function Dashboard() {
                 </TabsList>
               </div>
 
-              {/* OVERVIEW TAB */}
+              {/* OVERVIEW */}
               <TabsContent value="overview" className="space-y-4 mt-2">
                 {metricWidgets.length > 0 && (
                   <section className="space-y-2">
@@ -779,12 +753,8 @@ export default function Dashboard() {
                       animate="visible"
                     >
                       {metricWidgets.map((w) => (
-                        <motion.div
-                          key={w.code}
-                          variants={metricItemVariants}
-                          whileHover={{ y: -3, scale: 1.01 }}
-                          transition={{ type: "spring", stiffness: 240, damping: 20 }}
-                        >
+                        <motion.div key={w.code} variants={metricItemVariants} whileHover={{ y: -3, scale: 1.01 }}
+                          transition={{ type: "spring", stiffness: 240, damping: 20 }}>
                           <MetricWidgetCard widget={w} />
                         </motion.div>
                       ))}
@@ -801,7 +771,7 @@ export default function Dashboard() {
                 </section>
               </TabsContent>
 
-              {/* CLINICAL TAB */}
+              {/* CLINICAL */}
               <TabsContent value="clinical" className="space-y-4 mt-2">
                 {nonRevenueMetricWidgets.length > 0 && (
                   <section className="space-y-2">
@@ -813,12 +783,8 @@ export default function Dashboard() {
                       animate="visible"
                     >
                       {nonRevenueMetricWidgets.map((w) => (
-                        <motion.div
-                          key={w.code}
-                          variants={metricItemVariants}
-                          whileHover={{ y: -3, scale: 1.01 }}
-                          transition={{ type: "spring", stiffness: 240, damping: 20 }}
-                        >
+                        <motion.div key={w.code} variants={metricItemVariants} whileHover={{ y: -3, scale: 1.01 }}
+                          transition={{ type: "spring", stiffness: 240, damping: 20 }}>
                           <MetricWidgetCard widget={w} />
                         </motion.div>
                       ))}
@@ -850,7 +816,7 @@ export default function Dashboard() {
                 )}
               </TabsContent>
 
-              {/* REVENUE TAB */}
+              {/* REVENUE */}
               <TabsContent value="revenue" className="space-y-4 mt-2">
                 {revenueMetricWidgets.length > 0 && (
                   <section className="space-y-2">
@@ -862,12 +828,8 @@ export default function Dashboard() {
                       animate="visible"
                     >
                       {revenueMetricWidgets.map((w) => (
-                        <motion.div
-                          key={w.code}
-                          variants={metricItemVariants}
-                          whileHover={{ y: -3, scale: 1.01 }}
-                          transition={{ type: "spring", stiffness: 240, damping: 20 }}
-                        >
+                        <motion.div key={w.code} variants={metricItemVariants} whileHover={{ y: -3, scale: 1.01 }}
+                          transition={{ type: "spring", stiffness: 240, damping: 20 }}>
                           <MetricWidgetCard widget={w} />
                         </motion.div>
                       ))}
@@ -900,7 +862,7 @@ export default function Dashboard() {
                 )}
               </TabsContent>
 
-              {/* OPERATIONS TAB */}
+              {/* OPERATIONS */}
               <TabsContent value="operations" className="space-y-4 mt-2">
                 <section className="space-y-2">
                   <SectionTitle icon={Layers} title="Capacity & utilization" subtitle="Occupancy + flow side by side" />
@@ -938,12 +900,7 @@ export default function Dashboard() {
 
 function PresetSegment({ items, active, onChange }) {
   return (
-    <div
-      className={cn(
-        "relative rounded-2xl border border-slate-200 bg-white px-1 py-1",
-        "shadow-sm"
-      )}
-    >
+    <div className={cn("relative rounded-2xl border border-slate-200 bg-white px-1 py-1", "shadow-sm")}>
       <div className="grid grid-cols-5 gap-1">
         {items.map((p) => {
           const isActive = active === p.key
@@ -1029,7 +986,7 @@ function QuickActionTile({ action }) {
         </div>
 
         <div className="flex items-center gap-2">
-          {typeof stat === "number" && !Number.isNaN(stat) && (
+          {typeof stat === "number" && Number.isFinite(stat) && (
             <div className="text-right">
               <div className="text-[16px] font-semibold text-slate-900 leading-tight">
                 {stat.toLocaleString("en-IN", { maximumFractionDigits: statSuffix === "%" ? 1 : 0 })}
@@ -1052,8 +1009,6 @@ function QuickActionTile({ action }) {
     </Link>
   )
 }
-
-/* ---------- QUICK PILL ---------- */
 
 function QuickPill({ pill }) {
   const { label, value, helper, icon: Icon, tone, suffix } = pill
@@ -1080,15 +1035,9 @@ function QuickPill({ pill }) {
         {Icon && <Icon className="w-4 h-4 text-slate-800" />}
       </div>
       <div className="space-y-0.5">
-        <div className="text-[10px] uppercase tracking-wide font-semibold opacity-90">
-          {label}
-        </div>
+        <div className="text-[10px] uppercase tracking-wide font-semibold opacity-90">{label}</div>
         <div className="text-base sm:text-lg font-semibold leading-tight">
-          {typeof value === "number"
-            ? value.toLocaleString("en-IN", {
-                maximumFractionDigits: suffix === "%" ? 1 : 0,
-              })
-            : value}
+          {typeof value === "number" ? value.toLocaleString("en-IN", { maximumFractionDigits: suffix === "%" ? 1 : 0 }) : value}
           {suffix && <span className="ml-0.5 text-[11px]">{suffix}</span>}
         </div>
         {helper && <div className="text-[11px] leading-tight opacity-80">{helper}</div>}
@@ -1097,25 +1046,23 @@ function QuickPill({ pill }) {
   )
 }
 
-/* ---------- METRIC CARD ---------- */
-
 function MetricWidgetCard({ widget }) {
   const raw = widget.data
+  const isMoney =
+    widget?.config?.currency === "INR" ||
+    widget?.code?.startsWith("revenue_") ||
+    widget?.code === "billing_summary"
+
   const value =
     typeof raw === "number"
       ? raw
       : typeof raw === "string"
-      ? raw
-      : typeof raw === "object" && raw !== null
-      ? raw.value ?? raw.total ?? raw.amount ?? 0
-      : 0
+        ? Number(raw || 0)
+        : typeof raw === "object" && raw !== null
+          ? raw.value ?? raw.total ?? raw.amount ?? 0
+          : 0
 
-  const display =
-    typeof value === "number"
-      ? value.toLocaleString("en-IN", {
-          maximumFractionDigits: widget.code.includes("revenue") ? 0 : 0,
-        })
-      : value
+  const display = isMoney ? formatINR(value) : isFiniteNumber(value).toLocaleString("en-IN")
 
   return (
     <Card
@@ -1130,10 +1077,7 @@ function MetricWidgetCard({ widget }) {
           <span className="h-2 w-2 rounded-full bg-emerald-500 shadow-[0_0_0_4px_rgba(16,185,129,0.18)]" />
           {widget.title}
         </CardTitle>
-        <Badge
-          variant="outline"
-          className="text-[9px] uppercase tracking-wide border-slate-200 text-slate-500 bg-white"
-        >
+        <Badge variant="outline" className="text-[9px] uppercase tracking-wide border-slate-200 text-slate-500 bg-white">
           {widget.code}
         </Badge>
       </CardHeader>
@@ -1141,15 +1085,11 @@ function MetricWidgetCard({ widget }) {
         <div className="text-2xl md:text-3xl font-semibold tracking-tight mt-1 text-slate-900">
           {display}
         </div>
-        {widget.description && (
-          <p className="text-[12px] text-slate-600 mt-1">{widget.description}</p>
-        )}
+        {widget.description && <p className="text-[12px] text-slate-600 mt-1">{widget.description}</p>}
       </CardContent>
     </Card>
   )
 }
-
-/* ---------- CHART CARD ---------- */
 
 function ChartWidgetCard({ widget }) {
   const chartType = widget.config?.chart_type || "bar"
@@ -1173,18 +1113,14 @@ function ChartWidgetCard({ widget }) {
     return (
       <Card className="rounded-3xl border border-slate-200/70 bg-white/90 backdrop-blur-xl shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
         <CardHeader className="pb-2 flex flex-row items-center justify-between">
-          <CardTitle className="text-base font-semibold text-slate-900">
-            {widget.title}
-          </CardTitle>
-          <span className="rounded-full bg-slate-50 border border-slate-200 px-2 py-0.5 text-[10px] text-slate-600">
-            Snapshot
-          </span>
+          <CardTitle className="text-base font-semibold text-slate-900">{widget.title}</CardTitle>
+          <span className="rounded-full bg-slate-50 border border-slate-200 px-2 py-0.5 text-[10px] text-slate-600">Snapshot</span>
         </CardHeader>
         <CardContent className="h-56 sm:h-64">
           <ResponsiveContainer width="100%" height="100%">
             <PieChart>
               <Pie dataKey="value" data={data} innerRadius={52} outerRadius={84} paddingAngle={3}>
-                {data.map((entry, index) => (
+                {data.map((_, index) => (
                   <Cell key={`cell-${index}`} fill={chartColors[index % chartColors.length]} />
                 ))}
               </Pie>
@@ -1194,8 +1130,7 @@ function ChartWidgetCard({ widget }) {
 
           {typeof d.occupancy_pct === "number" && (
             <p className="text-xs text-slate-700 text-center mt-2">
-              Occupancy:{" "}
-              <span className="font-semibold text-emerald-600">{d.occupancy_pct}%</span>{" "}
+              Occupancy: <span className="font-semibold text-emerald-600">{d.occupancy_pct}%</span>{" "}
               <span className="opacity-80">({d.occupied}/{d.total} beds)</span>
             </p>
           )}
@@ -1204,16 +1139,14 @@ function ChartWidgetCard({ widget }) {
     )
   }
 
-  // Pie = status / payment mode
+  // Pie
   if (chartType === "pie") {
     const data = Array.isArray(widget.data) ? widget.data : []
     return (
       <Card className="rounded-3xl border border-slate-200/70 bg-white/90 backdrop-blur-xl shadow-[0_18px_50px_rgba(15,23,42,0.06)]">
         <CardHeader className="pb-2 flex flex-row items-center justify-between">
           <CardTitle className="text-base font-semibold text-slate-900">{widget.title}</CardTitle>
-          <span className="rounded-full bg-slate-50 border border-slate-200 px-2 py-0.5 text-[10px] text-slate-600">
-            Distribution
-          </span>
+          <span className="rounded-full bg-slate-50 border border-slate-200 px-2 py-0.5 text-[10px] text-slate-600">Distribution</span>
         </CardHeader>
         <CardContent className="h-56 sm:h-64">
           {data.length === 0 ? (
@@ -1221,15 +1154,8 @@ function ChartWidgetCard({ widget }) {
           ) : (
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie
-                  data={data}
-                  dataKey="value"
-                  nameKey="label"
-                  outerRadius={84}
-                  paddingAngle={3}
-                  labelLine={false}
-                >
-                  {data.map((entry, index) => (
+                <Pie data={data} dataKey="value" nameKey="label" outerRadius={84} paddingAngle={3} labelLine={false}>
+                  {data.map((_, index) => (
                     <Cell key={`cell-${index}`} fill={chartColors[index % chartColors.length]} />
                   ))}
                 </Pie>
@@ -1242,7 +1168,7 @@ function ChartWidgetCard({ widget }) {
     )
   }
 
-  // multi_bar = patient flow
+  // multi_bar (FIXED: consistent colors per series)
   if (chartType === "multi_bar") {
     const data = Array.isArray(widget.data) ? widget.data : []
     const series = widget.config?.series || []
@@ -1263,14 +1189,13 @@ function ChartWidgetCard({ widget }) {
                 <YAxis stroke="#6b7280" fontSize={11} />
                 <Tooltip contentStyle={tooltipStyle} />
                 {series.map((s, idx) => (
-                  <Bar key={s.key} dataKey={s.key} name={s.label} radius={[6, 6, 0, 0]}>
-                    {data.map((_, i) => (
-                      <Cell
-                        key={`cell-${s.key}-${i}`}
-                        fill={chartColors[(idx + i) % chartColors.length]}
-                      />
-                    ))}
-                  </Bar>
+                  <Bar
+                    key={s.key}
+                    dataKey={s.key}
+                    name={s.label}
+                    radius={[6, 6, 0, 0]}
+                    fill={chartColors[idx % chartColors.length]}
+                  />
                 ))}
               </BarChart>
             </ResponsiveContainer>
@@ -1285,9 +1210,9 @@ function ChartWidgetCard({ widget }) {
   const normalized =
     data.length > 0
       ? data.map((r, i) => ({
-          label: r.label ?? r.name ?? `Item ${i + 1}`,
-          value: r.value ?? r.amount ?? 0,
-        }))
+        label: r.label ?? r.name ?? `Item ${i + 1}`,
+        value: r.value ?? r.amount ?? 0,
+      }))
       : []
 
   return (
@@ -1320,8 +1245,6 @@ function ChartWidgetCard({ widget }) {
   )
 }
 
-/* ---------- LIST (CARD) WIDGET ---------- */
-
 function ListWidgetCard({ widget }) {
   const rows = Array.isArray(widget.data) ? widget.data : []
   const columns = widget.config?.columns || (rows[0] ? Object.keys(rows[0]) : [])
@@ -1350,10 +1273,7 @@ function ListWidgetCard({ widget }) {
                 {columns.map((col, ci) => (
                   <div
                     key={col}
-                    className={cn(
-                      "flex justify-between gap-2",
-                      ci === 0 ? "font-semibold text-slate-900" : "text-slate-700"
-                    )}
+                    className={cn("flex justify-between gap-2", ci === 0 ? "font-semibold text-slate-900" : "text-slate-700")}
                   >
                     <span className="text-[10px] uppercase tracking-wide text-slate-500">
                       {col.replace(/_/g, " ")}
@@ -1372,8 +1292,7 @@ function ListWidgetCard({ widget }) {
 
 function formatCell(value) {
   if (value == null) return "-"
-  if (typeof value === "number")
-    return value.toLocaleString("en-IN", { maximumFractionDigits: 1 })
+  if (typeof value === "number") return value.toLocaleString("en-IN", { maximumFractionDigits: 1 })
   if (typeof value === "string" && value.length > 40) return value.slice(0, 40) + "…"
   return String(value)
 }

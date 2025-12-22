@@ -45,7 +45,7 @@ import {
   Cpu,
   BookOpenText,
   Wallet,
-  Database, // ✅ add
+  Database,
 } from 'lucide-react'
 
 const defaultPrimary = '#2563eb'
@@ -80,9 +80,7 @@ function isProviderTenant() {
   const payload = decodeJwtPayload(token)
 
   const tokenTcode = String(payload?.tcode || '').trim().toUpperCase()
-  const tenantCode = String(localStorage.getItem('tenant_code') || '')
-    .trim()
-    .toUpperCase()
+  const tenantCode = String(localStorage.getItem('tenant_code') || '').trim().toUpperCase()
 
   const provider = String(PROVIDER_TENANT_CODE).trim().toUpperCase()
   return (tokenTcode && tokenTcode === provider) || (tenantCode && tenantCode === provider)
@@ -167,8 +165,6 @@ const GROUPS = [
         icon: ShoppingCart,
         reqAny: ['pharmacy.inventory.stock.view'],
       },
-
-      // ✅ Accounts (Supplier)
       {
         key: 'pharmacy-supplier-ledger',
         label: 'Supplier Ledger',
@@ -227,12 +223,7 @@ const GROUPS = [
         label: 'Departments',
         to: '/admin/departments',
         icon: Building2,
-        reqAny: [
-          'departments.view',
-          'departments.create',
-          'departments.update',
-          'departments.delete',
-        ],
+        reqAny: ['departments.view', 'departments.create', 'departments.update', 'departments.delete'],
       },
       {
         key: 'roles',
@@ -257,55 +248,13 @@ const GROUPS = [
     label: 'OP',
     icon: Stethoscope,
     items: [
-      {
-        key: 'op-dashboard',
-        label: 'Dashboard',
-        to: '/opd/dashboard',
-        icon: LayoutDashboard,
-        reqAny: ['appointments.view', 'mis.opd.view'],
-      },
-      {
-        key: 'appointments',
-        label: 'Appointments',
-        to: '/opd/appointments',
-        icon: CalendarClock,
-        reqAny: ['appointments.view', 'appointments.create'],
-      },
-      {
-        key: 'triage',
-        label: 'Vitals (Triage)',
-        to: '/opd/triage',
-        icon: Activity,
-        reqAny: ['vitals.create'],
-      },
-      {
-        key: 'queue',
-        label: 'Queue',
-        to: '/opd/queue',
-        icon: ListChecks,
-        reqAny: ['appointments.view', 'visits.view'],
-      },
-      {
-        key: 'followups',
-        label: 'Follow-ups (Waiting)',
-        to: '/opd/followups',
-        icon: Clock3,
-        reqAny: ['appointments.view', 'appointments.update'],
-      },
-      {
-        key: 'no-shows',
-        label: 'No-show Reschedule',
-        to: '/opd/no-shows',
-        icon: History,
-        reqAny: ['appointments.view', 'appointments.update'],
-      },
-      {
-        key: 'Doctor Fees',
-        label: 'Doctor Fees',
-        to: '/opd/doctor-fees',
-        icon: Receipt,
-        reqAny: ['appointments.view', 'appointments.update'],
-      },
+      { key: 'op-dashboard', label: 'Dashboard', to: '/opd/dashboard', icon: LayoutDashboard, reqAny: ['appointments.view', 'mis.opd.view'] },
+      { key: 'appointments', label: 'Appointments', to: '/opd/appointments', icon: CalendarClock, reqAny: ['appointments.view', 'appointments.create'] },
+      { key: 'triage', label: 'Vitals (Triage)', to: '/opd/triage', icon: Activity, reqAny: ['vitals.create'] },
+      { key: 'queue', label: 'Queue', to: '/opd/queue', icon: ListChecks, reqAny: ['appointments.view', 'visits.view'] },
+      { key: 'followups', label: 'Follow-ups (Waiting)', to: '/opd/followups', icon: Clock3, reqAny: ['appointments.view', 'appointments.update'] },
+      { key: 'no-shows', label: 'No-show Reschedule', to: '/opd/no-shows', icon: History, reqAny: ['appointments.view', 'appointments.update'] },
+      { key: 'Doctor Fees', label: 'Doctor Fees', to: '/opd/doctor-fees', icon: Receipt, reqAny: ['appointments.view', 'appointments.update'] },
     ],
   },
 
@@ -315,48 +264,12 @@ const GROUPS = [
     label: 'IP',
     icon: BedDouble,
     items: [
-      {
-        key: 'ipd-admissions',
-        label: 'Admissions',
-        to: '/ipd/admissions',
-        icon: FilePlus2,
-        reqAny: ['ipd.view', 'ipd.manage'],
-      },
-      {
-        key: 'ipd-tracking',
-        label: 'Tracking',
-        to: '/ipd/tracking',
-        icon: LayoutDashboard,
-        reqAny: ['ipd.tracking.view'],
-      },
-      {
-        key: 'ipd-my',
-        label: 'My Admissions',
-        to: '/ipd/my',
-        icon: NotebookPen,
-        reqAny: ['ipd.my.view', 'ipd.doctor'],
-      },
-      {
-        key: 'ipd-discharged',
-        label: 'Discharged',
-        to: '/ipd/discharged',
-        icon: Package,
-        reqAny: ['ipd.discharged.view'],
-      },
-      {
-        key: 'ipd-bedboard',
-        label: 'Bedboard',
-        to: '/ipd/bedboard',
-        icon: BedDouble,
-        reqAny: ['ipd.bedboard.view'],
-      },
-      {
-        key: 'ipd-masters',
-        label: 'IPD Masters',
-        to: '/ipd/masters',
-        icon: KeyRound,
-        reqAny: ['ipd.masters.manage', 'ipd.packages.manage'],
-      },
+      { key: 'ipd-admissions', label: 'Admissions', to: '/ipd/admissions', icon: FilePlus2, reqAny: ['ipd.view', 'ipd.manage'] },
+      { key: 'ipd-tracking', label: 'Tracking', to: '/ipd/tracking', icon: LayoutDashboard, reqAny: ['ipd.tracking.view'] },
+      { key: 'ipd-my', label: 'My Admissions', to: '/ipd/my', icon: NotebookPen, reqAny: ['ipd.my.view', 'ipd.doctor'] },
+      { key: 'ipd-discharged', label: 'Discharged', to: '/ipd/discharged', icon: Package, reqAny: ['ipd.discharged.view'] },
+      { key: 'ipd-bedboard', label: 'Bedboard', to: '/ipd/bedboard', icon: BedDouble, reqAny: ['ipd.bedboard.view'] },
+      { key: 'ipd-masters', label: 'IPD Masters', to: '/ipd/masters', icon: KeyRound, reqAny: ['ipd.masters.manage', 'ipd.packages.manage'] },
     ],
   },
 
@@ -366,48 +279,12 @@ const GROUPS = [
     label: 'Laboratory',
     icon: FlaskConical,
     items: [
-      {
-        key: 'lab-orders',
-        label: 'Orders & Reporting',
-        to: '/lab/orders',
-        icon: TestTube2,
-        reqAny: ['lab.orders.view', 'lab.orders.create', 'orders.lab.view', 'orders.lab.create'],
-      },
-      {
-        key: 'lab-service-master',
-        label: 'Lab Service Master',
-        to: '/lab/service/masters',
-        icon: Microscope,
-        reqAny: ['lis.masters.services.view', 'lis.masters.services.create', 'lis.masters.services.update'],
-      },
-      {
-        key: 'lab-device-mapping',
-        label: 'Analyzer Device Mapping',
-        to: '/lis/device-mapping',
-        icon: Cpu,
-        reqAny: ['lab.devices.view', 'lab.devices.manage'],
-      },
-      {
-        key: 'lab-analyzer-staging',
-        label: 'Analyzer Staging',
-        to: '/lis/analyzer-staging',
-        icon: Settings2,
-        reqAny: ['lab.device_results.review', 'lab.devices.view'],
-      },
-      {
-        key: 'lab-device-logs',
-        label: 'Analyzer Logs',
-        to: '/lis/device-logs',
-        icon: History,
-        reqAny: ['lab.device_logs.view', 'lab.devices.view'],
-      },
-      {
-        key: 'lab-masters',
-        label: 'Lab Masters (NABL)',
-        to: '/lab/masters',
-        icon: KeyRound,
-        reqAny: ['lab.masters.manage'],
-      },
+      { key: 'lab-orders', label: 'Orders & Reporting', to: '/lab/orders', icon: TestTube2, reqAny: ['lab.orders.view', 'lab.orders.create', 'orders.lab.view', 'orders.lab.create'] },
+      { key: 'lab-service-master', label: 'Lab Service Master', to: '/lab/service/masters', icon: Microscope, reqAny: ['lis.masters.services.view', 'lis.masters.services.create', 'lis.masters.services.update'] },
+      { key: 'lab-device-mapping', label: 'Analyzer Device Mapping', to: '/lis/device-mapping', icon: Cpu, reqAny: ['lab.devices.view', 'lab.devices.manage'] },
+      { key: 'lab-analyzer-staging', label: 'Analyzer Staging', to: '/lis/analyzer-staging', icon: Settings2, reqAny: ['lab.device_results.review', 'lab.devices.view'] },
+      { key: 'lab-device-logs', label: 'Analyzer Logs', to: '/lis/device-logs', icon: History, reqAny: ['lab.device_logs.view', 'lab.devices.view'] },
+      { key: 'lab-masters', label: 'Lab Masters (NABL)', to: '/lab/masters', icon: KeyRound, reqAny: ['lab.masters.manage'] },
     ],
   },
 
@@ -433,13 +310,7 @@ const GROUPS = [
           'radiology.scan.update',
         ],
       },
-      {
-        key: 'ris-masters',
-        label: 'RIS Masters',
-        to: '/ris/masters',
-        icon: KeyRound,
-        reqAny: ['radiology.masters.manage'],
-      },
+      { key: 'ris-masters', label: 'RIS Masters', to: '/ris/masters', icon: KeyRound, reqAny: ['radiology.masters.manage'] },
     ],
   },
 
@@ -469,13 +340,7 @@ const GROUPS = [
           'ot.procedures.delete',
         ],
       },
-      {
-        key: 'ot-schedule',
-        label: 'OT Schedule',
-        to: '/ot/schedule',
-        icon: CalendarDays,
-        reqAny: ['ot.schedule.view'],
-      },
+      { key: 'ot-schedule', label: 'OT Schedule', to: '/ot/schedule', icon: CalendarDays, reqAny: ['ot.schedule.view'] },
     ],
   },
 
@@ -484,15 +349,7 @@ const GROUPS = [
     key: 'billing',
     label: 'Billing',
     icon: Receipt,
-    items: [
-      {
-        key: 'billing-console',
-        label: 'Billing Console',
-        to: '/billing',
-        icon: LayoutDashboard,
-        reqAny: ['billing.view', 'billing.create'],
-      },
-    ],
+    items: [{ key: 'billing-console', label: 'Billing Console', to: '/billing', icon: LayoutDashboard, reqAny: ['billing.view', 'billing.create'] }],
   },
 
   // Settings
@@ -501,44 +358,19 @@ const GROUPS = [
     label: 'Settings',
     icon: SettingsIcon,
     items: [
-      {
-        key: 'schedules',
-        label: 'Schedules',
-        to: '/opd/schedules',
-        icon: CalendarClock,
-        reqAny: ['schedules.manage'],
-      },
-      {
-        key: 'ui-branding',
-        label: 'Customization & Templates',
-        to: '/settings/branding',
-        icon: LayoutTemplate,
-        reqAny: ['settings.customization.view', 'settings.customization.manage'],
-      },
-      {
-        key: 'perm-logs',
-        label: 'Permissions (Access Logs)',
-        to: '/admin/permissions',
-        icon: KeyRound,
-        reqAny: ['permissions.view', 'permissions.create', 'permissions.update', 'permissions.delete'],
-      },
+      { key: 'schedules', label: 'Schedules', to: '/opd/schedules', icon: CalendarClock, reqAny: ['schedules.manage'] },
+      { key: 'ui-branding', label: 'Customization & Templates', to: '/settings/branding', icon: LayoutTemplate, reqAny: ['settings.customization.view', 'settings.customization.manage'] },
+      { key: 'perm-logs', label: 'Permissions (Access Logs)', to: '/admin/permissions', icon: KeyRound, reqAny: ['permissions.view', 'permissions.create', 'permissions.update', 'permissions.delete'] },
     ],
   },
 
-  // ✅ Provider-only (added)
+  // ✅ Provider-only
   {
     key: 'provider',
     label: 'Provider Console',
     icon: Database,
     items: [
-      {
-        key: 'master-migrations',
-        label: 'Master Migrations',
-        to: '/master/migrations',
-        icon: Database,
-        reqAny: ['master.migrations.view'],
-        providerOnly: true,
-      },
+      { key: 'master-migrations', label: 'Master Migrations', to: '/master/migrations', icon: Database, reqAny: ['master.migrations.view'], providerOnly: true },
     ],
   },
 ]
@@ -548,13 +380,7 @@ export default function Sidebar() {
   const modules = useAuth((s) => s.modules) || {}
   const location = useLocation()
 
-  const {
-    sidebarCollapsed: collapsed,
-    toggleCollapse,
-    sidebarMobileOpen,
-    closeMobile,
-  } = useUI()
-
+  const { sidebarCollapsed: collapsed, toggleCollapse, sidebarMobileOpen, closeMobile } = useUI()
   const { branding } = useBranding() || {}
 
   // ✅ detect desktop (md and above) so collapse works ONLY on desktop
@@ -562,6 +388,7 @@ export default function Sidebar() {
     if (typeof window === 'undefined') return true
     return window.matchMedia('(min-width: 768px)').matches
   })
+
   useEffect(() => {
     if (typeof window === 'undefined') return
     const mq = window.matchMedia('(min-width: 768px)')
@@ -599,7 +426,7 @@ export default function Sidebar() {
     return (parts[0][0] + parts[1][0]).toUpperCase()
   }, [branding?.org_name])
 
-  // ✅ Mobile scroll fix: lock background scroll WITHOUT position:fixed (prevents inner scroll bug)
+  // ✅ Mobile: lock background scroll (keeps sidebar scroll perfect)
   useEffect(() => {
     if (!sidebarMobileOpen) return
     const prevOverflow = document.body.style.overflow
@@ -611,6 +438,16 @@ export default function Sidebar() {
       document.documentElement.style.overscrollBehavior = prevOb || ''
     }
   }, [sidebarMobileOpen])
+
+  // ✅ ESC to close on mobile
+  useEffect(() => {
+    if (!sidebarMobileOpen) return
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') closeMobile()
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [sidebarMobileOpen, closeMobile])
 
   const admin = !!user?.is_admin
   const provider = useMemo(() => isProviderTenant(), [])
@@ -638,7 +475,6 @@ export default function Sidebar() {
   const groups = useMemo(() => {
     return GROUPS.map((g) => {
       if (g.flatLink) {
-        // providerOnly on flatLink (if ever used)
         const providerOk = g.flatLink?.providerOnly ? provider : true
         const visible = providerOk && hasAny(g.flatLink.reqAny)
         return { ...g, _visible: visible }
@@ -680,12 +516,14 @@ export default function Sidebar() {
 
   return (
     <>
-      {/* Mobile overlay */}
+      {/* ✅ Mobile overlay */}
       <div
         onClick={closeMobile}
         className={[
-          'fixed inset-0 z-[100] bg-black/35 backdrop-blur-sm transition-opacity md:hidden',
+          'fixed inset-0 md:hidden transition-opacity',
+          'bg-black/35 backdrop-blur-sm',
           sidebarMobileOpen ? 'opacity-100' : 'pointer-events-none opacity-0',
+          'z-[55]', // ✅ below sidebar (sidebar is z-[60])
         ].join(' ')}
       />
 
@@ -696,15 +534,21 @@ export default function Sidebar() {
 
       <aside
         className={[
-          'z-50 border-r transition-[width,transform] duration-300 ease-out',
-          'fixed left-0 top-0 h-[100dvh] w-[86vw] max-w-sm md:w-auto',
+          // ✅ always above overlay
+          'z-[60] md:z-50',
+          'border-r transition-[width,transform] duration-300 ease-out',
+          // ✅ MOBILE FIX: full screen width so chevrons never go out
+          'fixed left-0 top-0 h-[100dvh] w-[100vw] max-w-[100vw]',
           sidebarMobileOpen ? 'translate-x-0' : '-translate-x-full',
-          'md:static md:translate-x-0 md:sticky md:top-0 md:h-[100dvh]',
+          'md:static md:translate-x-0 md:sticky md:top-0 md:h-[100dvh] md:w-auto md:max-w-none',
           desktopWidth,
           'grid grid-rows-[auto,1fr,auto] min-h-0',
           'overflow-x-hidden overflow-y-hidden',
+          'shadow-2xl md:shadow-none',
+          'will-change-transform',
         ].join(' ')}
         style={{ backgroundColor: sidebarBgColor, color: sidebarTextColor }}
+        aria-hidden={!isDesktop && !sidebarMobileOpen}
       >
         {/* Header */}
         <div
@@ -714,40 +558,37 @@ export default function Sidebar() {
               : 'px-3 py-3 flex items-center justify-between gap-2'
           }
         >
-          <div className={effectiveCollapsed ? 'flex flex-col items-center gap-2' : 'flex items-center gap-2 min-w-0'}>
-            {/* ✅ Logo / Initials (was missing) */}
+          <div
+            className={
+              effectiveCollapsed
+                ? 'flex flex-col items-center gap-2'
+                : 'flex items-center gap-2 min-w-0 flex-1'
+            }
+          >
+            {/* Logo / Initials */}
             <div
               className={[
                 'grid place-items-center rounded-2xl border shadow-sm overflow-hidden shrink-0',
-                effectiveCollapsed ? 'h-10 w-10' : 'h-10 w-10',
+                'h-10 w-10',
               ].join(' ')}
               style={{ backgroundColor: iconBgColor, borderColor: makeActiveBorder(primary) }}
               title={orgName}
             >
-              {logoUrl ? (
-                <img
-                  src={logoUrl}
-                  alt={orgName}
-                  className="h-full w-full object-cover"
-                  onError={(e) => {
-                    // fallback to initials if logo broken
-                    e.currentTarget.style.display = 'none'
-                  }}
-                />
-              ) : (
-                <span className="text-sm font-extrabold tracking-tight" style={{ color: primary }}>
+            <span className="text-sm font-extrabold tracking-tight" style={{ color: primary }}>
                   {initials}
                 </span>
-              )}
             </div>
 
             {!effectiveCollapsed && (
-              <div className="truncate">
+              <div className="min-w-0 flex-1">
                 <div className="text-xs font-semibold tracking-tight leading-snug truncate">{orgName}</div>
-                {orgTagline ? <div className="text-[10px] leading-tight text-slate-500 truncate">{orgTagline}</div> : null}
-                {/* ✅ Provider badge (only if provider tenant) */}
+                {orgTagline ? (
+                  <div className="text-[10px] leading-tight text-slate-500 truncate">{orgTagline}</div>
+                ) : null}
+
                 {provider ? (
-                  <div className="mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold"
+                  <div
+                    className="mt-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-semibold"
                     style={{ borderColor: activeBorder, color: primary, backgroundColor: activeBg }}
                   >
                     Provider
@@ -760,7 +601,7 @@ export default function Sidebar() {
           {/* Mobile close */}
           <button
             onClick={closeMobile}
-            className="md:hidden inline-flex h-9 w-9 items-center justify-center rounded-2xl hover:bg-gray-50 active:scale-95 transition"
+            className="md:hidden inline-flex h-9 w-9 items-center justify-center rounded-2xl hover:bg-gray-50 active:scale-95 transition shrink-0"
             aria-label="Close sidebar"
           >
             <X className="h-5 w-5" style={{ color: iconColor }} />
@@ -788,13 +629,12 @@ export default function Sidebar() {
           </button>
         </div>
 
-        {/* ✅ Menu */}
+        {/* Menu */}
         <nav
           className="min-h-0 flex-1 overflow-y-auto no-scrollbar y-fade px-2 pb-4 pt-1 space-y-1 overscroll-contain touch-pan-y"
           style={{ WebkitOverflowScrolling: 'touch' }}
         >
           {groups.map((group) => {
-            // Flat single link
             if (group.flatLink) {
               const GIcon = group.icon || KeyRound
               const active = isGroupRouteActive(group)
@@ -807,6 +647,7 @@ export default function Sidebar() {
                   className={[
                     'group relative flex h-10 items-center gap-3 rounded-xl px-3 text-sm leading-none',
                     'transition-colors duration-200 ease-out active:scale-[0.99]',
+                    'min-w-0',
                     effectiveCollapsed ? 'justify-center' : '',
                   ].join(' ')}
                   style={({ isActive }) =>
@@ -817,7 +658,7 @@ export default function Sidebar() {
                   title={effectiveCollapsed ? group.label : undefined}
                 >
                   <GIcon className="h-5 w-5 shrink-0" style={{ color: active ? '#ffffff' : iconColor }} />
-                  {!effectiveCollapsed && <span>{group.label}</span>}
+                  {!effectiveCollapsed && <span className="truncate min-w-0">{group.label}</span>}
                 </NavLink>
               )
             }
@@ -839,9 +680,10 @@ export default function Sidebar() {
                     toggleGroup(group.key)
                   }}
                   className={[
-                    'w-full flex items-center gap-3 rounded-xl px-3 h-10 text-sm',
+                    'w-full flex items-center rounded-xl px-3 h-10 text-sm',
                     'transition-colors duration-200 ease-out active:scale-[0.99]',
-                    effectiveCollapsed ? 'justify-center' : 'justify-between',
+                    'min-w-0',
+                    effectiveCollapsed ? 'justify-center' : 'justify-between gap-3',
                   ].join(' ')}
                   title={effectiveCollapsed ? group.label : undefined}
                   aria-expanded={effectiveCollapsed ? isFlyoutOpen : isOpen}
@@ -851,15 +693,18 @@ export default function Sidebar() {
                     boxShadow: active ? `0 0 0 1px ${activeBorder}` : undefined,
                   }}
                 >
-                  <span className="flex items-center gap-3">
+                  <span className="flex items-center gap-3 min-w-0 flex-1">
                     <GIcon className="h-5 w-5 shrink-0" style={{ color: iconColor }} />
-                    {!effectiveCollapsed && <span className="font-medium">{group.label}</span>}
+                    {!effectiveCollapsed && (
+                      <span className="font-medium truncate min-w-0">{group.label}</span>
+                    )}
                   </span>
 
+                  {/* ✅ Chevron always visible (doesn't get pushed out) */}
                   {!effectiveCollapsed && (
                     <ChevronDown
                       className={[
-                        'h-4 w-4 transition-transform duration-200',
+                        'h-4 w-4 shrink-0 transition-transform duration-200',
                         isOpen ? 'rotate-180' : 'rotate-0',
                       ].join(' ')}
                       style={{ color: iconColor }}
@@ -867,9 +712,8 @@ export default function Sidebar() {
                   )}
                 </button>
 
-                {/* Expanded items */}
                 {isOpen && (
-                  <div className="mt-1 space-y-1 pl-9">
+                  <div className="mt-1 space-y-1 pl-9 pr-1">
                     {group.items
                       .filter((it) => it._visible)
                       .map((it) => {
@@ -879,19 +723,15 @@ export default function Sidebar() {
                             key={it.key}
                             to={it.to}
                             onClick={closeMobile}
-                            className="group relative flex h-9 items-center gap-2 rounded-lg px-2 text-sm leading-none transition-colors duration-200 ease-out active:scale-[0.99]"
+                            className="group relative flex h-9 items-center gap-2 rounded-lg px-2 text-sm leading-none transition-colors duration-200 ease-out active:scale-[0.99] min-w-0"
                             style={({ isActive }) =>
                               isActive
-                                ? {
-                                    color: primary,
-                                    backgroundColor: activeBg,
-                                    boxShadow: `0 0 0 1px ${activeBorder}`,
-                                  }
+                                ? { color: primary, backgroundColor: activeBg, boxShadow: `0 0 0 1px ${activeBorder}` }
                                 : { color: sidebarTextColor }
                             }
                           >
                             <Ico className="h-[18px] w-[18px] shrink-0" style={{ color: iconColor }} />
-                            <span>{it.label}</span>
+                            <span className="truncate min-w-0">{it.label}</span>
                           </NavLink>
                         )
                       })}
@@ -900,7 +740,7 @@ export default function Sidebar() {
 
                 {/* Desktop flyout */}
                 {isFlyoutOpen ? (
-                  <div className="absolute left-full top-0 ml-2 z-[60] hidden md:block w-72 rounded-2xl border border-slate-500 bg-white shadow-2xl overflow-hidden">
+                  <div className="absolute left-full top-0 ml-2 z-[70] hidden md:block w-72 rounded-2xl border border-slate-500 bg-white shadow-2xl overflow-hidden">
                     <div className="px-3 py-2 border-b bg-slate-50">
                       <div className="text-xs font-black text-slate-900">{group.label}</div>
                       <div className="text-[10px] text-slate-500">Select a page</div>
@@ -919,21 +759,17 @@ export default function Sidebar() {
                                 setFlyoutKey(null)
                                 closeMobile()
                               }}
-                              className="flex items-center gap-2 rounded-xl px-2.5 py-2 text-sm hover:bg-slate-50 transition"
+                              className="flex items-center gap-2 rounded-xl px-2.5 py-2 text-sm hover:bg-slate-50 transition min-w-0"
                               style={({ isActive }) =>
                                 isActive
-                                  ? {
-                                      color: primary,
-                                      backgroundColor: activeBg,
-                                      boxShadow: `0 0 0 1px ${activeBorder}`,
-                                    }
+                                  ? { color: primary, backgroundColor: activeBg, boxShadow: `0 0 0 1px ${activeBorder}` }
                                   : { color: '#0f172a' }
                               }
                             >
-                              <span className="grid h-8 w-8 place-items-center rounded-xl border border-slate-500 bg-white">
+                              <span className="grid h-8 w-8 place-items-center rounded-xl border border-slate-500 bg-white shrink-0">
                                 <Ico className="h-[18px] w-[18px]" style={{ color: iconColor }} />
                               </span>
-                              <div className="min-w-0">
+                              <div className="min-w-0 flex-1">
                                 <div className="text-[13px] font-semibold truncate">{it.label}</div>
                                 <div className="text-[10px] text-slate-500 truncate">{it.to}</div>
                               </div>

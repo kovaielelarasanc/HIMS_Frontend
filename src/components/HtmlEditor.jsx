@@ -5,12 +5,12 @@ import { uploadFile } from '../api/templates'
 import { toast } from 'sonner'
 
 const FONTS = [
-    "system-ui, -apple-system, 'Segoe UI', Roboto, Arial, sans-serif",
+    "system-ui, -NUTRYAH-system, 'Segoe UI', Roboto, Arial, sans-serif",
     "Arial, Helvetica, sans-serif",
     "'Times New Roman', Times, serif",
     "'Georgia', serif",
     "'Courier New', Courier, monospace",
-    "'Inter', system-ui, -apple-system, sans-serif"
+    "'Inter', system-ui, -NUTRYAH-system, sans-serif"
 ]
 
 const COLORS = [

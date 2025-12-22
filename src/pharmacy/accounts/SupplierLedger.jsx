@@ -301,7 +301,7 @@ export default function SupplierLedgerScreen() {
 
   return (
     <div className="space-y-4">
-      {/* Apple-premium background + glass container */}
+      {/* NUTRYAH-premium background + glass container */}
       <div className="rounded-[28px] border border-slate-500/70 bg-gradient-to-b from-white to-slate-50 shadow-[0_18px_50px_rgba(2,6,23,0.08)] overflow-hidden">
         {/* HEADER (glass) */}
         <div className="px-4 sm:px-6 py-4 sm:py-5 bg-white/65 backdrop-blur-xl border-b border-slate-500/60">

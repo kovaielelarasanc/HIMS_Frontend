@@ -41,7 +41,7 @@ const PAYER_TYPES = [
 ]
 
 /* -------------------------
-   Apple UI Primitives
+   NUTRYAH UI Primitives
 ------------------------- */
 const UI = {
     page: 'bg-slate-50 min-h-full',
@@ -66,7 +66,7 @@ const UI = {
         'inline-flex items-center rounded-full border border-black/50 bg-black/[0.03] px-2 py-0.5 text-[11px] font-semibold text-slate-700',
 }
 
-/** Apple segmented control */
+/** NUTRYAH segmented control */
 function Segmented({ value, onChange, options, primary = '#2563eb', className = '' }) {
     return (
         <div
@@ -105,7 +105,7 @@ function Segmented({ value, onChange, options, primary = '#2563eb', className = 
     )
 }
 
-/** Apple mini segmented */
+/** NUTRYAH mini segmented */
 function MiniSegmented({ value, onChange, options, primary = '#2563eb' }) {
     return (
         <div className="inline-flex items-center rounded-2xl border border-black/50 bg-black/[0.03] p-1">
@@ -136,8 +136,8 @@ function MiniSegmented({ value, onChange, options, primary = '#2563eb' }) {
     )
 }
 
-/** Apple search input */
-function AppleSearch({ value, onChange, placeholder = 'Search…', className = '' }) {
+/** NUTRYAH search input */
+function NUTRYAHSearch({ value, onChange, placeholder = 'Search…', className = '' }) {
     return (
         <div className={cx('relative w-full', className)}>
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -161,8 +161,8 @@ function AppleSearch({ value, onChange, placeholder = 'Search…', className = '
     )
 }
 
-/** Apple modal: bottom sheet on mobile, centered on desktop */
-function AppleModal({ title, subtitle, onClose, children }) {
+/** NUTRYAH modal: bottom sheet on mobile, centered on desktop */
+function NUTRYAHModal({ title, subtitle, onClose, children }) {
     return (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/35 backdrop-blur-sm p-0 sm:p-4">
             <div className="w-full max-w-xl max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl border border-black/50 bg-white/90 backdrop-blur-xl shadow-[0_20px_60px_rgba(0,0,0,0.22)] px-4 py-4 sm:px-5 sm:py-5">
@@ -205,9 +205,9 @@ function EmptyState({ title, subtitle }) {
 }
 
 /* -------------------------
-   Apple macOS List (no tables)
+   NUTRYAH macOS List (no tables)
 ------------------------- */
-function AppleListShell({ title, right, children }) {
+function NUTRYAHListShell({ title, right, children }) {
     return (
         <div className="overflow-hidden rounded-3xl border border-black/50 bg-white/85 backdrop-blur">
             {(title || right) && (
@@ -280,7 +280,7 @@ function RowActions({ canManage, onEdit, onDeactivate, deactivateLabel = 'Deacti
     )
 }
 
-function AppleListRow({
+function NUTRYAHListRow({
     title,
     subtitle,
     metaLeft,
@@ -530,7 +530,7 @@ function PatientTypesTab({ primary }) {
                     </div>
 
                     <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-                        <AppleSearch value={q} onChange={setQ} placeholder="Search code, name, description…" className="sm:w-[320px]" />
+                        <NUTRYAHSearch value={q} onChange={setQ} placeholder="Search code, name, description…" className="sm:w-[320px]" />
                         {canManage && (
                             <button
                                 onClick={openCreate}
@@ -575,12 +575,12 @@ function PatientTypesTab({ primary }) {
             )}
 
             {!loading && filtered.length > 0 && (
-                <AppleListShell
+                <NUTRYAHListShell
                     title="Patient Types"
                     right={<span className={UI.badge}>macOS list</span>}
                 >
                     {filtered.map((t) => (
-                        <AppleListRow
+                        <NUTRYAHListRow
                             key={t.id}
                             title={t.name}
                             subtitle={<CodeBadge code={t.code} />}
@@ -612,7 +612,7 @@ function PatientTypesTab({ primary }) {
                             onDeactivate={() => quickDeactivate(t)}
                         />
                     ))}
-                </AppleListShell>
+                </NUTRYAHListShell>
             )}
 
             {modalOpen && (
@@ -686,7 +686,7 @@ function PatientTypeModal({ existing, onClose, onSaved, onDeleted, primary }) {
     }
 
     return (
-        <AppleModal
+        <NUTRYAHModal
             title={existing ? 'Edit Patient Type' : 'New Patient Type'}
             subtitle="Define master types like Emergency, OPD, IPD, Health Checkup…"
             onClose={onClose}
@@ -783,7 +783,7 @@ function PatientTypeModal({ existing, onClose, onSaved, onDeleted, primary }) {
                     </div>
                 </div>
             </form>
-        </AppleModal>
+        </NUTRYAHModal>
     )
 }
 
@@ -879,7 +879,7 @@ function PayersTab({ primary }) {
                     </div>
 
                     <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-                        <AppleSearch value={q} onChange={setQ} placeholder="Search code, name, type…" className="sm:w-[320px]" />
+                        <NUTRYAHSearch value={q} onChange={setQ} placeholder="Search code, name, type…" className="sm:w-[320px]" />
                         {canManage && (
                             <button
                                 onClick={openCreate}
@@ -928,9 +928,9 @@ function PayersTab({ primary }) {
             )}
 
             {!loading && filtered.length > 0 && (
-                <AppleListShell title="Payers" right={<span className={UI.badge}>macOS list</span>}>
+                <NUTRYAHListShell title="Payers" right={<span className={UI.badge}>macOS list</span>}>
                     {filtered.map((p) => (
-                        <AppleListRow
+                        <NUTRYAHListRow
                             key={p.id}
                             title={p.name}
                             subtitle={<CodeBadge code={p.code} />}
@@ -955,7 +955,7 @@ function PayersTab({ primary }) {
                             onDeactivate={() => quickDeactivate(p)}
                         />
                     ))}
-                </AppleListShell>
+                </NUTRYAHListShell>
             )}
 
             {modalOpen && (
@@ -1029,7 +1029,7 @@ function PayerModal({ existing, onClose, onSaved, onDeleted, primary }) {
     }
 
     return (
-        <AppleModal
+        <NUTRYAHModal
             title={existing ? 'Edit Payer' : 'New Payer'}
             subtitle="Master record used for credit / insurance patients."
             onClose={onClose}
@@ -1140,7 +1140,7 @@ function PayerModal({ existing, onClose, onSaved, onDeleted, primary }) {
                     </div>
                 </div>
             </form>
-        </AppleModal>
+        </NUTRYAHModal>
     )
 }
 
@@ -1246,7 +1246,7 @@ function TpasTab({ primary }) {
                     </div>
 
                     <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-                        <AppleSearch value={q} onChange={setQ} placeholder="Search code, name, payer…" className="sm:w-[320px]" />
+                        <NUTRYAHSearch value={q} onChange={setQ} placeholder="Search code, name, payer…" className="sm:w-[320px]" />
                         {canManage && (
                             <button
                                 onClick={openCreate}
@@ -1281,9 +1281,9 @@ function TpasTab({ primary }) {
             {!loading && filtered.length === 0 && <EmptyState title="No TPAs" subtitle="No data found." />}
 
             {!loading && filtered.length > 0 && (
-                <AppleListShell title="TPAs" right={<span className={UI.badge}>macOS list</span>}>
+                <NUTRYAHListShell title="TPAs" right={<span className={UI.badge}>macOS list</span>}>
                     {filtered.map((t) => (
-                        <AppleListRow
+                        <NUTRYAHListRow
                             key={t.id}
                             title={t.name}
                             subtitle={<CodeBadge code={t.code} />}
@@ -1311,7 +1311,7 @@ function TpasTab({ primary }) {
                             onDeactivate={() => quickDeactivate(t)}
                         />
                     ))}
-                </AppleListShell>
+                </NUTRYAHListShell>
             )}
 
             {modalOpen && (
@@ -1386,7 +1386,7 @@ function TpaModal({ existing, payers, onClose, onSaved, onDeleted, primary }) {
     }
 
     return (
-        <AppleModal title={existing ? 'Edit TPA' : 'New TPA'} subtitle="Third-party administrator master, mapped to payer." onClose={onClose}>
+        <NUTRYAHModal title={existing ? 'Edit TPA' : 'New TPA'} subtitle="Third-party administrator master, mapped to payer." onClose={onClose}>
             {err && (
                 <div className="mb-3 rounded-3xl border border-rose-200 bg-rose-50/80 p-3 text-[13px] text-rose-700">
                     {err}
@@ -1467,7 +1467,7 @@ function TpaModal({ existing, payers, onClose, onSaved, onDeleted, primary }) {
                     </div>
                 </div>
             </form>
-        </AppleModal>
+        </NUTRYAHModal>
     )
 }
 
@@ -1583,7 +1583,7 @@ function CreditPlansTab({ primary }) {
                     </div>
 
                     <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-                        <AppleSearch value={q} onChange={setQ} placeholder="Search code, name, payer, TPA…" className="sm:w-[320px]" />
+                        <NUTRYAHSearch value={q} onChange={setQ} placeholder="Search code, name, payer, TPA…" className="sm:w-[320px]" />
                         {canManage && (
                             <button onClick={openCreate} className={cx(UI.btn, 'text-white shadow-sm')} style={{ backgroundColor: primary }}>
                                 <Plus className="h-4 w-4" />
@@ -1614,9 +1614,9 @@ function CreditPlansTab({ primary }) {
             {!loading && filtered.length === 0 && <EmptyState title="No credit plans" subtitle="No data found." />}
 
             {!loading && filtered.length > 0 && (
-                <AppleListShell title="Credit Plans" right={<span className={UI.badge}>macOS list</span>}>
+                <NUTRYAHListShell title="Credit Plans" right={<span className={UI.badge}>macOS list</span>}>
                     {filtered.map((cp) => (
-                        <AppleListRow
+                        <NUTRYAHListRow
                             key={cp.id}
                             title={cp.name}
                             subtitle={<CodeBadge code={cp.code} />}
@@ -1649,7 +1649,7 @@ function CreditPlansTab({ primary }) {
                             onDeactivate={() => quickDeactivate(cp)}
                         />
                     ))}
-                </AppleListShell>
+                </NUTRYAHListShell>
             )}
 
             {modalOpen && (
@@ -1728,7 +1728,7 @@ function CreditPlanModal({ existing, payers, tpas, onClose, onSaved, onDeleted, 
     }
 
     return (
-        <AppleModal title={existing ? 'Edit Credit Plan' : 'New Credit Plan'} subtitle="Map plan to payer & optional TPA for billing workflows." onClose={onClose}>
+        <NUTRYAHModal title={existing ? 'Edit Credit Plan' : 'New Credit Plan'} subtitle="Map plan to payer & optional TPA for billing workflows." onClose={onClose}>
             {err && (
                 <div className="mb-3 rounded-3xl border border-rose-200 bg-rose-50/80 p-3 text-[13px] text-rose-700">
                     {err}
@@ -1801,6 +1801,6 @@ function CreditPlanModal({ existing, payers, tpas, onClose, onSaved, onDeleted, 
                     </div>
                 </div>
             </form>
-        </AppleModal>
+        </NUTRYAHModal>
     )
 }

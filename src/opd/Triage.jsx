@@ -681,7 +681,7 @@ export default function Triage() {
                                         <span className="inline-flex h-6 w-6 items-center justify-center rounded-full bg-black/[0.04] border border-black/50">
                                             <Sparkles className="h-3.5 w-3.5 text-slate-700" />
                                         </span>
-                                        Apple-glass workflow · List-first
+                                        NUTRYAH-glass workflow · List-first
                                     </div>
 
                                     <div className="mt-3 flex items-start gap-3">

@@ -134,7 +134,7 @@ export default function SupplierMonthlySummaryScreen() {
 
   return (
     <div className="space-y-4">
-      {/* Apple-glass container */}
+      {/* NUTRYAH-glass container */}
       <div className="rounded-[28px] border border-slate-500/70 bg-gradient-to-b from-white to-slate-50 shadow-[0_18px_50px_rgba(2,6,23,0.08)] overflow-hidden">
         {/* Glass Header */}
         <div className="px-4 sm:px-6 py-4 bg-white/70 backdrop-blur-xl border-b border-slate-500/60">

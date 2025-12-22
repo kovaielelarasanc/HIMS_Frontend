@@ -167,7 +167,7 @@ export default function PatientFormModal(props) {
 
 function PatientFormModalInner({ onClose, onSaved, initialPatient, lookups }) {
     const { branding } = useBranding() || {}
-    const primary = safeHex(branding?.primary_color) ? branding.primary_color : '#007AFF' // Apple-ish blue
+    const primary = safeHex(branding?.primary_color) ? branding.primary_color : '#007AFF' // NUTRYAH-ish blue
     const ring = alpha(primary, '33') || 'rgba(0,122,255,.20)'
 
     const mode = useMemo(() => (initialPatient ? 'edit' : 'create'), [initialPatient])
@@ -303,7 +303,7 @@ function PatientFormModalInner({ onClose, onSaved, initialPatient, lookups }) {
 
     const toggle = (k) => setOpenOpt((p) => ({ ...p, [k]: !p[k] }))
 
-    // Minimal Apple-like input styling
+    // Minimal NUTRYAH-like input styling
     const base =
         'w-full h-11 rounded-2xl border bg-white px-3 text-[14px] text-slate-900 placeholder:text-slate-400 outline-none transition shadow-sm'
     const textareaBase =
@@ -406,7 +406,7 @@ function PatientFormModalInner({ onClose, onSaved, initialPatient, lookups }) {
                             ) : null}
                         </div>
 
-                        {/* Mandatory (Apple-like card) */}
+                        {/* Mandatory (NUTRYAH-like card) */}
                         <Section title="Mandatory fields">
                             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                                 <Field label="Prefix *" state={state('prefix')}>

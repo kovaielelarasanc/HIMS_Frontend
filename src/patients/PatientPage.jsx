@@ -968,7 +968,7 @@ export default function PatientPage() {
                                                                             </div>
                                                                         </div>
 
-                                                                        {/* Hover chevron (Apple feel) */}
+                                                                        {/* Hover chevron (NUTRYAH feel) */}
                                                                         <ChevronRight className="h-5 w-5 text-slate-300 opacity-0 group-hover:opacity-100 transition" />
                                                                     </div>
                                                                 </div>

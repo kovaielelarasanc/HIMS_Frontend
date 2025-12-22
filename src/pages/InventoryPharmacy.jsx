@@ -915,7 +915,7 @@ export default function InventoryPharmacy() {
                           <Badge variant="outline" className="text-xs">{lowStock.length + maxStock.length}</Badge>
                         </CardTitle>
                         <CardDescription className="text-xs">
-                          Quick “Apple Health style” view of risk areas.
+                          Quick “NUTRYAH Health style” view of risk areas.
                         </CardDescription>
                       </div>
                       <Activity className="w-4 h-4 text-sky-500" />

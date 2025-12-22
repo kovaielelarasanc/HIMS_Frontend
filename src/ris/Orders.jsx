@@ -83,7 +83,7 @@ function useDebouncedValue(value, delay = 350) {
 }
 
 // ----------------------------
-// Apple-glass modal/sheet
+// NUTRYAH-glass modal/sheet
 // ----------------------------
 function GlassOverlay({ open, onClose, children }) {
     return (
@@ -462,7 +462,7 @@ export default function RisOrders() {
 
     return (
         <div className="min-h-[calc(100vh-40px)] text-slate-900">
-            {/* Background (Apple-ish) */}
+            {/* Background (NUTRYAH-ish) */}
             <div className="relative overflow-hidden rounded-[28px] border border-slate-500 bg-slate-50 p-3 md:p-5">
                 <div className="pointer-events-none absolute -top-24 left-1/2 h-72 w-[820px] -translate-x-1/2 rounded-full bg-sky-200/40 blur-3xl" />
                 <div className="pointer-events-none absolute -bottom-28 left-10 h-72 w-72 rounded-full bg-emerald-200/35 blur-3xl" />

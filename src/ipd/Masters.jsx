@@ -456,7 +456,7 @@ export default function Masters() {
                                     Wards · Rooms · Beds · Tariffs · Packages
                                 </h1>
                                 <p className="mt-1 text-[11px] font-medium text-slate-600 md:text-xs">
-                                    Apple-style explorer layout. Select ward → rooms → beds. Changes reflect in Admission, Bedboard and Billing.
+                                    NUTRYAH-style explorer layout. Select ward → rooms → beds. Changes reflect in Admission, Bedboard and Billing.
                                 </p>
                             </div>
                         </div>
@@ -473,8 +473,8 @@ export default function Masters() {
 
                     <div className="mt-5 space-y-5">
                         <LayoutExplorer />
-                        <BedRatesApple />
-                        <PackagesApple />
+                        <BedRatesNUTRYAH />
+                        <PackagesNUTRYAH />
                     </div>
                 </motion.div>
             </div>
@@ -649,7 +649,7 @@ function LayoutExplorer() {
             <GlassPanel
                 icon={Layers}
                 title="Ward · Room · Bed Explorer"
-                subtitle="No grid. Apple Finder-style navigation with sticky sidebar + animated detail panes."
+                subtitle="No grid. NUTRYAH Finder-style navigation with sticky sidebar + animated detail panes."
                 right={
                     <>
                         <PillButton onClick={() => openCreate('ward')}>
@@ -1503,7 +1503,7 @@ function parseRoomType(raw) {
     return { baseType: txt.trim(), basis: 'Daily' }
 }
 
-function BedRatesApple() {
+function BedRatesNUTRYAH() {
     const [rows, setRows] = useState([])
     const [rooms, setRooms] = useState([])
     const [loading, setLoading] = useState(false)
@@ -1833,7 +1833,7 @@ function BedRateEditor({ mode, row, roomTypeOptions = [], onSaved }) {
 
 /* ----------------------------- 3) packages ----------------------------- */
 
-function PackagesApple() {
+function PackagesNUTRYAH() {
     const [rows, setRows] = useState([])
     const [loading, setLoading] = useState(false)
     const [error, setError] = useState('')

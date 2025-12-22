@@ -1096,7 +1096,7 @@ export default function Appointments() {
                     {/* LIST */}
                     {pageTab === "list" && (
                         <motion.div key="list" {...fadeIn} className="space-y-3">
-                            <Card className={cx(UI.glass, "overflow-hidden")}>
+                            <Card className={cx(UI.glass, "overflow-hidden flex flex-col")}>
                                 <CardHeader className="border-b border-black/10 bg-white/60 backdrop-blur-xl">
                                     <div className="flex items-start justify-between gap-3">
                                         <div className="min-w-0">
@@ -1118,7 +1118,7 @@ export default function Appointments() {
                                     </div>
                                 </CardHeader>
 
-                                <CardContent className="pt-4">
+                                <CardContent className="pt-4 min-h-0">
                                     {loadingAppts && (
                                         <div className="space-y-3">
                                             {[0, 1, 2, 3].map((i) => (
@@ -1147,8 +1147,8 @@ export default function Appointments() {
                                     )}
 
                                     {!loadingAppts && filteredList.length > 0 && (
-                                        <ScrollArea className="max-h-[72vh] pr-1">
-                                            <div className="space-y-2">
+                                        <ScrollArea className="h-[min(100vh,calc(100dvh-320px))] pr-1">
+                                            <div className="space-y-2 pb-2">
                                                 {filteredList.map((a) => (
                                                     <ApptCard
                                                         key={a?.id}

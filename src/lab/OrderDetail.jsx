@@ -353,7 +353,7 @@ export default function OrderDetail() {
 
     return (
         <div className="p-3 md:p-6 space-y-4">
-            {/* Apple-style top header */}
+            {/* NUTRYAH-style top header */}
             <div className="rounded-3xl border border-slate-200/70 bg-white shadow-sm overflow-hidden">
                 <div className="p-4 md:p-5 bg-[radial-gradient(60%_120%_at_30%_0%,rgba(15,23,42,0.06),transparent_60%)]">
                     <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">

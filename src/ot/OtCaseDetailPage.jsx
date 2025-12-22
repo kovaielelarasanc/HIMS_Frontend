@@ -375,7 +375,7 @@ export default function OtCaseDetailPage() {
                         <DropdownMenuContent align="end" className="rounded-2xl">
                             <DropdownMenuItem onClick={handlePdfPreview}>
                                 <Eye className="mr-2 h-4 w-4" />
-                                Preview (Apple style)
+                                Preview (NUTRYAH style)
                             </DropdownMenuItem>
                             <DropdownMenuItem onClick={handlePdfDownload}>
                                 <Download className="mr-2 h-4 w-4" />
@@ -575,7 +575,7 @@ export default function OtCaseDetailPage() {
                 )}
             </div>
 
-            {/* Apple-style PDF Preview Modal */}
+            {/* NUTRYAH-style PDF Preview Modal */}
             <Dialog
                 open={pdfOpen}
                 onOpenChange={(v) => {
@@ -599,7 +599,7 @@ export default function OtCaseDetailPage() {
                             </Button>
                         </div>
                         <div className="px-0 text-xs text-slate-500">
-                            Apple-style PDF (cards + clean typography). Includes FULL Pre-op checklist.
+                            NUTRYAH-style PDF (cards + clean typography). Includes FULL Pre-op checklist.
                         </div>
                     </DialogHeader>
 

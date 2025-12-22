@@ -87,7 +87,7 @@ function StatCard({ label, value, icon: Icon, tone = 'slate' }) {
     )
 }
 
-function AppleDialog({ open, onOpenChange, title, subtitle, right, children }) {
+function NUTRYAHDialog({ open, onOpenChange, title, subtitle, right, children }) {
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
@@ -538,8 +538,8 @@ export default function NoShow() {
                     </CardContent>
                 </Card>
 
-                {/* ✅ Apple Reschedule Dialog */}
-                <AppleDialog
+                {/* ✅ NUTRYAH Reschedule Dialog */}
+                <NUTRYAHDialog
                     open={Boolean(target)}
                     onOpenChange={(v) => {
                         if (!v) setTarget(null)
@@ -609,7 +609,7 @@ export default function NoShow() {
                             </div>
                         </div>
                     ) : null}
-                </AppleDialog>
+                </NUTRYAHDialog>
             </div>
         </div>
     )

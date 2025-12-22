@@ -38,7 +38,7 @@ const fadeIn = {
 }
 
 /* -------------------------
-   Apple-ish UI atoms
+   NUTRYAH-ish UI atoms
 ------------------------- */
 const UI = {
     page: 'min-h-[calc(100vh-4rem)] bg-slate-50 px-3 py-4 md:px-6 md:py-6 lg:px-8',
@@ -61,7 +61,7 @@ const UI = {
         'inline-flex items-center rounded-full border border-black/50 bg-black/[0.03] px-2 py-0.5 text-[11px] font-semibold text-slate-700',
 }
 
-/** Apple segmented control */
+/** NUTRYAH segmented control */
 function Segmented({ value, onChange, options, className = '' }) {
     return (
         <div
@@ -92,8 +92,8 @@ function Segmented({ value, onChange, options, className = '' }) {
     )
 }
 
-/** Apple search */
-function AppleSearch({ value, onChange, placeholder = 'Search…', className = '' }) {
+/** NUTRYAH search */
+function NUTRYAHSearch({ value, onChange, placeholder = 'Search…', className = '' }) {
     return (
         <div className={cx('relative w-full', className)}>
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
@@ -117,8 +117,8 @@ function AppleSearch({ value, onChange, placeholder = 'Search…', className = '
     )
 }
 
-/** Apple modal (bottom sheet on mobile, centered on desktop) */
-function AppleModal({ title, subtitle, onClose, children }) {
+/** NUTRYAH modal (bottom sheet on mobile, centered on desktop) */
+function NUTRYAHModal({ title, subtitle, onClose, children }) {
     return (
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/35 backdrop-blur-sm p-0 sm:p-4">
             <div className="w-full max-w-xl max-h-[92vh] overflow-y-auto rounded-t-3xl sm:rounded-3xl border border-black/50 bg-white/90 backdrop-blur-xl shadow-[0_20px_60px_rgba(0,0,0,0.22)] px-4 py-4 sm:px-5 sm:py-5">
@@ -150,7 +150,7 @@ function AppleModal({ title, subtitle, onClose, children }) {
 }
 
 /** macOS list shell */
-function AppleListShell({ title, right, children }) {
+function NUTRYAHListShell({ title, right, children }) {
     return (
         <div className="overflow-hidden rounded-3xl border border-black/50 bg-white/85 backdrop-blur">
             {(title || right) && (
@@ -211,7 +211,7 @@ function RowActions({ canUpdate, canDelete, onEdit, onDelete }) {
     )
 }
 
-function AppleListRow({
+function NUTRYAHListRow({
     index,
     title,
     subtitle,
@@ -451,7 +451,7 @@ export default function Departments() {
                    
                 </div>
 
-                {/* Hero (Apple glass gradient) */}
+                {/* Hero (NUTRYAH glass gradient) */}
                 <motion.div {...fadeIn}>
                     <div className={cx(UI.card, 'relative overflow-hidden')}>
                         <div className="absolute inset-0 bg-gradient-to-r from-teal-700 via-teal-600 to-blue-600 opacity-90" />
@@ -541,7 +541,7 @@ export default function Departments() {
                             </div>
 
                             <div className="flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-end">
-                                <AppleSearch
+                                <NUTRYAHSearch
                                     value={searchTerm}
                                     onChange={setSearchTerm}
                                     placeholder="Search name or description…"
@@ -565,23 +565,23 @@ export default function Departments() {
                 {/* List (macOS rows, no tables) */}
                 <motion.div {...fadeIn}>
                     {loadingList ? (
-                        <AppleListShell title="Department list" right={<span className={UI.badge}>Loading…</span>}>
+                        <NUTRYAHListShell title="Department list" right={<span className={UI.badge}>Loading…</span>}>
                             {[0, 1, 2, 3].map((i) => (
                                 <SkeletonRow key={i} />
                             ))}
-                        </AppleListShell>
+                        </NUTRYAHListShell>
                     ) : filteredItems.length === 0 ? (
                         <EmptyState
                             title="No departments found"
                             subtitle="Try changing your search/filter, or create a new department."
                         />
                     ) : (
-                        <AppleListShell
+                        <NUTRYAHListShell
                             title="Department list"
                            
                         >
                             {filteredItems.map((d, idx) => (
-                                <AppleListRow
+                                <NUTRYAHListRow
                                     key={d.id}
                                     index={idx + 1}
                                     title={d.name}
@@ -594,13 +594,13 @@ export default function Departments() {
                                     onDelete={() => remove(d.id)}
                                 />
                             ))}
-                        </AppleListShell>
+                        </NUTRYAHListShell>
                     )}
                 </motion.div>
 
                 {/* Create/Edit Sheet */}
                 {modalOpen && (
-                    <AppleModal
+                    <NUTRYAHModal
                         title={editId ? 'Edit department' : 'New department'}
                         subtitle="Departments are used in OPD/IPD registration, staff workflows, and reporting."
                         onClose={closeModal}
@@ -658,7 +658,7 @@ export default function Departments() {
                                 </div>
                             </div>
                         </form>
-                    </AppleModal>
+                    </NUTRYAHModal>
                 )}
             </div>
         </div>

@@ -46,7 +46,7 @@ export default function LabTestPicker({ value = [], onChange }) {
 
   const normalized = useMemo(() => {
     const arr = Array.isArray(list) ? list : []
-    // Apple-ish behavior: selected tests shown on top (stable)
+    // NUTRYAH-ish behavior: selected tests shown on top (stable)
     const selected = []
     const rest = []
     for (const t of arr) {
@@ -84,7 +84,7 @@ export default function LabTestPicker({ value = [], onChange }) {
         </div>
       </div>
 
-      {/* Search (Apple premium) */}
+      {/* Search (NUTRYAH premium) */}
       <div className="relative">
         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
         <input

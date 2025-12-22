@@ -179,15 +179,33 @@ function getPatientAgeGender(p) {
 }
 
 /** normalize Rx line fields (freq missing issue fix) */
+/** normalize Rx line fields (freq/qty keys robust) */
 function normalizeLine(l) {
-  const itemName = pick(l, ['item_name', 'medicine_name', 'name'], '')
-  const strength = pick(l, ['strength', 'item_strength'], '')
-  const dose = pick(l, ['dose', 'dosage', 'dose_text'], '')
-  const frequency = pick(l, ['frequency', 'freq', 'dosage_frequency', 'frequency_text', 'freq_code'], '')
+  const itemName = pick(l, ['item_name', 'medicine_name', 'name', 'itemName'], '')
+  const strength = pick(l, ['strength', 'item_strength', 'itemStrength'], '')
+  const dose = pick(l, ['dose', 'dosage', 'dose_text', 'doseText'], '')
+
+  // ✅ FIX: include frequency_code
+  const frequency = pick(
+    l,
+    [
+      'frequency',
+      'frequency_code',     // ✅ backend key
+      'freq',
+      'dosage_frequency',
+      'frequency_text',
+      'freq_code',          // keep as fallback
+    ],
+    ''
+  )
+
   const duration_days = pick(l, ['duration_days', 'days', 'duration', 'duration_day'], '')
   const route = pick(l, ['route', 'route_code', 'administration_route'], '')
   const instructions = pick(l, ['instructions', 'sig', 'remarks', 'instruction'], '')
+
+  // ✅ qty: support requested/total + backend computed remaining/dispensed
   const qty = pick(l, ['total_qty', 'requested_qty', 'qty', 'quantity'], '')
+
   return {
     itemName,
     strength,
@@ -197,8 +215,11 @@ function normalizeLine(l) {
     route,
     instructions,
     qty,
+    dispensed_qty: pick(l, ['dispensed_qty', 'dispensedQty'], ''),
+    remaining_qty: pick(l, ['remaining_qty', 'remainingQty'], ''),
   }
 }
+
 
 /* ------------------------------ constants ------------------------------ */
 
@@ -477,7 +498,7 @@ export default function PharmacyRx() {
   /* ----------------------------- masters load ----------------------------- */
 
   useEffect(() => {
-    ;(async () => {
+    ; (async () => {
       try {
         setMastersLoading(true)
         const res = await getBillingMasters()
@@ -542,26 +563,26 @@ export default function PharmacyRx() {
     }
 
     let cancelled = false
-    ;(async () => {
-      try {
-        setPatientSearching(true)
-
-        let res
+      ; (async () => {
         try {
-          res = await listPatients(q)
-        } catch {
-          res = await listPatients({ q })
-        }
+          setPatientSearching(true)
 
-        if (cancelled) return
-        setPatientResults(res?.data?.items || res?.data || [])
-        setShowPatientDropdown(true)
-      } catch (e) {
-        // toast via interceptor
-      } finally {
-        if (!cancelled) setPatientSearching(false)
-      }
-    })()
+          let res
+          try {
+            res = await listPatients(q)
+          } catch {
+            res = await listPatients({ q })
+          }
+
+          if (cancelled) return
+          setPatientResults(res?.data?.items || res?.data || [])
+          setShowPatientDropdown(true)
+        } catch (e) {
+          // toast via interceptor
+        } finally {
+          if (!cancelled) setPatientSearching(false)
+        }
+      })()
 
     return () => {
       cancelled = true
@@ -599,24 +620,24 @@ export default function PharmacyRx() {
     }
 
     let cancelled = false
-    ;(async () => {
-      try {
-        setMedSearching(true)
-        const res = await listInventoryItems({
-          q,
-          kind: 'MEDICINE',
-          limit: 15,
-        })
-        if (cancelled) return
-        const items = res?.data?.items || res?.data || []
-        setMedResults(items)
-        setShowMedDropdown(true)
-      } catch (e) {
-        // toast via interceptor
-      } finally {
-        if (!cancelled) setMedSearching(false)
-      }
-    })()
+      ; (async () => {
+        try {
+          setMedSearching(true)
+          const res = await listInventoryItems({
+            q,
+            kind: 'MEDICINE',
+            limit: 15,
+          })
+          if (cancelled) return
+          const items = res?.data?.items || res?.data || []
+          setMedResults(items)
+          setShowMedDropdown(true)
+        } catch (e) {
+          // toast via interceptor
+        } finally {
+          if (!cancelled) setMedSearching(false)
+        }
+      })()
 
     return () => {
       cancelled = true
@@ -821,39 +842,39 @@ export default function PharmacyRx() {
   /* -------------------- FIX: hydrate selected patient in detail tab -------------------- */
   useEffect(() => {
     let cancelled = false
-    ;(async () => {
-      if (!selectedRx) {
-        setSelectedPatient(null)
-        return
-      }
+      ; (async () => {
+        if (!selectedRx) {
+          setSelectedPatient(null)
+          return
+        }
 
-      const embedded = selectedRx.patient
-      const pid =
-        selectedRx.patient_id ||
-        selectedRx.patientId ||
-        embedded?.id ||
-        null
+        const embedded = selectedRx.patient
+        const pid =
+          selectedRx.patient_id ||
+          selectedRx.patientId ||
+          embedded?.id ||
+          null
 
-      // if embedded patient already has enough data, use it
-      if (embedded && (embedded.uhid || embedded.phone || embedded.gender || embedded.age)) {
-        setSelectedPatient(embedded)
-        return
-      }
+        // if embedded patient already has enough data, use it
+        if (embedded && (embedded.uhid || embedded.phone || embedded.gender || embedded.age)) {
+          setSelectedPatient(embedded)
+          return
+        }
 
-      if (!pid) {
-        setSelectedPatient(embedded || null)
-        return
-      }
+        if (!pid) {
+          setSelectedPatient(embedded || null)
+          return
+        }
 
-      try {
-        setSelectedPatientLoading(true)
-        const full = await hydratePatientById(pid, { silent: true })
-        if (cancelled) return
-        setSelectedPatient(full || embedded || null)
-      } finally {
-        if (!cancelled) setSelectedPatientLoading(false)
-      }
-    })()
+        try {
+          setSelectedPatientLoading(true)
+          const full = await hydratePatientById(pid, { silent: true })
+          if (cancelled) return
+          setSelectedPatient(full || embedded || null)
+        } finally {
+          if (!cancelled) setSelectedPatientLoading(false)
+        }
+      })()
 
     return () => {
       cancelled = true
@@ -2070,7 +2091,7 @@ export default function PharmacyRx() {
                                       selectedRx.patient?.id ||
                                       null
                                     if (pid) {
-                                      ;(async () => {
+                                      ; (async () => {
                                         const full = await hydratePatientById(pid, { silent: true })
                                         if (full) {
                                           setHeader((prev) => ({ ...prev, patient: full }))

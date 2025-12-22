@@ -154,8 +154,8 @@ function Segmented({ value, onChange }) {
     )
 }
 
-/** Apple-style dialog */
-function AppleDialog({ open, onOpenChange, title, subtitle, right, children }) {
+/** NUTRYAH-style dialog */
+function NUTRYAHDialog({ open, onOpenChange, title, subtitle, right, children }) {
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent
@@ -804,7 +804,7 @@ export default function Followups() {
                 </Card>
 
                 {/* EDIT */}
-                <AppleDialog
+                <NUTRYAHDialog
                     open={Boolean(editTarget)}
                     onOpenChange={(v) => {
                         if (!v) closeEdit()
@@ -859,10 +859,10 @@ export default function Followups() {
                             </form>
                         </div>
                     ) : null}
-                </AppleDialog>
+                </NUTRYAHDialog>
 
                 {/* SCHEDULE (Free booking) */}
-                <AppleDialog
+                <NUTRYAHDialog
                     open={Boolean(schedTarget)}
                     onOpenChange={(v) => {
                         if (!v) closeSchedule()
@@ -994,7 +994,7 @@ export default function Followups() {
                             </form>
                         </div>
                     ) : null}
-                </AppleDialog>
+                </NUTRYAHDialog>
             </div>
         </div>
     )

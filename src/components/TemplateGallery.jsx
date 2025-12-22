@@ -13,7 +13,7 @@ footer.tpl-footer { position: running(doc-footer); }
   @top-center { content: element(doc-header); }
   @bottom-center { content: element(doc-footer); }
 }
-body { font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; font-size: 12px; }
+body { font-family: system-ui, -NUTRYAH-system, Segoe UI, Roboto, Arial, sans-serif; font-size: 12px; }
 h1,h2,h3 { margin: 0 0 8px 0; }
 table { width: 100%; border-collapse: collapse; }
 th, td { padding: 6px; }`

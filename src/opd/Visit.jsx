@@ -57,7 +57,7 @@ const UI = {
     chip:
         "inline-flex items-center gap-2 rounded-full border border-black/50 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700",
     chipBtn:
-        "inline-flex items-center gap-2 rounded-full border border-black/50 bg-black/85 px-3 py-1.5 text-[11px] font-semibold text-white hover:text-black hover:bg-black/[0.03] active:scale-[0.99] transition disabled:opacity-60",
+        "inline-flex items-center gap-2 rounded-full border border-black/50 bg-green-900 ck px-3 py-1.5 text-[11px] font-semibold text-white hover:text-black hover:bg-green-200 active:scale-[0.99] transition disabled:opacity-60",
     label: "text-[11px] font-semibold uppercase tracking-[0.16em] text-slate-500",
     textarea: "min-h-[110px] rounded-3xl border-black/50 bg-white/85 text-[13px] leading-relaxed",
     input: "h-11 rounded-2xl border-black/50 bg-white/85 text-[12px] font-semibold",
@@ -806,7 +806,7 @@ export default function Visit({ currentUser }) {
 
                                                     <button
                                                         type="button"
-                                                        className={cx(UI.chipBtn, "bg-white/85")}
+                                                        className={cx(UI.chipBtn, "")}
                                                         onClick={() => setActiveTab("followups")}
                                                         title="Open Follow-ups"
                                                     >
@@ -824,7 +824,7 @@ export default function Visit({ currentUser }) {
                             <div className="flex flex-wrap items-center gap-2 md:justify-end">
                                 <button
                                     type="button"
-                                    className={cx(UI.chipBtn, "bg-white/85")}
+                                    className={cx(UI.chipBtn, "")}
                                     onClick={previewPdf}
                                     disabled={pdfing || loading}
                                     title="Preview PDF"
@@ -835,7 +835,7 @@ export default function Visit({ currentUser }) {
 
                                 <button
                                     type="button"
-                                    className={cx(UI.chipBtn, "bg-white/85")}
+                                    className={cx(UI.chipBtn, "")}
                                     onClick={printPdf}
                                     disabled={pdfing || loading}
                                     title="Print PDF"
@@ -1574,7 +1574,7 @@ export default function Visit({ currentUser }) {
                                                 <Button
                                                     type="button"
                                                     variant="outline"
-                                                    className="h-10 rounded-2xl border-black/50 bg-white/85 font-semibold"
+                                                    className="h-10 rounded-2xl border-black/50  font-semibold"
                                                     onClick={previewPdf}
                                                     disabled={pdfing}
                                                 >

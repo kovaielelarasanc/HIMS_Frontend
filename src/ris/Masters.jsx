@@ -452,7 +452,7 @@ export default function RisMasters() {
                                     RIS Masters <span className="text-slate-400">—</span> Radiology Tests
                                 </h1>
                                 <p className="mt-1 text-[11px] font-medium text-slate-600 md:text-xs">
-                                    Apple-premium master UI: search, filter by modality, quick stats, create/edit via glass modal.
+                                    NUTRYAH-premium master UI: search, filter by modality, quick stats, create/edit via glass modal.
                                 </p>
                             </div>
                         </div>
