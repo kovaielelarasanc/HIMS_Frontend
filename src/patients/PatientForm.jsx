@@ -273,11 +273,24 @@ function PatientFormModalInner({ onClose, onSaved, initialPatient, lookups }) {
 
         if (!validateRequired()) return
 
+        // ✅ email optional: allow empty, but if typed then must be valid
+        const cleanEmail = String(form.email || '').trim()
+        if (cleanEmail && !isEmail(cleanEmail)) {
+            setTouched((p) => ({ ...p, email: true }))
+            setFieldErrors((p) => ({ ...p, email: 'Enter valid email or leave it blank' }))
+            setError('Please correct highlighted fields.')
+            return
+        }
+
         setSaving(true)
         try {
             const payload = {
                 ...form,
-                ref_doctor_id: toIntOrNull(form.ref_doctor_id), // "__NA__" -> null
+
+                // ✅ IMPORTANT: send null instead of empty string
+                email: cleanEmail || null,
+
+                ref_doctor_id: toIntOrNull(form.ref_doctor_id),
                 credit_payer_id: toIntOrNull(form.credit_payer_id),
                 credit_tpa_id: toIntOrNull(form.credit_tpa_id),
                 credit_plan_id: toIntOrNull(form.credit_plan_id),
@@ -286,9 +299,10 @@ function PatientFormModalInner({ onClose, onSaved, initialPatient, lookups }) {
                 patient_type: form.patient_type || null,
             }
 
-            const res = mode === 'create'
-                ? await createPatient(payload)
-                : await updatePatient(initialPatient.id, payload)
+            const res =
+                mode === 'create'
+                    ? await createPatient(payload)
+                    : await updatePatient(initialPatient.id, payload)
 
             onSaved?.(res.data)
             onClose?.()
@@ -300,6 +314,7 @@ function PatientFormModalInner({ onClose, onSaved, initialPatient, lookups }) {
             setSaving(false)
         }
     }
+
 
     const toggle = (k) => setOpenOpt((p) => ({ ...p, [k]: !p[k] }))
 

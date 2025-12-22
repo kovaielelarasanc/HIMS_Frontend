@@ -28,6 +28,10 @@ import {
     ChevronRight,
     Command,
     Check,
+    SlidersHorizontal,
+    Bookmark,
+    Trash2,
+    ArrowDownUp,
 } from 'lucide-react'
 
 import { useBranding } from '../branding/BrandingProvider'
@@ -37,8 +41,6 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-
-// Dropdown (3-dot + segmented more)
 import {
     DropdownMenu,
     DropdownMenuTrigger,
@@ -46,6 +48,7 @@ import {
     DropdownMenuItem,
     DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 
 import PatientFormModal from './PatientForm'
 import PatientDetailDrawer from './PatientDetailDrawer'
@@ -149,9 +152,7 @@ function SegmentedControl({
     options = [],
     moreOptions = [],
 }) {
-    const activeStyle = {
-        borderColor: alphaHex(primary, '22') || '#bfdbfe',
-    }
+    const activeStyle = { borderColor: alphaHex(primary, '22') || '#bfdbfe' }
 
     return (
         <div className="flex items-center gap-2">
@@ -233,10 +234,7 @@ function CommandPalette({
     const seqRef = useRef(0)
     const timerRef = useRef(null)
 
-    const defaultRows = useMemo(() => {
-        // show a few “ready” rows even when empty
-        return (fallbackPatients || []).slice(0, 10)
-    }, [fallbackPatients])
+    const defaultRows = useMemo(() => (fallbackPatients || []).slice(0, 10), [fallbackPatients])
 
     useEffect(() => {
         if (!open) return
@@ -244,8 +242,6 @@ function CommandPalette({
         setQ('')
         setRows(defaultRows)
         setIdx(0)
-
-        // focus
         const t = setTimeout(() => inputRef.current?.focus?.(), 50)
         return () => clearTimeout(t)
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -253,7 +249,6 @@ function CommandPalette({
 
     useEffect(() => {
         if (!open) return
-        // debounced server search
         if (timerRef.current) clearTimeout(timerRef.current)
 
         const query = (q || '').trim()
@@ -273,8 +268,7 @@ function CommandPalette({
                 if (patientTypeFilter) params.patient_type = patientTypeFilter
                 const res = await listPatients(params)
                 if (seqRef.current !== mySeq) return
-                const data = res.data || []
-                setRows(data)
+                setRows(res.data || [])
                 setIdx(0)
             } catch (e) {
                 if (seqRef.current !== mySeq) return
@@ -284,16 +278,12 @@ function CommandPalette({
             }
         }, 250)
 
-        return () => {
-            if (timerRef.current) clearTimeout(timerRef.current)
-        }
+        return () => timerRef.current && clearTimeout(timerRef.current)
     }, [q, open, patientTypeFilter, defaultRows])
 
     useEffect(() => {
         if (!open) return
-        const onKeyDown = (e) => {
-            if (e.key === 'Escape') onClose?.()
-        }
+        const onKeyDown = (e) => e.key === 'Escape' && onClose?.()
         window.addEventListener('keydown', onKeyDown)
         return () => window.removeEventListener('keydown', onKeyDown)
     }, [open, onClose])
@@ -321,7 +311,6 @@ function CommandPalette({
                 className="w-full max-w-2xl rounded-3xl border border-black/50 bg-white/90 backdrop-blur-xl shadow-[0_20px_60px_rgba(0,0,0,0.22)] overflow-hidden"
                 onMouseDown={(e) => e.stopPropagation()}
             >
-                {/* top */}
                 <div className="px-4 py-3 border-b border-black/50">
                     <div className="flex items-center gap-2">
                         <div className="h-9 w-9 rounded-2xl grid place-items-center border" style={accent}>
@@ -370,12 +359,8 @@ function CommandPalette({
                     </div>
 
                     <div className="mt-2 flex items-center justify-between text-[11px] text-slate-500">
-                        <div className="flex items-center gap-2">
-                            {loading ? 'Searching…' : q?.trim() ? `${rows.length} result(s)` : 'Type to search (server)'}
-                        </div>
-                        <div className="hidden sm:block">
-                            ↑↓ to navigate · Enter to open
-                        </div>
+                        <div>{loading ? 'Searching…' : q?.trim() ? `${rows.length} result(s)` : 'Type to search (server)'}</div>
+                        <div className="hidden sm:block">↑↓ to navigate · Enter to open</div>
                     </div>
 
                     {err && (
@@ -385,7 +370,6 @@ function CommandPalette({
                     )}
                 </div>
 
-                {/* results */}
                 <div className="max-h-[60vh] overflow-auto">
                     {rows.length === 0 && !loading ? (
                         <div className="px-4 py-10 text-center text-slate-500">
@@ -398,8 +382,7 @@ function CommandPalette({
                     ) : (
                         <ul className="divide-y divide-black/5">
                             {rows.map((p, i) => {
-                                const fullName =
-                                    `${p.first_name || ''} ${p.last_name || ''}`.trim() || '—'
+                                const fullName = `${p.first_name || ''} ${p.last_name || ''}`.trim() || '—'
                                 const active = p.is_active !== false
                                 const selected = i === idx
 
@@ -430,9 +413,7 @@ function CommandPalette({
                                             <div className="min-w-0 flex-1">
                                                 <div className="flex items-center justify-between gap-3">
                                                     <div className="min-w-0">
-                                                        <div className="font-semibold text-slate-900 truncate">
-                                                            {fullName}
-                                                        </div>
+                                                        <div className="font-semibold text-slate-900 truncate">{fullName}</div>
                                                         <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[12px] text-slate-500">
                                                             <span className="font-mono text-[11px] bg-black/[0.04] border border-black/50 rounded-full px-2 py-0.5">
                                                                 {p.uhid || '—'}
@@ -467,6 +448,330 @@ function CommandPalette({
     )
 }
 
+/* ===================== EXTREME FILTERS ===================== */
+
+const FILTER_DEFAULT = {
+    status: 'all', // all | active | inactive
+    gender: 'all', // all | male | female | other
+    blood_group: '',
+    tag_contains: '',
+    has_phone: false,
+    has_email: false,
+    age_min: '',
+    age_max: '',
+    reg_from: '',
+    reg_to: '',
+    sort_by: 'recent', // recent | name | uhid | age
+    sort_dir: 'desc', // asc | desc
+}
+
+const VIEWS_KEY = 'nutryah_patient_views_v1'
+
+function toYMD(d) {
+    if (!d) return ''
+    const dt = new Date(d)
+    if (Number.isNaN(dt.getTime())) return ''
+    const y = dt.getFullYear()
+    const m = String(dt.getMonth() + 1).padStart(2, '0')
+    const day = String(dt.getDate()).padStart(2, '0')
+    return `${y}-${m}-${day}`
+}
+
+function getCreatedDate(p) {
+    const raw =
+        p.created_at ||
+        p.createdAt ||
+        p.registered_at ||
+        p.registeredAt ||
+        p.created_on ||
+        p.createdOn ||
+        p.updated_at ||
+        p.updatedAt
+    if (!raw) return null
+    const dt = new Date(raw)
+    return Number.isNaN(dt.getTime()) ? null : dt
+}
+
+function extractAgeYears(p) {
+    const a = p.age ?? p.age_years ?? p.ageYears
+    if (typeof a === 'number' && !Number.isNaN(a)) return a
+    const txt = String(p.age_text || p.ageText || '').trim()
+    const m = txt.match(/(\d+)/)
+    return m ? Number(m[1]) : null
+}
+
+function FilterChip({ label, onRemove }) {
+    return (
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-black/50 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+            {label}
+            <button
+                type="button"
+                className="h-5 w-5 rounded-full hover:bg-black/[0.05] grid place-items-center"
+                onClick={onRemove}
+                title="Remove"
+            >
+                <X className="h-3.5 w-3.5 text-slate-500" />
+            </button>
+        </span>
+    )
+}
+
+function NativeSelect({ value, onChange, children }) {
+    return (
+        <select
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className="h-10 w-full rounded-2xl border border-black/50 bg-white px-3 text-[13px] text-slate-900 outline-none focus-visible:ring-black/10"
+        >
+            {children}
+        </select>
+    )
+}
+
+function FiltersDialog({ open, onOpenChange, filters, setFilters, primary }) {
+    const accent = {
+        backgroundColor: alphaHex(primary, '10') || '#eff6ff',
+        borderColor: alphaHex(primary, '22') || '#bfdbfe',
+        color: primary,
+    }
+
+    const set = (k, v) => setFilters((p) => ({ ...p, [k]: v }))
+    const toggle = (k) => setFilters((p) => ({ ...p, [k]: !p[k] }))
+
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className="max-w-3xl rounded-3xl border border-black/50 bg-white p-0 overflow-hidden">
+                <DialogHeader className="px-5 py-4 border-b border-black/50">
+                    <div className="flex items-center justify-between gap-3">
+                        <div className="min-w-0">
+                            <DialogTitle className="text-[16px] font-semibold tracking-tight">Advanced Filters</DialogTitle>
+                            <div className="text-[12px] text-slate-500 mt-1">
+                                Filtering + sorting.
+                            </div>
+                        </div>
+                        <div className="inline-flex items-center gap-2 rounded-full px-3 py-1 border" style={accent}>
+                            <SlidersHorizontal className="h-4 w-4" />
+                            Filters
+                        </div>
+                    </div>
+                </DialogHeader>
+
+                <div className="p-5 grid gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        <div className="grid gap-1">
+                            <div className="text-[11px] font-bold text-slate-600 uppercase">Status</div>
+                            <NativeSelect value={filters.status} onChange={(v) => set('status', v)}>
+                                <option value="all">All</option>
+                                <option value="active">Active</option>
+                                <option value="inactive">Inactive</option>
+                            </NativeSelect>
+                        </div>
+
+                        <div className="grid gap-1">
+                            <div className="text-[11px] font-bold text-slate-600 uppercase">Gender</div>
+                            <NativeSelect value={filters.gender} onChange={(v) => set('gender', v)}>
+                                <option value="all">All</option>
+                                <option value="male">Male</option>
+                                <option value="female">Female</option>
+                                <option value="other">Other</option>
+                            </NativeSelect>
+                        </div>
+
+                        <div className="grid gap-1">
+                            <div className="text-[11px] font-bold text-slate-600 uppercase">Blood Group</div>
+                            <Input
+                                className="h-10 rounded-2xl border-black/50 bg-white focus-visible:ring-black/10"
+                                placeholder="A+ / O- / AB+"
+                                value={filters.blood_group}
+                                onChange={(e) => set('blood_group', e.target.value)}
+                            />
+                        </div>
+
+                        <div className="grid gap-1">
+                            <div className="text-[11px] font-bold text-slate-600 uppercase">Age Min</div>
+                            <Input
+                                inputMode="numeric"
+                                className="h-10 rounded-2xl border-black/50 bg-white focus-visible:ring-black/10"
+                                placeholder="e.g., 18"
+                                value={filters.age_min}
+                                onChange={(e) => set('age_min', e.target.value.replace(/\D/g, ''))}
+                            />
+                        </div>
+
+                        <div className="grid gap-1">
+                            <div className="text-[11px] font-bold text-slate-600 uppercase">Age Max</div>
+                            <Input
+                                inputMode="numeric"
+                                className="h-10 rounded-2xl border-black/50 bg-white focus-visible:ring-black/10"
+                                placeholder="e.g., 60"
+                                value={filters.age_max}
+                                onChange={(e) => set('age_max', e.target.value.replace(/\D/g, ''))}
+                            />
+                        </div>
+
+                        <div className="grid gap-1">
+                            <div className="text-[11px] font-bold text-slate-600 uppercase">Tag Contains</div>
+                            <Input
+                                className="h-10 rounded-2xl border-black/50 bg-white focus-visible:ring-black/10"
+                                placeholder="VIP / Staff / Corporate"
+                                value={filters.tag_contains}
+                                onChange={(e) => set('tag_contains', e.target.value)}
+                            />
+                        </div>
+
+                        <div className="grid gap-1">
+                            <div className="text-[11px] font-bold text-slate-600 uppercase">Registered From</div>
+                            <Input
+                                type="date"
+                                className="h-10 rounded-2xl border-black/50 bg-white focus-visible:ring-black/10"
+                                value={filters.reg_from}
+                                onChange={(e) => set('reg_from', e.target.value)}
+                            />
+                        </div>
+
+                        <div className="grid gap-1">
+                            <div className="text-[11px] font-bold text-slate-600 uppercase">Registered To</div>
+                            <Input
+                                type="date"
+                                className="h-10 rounded-2xl border-black/50 bg-white focus-visible:ring-black/10"
+                                value={filters.reg_to}
+                                onChange={(e) => set('reg_to', e.target.value)}
+                            />
+                        </div>
+
+                        <div className="grid gap-1">
+                            <div className="text-[11px] font-bold text-slate-600 uppercase">Sort</div>
+                            <div className="flex gap-2">
+                                <NativeSelect value={filters.sort_by} onChange={(v) => set('sort_by', v)}>
+                                    <option value="recent">Recent</option>
+                                    <option value="name">Name</option>
+                                    <option value="uhid">UHID</option>
+                                    <option value="age">Age</option>
+                                </NativeSelect>
+                                <Button
+                                    variant="outline"
+                                    className="h-10 rounded-2xl border-black/50 bg-white hover:bg-black/[0.03]"
+                                    onClick={() => set('sort_dir', filters.sort_dir === 'asc' ? 'desc' : 'asc')}
+                                    title="Toggle sort direction"
+                                >
+                                    <ArrowDownUp className="h-4 w-4" />
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div className="rounded-3xl border border-black/50 bg-black/[0.02] p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <button
+                                type="button"
+                                className={cx(
+                                    'inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[12px] font-semibold border border-black/50',
+                                    filters.has_phone ? 'bg-white' : 'bg-black/[0.02] hover:bg-black/[0.04]'
+                                )}
+                                onClick={() => toggle('has_phone')}
+                            >
+                                <Phone className="h-4 w-4 text-slate-500" />
+                                Has Phone
+                            </button>
+
+                            <button
+                                type="button"
+                                className={cx(
+                                    'inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[12px] font-semibold border border-black/50',
+                                    filters.has_email ? 'bg-white' : 'bg-black/[0.02] hover:bg-black/[0.04]'
+                                )}
+                                onClick={() => toggle('has_email')}
+                            >
+                                <Mail className="h-4 w-4 text-slate-500" />
+                                Has Email
+                            </button>
+                        </div>
+
+                        <Button
+                            variant="outline"
+                            className="rounded-2xl border-black/50 bg-white hover:bg-black/[0.03]"
+                            onClick={() => setFilters({ ...FILTER_DEFAULT })}
+                        >
+                            Reset Filters
+                        </Button>
+                    </div>
+                </div>
+            </DialogContent>
+        </Dialog>
+    )
+}
+
+function ViewsMenu({ primary, onSave, views, onApply, onDelete }) {
+    const accent = {
+        backgroundColor: alphaHex(primary, '10') || '#eff6ff',
+        borderColor: alphaHex(primary, '22') || '#bfdbfe',
+        color: primary,
+    }
+
+    return (
+        <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+                <Button
+                    variant="outline"
+                    className="rounded-2xl border-black/50 bg-white hover:bg-black/[0.03]"
+                    title="Saved Views"
+                >
+                    <Bookmark className="h-4 w-4 mr-2" />
+                    Views
+                </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-64 rounded-2xl p-1.5 border border-black/50 shadow-xl bg-white">
+                <DropdownMenuItem
+                    className="rounded-xl cursor-pointer"
+                    onSelect={(e) => {
+                        e.preventDefault()
+                        onSave?.()
+                    }}
+                >
+                    <span className="inline-flex items-center gap-2">
+                        <span className="h-8 w-8 rounded-2xl grid place-items-center border" style={accent}>
+                            <Bookmark className="h-4 w-4" />
+                        </span>
+                        Save current view
+                    </span>
+                </DropdownMenuItem>
+
+                <DropdownMenuSeparator className="my-1" />
+
+                {views.length === 0 ? (
+                    <div className="px-3 py-2 text-[12px] text-slate-500">No saved views yet.</div>
+                ) : (
+                    views.map((v) => (
+                        <div key={v.name} className="flex items-center justify-between gap-2 px-1">
+                            <DropdownMenuItem
+                                className="rounded-xl cursor-pointer flex-1"
+                                onSelect={(e) => {
+                                    e.preventDefault()
+                                    onApply?.(v)
+                                }}
+                            >
+                                {v.name}
+                            </DropdownMenuItem>
+                            <button
+                                type="button"
+                                className="h-9 w-9 rounded-xl hover:bg-rose-50 grid place-items-center"
+                                title="Delete view"
+                                onClick={(e) => {
+                                    e.preventDefault()
+                                    e.stopPropagation()
+                                    onDelete?.(v)
+                                }}
+                            >
+                                <Trash2 className="h-4 w-4 text-rose-600" />
+                            </button>
+                        </div>
+                    ))
+                )}
+            </DropdownMenuContent>
+        </DropdownMenu>
+    )
+}
+
 export default function PatientPage() {
     const { branding } = useBranding() || {}
     const primary = branding?.primary_color || '#2563eb'
@@ -492,15 +797,32 @@ export default function PatientPage() {
         patientTypes: [],
     })
 
-    // Filters
+    // Server Filters
     const [patientTypeFilter, setPatientTypeFilter] = useState('')
+
+    // Export
     const [fromDate, setFromDate] = useState('')
     const [toDate, setToDate] = useState('')
     const [exporting, setExporting] = useState(false)
 
+    // Extreme Filters (client-side)
+    const [filters, setFilters] = useState({ ...FILTER_DEFAULT })
+    const [filtersOpen, setFiltersOpen] = useState(false)
+
+    // Views
+    const [views, setViews] = useState(() => {
+        try {
+            const raw = localStorage.getItem(VIEWS_KEY)
+            const parsed = raw ? JSON.parse(raw) : []
+            return Array.isArray(parsed) ? parsed : []
+        } catch {
+            return []
+        }
+    })
+
     const patientTypeOptions = useMemo(() => lookups.patientTypes || [], [lookups.patientTypes])
 
-    const stats = useMemo(() => {
+    const baseStats = useMemo(() => {
         const total = patients.length
         const active = patients.filter((p) => p.is_active !== false).length
         return { total, active, inactive: total - active }
@@ -580,9 +902,10 @@ export default function PatientPage() {
         loadPatients(q, codeOrEmpty)
     }
 
-    const handleReset = () => {
+    const handleResetAll = () => {
         setPatientTypeFilter('')
         setQ('')
+        setFilters({ ...FILTER_DEFAULT })
         loadPatients('', '')
     }
 
@@ -668,7 +991,7 @@ export default function PatientPage() {
             label: x.name || x.code,
         }))
 
-        const MAX_MAIN = 6 // All + 6 looks very iOS-clean
+        const MAX_MAIN = 6
         const main = all.concat(mapped).slice(0, MAX_MAIN + 1)
         const rest = all.concat(mapped).slice(MAX_MAIN + 1)
 
@@ -681,10 +1004,186 @@ export default function PatientPage() {
         color: primary,
     }
 
+    // Apply Extreme Filters (client-side)
+    const hasAnyLocalFilter = useMemo(() => {
+        const f = filters
+        return (
+            f.status !== 'all' ||
+            f.gender !== 'all' ||
+            !!String(f.blood_group || '').trim() ||
+            !!String(f.tag_contains || '').trim() ||
+            !!String(f.age_min || '').trim() ||
+            !!String(f.age_max || '').trim() ||
+            !!String(f.reg_from || '').trim() ||
+            !!String(f.reg_to || '').trim() ||
+            f.has_phone ||
+            f.has_email ||
+            f.sort_by !== FILTER_DEFAULT.sort_by ||
+            f.sort_dir !== FILTER_DEFAULT.sort_dir
+        )
+    }, [filters])
+
+    const filteredPatients = useMemo(() => {
+        const f = filters
+        const bgNeed = String(f.blood_group || '').trim().toLowerCase()
+        const tagNeed = String(f.tag_contains || '').trim().toLowerCase()
+        const ageMin = f.age_min ? Number(f.age_min) : null
+        const ageMax = f.age_max ? Number(f.age_max) : null
+
+        const regFrom = f.reg_from ? new Date(`${f.reg_from}T00:00:00`) : null
+        const regTo = f.reg_to ? new Date(`${f.reg_to}T23:59:59`) : null
+
+        let rows = (patients || []).filter((p) => {
+            // status
+            if (f.status === 'active' && p.is_active === false) return false
+            if (f.status === 'inactive' && p.is_active !== false) return false
+
+            // gender
+            if (f.gender !== 'all') {
+                const g = String(p.gender || '').toLowerCase()
+                if (g !== f.gender) return false
+            }
+
+            // blood group
+            if (bgNeed) {
+                const bg = String(p.blood_group || '').toLowerCase()
+                if (!bg.includes(bgNeed)) return false
+            }
+
+            // tag contains
+            if (tagNeed) {
+                const t = String(p.tag || '').toLowerCase()
+                if (!t.includes(tagNeed)) return false
+            }
+
+            // has phone/email
+            if (f.has_phone && !String(p.phone || '').trim()) return false
+            if (f.has_email && !String(p.email || '').trim()) return false
+
+            // age range
+            if (ageMin !== null || ageMax !== null) {
+                const age = extractAgeYears(p)
+                if (age === null) return false
+                if (ageMin !== null && age < ageMin) return false
+                if (ageMax !== null && age > ageMax) return false
+            }
+
+            // registered range
+            if (regFrom || regTo) {
+                const dt = getCreatedDate(p)
+                if (!dt) return false
+                if (regFrom && dt < regFrom) return false
+                if (regTo && dt > regTo) return false
+            }
+
+            return true
+        })
+
+        // sorting
+        const dir = f.sort_dir === 'asc' ? 1 : -1
+        rows.sort((a, b) => {
+            if (f.sort_by === 'name') {
+                const an = `${a.first_name || ''} ${a.last_name || ''}`.trim().toLowerCase()
+                const bn = `${b.first_name || ''} ${b.last_name || ''}`.trim().toLowerCase()
+                return an.localeCompare(bn) * dir
+            }
+            if (f.sort_by === 'uhid') {
+                const au = String(a.uhid || '').toLowerCase()
+                const bu = String(b.uhid || '').toLowerCase()
+                return au.localeCompare(bu) * dir
+            }
+            if (f.sort_by === 'age') {
+                const aa = extractAgeYears(a) ?? -1
+                const ba = extractAgeYears(b) ?? -1
+                return (aa - ba) * dir
+            }
+            // recent
+            const ad = getCreatedDate(a)?.getTime?.() || 0
+            const bd = getCreatedDate(b)?.getTime?.() || 0
+            return (ad - bd) * dir
+        })
+
+        return rows
+    }, [patients, filters])
+
+    const shownStats = useMemo(() => {
+        const total = filteredPatients.length
+        const active = filteredPatients.filter((p) => p.is_active !== false).length
+        return { total, active, inactive: total - active }
+    }, [filteredPatients])
+
+    const chips = useMemo(() => {
+        const f = filters
+        const out = []
+
+        if (f.status !== 'all') out.push({ k: 'status', label: `Status: ${f.status}` })
+        if (f.gender !== 'all') out.push({ k: 'gender', label: `Gender: ${f.gender}` })
+        if (String(f.blood_group || '').trim()) out.push({ k: 'blood_group', label: `Blood: ${f.blood_group}` })
+        if (String(f.tag_contains || '').trim()) out.push({ k: 'tag_contains', label: `Tag: ${f.tag_contains}` })
+        if (f.has_phone) out.push({ k: 'has_phone', label: 'Has Phone' })
+        if (f.has_email) out.push({ k: 'has_email', label: 'Has Email' })
+        if (String(f.age_min || '').trim() || String(f.age_max || '').trim()) {
+            out.push({ k: 'age', label: `Age: ${f.age_min || '…'}–${f.age_max || '…'}` })
+        }
+        if (String(f.reg_from || '').trim() || String(f.reg_to || '').trim()) {
+            out.push({ k: 'reg', label: `Reg: ${f.reg_from || '…'} → ${f.reg_to || '…'}` })
+        }
+        if (f.sort_by !== FILTER_DEFAULT.sort_by || f.sort_dir !== FILTER_DEFAULT.sort_dir) {
+            out.push({ k: 'sort', label: `Sort: ${f.sort_by} (${f.sort_dir})` })
+        }
+
+        return out
+    }, [filters])
+
+    const clearChip = (k) => {
+        if (k === 'age') return setFilters((p) => ({ ...p, age_min: '', age_max: '' }))
+        if (k === 'reg') return setFilters((p) => ({ ...p, reg_from: '', reg_to: '' }))
+        if (k === 'sort') return setFilters((p) => ({ ...p, sort_by: FILTER_DEFAULT.sort_by, sort_dir: FILTER_DEFAULT.sort_dir }))
+        if (k === 'has_phone') return setFilters((p) => ({ ...p, has_phone: false }))
+        if (k === 'has_email') return setFilters((p) => ({ ...p, has_email: false }))
+        setFilters((p) => ({ ...p, [k]: FILTER_DEFAULT[k] }))
+    }
+
+    const saveView = () => {
+        const name = window.prompt('View name? (e.g., Active OPD VIP)')
+        if (!name) return
+        const next = [
+            ...views.filter((v) => v.name !== name),
+            { name, q, patientTypeFilter, filters },
+        ]
+        setViews(next)
+        try {
+            localStorage.setItem(VIEWS_KEY, JSON.stringify(next))
+        } catch {
+            // ignore
+        }
+        toast.success('View saved.')
+    }
+
+    const applyView = (v) => {
+        setQ(v.q || '')
+        setPatientTypeFilter(v.patientTypeFilter || '')
+        setFilters(v.filters || { ...FILTER_DEFAULT })
+        loadPatients(v.q || '', v.patientTypeFilter || '')
+        toast.success('View applied.')
+    }
+
+    const deleteView = (v) => {
+        const ok = window.confirm(`Delete view "${v.name}"?`)
+        if (!ok) return
+        const next = views.filter((x) => x.name !== v.name)
+        setViews(next)
+        try {
+            localStorage.setItem(VIEWS_KEY, JSON.stringify(next))
+        } catch {
+            // ignore
+        }
+        toast.success('View deleted.')
+    }
+
     return (
         <div className="h-full min-h-0 w-full bg-slate-50">
-            {/* Centered container */}
-            <div className="mx-auto w-full max-w-6xl px-3 sm:px-5 py-4 flex flex-col gap-4 min-h-0">
+            <div className="mx-auto w-full max-w-12xl px-3 sm:px-5 py-4 flex flex-col gap-4 min-h-0">
                 {/* Header */}
                 <Card className="rounded-3xl border-black/50 bg-white/90 backdrop-blur shadow-[0_1px_2px_rgba(0,0,0,0.05)] overflow-hidden">
                     <CardHeader className="pb-3">
@@ -703,13 +1202,13 @@ export default function PatientPage() {
                                 </CardTitle>
 
                                 <p className="mt-1 text-[13px] text-slate-600 max-w-2xl leading-relaxed">
-                                    UHID search, smart filters, export, and quick profile actions.
+                                    UHID search, extreme filters, saved views, export, and quick profile actions.
                                 </p>
 
                                 <div className="mt-3 flex flex-wrap gap-2">
-                                    <StatPill label="Active" value={stats.active} tone="emerald" />
-                                    <StatPill label="Total" value={stats.total} tone="sky" />
-                                    {stats.inactive > 0 && <StatPill label="Inactive" value={stats.inactive} tone="rose" />}
+                                    <StatPill label="Showing" value={`${shownStats.total}/${baseStats.total}`} tone="sky" />
+                                    <StatPill label="Active" value={shownStats.active} tone="emerald" />
+                                    {shownStats.inactive > 0 && <StatPill label="Inactive" value={shownStats.inactive} tone="rose" />}
                                     <div className="inline-flex items-center gap-2 rounded-full bg-black/[0.04] px-3 py-1 text-[12px] font-semibold text-slate-700">
                                         <Tag className="h-4 w-4 opacity-70" />
                                         Type: {activeTypeLabel}
@@ -718,6 +1217,24 @@ export default function PatientPage() {
                             </div>
 
                             <div className="flex flex-wrap gap-2 md:justify-end">
+                                <ViewsMenu
+                                    primary={primary}
+                                    onSave={saveView}
+                                    views={views}
+                                    onApply={applyView}
+                                    onDelete={deleteView}
+                                />
+
+                                <Button
+                                    variant="outline"
+                                    className="rounded-2xl border-black/50 bg-white hover:bg-black/[0.03]"
+                                    onClick={() => setFiltersOpen(true)}
+                                    title="Advanced Filters"
+                                >
+                                    <SlidersHorizontal className="h-4 w-4 mr-2" />
+                                    Filters
+                                </Button>
+
                                 <Button
                                     variant="outline"
                                     className="rounded-2xl border-black/50 bg-white hover:bg-black/[0.03]"
@@ -754,7 +1271,6 @@ export default function PatientPage() {
                                             onChange={(e) => setQ(e.target.value)}
                                         />
 
-                                        {/* right: clear + ⌘K hint */}
                                         <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
                                             {!!q && (
                                                 <button
@@ -787,21 +1303,21 @@ export default function PatientPage() {
                                     <Button
                                         variant="outline"
                                         className="rounded-2xl border-black/50 bg-white hover:bg-black/[0.03]"
-                                        onClick={handleReset}
+                                        onClick={handleResetAll}
                                     >
-                                        Reset
+                                        Reset All
                                     </Button>
                                     <Button
                                         variant="outline"
                                         className="rounded-2xl border-black/50 bg-white hover:bg-black/[0.03]"
                                         onClick={() => loadPatients(q, patientTypeFilter)}
                                     >
-                                        Apply
+                                        Apply Server
                                     </Button>
                                 </div>
                             </div>
 
-                            {/* True iOS segmented control */}
+                            {/* Patient Type segmented (server) */}
                             <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                                 <div className="text-[12px] font-semibold text-slate-600">Patient Type</div>
                                 <SegmentedControl
@@ -813,7 +1329,23 @@ export default function PatientPage() {
                                 />
                             </div>
 
-                            {/* Export (clean) */}
+                            {/* Active filter chips */}
+                            {hasAnyLocalFilter && (
+                                <div className="flex flex-wrap gap-2">
+                                    {chips.map((c) => (
+                                        <FilterChip key={c.k} label={c.label} onRemove={() => clearChip(c.k)} />
+                                    ))}
+                                    <Button
+                                        variant="outline"
+                                        className="h-8 rounded-2xl border-black/50 bg-white hover:bg-black/[0.03]"
+                                        onClick={() => setFilters({ ...FILTER_DEFAULT })}
+                                    >
+                                        Clear Filters
+                                    </Button>
+                                </div>
+                            )}
+
+                            {/* Export */}
                             <div className="rounded-3xl border border-black/50 bg-black/[0.02] p-3">
                                 <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                                     <div className="flex items-center gap-2 text-[12px] font-semibold text-slate-700">
@@ -904,28 +1436,59 @@ export default function PatientPage() {
                                             </tr>
                                         )}
 
-                                        {!loading && patients.length === 0 && (
+                                        {!loading && filteredPatients.length === 0 && (
                                             <tr>
                                                 <td colSpan={5} className="px-5 py-14 text-center">
                                                     <div className="flex flex-col items-center gap-2">
                                                         <div className="h-12 w-12 rounded-3xl bg-black/[0.04] grid place-items-center">
                                                             <Inbox className="h-6 w-6 text-slate-400" />
                                                         </div>
-                                                        <div className="font-semibold text-slate-900">No patients found</div>
-                                                        <div className="text-[12px] text-slate-500">
-                                                            Try search / filters or create a new patient.
+                                                        <div className="font-semibold text-slate-900">
+                                                            {patients.length === 0 ? 'No patients found' : 'No matches for filters'}
                                                         </div>
-                                                        <Button className="rounded-2xl mt-1 shadow-sm" style={{ backgroundColor: primary }} onClick={handleNew}>
-                                                            <Plus className="h-4 w-4 mr-2" />
-                                                            New Patient
-                                                        </Button>
+                                                        <div className="text-[12px] text-slate-500">
+                                                            {patients.length === 0
+                                                                ? 'Try search / filters or create a new patient.'
+                                                                : 'Clear filters or widen conditions.'}
+                                                        </div>
+
+                                                        <div className="flex flex-wrap gap-2 mt-2 justify-center">
+                                                            {patients.length === 0 ? (
+                                                                <Button
+                                                                    className="rounded-2xl mt-1 shadow-sm"
+                                                                    style={{ backgroundColor: primary }}
+                                                                    onClick={handleNew}
+                                                                >
+                                                                    <Plus className="h-4 w-4 mr-2" />
+                                                                    New Patient
+                                                                </Button>
+                                                            ) : (
+                                                                <>
+                                                                    <Button
+                                                                        variant="outline"
+                                                                        className="rounded-2xl border-black/50 bg-white hover:bg-black/[0.03]"
+                                                                        onClick={() => setFilters({ ...FILTER_DEFAULT })}
+                                                                    >
+                                                                        Clear Filters
+                                                                    </Button>
+                                                                    <Button
+                                                                        className="rounded-2xl shadow-sm"
+                                                                        style={{ backgroundColor: primary }}
+                                                                        onClick={() => setFiltersOpen(true)}
+                                                                    >
+                                                                        <SlidersHorizontal className="h-4 w-4 mr-2" />
+                                                                        Edit Filters
+                                                                    </Button>
+                                                                </>
+                                                            )}
+                                                        </div>
                                                     </div>
                                                 </td>
                                             </tr>
                                         )}
 
                                         {!loading &&
-                                            patients.map((p) => {
+                                            filteredPatients.map((p) => {
                                                 const fullName = `${p.first_name || ''} ${p.last_name || ''}`.trim() || '—'
                                                 const active = p.is_active !== false
 
@@ -945,7 +1508,9 @@ export default function PatientPage() {
                                                                         color: primary,
                                                                     }}
                                                                 >
-                                                                    <span className="text-[12px] font-extrabold">{initials(p.first_name, p.last_name)}</span>
+                                                                    <span className="text-[12px] font-extrabold">
+                                                                        {initials(p.first_name, p.last_name)}
+                                                                    </span>
                                                                 </div>
 
                                                                 <div className="min-w-0 flex-1">
@@ -968,7 +1533,6 @@ export default function PatientPage() {
                                                                             </div>
                                                                         </div>
 
-                                                                        {/* Hover chevron (NUTRYAH feel) */}
                                                                         <ChevronRight className="h-5 w-5 text-slate-300 opacity-0 group-hover:opacity-100 transition" />
                                                                     </div>
                                                                 </div>
@@ -1032,24 +1596,54 @@ export default function PatientPage() {
                             </Card>
                         )}
 
-                        {!loading && patients.length === 0 && (
+                        {!loading && filteredPatients.length === 0 && (
                             <Card className="rounded-3xl border-black/50 bg-white/90 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
                                 <CardContent className="py-8 text-center">
                                     <div className="mx-auto h-12 w-12 rounded-3xl bg-black/[0.04] grid place-items-center">
                                         <Inbox className="h-6 w-6 text-slate-400" />
                                     </div>
-                                    <div className="mt-3 font-semibold text-slate-900">No patients found</div>
-                                    <div className="mt-1 text-[12px] text-slate-500">Try search or create a patient.</div>
-                                    <Button className="rounded-2xl mt-4 shadow-sm" style={{ backgroundColor: primary }} onClick={handleNew}>
-                                        <Plus className="h-4 w-4 mr-2" />
-                                        New Patient
-                                    </Button>
+                                    <div className="mt-3 font-semibold text-slate-900">
+                                        {patients.length === 0 ? 'No patients found' : 'No matches for filters'}
+                                    </div>
+                                    <div className="mt-1 text-[12px] text-slate-500">
+                                        {patients.length === 0 ? 'Try search or create a patient.' : 'Clear filters or widen conditions.'}
+                                    </div>
+                                    <div className="flex flex-wrap justify-center gap-2 mt-4">
+                                        {patients.length === 0 ? (
+                                            <Button
+                                                className="rounded-2xl shadow-sm"
+                                                style={{ backgroundColor: primary }}
+                                                onClick={handleNew}
+                                            >
+                                                <Plus className="h-4 w-4 mr-2" />
+                                                New Patient
+                                            </Button>
+                                        ) : (
+                                            <>
+                                                <Button
+                                                    variant="outline"
+                                                    className="rounded-2xl border-black/50 bg-white hover:bg-black/[0.03]"
+                                                    onClick={() => setFilters({ ...FILTER_DEFAULT })}
+                                                >
+                                                    Clear Filters
+                                                </Button>
+                                                <Button
+                                                    className="rounded-2xl shadow-sm"
+                                                    style={{ backgroundColor: primary }}
+                                                    onClick={() => setFiltersOpen(true)}
+                                                >
+                                                    <SlidersHorizontal className="h-4 w-4 mr-2" />
+                                                    Filters
+                                                </Button>
+                                            </>
+                                        )}
+                                    </div>
                                 </CardContent>
                             </Card>
                         )}
 
                         {!loading &&
-                            patients.map((p) => {
+                            filteredPatients.map((p) => {
                                 const fullName = `${p.first_name || ''} ${p.last_name || ''}`.trim() || '—'
                                 const active = p.is_active !== false
 
@@ -1167,11 +1761,20 @@ export default function PatientPage() {
                 onClose={() => setPaletteOpen(false)}
                 primary={primary}
                 patientTypeFilter={patientTypeFilter}
-                fallbackPatients={patients}
+                fallbackPatients={filteredPatients}
                 onPickPatient={(p) => {
                     setSelectedPatient(p)
                     setDetailOpen(true)
                 }}
+            />
+
+            {/* Advanced Filters */}
+            <FiltersDialog
+                open={filtersOpen}
+                onOpenChange={setFiltersOpen}
+                filters={filters}
+                setFilters={setFilters}
+                primary={primary}
             />
         </div>
     )
