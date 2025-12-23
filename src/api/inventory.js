@@ -6,6 +6,27 @@ export function listInventoryLocations() {
     return API.get('/inventory/locations')
 }
 
+export const searchItemBatches = ({
+    location_id,
+    q = '',
+    limit = 15,
+    only_in_stock = true,
+    exclude_expired = true,
+    active_only = true,
+    type = 'drug', // 'drug' | 'consumable' | 'all'
+} = {}) =>
+    API.get('/inventory/item-batches', {
+        params: {
+            location_id,
+            q,
+            limit,
+            only_in_stock,
+            exclude_expired,
+            active_only,
+            type,
+        },
+    })
+
 export function createInventoryLocation(payload) {
     return API.post('/inventory/locations', payload)
 }
@@ -145,34 +166,34 @@ export function listLocations(params = {}) {
 /// ---------- GRN ----------
 export function createGrn(payload) {
     return API.post("/inventory/grn", payload)
-  }
-  export function listGrns(params = {}) {
+}
+export function listGrns(params = {}) {
     return API.get("/inventory/grn", { params })
-  }
-  export function getGrn(id) {
+}
+export function getGrn(id) {
     return API.get(`/inventory/grn/${id}`)
-  }
-  export function updateGrn(id, payload) {
+}
+export function updateGrn(id, payload) {
     return API.put(`/inventory/grn/${id}`, payload)
-  }
-  export function postGrn(id, body = {}) {
+}
+export function postGrn(id, body = {}) {
     return API.post(`/inventory/grn/${id}/post`, body)
-  }
-  
-  // ---------- PO (for GRN autofill) ----------
-  export function listPendingPos(params = {}) {
+}
+
+// ---------- PO (for GRN autofill) ----------
+export function listPendingPos(params = {}) {
     return API.get("/inventory/purchase-orders/pending", { params })
-  }
+}
 //   export function getPurchaseOrder(poId) {
 //     return API.get(`/inventory/purchase-orders/${poId}`)
 //   }
-  
-  // ✅ NEW: use backend pending-items (ordered - received)
-  export function getPoPendingItems(poId) {
+
+// ✅ NEW: use backend pending-items (ordered - received)
+export function getPoPendingItems(poId) {
     return API.get(`/inventory/purchase-orders/${poId}/pending-items`)
-  }
-  
-  
+}
+
+
 // ---------- Returns ----------
 export function createReturnNote(payload) {
     return API.post('/inventory/returns', payload)

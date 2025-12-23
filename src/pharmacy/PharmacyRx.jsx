@@ -7,10 +7,11 @@ import {
   listPharmacyPrescriptions,
   createPharmacyPrescription,
   getPharmacyPrescription,
+
 } from '../api/pharmacyRx'
 import { listPatients, getPatientById } from '../api/patients'
 import { getBillingMasters } from '../api/billing'
-import { listInventoryItems } from '../api/inventory'
+import { listInventoryItems, searchItemBatches } from '../api/inventory'
 
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -71,6 +72,87 @@ function safeStr(x) {
   return (x ?? '').toString()
 }
 
+function fmtDateShort(x) {
+  if (!x) return '—'
+  try {
+    const d = new Date(x)
+    if (Number.isNaN(d.getTime())) return String(x)
+    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short' }) // e.g. "Aug 2026"
+  } catch {
+    return '—'
+  }
+}
+
+function fmtQty(v) {
+  const n = Number(v)
+  if (!Number.isFinite(n)) return safeStr(v) || '0'
+  return Number.isInteger(n) ? String(n) : n.toFixed(2)
+}
+
+function isExpired(expiry) {
+  if (!expiry) return false
+  const d = new Date(expiry)
+  if (Number.isNaN(d.getTime())) return false
+  const today = new Date()
+  // compare dates only
+  d.setHours(0, 0, 0, 0)
+  today.setHours(0, 0, 0, 0)
+  return d < today
+}
+
+// const EMPTY_LINE = {
+//   item: null,
+//   item_name: '',
+//   strength: '',
+//   route: 'PO',
+//   dose: '',
+//   frequency: '',
+//   duration_days: '',
+//   total_qty: '',
+//   instructions: '',
+//   is_prn: false,
+//   is_stat: false,
+//   requested_qty: '',
+//   _qtyTouched: false,
+
+//   // ✅ batch picker fields
+//   batch_id: null,
+//   batch_no: '',
+//   expiry_date: null,
+//   available_qty: '',
+// }
+
+const EMPTY_LINE = {
+  item: null,
+
+  // ✅ store IDs explicitly (prevents item_id validation error)
+  item_id: null,
+
+  item_name: '',
+  strength: '',
+  route: 'PO',
+
+  // ✅ checkbox schedule model
+  dose_slots: { M: 0, A: 0, E: 0, N: 0 }, // each slot holds dose count 0..9
+  frequency: '',
+
+  duration_days: '',
+  total_qty: '',
+  requested_qty: '',
+
+  dose: '', // optional note like "Tab"
+  instructions: '',
+  is_prn: false,
+  is_stat: false,
+
+  // batch picker (optional)
+  batch_id: null,
+  batch_no: '',
+  expiry_date: null,
+  available_qty: '',
+}
+
+
 function useDebouncedValue(value, delay = 300) {
   const [v, setV] = useState(value)
   useEffect(() => {
@@ -97,10 +179,7 @@ function useOnClickOutside(ref, handler) {
   }, [ref, handler])
 }
 
-function normalizeFreq(freq) {
-  const f = safeStr(freq).trim().toUpperCase()
-  return f
-}
+const normalizeFreq = (v = "") => String(v || "").trim().toUpperCase().replace(/\s+/g, "")
 
 /** robust getter for inconsistent backend keys */
 function pick(obj, keys, fallback = '') {
@@ -111,43 +190,38 @@ function pick(obj, keys, fallback = '') {
   return fallback
 }
 
-function parseFrequencyToPerDay(freqRaw) {
-  const f = normalizeFreq(freqRaw)
+const parseFrequencyToPerDay = (freq = "") => {
+  const f = normalizeFreq(freq)
 
-  const map = {
-    OD: 1,
-    QD: 1,
-    ONCE: 1,
-    BD: 2,
-    BID: 2,
-    TID: 3,
-    TDS: 3,
-    QID: 4,
-    QHS: 1,
-    HS: 1,
-  }
-  if (map[f]) return map[f]
-
-  if (f.includes('-')) {
-    const parts = f.split('-').map((x) => Number(x || 0))
-    const perDay = parts.reduce((a, b) => a + (Number.isFinite(b) ? b : 0), 0)
-    return perDay || 0
+  // numeric pattern: 1-1-1 or 0-1-0 or 1-1-1-1 etc
+  if (/^\d+(?:-\d+){1,3}$/.test(f)) {
+    return f.split("-").reduce((sum, x) => sum + (Number(x) || 0), 0)
   }
 
-  const qh = f.match(/^Q(\d{1,2})H$/)
-  if (qh) {
-    const h = Number(qh[1])
-    if (h > 0) return Math.floor(24 / h)
-  }
+  // common aliases
+  if (["OD", "QD", "ONCE", "HS", "QHS"].includes(f)) return 1
+  if (["BD", "BID"].includes(f)) return 2
+  if (["TID", "TDS"].includes(f)) return 3
+  if (["QID", "QDS"].includes(f)) return 4
 
   return 0
 }
 
-function calcAutoQty({ frequency, duration_days }) {
-  const d = Number(duration_days || 0)
-  const perDay = parseFrequencyToPerDay(frequency)
-  if (!d || !perDay) return ''
-  return String(perDay * d)
+const parseDoseMultiplier = (dose = "") => {
+  const m = String(dose || "").match(/(\d+(\.\d+)?)/)
+  const n = m ? Number(m[1]) : 1
+  return Number.isFinite(n) && n > 0 ? n : 1
+}
+
+const calcAutoQty = (line) => {
+  const days = Number(line?.duration_days || 0)
+  if (!Number.isFinite(days) || days <= 0) return ""
+
+  const perDay = parseFrequencyToPerDay(line?.frequency || "")
+  if (!perDay) return ""
+
+  const doseMul = parseDoseMultiplier(line?.dose || "") // keep 1 if you don't want dose based qty
+  return String(Math.round(perDay * days * doseMul))
 }
 
 function getPatientDisplay(p) {
@@ -261,21 +335,21 @@ const EMPTY_HEADER = {
   notes: '',
 }
 
-const EMPTY_LINE = {
-  item: null,
-  item_name: '',
-  strength: '',
-  route: 'PO',
-  dose: '',
-  frequency: '',
-  duration_days: '',
-  total_qty: '',
-  instructions: '',
-  is_prn: false,
-  is_stat: false,
-  requested_qty: '',
-  _qtyTouched: false,
-}
+// const EMPTY_LINE = {
+//   item: null,
+//   item_name: '',
+//   strength: '',
+//   route: 'PO',
+//   dose: '',
+//   frequency: '',
+//   duration_days: '',
+//   total_qty: '',
+//   instructions: '',
+//   is_prn: false,
+//   is_stat: false,
+//   requested_qty: '',
+//   _qtyTouched: false,
+// }
 
 /* ------------------------------ UI helpers ------------------------------ */
 
@@ -362,6 +436,7 @@ function PatientSummaryCard({ patient, loading }) {
 
   const addrLine = [address, city, state, pin].filter(Boolean).join(', ')
 
+
   return (
     <div className="rounded-3xl border border-slate-500 bg-white/70 backdrop-blur p-4 shadow-sm">
       <div className="flex items-start justify-between gap-3">
@@ -417,6 +492,91 @@ function PatientSummaryCard({ patient, loading }) {
   )
 }
 
+
+function toInt(v) {
+  const n = Number(v)
+  return Number.isFinite(n) ? Math.trunc(n) : null
+}
+
+function clampInt(v, min, max) {
+  const n = Math.trunc(Number(v))
+  if (!Number.isFinite(n)) return min
+  return Math.max(min, Math.min(max, n))
+}
+
+const SLOT_KEYS = ['M', 'A', 'E', 'N']
+const SLOT_META = {
+  M: { label: 'Morning' },
+  A: { label: 'Afternoon' },
+  E: { label: 'Evening' },
+  N: { label: 'Night' },
+}
+
+function emptySlots() {
+  return { M: 0, A: 0, E: 0, N: 0 }
+}
+
+function slotsToFrequency(slots) {
+  const s = slots || emptySlots()
+  return SLOT_KEYS.map((k) => clampInt(s[k] ?? 0, 0, 9)).join('-') // supports 0..9 tablets each slot
+}
+
+function frequencyToSlots(freq) {
+  // supports: "1-0-1-0" or "OD/BD/TID/QID"
+  const f = safeStr(freq).trim().toUpperCase()
+  const s = emptySlots()
+
+  const preset = {
+    OD: { M: 1 },
+    BD: { M: 1, N: 1 },
+    TID: { M: 1, A: 1, N: 1 },
+    TDS: { M: 1, A: 1, N: 1 },
+    QID: { M: 1, A: 1, E: 1, N: 1 },
+  }
+  if (preset[f]) return { ...s, ...preset[f] }
+
+  if (f.includes('-')) {
+    const parts = f.split('-').map((x) => clampInt(x || 0, 0, 9))
+    // map first 4 parts → M A E N
+    s.M = parts[0] ?? 0
+    s.A = parts[1] ?? 0
+    s.E = parts[2] ?? 0
+    s.N = parts[3] ?? 0
+    return s
+  }
+  return s
+}
+
+function perDayFromSlots(slots) {
+  const s = slots || emptySlots()
+  return SLOT_KEYS.reduce((sum, k) => sum + (Number(s[k]) || 0), 0)
+}
+
+// function calcAutoQty(line) {
+//   const days = Number(line?.duration_days || 0)
+//   if (!Number.isFinite(days) || days <= 0) return ''
+
+//   // primary: checkbox slots
+//   const slots = line?.dose_slots
+//   const perDay = slots ? perDayFromSlots(slots) : parseFrequencyToPerDay(line?.frequency)
+//   if (!perDay) return ''
+
+//   return String(perDay * Math.trunc(days))
+// }
+
+function applyAuto(line) {
+  const next = { ...line }
+
+  // keep frequency always aligned with slots
+  next.frequency = slotsToFrequency(next.dose_slots || emptySlots())
+
+  // auto qty always (no manual typing)
+  const qty = calcAutoQty(next)
+  next.total_qty = qty
+  next.requested_qty = qty
+
+  return next
+}
 /* -------------------------------- component ------------------------------- */
 
 export default function PharmacyRx() {
@@ -472,7 +632,14 @@ export default function PharmacyRx() {
 
   // cache for patient details
   const patientCacheRef = useRef(new Map())
+  const [pharmacyLocationId, setPharmacyLocationId] = useState(() => {
+    const v = Number(localStorage.getItem('pharmacy.locationId') || '')
+    return Number.isFinite(v) && v > 0 ? v : 1
+  })
 
+  useEffect(() => {
+    if (pharmacyLocationId) localStorage.setItem('pharmacy.locationId', String(pharmacyLocationId))
+  }, [pharmacyLocationId])
   useOnClickOutside(patientDropRef, () => setShowPatientDropdown(false))
   useOnClickOutside(medDropRef, () => setShowMedDropdown(false))
 
@@ -623,14 +790,18 @@ export default function PharmacyRx() {
       ; (async () => {
         try {
           setMedSearching(true)
-          const res = await listInventoryItems({
+          const res = await searchItemBatches({
+            location_id: pharmacyLocationId,
             q,
-            kind: 'MEDICINE',
             limit: 15,
+            type: 'drug',
+            only_in_stock: true,
+            exclude_expired: true,
+            active_only: true,
           })
           if (cancelled) return
-          const items = res?.data?.items || res?.data || []
-          setMedResults(items)
+          const rows = res?.data?.items || res?.data || []
+          setMedResults(rows)
           setShowMedDropdown(true)
         } catch (e) {
           // toast via interceptor
@@ -644,25 +815,45 @@ export default function PharmacyRx() {
     }
   }, [debouncedMedQuery])
 
-  function handleSelectMedicine(item) {
+  function handleSelectMedicine(row) {
+    const itemId = toInt(row?.item_id ?? row?.id) // batch search usually returns item_id
+    const batchId = toInt(row?.batch_id)
+
+    if (!itemId) {
+      toast.error('Invalid item selected (missing item_id).')
+      return
+    }
+
     setCurrentLine((prev) => {
       const next = {
         ...prev,
-        item,
-        item_name: item.name || item.item_name || prev.item_name || '',
-        strength: prev.strength || item.strength || item.form || '',
-        route: prev.route || item.route || 'PO',
+        item: row,
+        item_id: itemId,
+
+        item_name: row.name || prev.item_name || '',
+        strength: row.strength || row.form || prev.strength || '',
+        route: prev.route || 'PO',
+
+        // keep batch if returned
+        batch_id: batchId || prev.batch_id || null,
+        batch_no: row.batch_no || prev.batch_no || '',
+        expiry_date: row.expiry_date || prev.expiry_date || null,
+        available_qty: row.available_qty ?? prev.available_qty ?? '',
       }
 
-      if (!next._qtyTouched) {
-        const auto = calcAutoQty(next)
-        if (auto) next.total_qty = auto
-      }
-      return next
+      // ✅ friendly defaults:
+      // if user hasn't selected any schedule yet, default to BD (Morning + Night)
+      const hasAny = perDayFromSlots(next.dose_slots) > 0
+      if (!hasAny) next.dose_slots = { M: 1, A: 0, E: 0, N: 1 }
+
+      return applyAuto(next)
     })
-    setMedQuery(item.name || item.item_name || '')
+
+    setMedQuery(row.name || '')
     setShowMedDropdown(false)
   }
+
+
 
   /* ----------------------------- form helpers ----------------------------- */
 
@@ -708,53 +899,88 @@ export default function PharmacyRx() {
   }
 
   function handleAddLine() {
-    const name = currentLine.item?.name || currentLine.item_name
-    if (!currentLine.item && !name) {
-      toast.error('Select a medicine first')
+    // must select from dropdown
+    const itemId = toInt(currentLine.item_id ?? currentLine.item?.item_id ?? currentLine.item?.id)
+    if (!itemId) {
+      toast.error('Please select the medicine from dropdown.')
       return
     }
 
-    const qtyStr = safeStr(currentLine.total_qty || suggestedQtyForCurrent()).trim()
-    const qty = qtyStr ? Number(qtyStr) : 0
+    // user must choose schedule + days
+    const days = toInt(currentLine.duration_days)
+    const perDay = perDayFromSlots(currentLine.dose_slots)
+    if (!days || days <= 0) {
+      toast.error('Enter valid Days')
+      return
+    }
+    if (!perDay || perDay <= 0) {
+      toast.error('Select dosage schedule (checkboxes)')
+      return
+    }
+
+    const computed = applyAuto(currentLine)
+    const qty = Number(computed.total_qty || 0)
+
     if (!qty || !Number.isFinite(qty) || qty <= 0) {
-      toast.error('Enter a valid Total Qty (or set Frequency + Days)')
+      toast.error('Auto quantity failed. Check Days + Schedule.')
+      return
+    }
+
+    // optional stock validation if batch stock exists
+    const available = Number(computed.available_qty ?? computed.item?.available_qty ?? 0)
+    if (Number.isFinite(available) && available > 0 && qty > available) {
+      toast.error(`Qty exceeds available stock for this batch (Available: ${available})`)
       return
     }
 
     const newLine = {
-      ...currentLine,
-      total_qty: String(qty),
-      requested_qty: currentLine.requested_qty || String(qty),
+      ...computed,
+      item_id: itemId,
+      duration_days: String(days),
     }
 
-    const newId = newLine.item?.id || newLine.item_id
-    if (newId) {
-      const idx = lines.findIndex((l) => (l.item?.id || l.item_id) === newId)
-      if (idx >= 0) {
-        const prev = lines[idx]
-        const prevQty = Number(prev.total_qty || prev.requested_qty || 0) || 0
-        const mergedQty = prevQty + qty
-        const merged = {
-          ...prev,
-          ...newLine,
-          total_qty: String(mergedQty),
-          requested_qty: String(mergedQty),
-        }
-        setLines((arr) => arr.map((x, i) => (i === idx ? merged : x)))
-        toast.success(`Merged duplicate: ${name} (Qty ${prevQty} → ${mergedQty})`)
-      } else {
-        setLines((prev) => [...prev, newLine])
+    // merge by item+batch (safe for inventory)
+    const batchId = toInt(newLine.batch_id ?? newLine.item?.batch_id)
+    const key = `${itemId}::${batchId || ''}`
+
+    const idx = lines.findIndex((l) => {
+      const li = toInt(l.item_id ?? l.item?.item_id ?? l.item?.id)
+      const lb = toInt(l.batch_id ?? l.item?.batch_id)
+      return `${li}::${lb || ''}` === key
+    })
+
+    if (idx >= 0) {
+      const prev = lines[idx]
+      const prevQty = Number(prev.total_qty || 0) || 0
+      const mergedQty = prevQty + qty
+
+      const prevAvail = Number(prev.available_qty ?? 0)
+      if (Number.isFinite(prevAvail) && prevAvail > 0 && mergedQty > prevAvail) {
+        toast.error(`Merged qty exceeds available stock (Available: ${prevAvail})`)
+        return
       }
+
+      const merged = {
+        ...prev,
+        ...newLine,
+        total_qty: String(mergedQty),
+        requested_qty: String(mergedQty),
+      }
+
+      setLines((arr) => arr.map((x, i) => (i === idx ? merged : x)))
+      toast.success(`Merged duplicate batch: ${newLine.item_name} (${prevQty} → ${mergedQty})`)
     } else {
       setLines((prev) => [...prev, newLine])
     }
 
+    // reset line
     setCurrentLine(EMPTY_LINE)
     setMedQuery('')
     setShowMedDropdown(false)
-
     setTimeout(() => medInputRef.current?.focus?.(), 50)
   }
+
+
 
   function handleRemoveLine(idx) {
     setLines((prev) => prev.filter((_, i) => i !== idx))
@@ -763,56 +989,60 @@ export default function PharmacyRx() {
   async function handleSubmitRx() {
     const isCounter = header.type === 'COUNTER'
 
-    if (!isCounter && !header.patient) {
-      toast.error('Select a patient')
-      return
-    }
-    if (!isCounter && !header.doctorId) {
-      toast.error('Select a doctor')
-      return
-    }
-    if (!lines.length) {
-      toast.error('Add at least one medicine')
-      return
+    if (!isCounter && !header.patient) return toast.error('Select a patient')
+    if (!isCounter && !header.doctorId) return toast.error('Select a doctor')
+    if (!lines.length) return toast.error('Add at least one medicine')
+
+    // validate
+    for (let i = 0; i < lines.length; i++) {
+      const l = lines[i]
+      const itemId = toInt(l.item_id ?? l.item?.item_id ?? l.item?.id)
+      if (!itemId) return toast.error(`Line ${i + 1}: Invalid item_id`)
+      const qty = Number(l.total_qty || calcAutoQty(l) || 0)
+      if (!qty || qty <= 0) return toast.error(`Line ${i + 1}: Invalid qty`)
     }
 
     const payload = {
       type: header.type,
       priority: header.priority,
       rx_datetime: header.datetime,
-      patient_id: header.patient?.id || null,
-      doctor_user_id: isCounter ? null : header.doctorId || null,
+      patient_id: toInt(header.patient?.id),
+      doctor_user_id: toInt(header.doctorId),
       visit_id: header.type === 'OPD' ? header.visitNo || null : null,
       ipd_admission_id: header.type === 'IPD' ? header.admissionNo || null : null,
       ot_case_id: header.type === 'OT' ? header.otCaseNo || null : null,
       notes: header.notes || '',
+
       lines: lines.map((l) => {
-        const qtyStr = safeStr(l.total_qty || l.requested_qty || calcAutoQty(l)).trim()
-        const qty = qtyStr ? Number(qtyStr) : null
+        const itemId = toInt(l.item_id ?? l.item?.item_id ?? l.item?.id)
+        const line = applyAuto(l)
+        const qty = Number(line.total_qty || 0)
 
         return {
-          item_id: l.item?.id || l.item_id || null,
-          item_name: l.item?.name || l.item_name || '',
-          strength: l.strength || null,
-          route: l.route || null,
-          dose: l.dose || null,
-          frequency: l.frequency || null,
-          duration_days: l.duration_days ? Number(l.duration_days) : null,
+          item_id: itemId,
+          item_name: line.item?.name || line.item_name || '',
+          strength: line.strength || null,
+          route: line.route || null,
+
+          // ✅ frequency always a string like "1-0-1-0"
+          frequency: slotsToFrequency(line.dose_slots),
+
+          duration_days: toInt(line.duration_days),
           requested_qty: qty,
           total_qty: qty,
-          instructions: l.instructions || null,
-          is_prn: !!l.is_prn,
-          is_stat: !!l.is_stat,
+
+          dose: line.dose || null,
+          instructions: line.instructions || null,
+          is_prn: !!line.is_prn,
+          is_stat: !!line.is_stat,
         }
       }),
     }
+    console.log(payload, "payload");
 
     try {
       setSubmitting(true)
-
-      if (header.doctorId) {
-        localStorage.setItem('pharmacy.lastDoctorId', header.doctorId)
-      }
+      if (header.doctorId) localStorage.setItem('pharmacy.lastDoctorId', header.doctorId)
 
       const res = await createPharmacyPrescription(payload)
       toast.success('Prescription created & sent to Pharmacy')
@@ -821,12 +1051,11 @@ export default function PharmacyRx() {
       setTab('list')
       fetchRxList()
       if (res?.data) setSelectedRx(res.data)
-    } catch (e) {
-      // toast via interceptor
     } finally {
       setSubmitting(false)
     }
   }
+
 
   async function handleOpenRx(row) {
     try {
@@ -918,6 +1147,7 @@ export default function PharmacyRx() {
   }, [newType])
 
   /* --------------------------------- render -------------------------------- */
+
 
   return (
     <div className="relative w-full">
@@ -1616,15 +1846,18 @@ export default function PharmacyRx() {
                                   <div className="space-y-1 relative" ref={medDropRef}>
                                     <div className="flex items-center justify-between">
                                       <Label className="text-[11px] text-slate-600">
-                                        Medicine <span className="text-[10px] text-slate-400">(linked to Inventory)</span>
+                                        Medicine{" "}
+                                        <span className="text-[10px] text-slate-400">
+                                          (linked to Inventory)
+                                        </span>
                                       </Label>
 
-                                      {!!suggestedQtyForCurrent() && !currentLine.total_qty && (
-                                        <span className="text-[10px] text-slate-500">
-                                          Suggested qty:{' '}
-                                          <span className="font-medium">{suggestedQtyForCurrent()}</span>
+                                      <span className="text-[10px] text-slate-500">
+                                        Auto qty:{" "}
+                                        <span className="font-medium">
+                                          {calcAutoQty(currentLine) || "—"}
                                         </span>
-                                      )}
+                                      </span>
                                     </div>
 
                                     <div className="relative">
@@ -1656,7 +1889,9 @@ export default function PharmacyRx() {
                                           )}
 
                                           {!medSearching && !medResults.length && (
-                                            <div className="px-3 py-2 text-slate-500">No items found</div>
+                                            <div className="px-3 py-2 text-slate-500">
+                                              No items found
+                                            </div>
                                           )}
 
                                           {!medSearching &&
@@ -1672,16 +1907,45 @@ export default function PharmacyRx() {
                                                     {it.name || it.item_name}
                                                   </span>
                                                   {it.code && (
-                                                    <span className="text-[10px] text-slate-500">{it.code}</span>
+                                                    <span className="text-[10px] text-slate-500">
+                                                      {it.code}
+                                                    </span>
                                                   )}
                                                 </div>
-                                                <div className="text-[11px] text-slate-500 flex items-center gap-2">
-                                                  <span>{it.strength || it.form || ''}</span>
-                                                  {Number.isFinite(Number(it.available_qty)) && (
-                                                    <Badge variant="outline" className="text-[10px]">
-                                                      Stock: {it.available_qty}
-                                                    </Badge>
-                                                  )}
+
+                                                <div className="text-[11px] text-slate-500 flex flex-wrap items-center gap-2">
+                                                  <span>{it.strength || it.form || ""}</span>
+
+                                                  <Badge
+                                                    variant="outline"
+                                                    className={[
+                                                      "text-[10px]",
+                                                      isExpired(it.expiry_date)
+                                                        ? "border-rose-200 text-rose-700"
+                                                        : "border-slate-500",
+                                                    ].join(" ")}
+                                                  >
+                                                    Exp: {fmtDateShort(it.expiry_date)}
+                                                  </Badge>
+
+                                                  <Badge
+                                                    variant="outline"
+                                                    className="text-[10px] border-slate-500"
+                                                  >
+                                                    Batch: {it.batch_no || "—"}
+                                                  </Badge>
+
+                                                  <Badge
+                                                    variant="outline"
+                                                    className={[
+                                                      "text-[10px]",
+                                                      Number(it.available_qty) <= 0
+                                                        ? "border-rose-200 text-rose-700"
+                                                        : "border-emerald-200 text-emerald-700",
+                                                    ].join(" ")}
+                                                  >
+                                                    Qty: {fmtQty(it.available_qty)}
+                                                  </Badge>
                                                 </div>
                                               </button>
                                             ))}
@@ -1690,155 +1954,365 @@ export default function PharmacyRx() {
                                     </AnimatePresence>
                                   </div>
 
-                                  {/* Dose/Freq/Days */}
-                                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                    <div className="space-y-1">
-                                      <Label className="text-[11px] text-slate-600">Dose</Label>
-                                      <Input
-                                        value={currentLine.dose}
-                                        onChange={(e) => setCurrentLine((prev) => ({ ...prev, dose: e.target.value }))}
-                                        placeholder="e.g. 500 mg"
-                                        className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
-                                      />
+                                  {/* ✅ Super user-friendly dosage planner (checkbox frequency) */}
+                                  <div className="rounded-2xl border border-slate-200 bg-white/70 backdrop-blur p-3 space-y-3">
+                                    {/* Optional Dose (keep minimal) */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                      <div className="space-y-1 sm:col-span-1">
+                                        <Label className="text-[11px] text-slate-600">
+                                          Dose <span className="text-[10px] text-slate-400">(optional)</span>
+                                        </Label>
+                                        <Input
+                                          value={currentLine.dose}
+                                          onChange={(e) =>
+                                            setCurrentLine((prev) => ({
+                                              ...prev,
+                                              dose: e.target.value,
+                                            }))
+                                          }
+                                          placeholder="e.g. 1 tab"
+                                          className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
+                                        />
+                                      </div>
+
+                                      <div className="space-y-1 sm:col-span-1">
+                                        <Label className="text-[11px] text-slate-600">
+                                          Days <span className="text-[10px] text-slate-400">(required)</span>
+                                        </Label>
+                                        <Input
+                                          value={currentLine.duration_days}
+                                          onChange={(e) =>
+                                            setCurrentLine((prev) => {
+                                              const next = {
+                                                ...prev,
+                                                duration_days: e.target.value,
+                                                _qtyTouched: false,
+                                              }
+                                              next.total_qty = calcAutoQty(next) // ✅ always auto
+                                              return next
+                                            })
+                                          }
+                                          placeholder="e.g. 5"
+                                          className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
+                                        />
+                                      </div>
+
+                                      <div className="space-y-1 sm:col-span-1">
+                                        <Label className="text-[11px] text-slate-600">
+                                          Total Qty <span className="text-[10px] text-slate-400">(auto)</span>
+                                        </Label>
+
+                                        {(() => {
+                                          const autoQty = calcAutoQty(currentLine)
+                                          const perDay = parseFrequencyToPerDay(currentLine.frequency)
+                                          const days = Number(currentLine.duration_days || 0) || 0
+                                          const avail = Number(
+                                            currentLine.available_qty ?? currentLine.item?.available_qty ?? 0
+                                          )
+                                          const exceeds =
+                                            Number(autoQty || 0) > 0 &&
+                                            Number.isFinite(avail) &&
+                                            avail > 0 &&
+                                            Number(autoQty || 0) > avail
+
+                                          return (
+                                            <div
+                                              className={[
+                                                "h-10 rounded-full border px-3 flex items-center justify-between",
+                                                "bg-white/70 backdrop-blur",
+                                                exceeds
+                                                  ? "border-rose-200"
+                                                  : "border-slate-500",
+                                              ].join(" ")}
+                                            >
+                                              <div className="text-sm font-semibold text-slate-900">
+                                                {autoQty || "—"}
+                                              </div>
+                                              <div className="text-[11px] text-slate-500">
+                                                {perDay ? `${perDay}/day` : "Pick frequency"}{" "}
+                                                {days ? `× ${days}d` : ""}
+                                              </div>
+                                            </div>
+                                          )
+                                        })()}
+                                      </div>
                                     </div>
 
-                                    <div className="space-y-1">
-                                      <Label className="text-[11px] text-slate-600">Frequency</Label>
-                                      <Input
-                                        value={currentLine.frequency}
-                                        onChange={(e) =>
+                                    {/* Frequency selection (checkboxes) */}
+                                    <div className="space-y-1.5">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <Label className="text-[11px] text-slate-600">
+                                          Dosage frequency (checkboxes)
+                                        </Label>
+                                        <div className="text-[10px] text-slate-500">
+                                          Stored as:{" "}
+                                          <span className="font-medium">
+                                            {(() => {
+                                              const f = normalizeFreq(currentLine.frequency)
+                                              if (f.includes("-")) return f
+                                              if (["BD", "BID"].includes(f)) return "1-0-1"
+                                              if (["TID", "TDS"].includes(f)) return "1-1-1"
+                                              if (["OD", "QD", "ONCE", "HS", "QHS"].includes(f)) return "1-0-0"
+                                              return f || "—"
+                                            })()}
+                                          </span>
+                                        </div>
+                                      </div>
+
+                                      {(() => {
+                                        const f = normalizeFreq(currentLine.frequency)
+                                        let parts = [0, 0, 0] // M-A-N
+                                        if (f.includes("-")) {
+                                          const p = f.split("-")
+                                          parts = [
+                                            Number(p[0] || 0) ? 1 : 0,
+                                            Number(p[1] || 0) ? 1 : 0,
+                                            Number(p[2] || 0) ? 1 : 0,
+                                          ]
+                                        } else if (["BD", "BID"].includes(f)) {
+                                          parts = [1, 0, 1]
+                                        } else if (["TID", "TDS"].includes(f)) {
+                                          parts = [1, 1, 1]
+                                        } else if (["OD", "QD", "ONCE", "HS", "QHS"].includes(f)) {
+                                          parts = [1, 0, 0]
+                                        }
+
+                                        const toggleAt = (idx) => {
                                           setCurrentLine((prev) => {
-                                            const next = { ...prev, frequency: e.target.value }
-                                            if (!next._qtyTouched && !next.total_qty) {
-                                              const auto = calcAutoQty(next)
-                                              if (auto) next.total_qty = auto
+                                            const pf = normalizeFreq(prev.frequency)
+                                            let p = [0, 0, 0]
+                                            if (pf.includes("-")) {
+                                              const sp = pf.split("-")
+                                              p = [
+                                                Number(sp[0] || 0) ? 1 : 0,
+                                                Number(sp[1] || 0) ? 1 : 0,
+                                                Number(sp[2] || 0) ? 1 : 0,
+                                              ]
+                                            } else if (["BD", "BID"].includes(pf)) {
+                                              p = [1, 0, 1]
+                                            } else if (["TID", "TDS"].includes(pf)) {
+                                              p = [1, 1, 1]
+                                            } else if (["OD", "QD", "ONCE", "HS", "QHS"].includes(pf)) {
+                                              p = [1, 0, 0]
                                             }
+
+                                            p[idx] = p[idx] ? 0 : 1
+                                            const next = {
+                                              ...prev,
+                                              frequency: `${p[0]}-${p[1]}-${p[2]}`,
+                                              _qtyTouched: false,
+                                            }
+                                            next.total_qty = calcAutoQty(next) // ✅ always auto
                                             return next
                                           })
                                         }
-                                        placeholder="e.g. 1-0-1 / BD / TID"
-                                        className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
-                                      />
-                                    </div>
 
-                                    <div className="space-y-1">
-                                      <Label className="text-[11px] text-slate-600">Days</Label>
-                                      <Input
-                                        value={currentLine.duration_days}
-                                        onChange={(e) =>
-                                          setCurrentLine((prev) => {
-                                            const next = { ...prev, duration_days: e.target.value }
-                                            if (!next._qtyTouched && !next.total_qty) {
-                                              const auto = calcAutoQty(next)
-                                              if (auto) next.total_qty = auto
+                                        return (
+                                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                            {[
+                                              { label: "Morning", idx: 0 },
+                                              { label: "Afternoon", idx: 1 },
+                                              { label: "Night", idx: 2 },
+                                            ].map((x) => (
+                                              <label
+                                                key={x.label}
+                                                className={[
+                                                  "h-10 rounded-full border px-3 flex items-center gap-2 cursor-pointer select-none",
+                                                  "bg-white/70 backdrop-blur",
+                                                  parts[x.idx]
+                                                    ? "border-slate-900"
+                                                    : "border-slate-500",
+                                                ].join(" ")}
+                                              >
+                                                <input
+                                                  type="checkbox"
+                                                  className="h-4 w-4 accent-slate-900"
+                                                  checked={!!parts[x.idx]}
+                                                  onChange={() => toggleAt(x.idx)}
+                                                />
+                                                <span className="text-sm text-slate-700">
+                                                  {x.label}
+                                                </span>
+                                              </label>
+                                            ))}
+                                          </div>
+                                        )
+                                      })()}
+
+                                      {/* Quick presets (still useful + updates auto qty) */}
+                                      <div className="flex flex-wrap gap-1.5 pt-1">
+                                        {FREQ_PRESETS.map((f) => (
+                                          <button
+                                            key={f.value}
+                                            type="button"
+                                            onClick={() =>
+                                              setCurrentLine((prev) => {
+                                                const next = {
+                                                  ...prev,
+                                                  frequency: f.value,
+                                                  _qtyTouched: false,
+                                                }
+                                                next.total_qty = calcAutoQty(next) // ✅ always auto
+                                                return next
+                                              })
                                             }
-                                            return next
-                                          })
-                                        }
-                                        placeholder="e.g. 5"
-                                        className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
-                                      />
-                                    </div>
-                                  </div>
+                                            className={[
+                                              "px-3 py-1 rounded-full text-[11px] border shadow-sm transition",
+                                              normalizeFreq(currentLine.frequency) === f.value
+                                                ? "bg-slate-900 text-white border-slate-900"
+                                                : "bg-white/70 text-slate-700 border-slate-500 backdrop-blur",
+                                            ].join(" ")}
+                                          >
+                                            {f.label}
+                                          </button>
+                                        ))}
 
-                                  <div className="flex flex-wrap gap-1.5 pt-1">
-                                    {FREQ_PRESETS.map((f) => (
-                                      <button
-                                        key={f.value}
-                                        type="button"
-                                        onClick={() =>
-                                          setCurrentLine((prev) => {
-                                            const next = { ...prev, frequency: f.value }
-                                            if (!next._qtyTouched && !next.total_qty) {
-                                              const auto = calcAutoQty(next)
-                                              if (auto) next.total_qty = auto
-                                            }
-                                            return next
-                                          })
-                                        }
-                                        className={[
-                                          'px-3 py-1 rounded-full text-[11px] border shadow-sm transition',
-                                          normalizeFreq(currentLine.frequency) === f.value
-                                            ? 'bg-slate-900 text-white border-slate-900'
-                                            : 'bg-white/70 text-slate-700 border-slate-500 backdrop-blur',
-                                        ].join(' ')}
-                                      >
-                                        {f.label}
-                                      </button>
-                                    ))}
-                                  </div>
-
-                                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                                    <div className="space-y-1">
-                                      <Label className="text-[11px] text-slate-600">Route</Label>
-                                      <Select
-                                        value={currentLine.route || 'PO'}
-                                        onValueChange={(val) => setCurrentLine((prev) => ({ ...prev, route: val }))}
-                                      >
-                                        <SelectTrigger className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full">
-                                          <SelectValue placeholder="Route" />
-                                        </SelectTrigger>
-                                        <SelectContent>
-                                          {ROUTE_PRESETS.map((r) => (
-                                            <SelectItem key={r} value={r}>
-                                              {r}
-                                            </SelectItem>
-                                          ))}
-                                        </SelectContent>
-                                      </Select>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            setCurrentLine((prev) => {
+                                              const next = {
+                                                ...prev,
+                                                frequency: "",
+                                                _qtyTouched: false,
+                                              }
+                                              next.total_qty = ""
+                                              return next
+                                            })
+                                          }
+                                          className="px-3 py-1 rounded-full text-[11px] border shadow-sm transition bg-white/70 text-slate-600 border-slate-500"
+                                        >
+                                          Clear
+                                        </button>
+                                      </div>
                                     </div>
 
+                                    {/* Route + Strength auto */}
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                      <div className="space-y-1">
+                                        <Label className="text-[11px] text-slate-600">Route</Label>
+                                        <Select
+                                          value={currentLine.route || "PO"}
+                                          onValueChange={(val) =>
+                                            setCurrentLine((prev) => ({
+                                              ...prev,
+                                              route: val,
+                                            }))
+                                          }
+                                        >
+                                          <SelectTrigger className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full">
+                                            <SelectValue placeholder="Route" />
+                                          </SelectTrigger>
+                                          <SelectContent>
+                                            {ROUTE_PRESETS.map((r) => (
+                                              <SelectItem key={r} value={r}>
+                                                {r}
+                                              </SelectItem>
+                                            ))}
+                                          </SelectContent>
+                                        </Select>
+                                      </div>
+
+                                      <div className="space-y-1">
+                                        <Label className="text-[11px] text-slate-600">
+                                          Strength <span className="text-[10px] text-slate-400">(auto)</span>
+                                        </Label>
+                                        <Input
+                                          value={currentLine.strength}
+                                          onChange={(e) =>
+                                            setCurrentLine((prev) => ({
+                                              ...prev,
+                                              strength: e.target.value,
+                                            }))
+                                          }
+                                          placeholder="Auto-filled if available"
+                                          className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
+                                        />
+                                      </div>
+                                    </div>
+
                                     <div className="space-y-1">
-                                      <Label className="text-[11px] text-slate-600">Total Qty</Label>
+                                      <Label className="text-[11px] text-slate-600">
+                                        Instructions to patient <span className="text-[10px] text-slate-400">(optional)</span>
+                                      </Label>
                                       <Input
-                                        value={currentLine.total_qty}
+                                        value={currentLine.instructions}
                                         onChange={(e) =>
                                           setCurrentLine((prev) => ({
                                             ...prev,
-                                            total_qty: e.target.value,
-                                            _qtyTouched: true,
+                                            instructions: e.target.value,
                                           }))
                                         }
-                                        placeholder={suggestedQtyForCurrent() ? `Suggested: ${suggestedQtyForCurrent()}` : 'eg. 10'}
+                                        placeholder="After food, morning & night, etc."
                                         className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
                                       />
                                     </div>
 
-                                    <div className="space-y-1">
-                                      <Label className="text-[11px] text-slate-600">Strength</Label>
-                                      <Input
-                                        value={currentLine.strength}
-                                        onChange={(e) => setCurrentLine((prev) => ({ ...prev, strength: e.target.value }))}
-                                        placeholder="Auto-filled if available"
-                                        className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
-                                      />
-                                    </div>
-                                  </div>
+                                    {/* Stock hint */}
+                                    {(() => {
+                                      const autoQty = Number(calcAutoQty(currentLine) || 0)
+                                      const avail = Number(
+                                        currentLine.available_qty ?? currentLine.item?.available_qty ?? 0
+                                      )
+                                      const hasAvail = Number.isFinite(avail) && avail > 0
+                                      const exceeds = hasAvail && autoQty > avail
+                                      if (!currentLine.batch_id && !currentLine.item?.batch_id) return null
 
-                                  <div className="space-y-1">
-                                    <Label className="text-[11px] text-slate-600">Instructions to patient</Label>
-                                    <Input
-                                      value={currentLine.instructions}
-                                      onChange={(e) => setCurrentLine((prev) => ({ ...prev, instructions: e.target.value }))}
-                                      placeholder="After food, morning & night, etc."
-                                      className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
-                                    />
+                                      return (
+                                        <div
+                                          className={[
+                                            "rounded-2xl border px-3 py-2 text-[11px]",
+                                            exceeds
+                                              ? "border-rose-200 bg-rose-50/70 text-rose-700"
+                                              : "border-slate-200 bg-slate-50/70 text-slate-600",
+                                          ].join(" ")}
+                                        >
+                                          Batch:{" "}
+                                          <span className="font-medium">
+                                            {currentLine.batch_no || currentLine.item?.batch_no || "—"}
+                                          </span>{" "}
+                                          • Exp:{" "}
+                                          <span className="font-medium">
+                                            {fmtDateShort(currentLine.expiry_date || currentLine.item?.expiry_date)}
+                                          </span>{" "}
+                                          • Available:{" "}
+                                          <span className="font-medium">
+                                            {fmtQty(currentLine.available_qty ?? currentLine.item?.available_qty)}
+                                          </span>
+                                          {exceeds ? (
+                                            <span className="ml-2 font-medium">
+                                              (Qty exceeds stock)
+                                            </span>
+                                          ) : null}
+                                        </div>
+                                      )
+                                    })()}
                                   </div>
                                 </div>
 
                                 <div className="flex flex-col justify-between gap-2">
                                   <div className="text-[11px] text-slate-500">
                                     <p className="leading-relaxed">
-                                      Fast add line. Use frequency chips and auto-qty to reduce typing.
-                                      Duplicate medicines auto-merge.
+                                      ✅ User only selects medicine + checks frequency + enters days.
+                                      <br />
+                                      Qty is calculated automatically and validated against available stock.
                                     </p>
                                   </div>
+
                                   <div className="flex justify-end">
                                     <Button
                                       type="button"
                                       size="sm"
                                       className="h-10 px-4 rounded-full shadow-sm"
                                       onClick={handleAddLine}
+                                      disabled={!currentLine.item || !calcAutoQty(currentLine)}
+                                      title={
+                                        !currentLine.item
+                                          ? "Select a medicine"
+                                          : !calcAutoQty(currentLine)
+                                            ? "Select frequency + days"
+                                            : "Add line"
+                                      }
                                     >
                                       <Plus className="w-4 h-4 mr-1" />
                                       Add line
@@ -2235,4 +2709,5 @@ export default function PharmacyRx() {
       </div>
     </div>
   )
+
 }

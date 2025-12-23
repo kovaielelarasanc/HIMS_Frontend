@@ -65,6 +65,18 @@ export function cancelPharmacyPrescription(id, reason) {
     return API.post(`/pharmacy/prescriptions/${id}/cancel`, { reason })
 }
 
+
+export const getPharmacyRxDetails = (rxId) =>
+  API.get(`/pharmacy/prescriptions/${rxId}`)
+
+export const dispenseFromRx = (rxId, payload) =>
+  API.post(`/pharmacy/prescriptions/${rxId}/dispense`, payload)
+
+// ✅ Batch picker API
+export const listBatchPicks = ({ location_id, item_id, limit = 100 }) =>
+  API.get(`/pharmacy/batches/pick`, { params: { location_id, item_id, limit } })
+
+
 // NOTE: Backend does not expose DELETE /pharmacy/prescriptions/{id}
 // If you implement it later, you can use this helper:
 // export function deletePharmacyPrescription(id) {
@@ -98,4 +110,4 @@ export async function openPharmacyPrescriptionPdfInNewTab(rxId) {
     const blob = new Blob([res.data], { type: 'application/pdf' })
     const url = window.URL.createObjectURL(blob)
     window.open(url, '_blank', 'noopener,noreferrer')
-  }
+}

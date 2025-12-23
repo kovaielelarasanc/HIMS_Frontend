@@ -2,6 +2,8 @@
 import { useEffect, useMemo, useState, useCallback, useRef } from 'react'
 import { toast } from 'sonner'
 
+import API from '../api/client' // ✅ add this
+
 import {
   listDispenseQueue,
   getPharmacyPrescription,
@@ -9,7 +11,7 @@ import {
   openPharmacyPrescriptionPdfInNewTab,
 } from '../api/pharmacyRx'
 import { listInventoryLocations } from '../api/inventory'
-import { getPatientById } from '../api/patients' // ✅ load patient details if missing
+import { getPatientById } from '../api/patients'
 
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -42,6 +44,7 @@ import {
   ArrowRight,
   X,
   Wand2,
+  Layers, // ✅ icon for batch
 } from 'lucide-react'
 
 const RX_TYPES = [
@@ -73,12 +76,17 @@ function formatDateTime(x) {
   return s.length > 16 ? s.slice(0, 16) : s
 }
 
+function formatDateOnly(x) {
+  if (!x) return '—'
+  const s = String(x)
+  return s.includes('T') ? s.slice(0, 10) : s
+}
+
 function num(x, def = 0) {
   const n = Number(x)
   return Number.isFinite(n) ? n : def
 }
 
-// ---- Robust unwrapping (some APIs return {data:{...}} or {patient:{...}}) ----
 function unwrapApiData(res) {
   if (!res) return null
   const d = res?.data
@@ -86,9 +94,7 @@ function unwrapApiData(res) {
   return d?.data ?? d
 }
 
-// ---- Patient helpers ----
 function getPatientId(obj) {
-  console.log(obj, "dkbksbdvk");
   return obj?.patient_id || obj?.patientId || obj?.patient?.id || obj?.patient?.patient_id || null
 }
 
@@ -109,7 +115,6 @@ function getPatientName(obj) {
     [obj?.patient_first_name, obj?.patient_last_name].filter(Boolean).join(' ').trim()
 
   if (name) return name
-
   const pid = getPatientId(obj)
   if (pid) return `Patient #${pid}`
   return '—'
@@ -128,17 +133,18 @@ function getPatientUhid(obj) {
   )
 }
 
+// ✅ FIX: never return object
 function getDoctorName(obj) {
   const d = obj?.doctor
-  return (
-    obj?.doctor_name ||
-    obj?.doctor_display ||
-    obj?.doctorName ||
-    obj?.doctor ||
-    d?.full_name ||
-    d?.name ||
-    ''
-  )
+  if (typeof obj?.doctor_name === 'string' && obj.doctor_name.trim()) return obj.doctor_name
+  if (typeof obj?.doctor_display === 'string' && obj.doctor_display.trim()) return obj.doctor_display
+  if (typeof obj?.doctorName === 'string' && obj.doctorName.trim()) return obj.doctorName
+
+  if (d && typeof d === 'object') {
+    return d.full_name || d.name || d.display_name || ''
+  }
+  if (typeof d === 'string') return d
+  return ''
 }
 
 function getRxNo(obj) {
@@ -149,13 +155,11 @@ function getRxType(obj) {
   return obj?.type || obj?.rx_type || obj?.rxType || 'OPD'
 }
 
-// ---- Line helpers ----
 function getLineId(l) {
   return l?.id ?? l?.line_id ?? l?.rx_line_id ?? l?.prescription_line_id ?? null
 }
 
 function getFreqCode(l) {
-  // supports: frequency_code, frequency, frequency.code, frequency.name, etc.
   const f =
     l?.frequency_code ??
     l?.frequencyCode ??
@@ -187,7 +191,6 @@ function suggestedQtyFromFreq(line) {
 
   if (!d) return ''
 
-  // Pattern like 1-0-1
   if (/^\d+\-\d+\-\d+$/.test(raw)) {
     const parts = raw.split('-').map((x) => num(x || 0, 0))
     const perDay = parts.reduce((a, b) => a + b, 0)
@@ -200,12 +203,10 @@ function suggestedQtyFromFreq(line) {
   if (['BD', 'BID', 'TWICE'].includes(f)) return 2 * d
   if (['TDS', 'TID', 'THRICE'].includes(f)) return 3 * d
   if (f === 'HS') return 1 * d
-  if (['SOS', 'PRN'].includes(f)) return '' // PRN -> don’t auto-suggest
+  if (['SOS', 'PRN'].includes(f)) return ''
   if (f === 'STAT') return 1
 
-  // fallback: times_per_day + duration
   if (tpd > 0) return tpd * d
-
   return ''
 }
 
@@ -326,17 +327,14 @@ function LineInstruction({ line }) {
   )
 }
 
-function LineCardMobile({ line, idx, onChangeQty }) {
+function LineCardMobile({ line, idx, onChangeQty, onChangeBatch, batchOptions }) {
   const med = line?.item_name || line?.medicine_name || 'Unnamed medicine'
   const strength = line?.item_strength || line?.strength || ''
-  const prescribed =
-    line?.requested_qty ??
-    line?.total_qty ??
-    line?.qty ??
-    line?.quantity ??
-    suggestedQtyFromFreq(line) ??
-    '—'
   const remaining = num(line?.remaining_calc, 0)
+
+  const options = batchOptions || []
+  const batchLabel = line?.batch_no ? `${line.batch_no} • ${formatDateOnly(line.expiry_date)}` : 'Select batch'
+  const avail = Number.isFinite(num(line?.batch_available_qty, NaN)) ? num(line?.batch_available_qty, 0) : null
 
   return (
     <div className="rounded-2xl border border-slate-500 bg-white p-3 space-y-2">
@@ -359,9 +357,34 @@ function LineCardMobile({ line, idx, onChangeQty }) {
       </div>
 
       <div className="grid grid-cols-2 gap-2">
-        <div className="rounded-xl border border-slate-500 bg-slate-50 px-3 py-2">
-          <div className="text-[10px] text-slate-500">Prescribed</div>
-          <div className="text-[11px] font-semibold text-slate-800">{String(prescribed)}</div>
+        <div className="rounded-xl border border-slate-500 bg-white px-3 py-2">
+          <div className="text-[10px] text-slate-500 flex items-center gap-1">
+            <Layers className="h-3 w-3" /> Batch
+          </div>
+
+          <Select
+            value={line?.batch_id ? String(line.batch_id) : ''}
+            onValueChange={(v) => onChangeBatch(idx, v)}
+          >
+            <SelectTrigger className="mt-1 h-8 text-[11px] bg-white border-slate-500 rounded-full">
+              <SelectValue placeholder={batchLabel} />
+            </SelectTrigger>
+            <SelectContent>
+              {options.length === 0 ? (
+                <SelectItem value="__none" disabled>No batches</SelectItem>
+              ) : (
+                options.map((b) => (
+                  <SelectItem key={b.batch_id} value={String(b.batch_id)}>
+                    {b.batch_no} • exp {formatDateOnly(b.expiry_date)} • qty {num(b.available_qty, 0)}
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
+
+          <div className="mt-1 text-[10px] text-slate-500">
+            Avail: <span className="font-medium text-slate-700">{avail === null ? '—' : avail}</span>
+          </div>
         </div>
 
         <div className="rounded-xl border border-slate-500 bg-white px-3 py-2">
@@ -400,13 +423,15 @@ export default function PharmacyDispense() {
 
   const [previewOpen, setPreviewOpen] = useState(false)
 
-  // ✅ patient cache to avoid repeated API calls
+  // ✅ patient cache
   const patientCacheRef = useRef({})
+
+  // ✅ batch options cache: key = `${locId}-${itemId}`
+  const batchCacheRef = useRef({})
 
   const loadPatient = useCallback(async (patientId) => {
     const id = Number(patientId || 0)
     if (!id) return null
-
     if (patientCacheRef.current[id]) return patientCacheRef.current[id]
 
     try {
@@ -416,13 +441,11 @@ export default function PharmacyDispense() {
       if (p) patientCacheRef.current[id] = p
       return p
     } catch (e) {
-      // eslint-disable-next-line no-console
       console.error('loadPatient error', e)
       return null
     }
   }, [])
 
-  // hydrate a small batch of queue items (so patient name/UHID shows even if queue API doesn’t return patient object)
   const hydrateQueuePatients = useCallback(async (rows) => {
     try {
       const list = Array.isArray(rows) ? rows : []
@@ -435,13 +458,11 @@ export default function PharmacyDispense() {
       const unique = [...new Set(need)].slice(0, 15)
       if (!unique.length) return list
 
-      // load sequentially (safe + avoids burst)
       for (const pid of unique) {
         // eslint-disable-next-line no-await-in-loop
         await loadPatient(pid)
       }
 
-      // attach from cache
       return list.map((r) => {
         if (r?.patient) return r
         const pid = Number(getPatientId(r) || 0)
@@ -450,7 +471,6 @@ export default function PharmacyDispense() {
         return p ? { ...r, patient: p, patient_id: pid } : r
       })
     } catch (e) {
-      // eslint-disable-next-line no-console
       console.error('hydrateQueuePatients error', e)
       return rows
     }
@@ -458,43 +478,31 @@ export default function PharmacyDispense() {
 
   useEffect(() => {
     let mounted = true
-      ; (async () => {
-        try {
-          const res = await listInventoryLocations()
-          const items = unwrapApiData(res) || []
-          if (!mounted) return
-          setLocations(items)
-          if (!queueLocationId) setQueueLocationId(ALL_LOC)
-        } catch {
-          // handled by interceptor
-        }
-      })()
-    return () => {
-      mounted = false
-    }
+    ;(async () => {
+      try {
+        const res = await listInventoryLocations()
+        const items = unwrapApiData(res) || []
+        if (!mounted) return
+        setLocations(items)
+        if (!queueLocationId) setQueueLocationId(ALL_LOC)
+      } catch {
+        // handled by interceptor
+      }
+    })()
+    return () => { mounted = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  const locationLabel = useCallback(
-    (val) => {
-      if (!locations?.length) return 'No locations'
-      if (!val || val === ALL_LOC) return 'All / Not linked'
-      const id = Number(val)
-      const loc = locations.find((l) => l.id === id)
-      return loc?.name || loc?.code || `Location #${id}`
-    },
-    [locations]
-  )
+  const locationLabel = useCallback((val) => {
+    if (!locations?.length) return 'No locations'
+    if (!val || val === ALL_LOC) return 'All / Not linked'
+    const id = Number(val)
+    const loc = locations.find((l) => l.id === id)
+    return loc?.name || loc?.code || `Location #${id}`
+  }, [locations])
 
-  const currentQueueLocationName = useMemo(
-    () => locationLabel(queueLocationId),
-    [queueLocationId, locationLabel]
-  )
-
-  const currentDispenseLocationName = useMemo(
-    () => (dispenseLocationId ? locationLabel(dispenseLocationId) : 'Not selected'),
-    [dispenseLocationId, locationLabel]
-  )
+  const currentQueueLocationName = useMemo(() => locationLabel(queueLocationId), [queueLocationId, locationLabel])
+  const currentDispenseLocationName = useMemo(() => (dispenseLocationId ? locationLabel(dispenseLocationId) : 'Not selected'), [dispenseLocationId, locationLabel])
 
   const fetchQueue = useCallback(async () => {
     try {
@@ -516,9 +524,28 @@ export default function PharmacyDispense() {
     }
   }, [statusFilter, typeFilter, search, queueLocationId, hydrateQueuePatients])
 
-  useEffect(() => {
-    fetchQueue()
-  }, [fetchQueue])
+  useEffect(() => { fetchQueue() }, [fetchQueue])
+
+  // ✅ load batch picks
+  const fetchBatchPicks = useCallback(async (locId, itemId) => {
+    const L = Number(locId || 0)
+    const I = Number(itemId || 0)
+    if (!L || !I) return []
+
+    const key = `${L}-${I}`
+    if (batchCacheRef.current[key]) return batchCacheRef.current[key]
+
+    try {
+      const res = await API.get('/pharmacy/batch-picks', { params: { location_id: L, item_id: I } })
+      const rows = unwrapApiData(res) || res?.data || []
+      const list = Array.isArray(rows) ? rows : []
+      batchCacheRef.current[key] = list
+      return list
+    } catch (e) {
+      console.error('fetchBatchPicks error', e)
+      return []
+    }
+  }, [])
 
   async function handleSelectRx(row, { openPreview = true } = {}) {
     try {
@@ -527,7 +554,6 @@ export default function PharmacyDispense() {
       const res = await getPharmacyPrescription(row.id)
       let data = unwrapApiData(res) || row
 
-      // ✅ Ensure patient object exists (fix patient details missing)
       const pid = getPatientId(data) || getPatientId(row)
       if (!data.patient && pid) {
         const patient = await loadPatient(pid)
@@ -546,25 +572,28 @@ export default function PharmacyDispense() {
         const { requested, remaining } = computeRequestedAndRemaining(l)
         const estimate = suggestedQtyFromFreq(l)
 
-        // default: remaining > 0 else requested >0 else estimate else blank
         const defaultQty =
-          remaining > 0
-            ? remaining
-            : (requested > 0 ? requested : (estimate !== '' ? estimate : ''))
+          remaining > 0 ? remaining : (requested > 0 ? requested : (estimate !== '' ? estimate : ''))
 
         return {
           ...l,
-          id: getLineId(l) ?? l?.id, // keep stable id
+          id: getLineId(l) ?? l?.id,
           requested_qty: requested,
           remaining_calc: remaining,
           dispense_qty: defaultQty !== '' && Number(defaultQty) > 0 ? String(defaultQty) : '',
+
+          // ✅ batch fields from backend
+          item_id: l?.item_id ?? l?.itemId,
+          batch_id: l?.batch_id ?? null,
+          batch_no: l?.batch_no ?? null,
+          expiry_date: l?.expiry_date ?? null,
+          batch_available_qty: l?.batch_current_qty ?? null,
         }
       })
 
       setDispenseLines(lines)
       if (openPreview) setPreviewOpen(true)
     } catch (e) {
-      // eslint-disable-next-line no-console
       console.error('Select Rx error', e)
       toast.error('Failed to open prescription')
     } finally {
@@ -576,6 +605,34 @@ export default function PharmacyDispense() {
     const v = value === '' ? '' : String(value)
     setDispenseLines((prev) => prev.map((l, i) => (i === idx ? { ...l, dispense_qty: v } : l)))
   }
+
+  // ✅ change batch
+  const handleChangeBatch = useCallback((idx, batchIdStr) => {
+    const bid = batchIdStr && batchIdStr !== '__none' ? Number(batchIdStr) : null
+
+    setDispenseLines((prev) => {
+      const list = prev || []
+      const line = list[idx]
+      if (!line) return list
+
+      const locId = Number(dispenseLocationId || 0)
+      const itemId = Number(line.item_id || 0)
+      const key = `${locId}-${itemId}`
+      const options = batchCacheRef.current[key] || []
+      const sel = options.find((b) => Number(b.batch_id) === Number(bid))
+
+      return list.map((l, i) => {
+        if (i !== idx) return l
+        return {
+          ...l,
+          batch_id: bid,
+          batch_no: sel?.batch_no ?? l.batch_no,
+          expiry_date: sel?.expiry_date ?? l.expiry_date,
+          batch_available_qty: sel?.available_qty ?? l.batch_available_qty,
+        }
+      })
+    })
+  }, [dispenseLocationId])
 
   function fillAllToRemaining() {
     setDispenseLines((prev) =>
@@ -592,6 +649,26 @@ export default function PharmacyDispense() {
     setDispenseLines((prev) => (prev || []).map((l) => ({ ...l, dispense_qty: '' })))
   }
 
+  // ✅ prefetch batches for selected Rx
+  useEffect(() => {
+    let alive = true
+    ;(async () => {
+      const locId = Number(dispenseLocationId || 0)
+      if (!selectedRx || !locId) return
+
+      const lines = dispenseLines || []
+      const uniqueItems = [...new Set(lines.map((l) => Number(l.item_id || 0)).filter(Boolean))].slice(0, 25)
+
+      for (const itemId of uniqueItems) {
+        // eslint-disable-next-line no-await-in-loop
+        await fetchBatchPicks(locId, itemId)
+        if (!alive) return
+      }
+    })()
+
+    return () => { alive = false }
+  }, [selectedRx, dispenseLocationId, fetchBatchPicks, dispenseLines])
+
   async function handleDispense() {
     if (!selectedRx) return
 
@@ -607,12 +684,17 @@ export default function PharmacyDispense() {
       return
     }
 
-    // ✅ ensure line ids exist
     const bad = validLines.find((l) => !getLineId(l))
     if (bad) {
       toast.error('Some lines are missing line_id (cannot dispense). Refresh Rx and try again.')
-      // eslint-disable-next-line no-console
       console.error('Bad line (missing id):', bad)
+      return
+    }
+
+    // ✅ require batch_id
+    const noBatch = validLines.find((l) => !Number(l?.batch_id || 0))
+    if (noBatch) {
+      toast.error(`Select batch for: ${noBatch.item_name || noBatch.medicine_name || 'a medicine'}`)
       return
     }
 
@@ -620,16 +702,12 @@ export default function PharmacyDispense() {
       lines: validLines.map((l) => ({
         line_id: Number(getLineId(l)),
         dispense_qty: num(l?.dispense_qty || 0, 0),
+        batch_id: Number(l?.batch_id || 0), // ✅ send batch id
       })),
       location_id: effectiveLocationId,
       create_sale: true,
       context_type: safeUpper(getRxType(selectedRx)),
     }
-
-    // eslint-disable-next-line no-console
-    console.log(selectedRx, 'selectedRx')
-    // eslint-disable-next-line no-console
-    console.log(payload, 'handleDispense payload')
 
     try {
       setDispensing(true)
@@ -642,7 +720,6 @@ export default function PharmacyDispense() {
       setDispenseLines([])
       setTab('queue')
     } catch (e) {
-      // eslint-disable-next-line no-console
       console.error('Dispense error', e)
       const detail = e?.response?.data?.detail
       if (typeof detail === 'string') toast.error(detail)
@@ -654,6 +731,15 @@ export default function PharmacyDispense() {
   }
 
   const selectedLines = useMemo(() => dispenseLines || [], [dispenseLines])
+
+  // ✅ batch options per line
+  const batchOptionsForLine = useCallback((line) => {
+    const locId = Number(dispenseLocationId || 0)
+    const itemId = Number(line?.item_id || 0)
+    if (!locId || !itemId) return []
+    const key = `${locId}-${itemId}`
+    return batchCacheRef.current[key] || []
+  }, [dispenseLocationId])
 
   return (
     <div className="p-4 md:p-6 space-y-4">
@@ -670,7 +756,7 @@ export default function PharmacyDispense() {
               </h1>
             </div>
             <p className="text-sm text-slate-500">
-              Queue → Preview → Dispense (Queue location filter and Dispense location are separate).
+              Queue → Preview → Dispense (Batch + Expiry + Available Qty).
             </p>
           </div>
 
@@ -1025,7 +1111,7 @@ export default function PharmacyDispense() {
 
           {/* Preview Dialog */}
           <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
-            <DialogContent className="sm:max-w-4xl w-[calc(100vw-22px)] rounded-3xl bg-white border-slate-500 max-h-[85vh] overflow-y-auto">
+            <DialogContent className="sm:max-w-5xl w-[calc(100vw-22px)] rounded-3xl bg-white border-slate-500 max-h-[85vh] overflow-y-auto">
               <DialogHeader>
                 <DialogTitle className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
@@ -1090,48 +1176,94 @@ export default function PharmacyDispense() {
                         <div className="py-6 text-center text-slate-500 text-sm">No lines found.</div>
                       ) : (
                         selectedLines.map((l, idx) => (
-                          <LineCardMobile key={getLineId(l) || idx} line={l} idx={idx} onChangeQty={handleChangeDispenseQty} />
+                          <LineCardMobile
+                            key={getLineId(l) || idx}
+                            line={l}
+                            idx={idx}
+                            onChangeQty={handleChangeDispenseQty}
+                            onChangeBatch={handleChangeBatch}
+                            batchOptions={batchOptionsForLine(l)}
+                          />
                         ))
                       )}
                     </div>
 
-                    <div className="hidden md:block max-h-[420px] overflow-auto">
+                    <div className="hidden md:block max-h-[460px] overflow-auto">
                       <table className="w-full text-[11px]">
                         <thead className="bg-slate-50 sticky top-0 z-10">
                           <tr className="text-slate-500">
                             <th className="text-left px-3 py-2 font-medium">#</th>
                             <th className="text-left px-3 py-2 font-medium">Medicine</th>
                             <th className="text-left px-3 py-2 font-medium">Instructions</th>
-                            <th className="text-left px-3 py-2 font-medium">Remaining</th>
+                            <th className="text-left px-3 py-2 font-medium">Batch</th>
+                            <th className="text-left px-3 py-2 font-medium">Expiry</th>
+                            <th className="text-left px-3 py-2 font-medium">Avail</th>
                             <th className="text-right px-3 py-2 font-medium">Dispense</th>
                           </tr>
                         </thead>
                         <tbody>
                           {selectedLines.length === 0 ? (
-                            <tr><td colSpan={5} className="px-3 py-6 text-center text-slate-500">No lines found.</td></tr>
+                            <tr><td colSpan={7} className="px-3 py-6 text-center text-slate-500">No lines found.</td></tr>
                           ) : (
-                            selectedLines.map((l, idx) => (
-                              <tr key={getLineId(l) || idx} className="border-t border-slate-500">
-                                <td className="px-3 py-2 align-top text-slate-500">{idx + 1}</td>
-                                <td className="px-3 py-2 align-top">
-                                  <div className="flex flex-col">
-                                    <span className="font-medium text-slate-900">{l.item_name || l.medicine_name || 'Unnamed medicine'}</span>
-                                    {(l.item_strength || l.strength) && <span className="text-[10px] text-slate-500">{l.item_strength || l.strength}</span>}
-                                  </div>
-                                </td>
-                                <td className="px-3 py-2 align-top text-slate-700"><LineInstruction line={l} /></td>
-                                <td className="px-3 py-2 align-top text-slate-700">{num(l.remaining_calc, 0)}</td>
-                                <td className="px-3 py-2 align-top text-right">
-                                  <Input
-                                    type="number"
-                                    min="0"
-                                    value={l.dispense_qty ?? ''}
-                                    onChange={(e) => handleChangeDispenseQty(idx, e.target.value)}
-                                    className="h-8 w-24 ml-auto text-[11px] text-right bg-white border-slate-500 rounded-full"
-                                  />
-                                </td>
-                              </tr>
-                            ))
+                            selectedLines.map((l, idx) => {
+                              const opts = batchOptionsForLine(l)
+                              const avail = num(l.batch_available_qty, NaN)
+
+                              return (
+                                <tr key={getLineId(l) || idx} className="border-t border-slate-500">
+                                  <td className="px-3 py-2 align-top text-slate-500">{idx + 1}</td>
+
+                                  <td className="px-3 py-2 align-top">
+                                    <div className="flex flex-col">
+                                      <span className="font-medium text-slate-900">{l.item_name || l.medicine_name || 'Unnamed medicine'}</span>
+                                      {(l.item_strength || l.strength) && <span className="text-[10px] text-slate-500">{l.item_strength || l.strength}</span>}
+                                    </div>
+                                  </td>
+
+                                  <td className="px-3 py-2 align-top text-slate-700"><LineInstruction line={l} /></td>
+
+                                  <td className="px-3 py-2 align-top">
+                                    <Select
+                                      value={l?.batch_id ? String(l.batch_id) : ''}
+                                      onValueChange={(v) => handleChangeBatch(idx, v)}
+                                    >
+                                      <SelectTrigger className="h-8 w-[190px] bg-white border-slate-500 rounded-full text-[11px]">
+                                        <SelectValue placeholder={l?.batch_no ? l.batch_no : 'Select batch'} />
+                                      </SelectTrigger>
+                                      <SelectContent>
+                                        {opts.length === 0 ? (
+                                          <SelectItem value="__none" disabled>No batches</SelectItem>
+                                        ) : (
+                                          opts.map((b) => (
+                                            <SelectItem key={b.batch_id} value={String(b.batch_id)}>
+                                              {b.batch_no} • exp {formatDateOnly(b.expiry_date)} • qty {num(b.available_qty, 0)}
+                                            </SelectItem>
+                                          ))
+                                        )}
+                                      </SelectContent>
+                                    </Select>
+                                  </td>
+
+                                  <td className="px-3 py-2 align-top text-slate-700">
+                                    {formatDateOnly(l.expiry_date)}
+                                  </td>
+
+                                  <td className="px-3 py-2 align-top text-slate-700">
+                                    {Number.isFinite(avail) ? avail : '—'}
+                                  </td>
+
+                                  <td className="px-3 py-2 align-top text-right">
+                                    <Input
+                                      type="number"
+                                      min="0"
+                                      value={l.dispense_qty ?? ''}
+                                      onChange={(e) => handleChangeDispenseQty(idx, e.target.value)}
+                                      className="h-8 w-24 ml-auto text-[11px] text-right bg-white border-slate-500 rounded-full"
+                                    />
+                                  </td>
+                                </tr>
+                              )
+                            })
                           )}
                         </tbody>
                       </table>
@@ -1200,14 +1332,9 @@ export default function PharmacyDispense() {
               </CardHeader>
 
               <CardContent className="space-y-3">
-                <div className="md:hidden space-y-2">
-                  {selectedLines.length === 0 ? (
-                    <div className="py-6 text-center text-slate-500 text-sm">No lines found.</div>
-                  ) : (
-                    selectedLines.map((l, idx) => (
-                      <LineCardMobile key={getLineId(l) || idx} line={l} idx={idx} onChangeQty={handleChangeDispenseQty} />
-                    ))
-                  )}
+                {/* mobile cards already appear in Preview dialog; in dispense tab we keep desktop table visible */}
+                <div className="text-[11px] text-slate-500">
+                  Tip: Make sure every line has a <span className="font-medium text-slate-700">Batch</span> selected.
                 </div>
 
                 <div className="sticky bottom-0 bg-white border border-slate-500 rounded-2xl p-3 flex flex-col md:flex-row md:items-center md:justify-between gap-2">
