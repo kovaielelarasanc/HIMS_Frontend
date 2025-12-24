@@ -36,8 +36,15 @@ import {
     ClipboardList,
     Sparkles,
     Zap,
+    ChevronLeft,
+    ChevronRight,
+    ChevronsLeft,
+    ChevronsRight,
+    MoreHorizontal,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useCanAny } from '../hooks/useCan'
+
 
 const todayStr = () => new Date().toISOString().slice(0, 10)
 
@@ -66,6 +73,13 @@ const SORTS = [
     { key: 'queue', label: 'Queue#' },
     { key: 'time', label: 'Time' },
     { key: 'waiting', label: 'Waiting' },
+]
+
+const PAGE_SIZES = [
+    { key: 20, label: '20' },
+    { key: 30, label: '30' },
+    { key: 40, label: '40' },
+    { key: 'all', label: 'All' },
 ]
 
 function cx(...xs) {
@@ -209,7 +223,7 @@ function MiniSeg({ value, onChange, options }) {
                 const active = value === opt.key
                 return (
                     <button
-                        key={opt.key}
+                        key={String(opt.key)}
                         type="button"
                         onClick={() => onChange(opt.key)}
                         className={cx(
@@ -258,8 +272,128 @@ function FilterChip({ active, onClick, icon: Icon, children, tone = 'slate', tit
     )
 }
 
+function PaginationBar({ page, pageCount, onPage }) {
+    if (!pageCount || pageCount <= 1) return null
+
+    const makePages = () => {
+        const out = []
+        const push = (x) => out.push(x)
+
+        const clamp = (n) => Math.max(1, Math.min(pageCount, n))
+        const cur = clamp(page)
+
+        // show: 1 ... (cur-1) cur (cur+1) ... last
+        const window = 1
+        const left = clamp(cur - window)
+        const right = clamp(cur + window)
+
+        push(1)
+        if (left > 2) push('dotsL')
+        for (let p = left; p <= right; p++) {
+            if (p !== 1 && p !== pageCount) push(p)
+        }
+        if (right < pageCount - 1) push('dotsR')
+        if (pageCount !== 1) push(pageCount)
+
+        // remove duplicates
+        const uniq = []
+        const seen = new Set()
+        for (const x of out) {
+            const k = String(x)
+            if (!seen.has(k)) {
+                seen.add(k)
+                uniq.push(x)
+            }
+        }
+        return uniq
+    }
+
+    const items = makePages()
+
+    return (
+        <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button
+                size="sm"
+                variant="outline"
+                className="h-10 rounded-2xl border-black/50 bg-white/85 font-semibold"
+                onClick={() => onPage(1)}
+                disabled={page <= 1}
+                title="First"
+            >
+                <ChevronsLeft className="h-4 w-4" />
+            </Button>
+            <Button
+                size="sm"
+                variant="outline"
+                className="h-10 rounded-2xl border-black/50 bg-white/85 font-semibold"
+                onClick={() => onPage(page - 1)}
+                disabled={page <= 1}
+                title="Previous"
+            >
+                <ChevronLeft className="h-4 w-4" />
+            </Button>
+
+            <div className="flex flex-wrap items-center gap-1">
+                {items.map((it) => {
+                    if (it === 'dotsL' || it === 'dotsR') {
+                        return (
+                            <span
+                                key={String(it)}
+                                className="inline-flex h-10 items-center justify-center rounded-2xl border border-black/30 bg-white/60 px-3 text-[12px] text-slate-500"
+                            >
+                                <MoreHorizontal className="h-4 w-4" />
+                            </span>
+                        )
+                    }
+
+                    const active = it === page
+                    return (
+                        <button
+                            key={String(it)}
+                            type="button"
+                            onClick={() => onPage(it)}
+                            className={cx(
+                                'h-10 min-w-[42px] rounded-2xl border px-3 text-[12px] font-semibold transition',
+                                active
+                                    ? 'border-slate-900 bg-slate-900 text-white'
+                                    : 'border-black/50 bg-white/85 text-slate-700 hover:bg-black/[0.03]',
+                            )}
+                            title={`Page ${it}`}
+                        >
+                            {it}
+                        </button>
+                    )
+                })}
+            </div>
+
+            <Button
+                size="sm"
+                variant="outline"
+                className="h-10 rounded-2xl border-black/50 bg-white/85 font-semibold"
+                onClick={() => onPage(page + 1)}
+                disabled={page >= pageCount}
+                title="Next"
+            >
+                <ChevronRight className="h-4 w-4" />
+            </Button>
+            <Button
+                size="sm"
+                variant="outline"
+                className="h-10 rounded-2xl border-black/50 bg-white/85 font-semibold"
+                onClick={() => onPage(pageCount)}
+                disabled={page >= pageCount}
+                title="Last"
+            >
+                <ChevronsRight className="h-4 w-4" />
+            </Button>
+        </div>
+    )
+}
+
 export default function Queue() {
     const { user } = useAuth() || {}
+    const canViewQueue = useCanAny(['appointments.view', 'visits.view', 'vitals.create']) || Boolean(user?.is_doctor)
+
     const navigate = useNavigate()
 
     const [doctorId, setDoctorId] = useState(null)
@@ -283,10 +417,14 @@ export default function Queue() {
     const [sortMode, setSortMode] = useState('clinical') // clinical | queue | time | waiting
     const [autoRefresh, setAutoRefresh] = useState(true)
 
+    // ✅ Pagination
+    const [pageSize, setPageSize] = useState(20) // 20 | 30 | 40 | 'all'
+    const [page, setPage] = useState(1)
+
     const effectiveDoctorId = myOnly ? user?.id : doctorId
     const hasSelection = Boolean(date) && (myOnly ? Boolean(user?.id) : Boolean(doctorId))
 
-    // auto-enable My appointments for doctors (doctor-friendly)
+    // auto-enable My appointments for doctors
     useEffect(() => {
         if (!user?.id) return
         const isDoctor = Boolean(user?.is_doctor)
@@ -296,11 +434,16 @@ export default function Queue() {
         setMyOnly(true)
         setDoctorId(user.id)
         setDoctorMeta({ name: user?.name || user?.full_name || 'My queue' })
-        // no toast here (avoid spam on reload)
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [user?.id])
 
+    // inside Queue component, before load() definition OR inside load()
     const load = useCallback(async () => {
+        if (!canViewQueue) {
+            setRows([])
+            return
+        }
+
         if (!date || !hasSelection) {
             setRows([])
             return
@@ -308,18 +451,11 @@ export default function Queue() {
 
         try {
             setLoading(true)
-
             const params = { for_date: date }
 
-            // prefer backend-enforced behavior
-            if (myOnly) {
-                params.my_only = true
-            } else {
-                params.doctor_user_id = Number(effectiveDoctorId)
-            }
+            if (myOnly) params.my_only = true
+            else params.doctor_user_id = Number(effectiveDoctorId)
 
-            // optionally keep dept scoping if your auth sends department_id
-            // (safe for most hospitals)
             if (user?.department_id) params.department_id = user.department_id
 
             const { data } = await fetchQueue(params)
@@ -330,19 +466,19 @@ export default function Queue() {
         } finally {
             setLoading(false)
         }
-    }, [date, hasSelection, myOnly, effectiveDoctorId, user])
+    }, [canViewQueue, date, hasSelection, myOnly, effectiveDoctorId, user])
+
 
     useEffect(() => {
         load()
     }, [load])
 
-    // auto refresh (doctor-friendly)
     useEffect(() => {
         if (!autoRefresh) return
         if (!hasSelection) return
         const t = setInterval(() => {
             load()
-        }, 30000) // 30s
+        }, 30000)
         return () => clearInterval(t)
     }, [autoRefresh, hasSelection, load])
 
@@ -421,15 +557,12 @@ export default function Queue() {
     const filteredRows = useMemo(() => {
         let list = filteredByStatus
 
-        // vitals filter
         if (vitalsFilter === 'needed') list = list.filter((r) => !r.has_vitals)
         if (vitalsFilter === 'done') list = list.filter((r) => !!r.has_vitals)
 
-        // visit filter
         if (visitFilter === 'no_visit') list = list.filter((r) => !r.visit_id)
         if (visitFilter === 'has_visit') list = list.filter((r) => !!r.visit_id)
 
-        // waiting 30+ (only today + active-ish)
         if (waiting30Plus) {
             list = list.filter((r) => {
                 const m = waitingMinutes(r, date)
@@ -437,7 +570,6 @@ export default function Queue() {
             })
         }
 
-        // search
         const q = searchTerm.trim().toLowerCase()
         if (q) {
             list = list.filter((r) => {
@@ -446,13 +578,7 @@ export default function Queue() {
                 const phone = String(r.patient?.phone || '').toLowerCase()
                 const purpose = String(r.visit_purpose || '').toLowerCase()
                 const qno = String(r.queue_no ?? '').toLowerCase()
-                return (
-                    name.includes(q) ||
-                    uhid.includes(q) ||
-                    phone.includes(q) ||
-                    purpose.includes(q) ||
-                    qno.includes(q)
-                )
+                return name.includes(q) || uhid.includes(q) || phone.includes(q) || purpose.includes(q) || qno.includes(q)
             })
         }
 
@@ -487,14 +613,13 @@ export default function Queue() {
             if (sortMode === 'waiting') {
                 const wa = waitingMinutes(a, date) ?? -1
                 const wb = waitingMinutes(b, date) ?? -1
-                const dw = wb - wa // high waiting first
+                const dw = wb - wa
                 if (dw !== 0) return dw
                 const ds = score(a.status) - score(b.status)
                 if (ds !== 0) return ds
                 return qno(a.queue_no) - qno(b.queue_no)
             }
 
-            // clinical (default): in_progress > checked_in > booked, then waiting, then queue#
             const ds = score(a.status) - score(b.status)
             if (ds !== 0) return ds
             const wa = waitingMinutes(a, date) ?? -1
@@ -509,6 +634,39 @@ export default function Queue() {
         return arr
     }, [filteredRows, sortMode, date])
 
+    // ✅ Reset to page 1 when filters change
+    useEffect(() => {
+        setPage(1)
+    }, [date, effectiveDoctorId, myOnly, statusFilter, vitalsFilter, visitFilter, waiting30Plus, sortMode, searchTerm, pageSize])
+
+    // ✅ Client-side pagination
+    const { pageRows, pageCount, pageInfo } = useMemo(() => {
+        const total = sortedRows.length
+        if (pageSize === 'all') {
+            return {
+                pageRows: sortedRows,
+                pageCount: 1,
+                pageInfo: { total, from: total ? 1 : 0, to: total },
+            }
+        }
+        const size = Number(pageSize) || 20
+        const count = Math.max(1, Math.ceil(total / size))
+        const p = Math.max(1, Math.min(page, count))
+        const start = (p - 1) * size
+        const end = Math.min(total, start + size)
+        return {
+            pageRows: sortedRows.slice(start, end),
+            pageCount: count,
+            pageInfo: { total, from: total ? start + 1 : 0, to: end },
+        }
+    }, [sortedRows, pageSize, page])
+
+    // clamp page if total shrinks
+    useEffect(() => {
+        if (pageCount <= 1) return
+        if (page > pageCount) setPage(pageCount)
+    }, [pageCount, page])
+
     const openTriageFor = (row) => {
         navigate('/opd/triage', {
             state: {
@@ -520,7 +678,6 @@ export default function Queue() {
     }
 
     const nextCandidate = useMemo(() => {
-        // next patient to treat: checked-in first, then booked
         const a = sortedRows.find((r) => r.status === 'checked_in')
         if (a) return a
         const b = sortedRows.find((r) => r.status === 'booked')
@@ -541,6 +698,32 @@ export default function Queue() {
         }
         await changeStatus(row, 'in_progress', { goToVisit: true })
     }
+
+    if (!canViewQueue) {
+        return (
+            <div className={UI.page}>
+                <div className="mx-auto max-w-4xl px-4 py-10 md:px-8">
+                    <div className="rounded-3xl border border-black/50 bg-white/80 backdrop-blur p-6 shadow-[0_12px_35px_rgba(2,6,23,0.10)]">
+                        <div className="flex items-start gap-3">
+                            <div className="inline-flex h-12 w-12 items-center justify-center rounded-3xl border border-black/50 bg-black/[0.04]">
+                                <Lock className="h-5 w-5 text-slate-700" />
+                            </div>
+                            <div className="min-w-0">
+                                <div className="text-lg font-semibold text-slate-900">Access denied</div>
+                                <p className="mt-1 text-sm text-slate-600">
+                                    You don’t have permission to view the OPD Queue.
+                                </p>
+                                <div className="mt-3 text-[12px] text-slate-500">
+                                    Required: <span className="font-semibold text-slate-700">appointments.view</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )
+    }
+
 
     return (
         <div className={UI.page}>
@@ -571,7 +754,9 @@ export default function Queue() {
                                         <Stethoscope className="h-5 w-5 text-slate-700" />
                                     </div>
                                     <div className="min-w-0">
-                                        <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900">Queue Management</h1>
+                                        <h1 className="text-xl md:text-2xl font-semibold tracking-tight text-slate-900">
+                                            Queue Management
+                                        </h1>
                                         <p className="mt-1 text-sm text-slate-600">
                                             Doctor workflow: find next → check vitals → start visit → complete.
                                         </p>
@@ -639,7 +824,11 @@ export default function Queue() {
                                     disabled={loading || !hasSelection || !nextCandidate}
                                     title="Start next patient (opens triage if vitals missing)"
                                 >
-                                    {nextCandidate?.has_vitals ? <Zap className="mr-2 h-4 w-4" /> : <HeartPulse className="mr-2 h-4 w-4" />}
+                                    {nextCandidate?.has_vitals ? (
+                                        <Zap className="mr-2 h-4 w-4" />
+                                    ) : (
+                                        <HeartPulse className="mr-2 h-4 w-4" />
+                                    )}
                                     Start next
                                 </Button>
 
@@ -659,7 +848,7 @@ export default function Queue() {
                 </motion.div>
 
                 {/* CONTROLS + LIST */}
-                <Card className={cx(UI.glass, 'overflow-hidden')}>
+                <Card className={cx(UI.glass, 'overflow-hidden flex flex-col')}>
                     <CardHeader className="border-b border-black/50 bg-white/60 backdrop-blur-xl">
                         <div className="flex flex-col gap-4">
                             <div className="flex flex-col gap-3 md:flex-row md:items-end md:justify-between">
@@ -671,7 +860,10 @@ export default function Queue() {
                                         </CardDescription>
 
                                         <div
-                                            className={cx('mt-3 rounded-2xl border border-black/50 bg-white/85 px-3 py-2', myOnly && 'opacity-70 pointer-events-none')}
+                                            className={cx(
+                                                'mt-3 rounded-2xl border border-black/50 bg-white/85 px-3 py-2',
+                                                myOnly && 'opacity-70 pointer-events-none',
+                                            )}
                                             title={myOnly ? 'My appointments is ON (doctor locked)' : 'Select doctor'}
                                         >
                                             <DoctorPicker value={doctorId} onChange={handleDoctorChange} autoSelectCurrentDoctor />
@@ -721,6 +913,8 @@ export default function Queue() {
                                             setVisitFilter('all')
                                             setWaiting30Plus(false)
                                             setSortMode('clinical')
+                                            setPageSize(20)
+                                            setPage(1)
                                         }}
                                         disabled={!hasSelection}
                                     >
@@ -802,6 +996,26 @@ export default function Queue() {
 
                             <Separator className="bg-black/10" />
 
+                            {/* ✅ Rows per page + Pagination (top) */}
+                            <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <span className={UI.chip}>Rows</span>
+                                    <MiniSeg value={pageSize} onChange={setPageSize} options={PAGE_SIZES} />
+
+                                    <Badge
+                                        variant="outline"
+                                        className="rounded-full border-black/50 bg-white/85 px-3 py-1 text-[11px] font-semibold text-slate-700"
+                                        title="Current visible range"
+                                    >
+                                        {pageInfo.from}-{pageInfo.to} of <span className="ml-1 tabular-nums">{pageInfo.total}</span>
+                                    </Badge>
+                                </div>
+
+                                <PaginationBar page={page} pageCount={pageCount} onPage={setPage} />
+                            </div>
+
+                            <Separator className="bg-black/10" />
+
                             <div className="flex items-center justify-between gap-3">
                                 <div className="text-[11px] font-semibold text-slate-500 uppercase tracking-wide">Status</div>
                                 <Badge
@@ -816,7 +1030,8 @@ export default function Queue() {
                         </div>
                     </CardHeader>
 
-                    <CardContent className="pt-4">
+                    {/* ✅ IMPORTANT: flex-1 + min-h-0 fixes ScrollArea on all devices */}
+                    <CardContent className="pt-4 flex-1 min-h-0">
                         {!hasSelection && (
                             <div className="rounded-3xl border border-dashed border-black/20 bg-black/[0.02] px-6 py-10 text-center">
                                 <div className="mx-auto mb-3 inline-flex h-12 w-12 items-center justify-center rounded-3xl border border-black/50 bg-white/60">
@@ -859,179 +1074,191 @@ export default function Queue() {
                         )}
 
                         {hasSelection && !loading && sortedRows.length > 0 && (
-                            <ScrollArea className="max-h-[62vh] pr-1">
-                                <div className="space-y-2">
-                                    <AnimatePresence initial={false}>
-                                        {sortedRows.map((row) => {
-                                            const waiting = computeWaitingLabel(row, date)
-                                            const initials =
-                                                (row.patient?.name || 'P')
-                                                    .split(' ')
-                                                    .filter(Boolean)
-                                                    .slice(0, 2)
-                                                    .map((s) => s[0]?.toUpperCase())
-                                                    .join('') || 'P'
+                            <>
+                                {/* ✅ FIX: ScrollArea must have fixed HEIGHT (h-...), not max-h */}
+                                <ScrollArea className="h-[66vh] md:h-[68vh] lg:h-[70vh] pr-1">
+                                    <div className="space-y-2">
+                                        <AnimatePresence initial={false}>
+                                            {pageRows.map((row) => {
+                                                const waiting = computeWaitingLabel(row, date)
+                                                const initials =
+                                                    (row.patient?.name || 'P')
+                                                        .split(' ')
+                                                        .filter(Boolean)
+                                                        .slice(0, 2)
+                                                        .map((s) => s[0]?.toUpperCase())
+                                                        .join('') || 'P'
 
-                                            const queueNo = row?.queue_no ?? null
+                                                const queueNo = row?.queue_no ?? null
 
-                                            return (
-                                                <motion.div
-                                                    key={row.appointment_id}
-                                                    initial={{ opacity: 0, y: 6 }}
-                                                    animate={{ opacity: 1, y: 0 }}
-                                                    exit={{ opacity: 0, y: -6 }}
-                                                    transition={{ duration: 0.14 }}
-                                                    className="rounded-3xl border border-black/50 bg-white/80 backdrop-blur px-4 py-3 shadow-[0_10px_24px_rgba(2,6,23,0.08)]"
-                                                >
-                                                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                                                        {/* LEFT */}
-                                                        <div className="min-w-0">
-                                                            <div className="flex flex-wrap items-center gap-2">
-                                                                <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white tabular-nums">
-                                                                    {row.time || '-'}
-                                                                    
-                                                                    
-                                                                </span>
-
-                                                                {queueNo !== null && queueNo !== undefined ? (
-                                                                    <span className="inline-flex items-center gap-1 rounded-full border border-black/50 bg-white/85 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
-                                                                        <span className="opacity-70">Queue</span>
-                                                                        <span className="tabular-nums">{queueNo}</span>
+                                                return (
+                                                    <motion.div
+                                                        key={row.appointment_id}
+                                                        initial={{ opacity: 0, y: 6 }}
+                                                        animate={{ opacity: 1, y: 0 }}
+                                                        exit={{ opacity: 0, y: -6 }}
+                                                        transition={{ duration: 0.14 }}
+                                                        className="rounded-3xl border border-black/50 bg-white/80 backdrop-blur px-4 py-3 shadow-[0_10px_24px_rgba(2,6,23,0.08)]"
+                                                    >
+                                                        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                                            {/* LEFT */}
+                                                            <div className="min-w-0">
+                                                                <div className="flex flex-wrap items-center gap-2">
+                                                                    <span className="rounded-full bg-slate-900 px-2.5 py-1 text-[11px] font-semibold text-white tabular-nums">
+                                                                        {row.time || '-'}
                                                                     </span>
-                                                                ) : null}
 
-                                                                <span className={statusPill(row.status)}>
-                                                                    {statusLabel[row.status] || row.status}
-                                                                </span>
-
-                                                                {waiting && (
-                                                                    <span className="inline-flex items-center gap-1 rounded-full border border-black/50 bg-white/85 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
-                                                                        <Clock className="h-3.5 w-3.5 text-slate-500" />
-                                                                        Waiting <span className="tabular-nums">{waiting}</span>
-                                                                    </span>
-                                                                )}
-
-                                                                <span className="inline-flex items-center gap-1 rounded-full border border-black/50 bg-white/85 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
-                                                                    <HeartPulse className="h-3.5 w-3.5 text-slate-500" />
-                                                                    Vitals <span className="font-semibold">{row.has_vitals ? 'Yes' : 'No'}</span>
-                                                                </span>
-
-                                                                {row.visit_id ? (
-                                                                    <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-800">
-                                                                        <CheckCircle2 className="h-3.5 w-3.5" />
-                                                                        Visit ready
-                                                                    </span>
-                                                                ) : null}
-                                                            </div>
-
-                                                            <div className="mt-2 flex items-start gap-3 min-w-0">
-                                                                <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-3xl border border-black/50 bg-black/[0.03] text-[12px] font-semibold text-slate-800">
-                                                                    {initials}
-                                                                </div>
-
-                                                                <div className="min-w-0">
-                                                                    <div className="flex flex-wrap items-center gap-2">
-                                                                        <div className="truncate text-[14px] font-semibold text-slate-900">
-                                                                            {row.patient?.name || '—'}
-                                                                        </div>
-                                                                        <div className="text-[11px] text-slate-500">
-                                                                            UHID{' '}
-                                                                            <span className="font-semibold text-slate-700">{row.patient?.uhid || '—'}</span>
-                                                                            {' · '}
-                                                                            <span className="font-semibold text-slate-700">{row.patient?.phone || '—'}</span>
-                                                                        </div>
-                                                                    </div>
-
-                                                                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
-                                                                        <span>
-                                                                            Purpose{' '}
-                                                                            <span className="font-semibold text-slate-700">{row.visit_purpose || 'Consultation'}</span>
+                                                                    {queueNo !== null && queueNo !== undefined ? (
+                                                                        <span className="inline-flex items-center gap-1 rounded-full border border-black/50 bg-white/85 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+                                                                            <span className="opacity-70">Queue</span>
+                                                                            <span className="tabular-nums">{queueNo}</span>
                                                                         </span>
+                                                                    ) : null}
+
+                                                                    <span className={statusPill(row.status)}>
+                                                                        {statusLabel[row.status] || row.status}
+                                                                    </span>
+
+                                                                    {waiting && (
+                                                                        <span className="inline-flex items-center gap-1 rounded-full border border-black/50 bg-white/85 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+                                                                            <Clock className="h-3.5 w-3.5 text-slate-500" />
+                                                                            Waiting <span className="tabular-nums">{waiting}</span>
+                                                                        </span>
+                                                                    )}
+
+                                                                    <span className="inline-flex items-center gap-1 rounded-full border border-black/50 bg-white/85 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+                                                                        <HeartPulse className="h-3.5 w-3.5 text-slate-500" />
+                                                                        Vitals <span className="font-semibold">{row.has_vitals ? 'Yes' : 'No'}</span>
+                                                                    </span>
+
+                                                                    {row.visit_id ? (
+                                                                        <span className="inline-flex items-center gap-1 rounded-full border border-emerald-200 bg-emerald-50 px-2.5 py-1 text-[11px] font-semibold text-emerald-800">
+                                                                            <CheckCircle2 className="h-3.5 w-3.5" />
+                                                                            Visit ready
+                                                                        </span>
+                                                                    ) : null}
+                                                                </div>
+
+                                                                <div className="mt-2 flex items-start gap-3 min-w-0">
+                                                                    <div className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-3xl border border-black/50 bg-black/[0.03] text-[12px] font-semibold text-slate-800">
+                                                                        {initials}
+                                                                    </div>
+
+                                                                    <div className="min-w-0">
+                                                                        <div className="flex flex-wrap items-center gap-2">
+                                                                            <div className="truncate text-[14px] font-semibold text-slate-900">
+                                                                                {row.patient?.name || '—'}
+                                                                            </div>
+                                                                            <div className="text-[11px] text-slate-500">
+                                                                                UHID{' '}
+                                                                                <span className="font-semibold text-slate-700">{row.patient?.uhid || '—'}</span>
+                                                                                {' · '}
+                                                                                <span className="font-semibold text-slate-700">{row.patient?.phone || '—'}</span>
+                                                                            </div>
+                                                                        </div>
+
+                                                                        <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px] text-slate-500">
+                                                                            <span>
+                                                                                Purpose{' '}
+                                                                                <span className="font-semibold text-slate-700">{row.visit_purpose || 'Consultation'}</span>
+                                                                            </span>
+                                                                        </div>
                                                                     </div>
                                                                 </div>
                                                             </div>
-                                                        </div>
 
-                                                        {/* RIGHT ACTIONS */}
-                                                        <div className="flex flex-wrap items-center justify-end gap-2">
-                                                            {/* always: open triage */}
-                                                            <Button
-                                                                size="sm"
-                                                                variant="outline"
-                                                                className="h-10 rounded-2xl border-black/50 bg-white/85 font-semibold"
-                                                                onClick={() => openTriageFor(row)}
-                                                                title="Open Triage for this appointment"
-                                                            >
-                                                                <HeartPulse className="mr-2 h-4 w-4" />
-                                                                Vitals
-                                                            </Button>
-
-                                                            {row.status === 'booked' && (
-                                                                <>
-                                                                    <Button
-                                                                        size="sm"
-                                                                        className="h-10 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-semibold"
-                                                                        onClick={() => changeStatus(row, 'checked_in')}
-                                                                    >
-                                                                        <LogIn className="mr-2 h-4 w-4" />
-                                                                        Check-in
-                                                                    </Button>
-                                                                    <Button
-                                                                        size="sm"
-                                                                        variant="outline"
-                                                                        className="h-10 rounded-2xl border-black/50 bg-white/85 font-semibold"
-                                                                        onClick={() => changeStatus(row, 'no_show')}
-                                                                    >
-                                                                        <XCircle className="mr-2 h-4 w-4" />
-                                                                        No-show
-                                                                    </Button>
-                                                                </>
-                                                            )}
-
-                                                            {row.status === 'checked_in' && (
-                                                                <Button
-                                                                    size="sm"
-                                                                    className="h-10 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-semibold"
-                                                                    onClick={() => {
-                                                                        if (!row.has_vitals) return openTriageFor(row)
-                                                                        changeStatus(row, 'in_progress', { goToVisit: true })
-                                                                    }}
-                                                                    title={row.has_vitals ? 'Start visit' : 'Vitals needed first'}
-                                                                >
-                                                                    <PlayCircle className="mr-2 h-4 w-4" />
-                                                                    Start visit
-                                                                </Button>
-                                                            )}
-
-                                                            {row.status === 'in_progress' && (
-                                                                <Button
-                                                                    size="sm"
-                                                                    className="h-10 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-semibold"
-                                                                    onClick={() => changeStatus(row, 'completed')}
-                                                                >
-                                                                    <CheckCircle2 className="mr-2 h-4 w-4" />
-                                                                    Complete
-                                                                </Button>
-                                                            )}
-
-                                                            {row.visit_id && (
+                                                            {/* RIGHT ACTIONS */}
+                                                            <div className="flex flex-wrap items-center justify-end gap-2">
                                                                 <Button
                                                                     size="sm"
                                                                     variant="outline"
                                                                     className="h-10 rounded-2xl border-black/50 bg-white/85 font-semibold"
-                                                                    onClick={() => navigate(`/opd/visit/${row.visit_id}`)}
+                                                                    onClick={() => openTriageFor(row)}
+                                                                    title="Open Triage for this appointment"
                                                                 >
-                                                                    Open visit
+                                                                    <HeartPulse className="mr-2 h-4 w-4" />
+                                                                    Vitals
                                                                 </Button>
-                                                            )}
+
+                                                                {row.status === 'booked' && (
+                                                                    <>
+                                                                        <Button
+                                                                            size="sm"
+                                                                            className="h-10 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-semibold"
+                                                                            onClick={() => changeStatus(row, 'checked_in')}
+                                                                        >
+                                                                            <LogIn className="mr-2 h-4 w-4" />
+                                                                            Check-in
+                                                                        </Button>
+                                                                        <Button
+                                                                            size="sm"
+                                                                            variant="outline"
+                                                                            className="h-10 rounded-2xl border-black/50 bg-white/85 font-semibold"
+                                                                            onClick={() => changeStatus(row, 'no_show')}
+                                                                        >
+                                                                            <XCircle className="mr-2 h-4 w-4" />
+                                                                            No-show
+                                                                        </Button>
+                                                                    </>
+                                                                )}
+
+                                                                {row.status === 'checked_in' && (
+                                                                    <Button
+                                                                        size="sm"
+                                                                        className="h-10 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-semibold"
+                                                                        onClick={() => {
+                                                                            if (!row.has_vitals) return openTriageFor(row)
+                                                                            changeStatus(row, 'in_progress', { goToVisit: true })
+                                                                        }}
+                                                                        title={row.has_vitals ? 'Start visit' : 'Vitals needed first'}
+                                                                    >
+                                                                        <PlayCircle className="mr-2 h-4 w-4" />
+                                                                        Start visit
+                                                                    </Button>
+                                                                )}
+
+                                                                {row.status === 'in_progress' && (
+                                                                    <Button
+                                                                        size="sm"
+                                                                        className="h-10 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-semibold"
+                                                                        onClick={() => changeStatus(row, 'completed')}
+                                                                    >
+                                                                        <CheckCircle2 className="mr-2 h-4 w-4" />
+                                                                        Complete
+                                                                    </Button>
+                                                                )}
+
+                                                                {row.visit_id && (
+                                                                    <Button
+                                                                        size="sm"
+                                                                        variant="outline"
+                                                                        className="h-10 rounded-2xl border-black/50 bg-white/85 font-semibold"
+                                                                        onClick={() => navigate(`/opd/visit/${row.visit_id}`)}
+                                                                    >
+                                                                        Open visit
+                                                                    </Button>
+                                                                )}
+                                                            </div>
                                                         </div>
-                                                    </div>
-                                                </motion.div>
-                                            )
-                                        })}
-                                    </AnimatePresence>
+                                                    </motion.div>
+                                                )
+                                            })}
+                                        </AnimatePresence>
+                                    </div>
+                                </ScrollArea>
+
+                                {/* ✅ Bottom Pagination (always visible) */}
+                                <div className="mt-4 flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+                                    <Badge
+                                        variant="outline"
+                                        className="rounded-full border-black/50 bg-white/85 px-3 py-2 text-[11px] font-semibold text-slate-700"
+                                    >
+                                        Showing {pageInfo.from}-{pageInfo.to} of <span className="ml-1 tabular-nums">{pageInfo.total}</span>
+                                    </Badge>
+
+                                    <PaginationBar page={page} pageCount={pageCount} onPage={setPage} />
                                 </div>
-                            </ScrollArea>
+                            </>
                         )}
                     </CardContent>
                 </Card>

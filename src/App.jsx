@@ -48,7 +48,7 @@ import InvoiceDetail from "./billing/InvoiceDetail";
 import BillingConsole from "./billing/BillingConsole";
 import Advances from "./billing/AdvanceDeposit";
 
-import PatientEmrTimeline from "./emr/PatientEmrTimeline";
+// import PatientEmrTimeline from "./emr/PatientEmrTimeline";
 
 import Templates from "./pdftemplates/Templates";
 import TemplateEditor from "./pdftemplates/TemplateEditor";
@@ -96,6 +96,8 @@ import SupplierPayments from "./pharmacy/accounts/SupplierPayments";
 import MigrationsConsole from "./pages/master/MigrationsConsole";
 
 import { Toaster } from "sonner";
+import EmrPage from "./pages/emr/Emr";
+import EmrConsole from "./pages/emr/EmrConsole";
 
 export default function App() {
   useEffect(() => {
@@ -195,7 +197,7 @@ export default function App() {
             <Route path="/billing/advance" element={<Advances />} />
 
             {/* EMR */}
-            <Route path="/emr" element={<PatientEmrTimeline />} />
+            <Route path="/emr" element={<EmrConsole />} />
 
             {/* Templates */}
             <Route path="/templates" element={<Templates />} />

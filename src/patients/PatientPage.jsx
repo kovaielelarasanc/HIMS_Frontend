@@ -1,13 +1,11 @@
 // FILE: src/patients/PatientPage.jsx
 import { useEffect, useMemo, useRef, useState, useCallback } from 'react'
 import { toast } from 'sonner'
-import {
-    listPatients,
-    deactivatePatient,
-    getPatientMastersAll,
-    exportPatientsExcel,
-} from '../api/patients'
 
+import { listPatients, deactivatePatient, getPatientMastersAll, exportPatientsExcel } from '../api/patients'
+import { useBranding } from '../branding/BrandingProvider'
+
+// icons
 import {
     Users,
     Search,
@@ -26,6 +24,7 @@ import {
     CalendarDays,
     MoreVertical,
     ChevronRight,
+    ChevronLeft,
     Command,
     Check,
     SlidersHorizontal,
@@ -33,8 +32,6 @@ import {
     Trash2,
     ArrowDownUp,
 } from 'lucide-react'
-
-import { useBranding } from '../branding/BrandingProvider'
 
 // shadcn/ui
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
@@ -53,6 +50,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import PatientFormModal from './PatientForm'
 import PatientDetailDrawer from './PatientDetailDrawer'
 
+/* ------------------------- utils ------------------------- */
 const cx = (...a) => a.filter(Boolean).join(' ')
 const safeHex = (v) => typeof v === 'string' && v.startsWith('#') && v.length === 7
 const alphaHex = (hex, a = '1A') => (safeHex(hex) ? `${hex}${a}` : undefined)
@@ -63,6 +61,30 @@ const initials = (first = '', last = '') => {
     return (a + b).toUpperCase()
 }
 
+function getCreatedDate(p) {
+    const raw =
+        p.created_at ||
+        p.createdAt ||
+        p.registered_at ||
+        p.registeredAt ||
+        p.created_on ||
+        p.createdOn ||
+        p.updated_at ||
+        p.updatedAt
+    if (!raw) return null
+    const dt = new Date(raw)
+    return Number.isNaN(dt.getTime()) ? null : dt
+}
+
+function extractAgeYears(p) {
+    const a = p.age ?? p.age_years ?? p.ageYears
+    if (typeof a === 'number' && !Number.isNaN(a)) return a
+    const txt = String(p.age_text || p.ageText || '').trim()
+    const m = txt.match(/(\d+)/)
+    return m ? Number(m[1]) : null
+}
+
+/* ------------------------- UI bits ------------------------- */
 function StatPill({ label, value, tone = 'slate' }) {
     const toneMap = {
         slate: 'bg-black/[0.04] text-slate-700',
@@ -102,7 +124,7 @@ function RowActions({ onView, onEdit, onDeactivate }) {
             <DropdownMenuContent
                 align="end"
                 sideOffset={8}
-                className="w-44 rounded-2xl p-1.5 border border-black/50 shadow-xl bg-white"
+                className="w-44 rounded-2xl p-1.5 border border-black/10 shadow-xl bg-white"
                 onClick={(e) => e.stopPropagation()}
             >
                 <DropdownMenuItem
@@ -144,52 +166,45 @@ function RowActions({ onView, onEdit, onDeactivate }) {
     )
 }
 
-/** iOS segmented control (clean) */
-function SegmentedControl({
-    value,
-    onChange,
-    primary = '#2563eb',
-    options = [],
-    moreOptions = [],
-}) {
+/** iOS-ish segmented control (now mobile-safe: horizontal scroll) */
+function SegmentedControl({ value, onChange, primary = '#2563eb', options = [], moreOptions = [] }) {
     const activeStyle = { borderColor: alphaHex(primary, '22') || '#bfdbfe' }
 
     return (
-        <div className="flex items-center gap-2">
-            <div className="inline-flex items-center rounded-2xl border border-black/50 bg-black/[0.03] p-1">
-                {options.map((opt) => {
-                    const active = value === opt.value
-                    return (
-                        <button
-                            key={opt.value}
-                            type="button"
-                            onClick={() => onChange(opt.value)}
-                            className={cx(
-                                'relative h-9 px-3 rounded-xl text-[12px] font-semibold tracking-tight transition',
-                                'focus:outline-none',
-                                active
-                                    ? 'bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08)] text-slate-900 border border-black/50'
-                                    : 'text-slate-600 hover:text-slate-800 hover:bg-white/60'
-                            )}
-                            style={active ? activeStyle : undefined}
-                        >
-                            {opt.label}
-                        </button>
-                    )
-                })}
+        <div className="flex items-center gap-2 min-w-0">
+            <div className="min-w-0 overflow-x-auto">
+                <div className="inline-flex items-center rounded-2xl border border-black/10 bg-black/[0.03] p-1 whitespace-nowrap">
+                    {options.map((opt) => {
+                        const active = value === opt.value
+                        return (
+                            <button
+                                key={opt.value}
+                                type="button"
+                                onClick={() => onChange(opt.value)}
+                                className={cx(
+                                    'relative h-9 px-3 rounded-xl text-[12px] font-semibold tracking-tight transition',
+                                    'focus:outline-none',
+                                    active
+                                        ? 'bg-white shadow-[0_1px_2px_rgba(0,0,0,0.08)] text-slate-900 border border-black/10'
+                                        : 'text-slate-600 hover:text-slate-800 hover:bg-white/60'
+                                )}
+                                style={active ? activeStyle : undefined}
+                            >
+                                {opt.label}
+                            </button>
+                        )
+                    })}
+                </div>
             </div>
 
             {moreOptions.length > 0 && (
                 <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                        <Button
-                            variant="outline"
-                            className="h-10 rounded-2xl border-black/50 bg-white hover:bg-black/[0.03]"
-                        >
+                        <Button variant="outline" className="h-10 rounded-2xl border-black/10 bg-white hover:bg-black/[0.03]">
                             More…
                         </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent className="w-56 rounded-2xl p-1.5 border border-black/50 shadow-xl bg-white">
+                    <DropdownMenuContent className="w-56 rounded-2xl p-1.5 border border-black/10 shadow-xl bg-white">
                         {moreOptions.map((opt) => {
                             const active = value === opt.value
                             return (
@@ -215,15 +230,8 @@ function SegmentedControl({
     )
 }
 
-/** ⌘K palette (server search debounced, keyboard nav) */
-function CommandPalette({
-    open,
-    onClose,
-    primary,
-    patientTypeFilter,
-    onPickPatient,
-    fallbackPatients = [],
-}) {
+/** ⌘K palette (mobile-safe height + scroll) */
+function CommandPalette({ open, onClose, primary, patientTypeFilter, onPickPatient, fallbackPatients = [] }) {
     const [q, setQ] = useState('')
     const [loading, setLoading] = useState(false)
     const [rows, setRows] = useState([])
@@ -304,14 +312,14 @@ function CommandPalette({
 
     return (
         <div
-            className="fixed inset-0 z-[80] bg-black/35 backdrop-blur-sm flex items-start justify-center px-3 py-10"
+            className="fixed inset-0 z-[80] bg-black/35 backdrop-blur-sm flex items-start justify-center px-3 py-6 sm:py-10"
             onMouseDown={onClose}
         >
             <div
-                className="w-full max-w-2xl rounded-3xl border border-black/50 bg-white/90 backdrop-blur-xl shadow-[0_20px_60px_rgba(0,0,0,0.22)] overflow-hidden"
+                className="w-full max-w-2xl rounded-3xl border border-black/10 bg-white/95 backdrop-blur-xl shadow-[0_20px_60px_rgba(0,0,0,0.22)] overflow-hidden"
                 onMouseDown={(e) => e.stopPropagation()}
             >
-                <div className="px-4 py-3 border-b border-black/50">
+                <div className="px-4 py-3 border-b border-black/10">
                     <div className="flex items-center gap-2">
                         <div className="h-9 w-9 rounded-2xl grid place-items-center border" style={accent}>
                             <Command className="h-4 w-4" />
@@ -337,7 +345,7 @@ function CommandPalette({
                                         pick(rows[idx] || rows[0])
                                     }
                                 }}
-                                className="h-11 rounded-2xl pl-10 pr-24 border-black/50 bg-white focus-visible:ring-black/10"
+                                className="h-11 rounded-2xl pl-10 pr-24 border-black/10 bg-white focus-visible:ring-black/10"
                                 placeholder="Search patients… (UHID / Name / Phone)"
                             />
                             <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
@@ -351,7 +359,7 @@ function CommandPalette({
                                         <X className="h-4 w-4 text-slate-500" />
                                     </button>
                                 )}
-                                <div className="hidden sm:flex items-center gap-1 rounded-full border border-black/50 bg-black/[0.03] px-2 py-1 text-[11px] text-slate-600">
+                                <div className="hidden sm:flex items-center gap-1 rounded-full border border-black/10 bg-black/[0.03] px-2 py-1 text-[11px] text-slate-600">
                                     <span>Esc</span>
                                 </div>
                             </div>
@@ -370,7 +378,7 @@ function CommandPalette({
                     )}
                 </div>
 
-                <div className="max-h-[60vh] overflow-auto">
+                <div className="max-h-[70vh] sm:max-h-[60vh] overflow-auto">
                     {rows.length === 0 && !loading ? (
                         <div className="px-4 py-10 text-center text-slate-500">
                             <div className="mx-auto h-12 w-12 rounded-3xl bg-black/[0.04] grid place-items-center">
@@ -405,9 +413,7 @@ function CommandPalette({
                                                     color: primary,
                                                 }}
                                             >
-                                                <span className="text-[12px] font-extrabold">
-                                                    {initials(p.first_name, p.last_name)}
-                                                </span>
+                                                <span className="text-[12px] font-extrabold">{initials(p.first_name, p.last_name)}</span>
                                             </div>
 
                                             <div className="min-w-0 flex-1">
@@ -415,7 +421,7 @@ function CommandPalette({
                                                     <div className="min-w-0">
                                                         <div className="font-semibold text-slate-900 truncate">{fullName}</div>
                                                         <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[12px] text-slate-500">
-                                                            <span className="font-mono text-[11px] bg-black/[0.04] border border-black/50 rounded-full px-2 py-0.5">
+                                                            <span className="font-mono text-[11px] bg-black/[0.04] border border-black/10 rounded-full px-2 py-0.5">
                                                                 {p.uhid || '—'}
                                                             </span>
                                                             {p.phone && (
@@ -424,10 +430,7 @@ function CommandPalette({
                                                                     {p.phone}
                                                                 </span>
                                                             )}
-                                                            <Badge
-                                                                variant="secondary"
-                                                                className="rounded-full border border-black/50 bg-black/[0.03] text-slate-700"
-                                                            >
+                                                            <Badge variant="secondary" className="rounded-full border border-black/10 bg-black/[0.03] text-slate-700">
                                                                 {active ? 'Active' : 'Inactive'}
                                                             </Badge>
                                                         </div>
@@ -448,8 +451,7 @@ function CommandPalette({
     )
 }
 
-/* ===================== EXTREME FILTERS ===================== */
-
+/* ------------------------- Filters ------------------------- */
 const FILTER_DEFAULT = {
     status: 'all', // all | active | inactive
     gender: 'all', // all | male | female | other
@@ -467,42 +469,9 @@ const FILTER_DEFAULT = {
 
 const VIEWS_KEY = 'nutryah_patient_views_v1'
 
-function toYMD(d) {
-    if (!d) return ''
-    const dt = new Date(d)
-    if (Number.isNaN(dt.getTime())) return ''
-    const y = dt.getFullYear()
-    const m = String(dt.getMonth() + 1).padStart(2, '0')
-    const day = String(dt.getDate()).padStart(2, '0')
-    return `${y}-${m}-${day}`
-}
-
-function getCreatedDate(p) {
-    const raw =
-        p.created_at ||
-        p.createdAt ||
-        p.registered_at ||
-        p.registeredAt ||
-        p.created_on ||
-        p.createdOn ||
-        p.updated_at ||
-        p.updatedAt
-    if (!raw) return null
-    const dt = new Date(raw)
-    return Number.isNaN(dt.getTime()) ? null : dt
-}
-
-function extractAgeYears(p) {
-    const a = p.age ?? p.age_years ?? p.ageYears
-    if (typeof a === 'number' && !Number.isNaN(a)) return a
-    const txt = String(p.age_text || p.ageText || '').trim()
-    const m = txt.match(/(\d+)/)
-    return m ? Number(m[1]) : null
-}
-
 function FilterChip({ label, onRemove }) {
     return (
-        <span className="inline-flex items-center gap-1.5 rounded-full border border-black/50 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+        <span className="inline-flex items-center gap-1.5 rounded-full border border-black/10 bg-white px-2.5 py-1 text-[11px] font-semibold text-slate-700">
             {label}
             <button
                 type="button"
@@ -519,9 +488,10 @@ function FilterChip({ label, onRemove }) {
 function NativeSelect({ value, onChange, children }) {
     return (
         <select
+            s
             value={value}
             onChange={(e) => onChange(e.target.value)}
-            className="h-10 w-full rounded-2xl border border-black/50 bg-white px-3 text-[13px] text-slate-900 outline-none focus-visible:ring-black/10"
+            className="h-10 w-full rounded-2xl border border-black/10 bg-white px-3 text-[13px] text-slate-900 outline-none focus-visible:ring-black/10"
         >
             {children}
         </select>
@@ -540,160 +510,184 @@ function FiltersDialog({ open, onOpenChange, filters, setFilters, primary }) {
 
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="max-w-3xl rounded-3xl border border-black/50 bg-white p-0 overflow-hidden">
-                <DialogHeader className="px-5 py-4 border-b border-black/50">
+            <DialogContent
+                className={cx(
+                    'p-0 overflow-hidden',
+                    'w-[calc(100vw-1.25rem)] sm:w-full',
+                    'max-w-3xl rounded-3xl border border-black/10 bg-white'
+                )}
+            >
+                <DialogHeader className="px-5 py-4 border-b border-black/10">
                     <div className="flex items-center justify-between gap-3">
                         <div className="min-w-0">
                             <DialogTitle className="text-[16px] font-semibold tracking-tight">Advanced Filters</DialogTitle>
-                            <div className="text-[12px] text-slate-500 mt-1">
-                                Filtering + sorting.
-                            </div>
+                            <div className="text-[12px] text-slate-500 mt-1">Filtering + sorting.</div>
                         </div>
-                        <div className="inline-flex items-center gap-2 rounded-full px-3 py-1 border" style={accent}>
-                            <SlidersHorizontal className="h-4 w-4" />
-                            Filters
+
+                        <div className="flex items-center gap-2">
+                            <div className="hidden sm:inline-flex items-center gap-2 rounded-full px-3 py-1 border" style={accent}>
+                                <SlidersHorizontal className="h-4 w-4" />
+                                Filters
+                            </div>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="rounded-2xl"
+                                onClick={() => onOpenChange(false)}
+                                title="Close"
+                            >
+                                <X className="h-4 w-4" />
+                            </Button>
                         </div>
                     </div>
                 </DialogHeader>
 
-                <div className="p-5 grid gap-4">
-                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                        <div className="grid gap-1">
-                            <div className="text-[11px] font-bold text-slate-600 uppercase">Status</div>
-                            <NativeSelect value={filters.status} onChange={(v) => set('status', v)}>
-                                <option value="all">All</option>
-                                <option value="active">Active</option>
-                                <option value="inactive">Inactive</option>
-                            </NativeSelect>
-                        </div>
-
-                        <div className="grid gap-1">
-                            <div className="text-[11px] font-bold text-slate-600 uppercase">Gender</div>
-                            <NativeSelect value={filters.gender} onChange={(v) => set('gender', v)}>
-                                <option value="all">All</option>
-                                <option value="male">Male</option>
-                                <option value="female">Female</option>
-                                <option value="other">Other</option>
-                            </NativeSelect>
-                        </div>
-
-                        <div className="grid gap-1">
-                            <div className="text-[11px] font-bold text-slate-600 uppercase">Blood Group</div>
-                            <Input
-                                className="h-10 rounded-2xl border-black/50 bg-white focus-visible:ring-black/10"
-                                placeholder="A+ / O- / AB+"
-                                value={filters.blood_group}
-                                onChange={(e) => set('blood_group', e.target.value)}
-                            />
-                        </div>
-
-                        <div className="grid gap-1">
-                            <div className="text-[11px] font-bold text-slate-600 uppercase">Age Min</div>
-                            <Input
-                                inputMode="numeric"
-                                className="h-10 rounded-2xl border-black/50 bg-white focus-visible:ring-black/10"
-                                placeholder="e.g., 18"
-                                value={filters.age_min}
-                                onChange={(e) => set('age_min', e.target.value.replace(/\D/g, ''))}
-                            />
-                        </div>
-
-                        <div className="grid gap-1">
-                            <div className="text-[11px] font-bold text-slate-600 uppercase">Age Max</div>
-                            <Input
-                                inputMode="numeric"
-                                className="h-10 rounded-2xl border-black/50 bg-white focus-visible:ring-black/10"
-                                placeholder="e.g., 60"
-                                value={filters.age_max}
-                                onChange={(e) => set('age_max', e.target.value.replace(/\D/g, ''))}
-                            />
-                        </div>
-
-                        <div className="grid gap-1">
-                            <div className="text-[11px] font-bold text-slate-600 uppercase">Tag Contains</div>
-                            <Input
-                                className="h-10 rounded-2xl border-black/50 bg-white focus-visible:ring-black/10"
-                                placeholder="VIP / Staff / Corporate"
-                                value={filters.tag_contains}
-                                onChange={(e) => set('tag_contains', e.target.value)}
-                            />
-                        </div>
-
-                        <div className="grid gap-1">
-                            <div className="text-[11px] font-bold text-slate-600 uppercase">Registered From</div>
-                            <Input
-                                type="date"
-                                className="h-10 rounded-2xl border-black/50 bg-white focus-visible:ring-black/10"
-                                value={filters.reg_from}
-                                onChange={(e) => set('reg_from', e.target.value)}
-                            />
-                        </div>
-
-                        <div className="grid gap-1">
-                            <div className="text-[11px] font-bold text-slate-600 uppercase">Registered To</div>
-                            <Input
-                                type="date"
-                                className="h-10 rounded-2xl border-black/50 bg-white focus-visible:ring-black/10"
-                                value={filters.reg_to}
-                                onChange={(e) => set('reg_to', e.target.value)}
-                            />
-                        </div>
-
-                        <div className="grid gap-1">
-                            <div className="text-[11px] font-bold text-slate-600 uppercase">Sort</div>
-                            <div className="flex gap-2">
-                                <NativeSelect value={filters.sort_by} onChange={(v) => set('sort_by', v)}>
-                                    <option value="recent">Recent</option>
-                                    <option value="name">Name</option>
-                                    <option value="uhid">UHID</option>
-                                    <option value="age">Age</option>
+                {/* scrollable body (mobile-safe) */}
+                <div className="max-h-[78vh] overflow-auto">
+                    <div className="p-5 grid gap-4">
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                            <div className="grid gap-1">
+                                <div className="text-[11px] font-bold text-slate-600 uppercase">Status</div>
+                                <NativeSelect value={filters.status} onChange={(v) => set('status', v)}>
+                                    <option value="all">All</option>
+                                    <option value="active">Active</option>
+                                    <option value="inactive">Inactive</option>
                                 </NativeSelect>
+                            </div>
+
+                            <div className="grid gap-1">
+                                <div className="text-[11px] font-bold text-slate-600 uppercase">Gender</div>
+                                <NativeSelect value={filters.gender} onChange={(v) => set('gender', v)}>
+                                    <option value="all">All</option>
+                                    <option value="male">Male</option>
+                                    <option value="female">Female</option>
+                                    <option value="other">Other</option>
+                                </NativeSelect>
+                            </div>
+
+                            <div className="grid gap-1">
+                                <div className="text-[11px] font-bold text-slate-600 uppercase">Blood Group</div>
+                                <Input
+                                    className="h-10 rounded-2xl border-black/10 bg-white focus-visible:ring-black/10"
+                                    placeholder="A+ / O- / AB+"
+                                    value={filters.blood_group}
+                                    onChange={(e) => set('blood_group', e.target.value)}
+                                />
+                            </div>
+
+                            <div className="grid gap-1">
+                                <div className="text-[11px] font-bold text-slate-600 uppercase">Age Min</div>
+                                <Input
+                                    inputMode="numeric"
+                                    className="h-10 rounded-2xl border-black/10 bg-white focus-visible:ring-black/10"
+                                    placeholder="e.g., 18"
+                                    value={filters.age_min}
+                                    onChange={(e) => set('age_min', e.target.value.replace(/\D/g, ''))}
+                                />
+                            </div>
+
+                            <div className="grid gap-1">
+                                <div className="text-[11px] font-bold text-slate-600 uppercase">Age Max</div>
+                                <Input
+                                    inputMode="numeric"
+                                    className="h-10 rounded-2xl border-black/10 bg-white focus-visible:ring-black/10"
+                                    placeholder="e.g., 60"
+                                    value={filters.age_max}
+                                    onChange={(e) => set('age_max', e.target.value.replace(/\D/g, ''))}
+                                />
+                            </div>
+
+                            <div className="grid gap-1">
+                                <div className="text-[11px] font-bold text-slate-600 uppercase">Tag Contains</div>
+                                <Input
+                                    className="h-10 rounded-2xl border-black/10 bg-white focus-visible:ring-black/10"
+                                    placeholder="VIP / Staff / Corporate"
+                                    value={filters.tag_contains}
+                                    onChange={(e) => set('tag_contains', e.target.value)}
+                                />
+                            </div>
+
+                            <div className="grid gap-1">
+                                <div className="text-[11px] font-bold text-slate-600 uppercase">Registered From</div>
+                                <Input
+                                    type="date"
+                                    className="h-10 rounded-2xl border-black/10 bg-white focus-visible:ring-black/10"
+                                    value={filters.reg_from}
+                                    onChange={(e) => set('reg_from', e.target.value)}
+                                />
+                            </div>
+
+                            <div className="grid gap-1">
+                                <div className="text-[11px] font-bold text-slate-600 uppercase">Registered To</div>
+                                <Input
+                                    type="date"
+                                    className="h-10 rounded-2xl border-black/10 bg-white focus-visible:ring-black/10"
+                                    value={filters.reg_to}
+                                    onChange={(e) => set('reg_to', e.target.value)}
+                                />
+                            </div>
+
+                            <div className="grid gap-1">
+                                <div className="text-[11px] font-bold text-slate-600 uppercase">Sort</div>
+                                <div className="flex gap-2">
+                                    <NativeSelect value={filters.sort_by} onChange={(v) => set('sort_by', v)}>
+                                        <option value="recent">Recent</option>
+                                        <option value="name">Name</option>
+                                        <option value="uhid">UHID</option>
+                                        <option value="age">Age</option>
+                                    </NativeSelect>
+                                    <Button
+                                        variant="outline"
+                                        className="h-10 rounded-2xl border-black/10 bg-white hover:bg-black/[0.03]"
+                                        onClick={() => set('sort_dir', filters.sort_dir === 'asc' ? 'desc' : 'asc')}
+                                        title="Toggle sort direction"
+                                    >
+                                        <ArrowDownUp className="h-4 w-4" />
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="rounded-3xl border border-black/10 bg-black/[0.02] p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                            <div className="flex flex-wrap items-center gap-2">
+                                <button
+                                    type="button"
+                                    className={cx(
+                                        'inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[12px] font-semibold border border-black/10',
+                                        filters.has_phone ? 'bg-white' : 'bg-black/[0.02] hover:bg-black/[0.04]'
+                                    )}
+                                    onClick={() => toggle('has_phone')}
+                                >
+                                    <Phone className="h-4 w-4 text-slate-500" />
+                                    Has Phone
+                                </button>
+
+                                <button
+                                    type="button"
+                                    className={cx(
+                                        'inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[12px] font-semibold border border-black/10',
+                                        filters.has_email ? 'bg-white' : 'bg-black/[0.02] hover:bg-black/[0.04]'
+                                    )}
+                                    onClick={() => toggle('has_email')}
+                                >
+                                    <Mail className="h-4 w-4 text-slate-500" />
+                                    Has Email
+                                </button>
+                            </div>
+
+                            <div className="flex gap-2">
                                 <Button
                                     variant="outline"
-                                    className="h-10 rounded-2xl border-black/50 bg-white hover:bg-black/[0.03]"
-                                    onClick={() => set('sort_dir', filters.sort_dir === 'asc' ? 'desc' : 'asc')}
-                                    title="Toggle sort direction"
+                                    className="rounded-2xl border-black/10 bg-white hover:bg-black/[0.03]"
+                                    onClick={() => setFilters({ ...FILTER_DEFAULT })}
                                 >
-                                    <ArrowDownUp className="h-4 w-4" />
+                                    Reset
+                                </Button>
+                                <Button className="rounded-2xl shadow-sm" style={{ backgroundColor: primary }} onClick={() => onOpenChange(false)}>
+                                    Apply
                                 </Button>
                             </div>
                         </div>
-                    </div>
-
-                    <div className="rounded-3xl border border-black/50 bg-black/[0.02] p-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
-                        <div className="flex flex-wrap items-center gap-2">
-                            <button
-                                type="button"
-                                className={cx(
-                                    'inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[12px] font-semibold border border-black/50',
-                                    filters.has_phone ? 'bg-white' : 'bg-black/[0.02] hover:bg-black/[0.04]'
-                                )}
-                                onClick={() => toggle('has_phone')}
-                            >
-                                <Phone className="h-4 w-4 text-slate-500" />
-                                Has Phone
-                            </button>
-
-                            <button
-                                type="button"
-                                className={cx(
-                                    'inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[12px] font-semibold border border-black/50',
-                                    filters.has_email ? 'bg-white' : 'bg-black/[0.02] hover:bg-black/[0.04]'
-                                )}
-                                onClick={() => toggle('has_email')}
-                            >
-                                <Mail className="h-4 w-4 text-slate-500" />
-                                Has Email
-                            </button>
-                        </div>
-
-                        <Button
-                            variant="outline"
-                            className="rounded-2xl border-black/50 bg-white hover:bg-black/[0.03]"
-                            onClick={() => setFilters({ ...FILTER_DEFAULT })}
-                        >
-                            Reset Filters
-                        </Button>
                     </div>
                 </div>
             </DialogContent>
@@ -711,16 +705,12 @@ function ViewsMenu({ primary, onSave, views, onApply, onDelete }) {
     return (
         <DropdownMenu>
             <DropdownMenuTrigger asChild>
-                <Button
-                    variant="outline"
-                    className="rounded-2xl border-black/50 bg-white hover:bg-black/[0.03]"
-                    title="Saved Views"
-                >
+                <Button variant="outline" className="rounded-2xl border-black/10 bg-white hover:bg-black/[0.03]" title="Saved Views">
                     <Bookmark className="h-4 w-4 mr-2" />
                     Views
                 </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent className="w-64 rounded-2xl p-1.5 border border-black/50 shadow-xl bg-white">
+            <DropdownMenuContent className="w-64 rounded-2xl p-1.5 border border-black/10 shadow-xl bg-white">
                 <DropdownMenuItem
                     className="rounded-xl cursor-pointer"
                     onSelect={(e) => {
@@ -772,9 +762,82 @@ function ViewsMenu({ primary, onSave, views, onApply, onDelete }) {
     )
 }
 
+/* ------------------------- Pagination ------------------------- */
+const PAGE_SIZES = [10, 20, 30, 40, 100, 'All']
+
+function PaginationBar({ total, page, setPage, pageSize, setPageSize }) {
+    const pages = useMemo(() => {
+        if (pageSize === 'All') return 1
+        const n = Math.max(1, Math.ceil((total || 0) / Number(pageSize || 20)))
+        return n
+    }, [total, pageSize])
+
+    useEffect(() => {
+        // clamp
+        setPage((p) => Math.min(Math.max(1, p), pages))
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [pages])
+
+    const canPrev = page > 1
+    const canNext = page < pages
+
+    return (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 px-4 py-3 border-t border-black/10 bg-white/80 backdrop-blur">
+            <div className="text-[12px] text-slate-600 flex items-center gap-2">
+                <span className="font-semibold text-slate-800 tabular-nums">{total || 0}</span>
+                <span>records</span>
+                <span className="text-slate-300">•</span>
+                <span className="tabular-nums">
+                    Page <span className="font-semibold text-slate-800">{page}</span> / {pages}
+                </span>
+            </div>
+
+            <div className="flex flex-wrap items-center gap-2 justify-between sm:justify-end">
+                <div className="flex items-center gap-2">
+                    <span className="text-[12px] text-slate-600">Show</span>
+                    <select
+                        value={pageSize}
+                        onChange={(e) => setPageSize(e.target.value === 'All' ? 'All' : Number(e.target.value))}
+                        className="h-9 rounded-2xl border border-black/10 bg-white px-3 text-[13px] outline-none"
+                    >
+                        {PAGE_SIZES.map((s) => (
+                            <option key={String(s)} value={String(s)}>
+                                {String(s)}
+                            </option>
+                        ))}
+                    </select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                    <Button
+                        variant="outline"
+                        className="h-9 rounded-2xl border-black/10 bg-white hover:bg-black/[0.03]"
+                        disabled={!canPrev || pageSize === 'All'}
+                        onClick={() => canPrev && setPage(page - 1)}
+                    >
+                        <ChevronLeft className="h-4 w-4 mr-1" />
+                        Prev
+                    </Button>
+                    <Button
+                        variant="outline"
+                        className="h-9 rounded-2xl border-black/10 bg-white hover:bg-black/[0.03]"
+                        disabled={!canNext || pageSize === 'All'}
+                        onClick={() => canNext && setPage(page + 1)}
+                    >
+                        Next
+                        <ChevronRight className="h-4 w-4 ml-1" />
+                    </Button>
+                </div>
+            </div>
+        </div>
+    )
+}
+
+/* ------------------------- Page ------------------------- */
 export default function PatientPage() {
     const { branding } = useBranding() || {}
     const primary = branding?.primary_color || '#2563eb'
+    const secondary = branding?.secondary_color || primary
 
     const [patients, setPatients] = useState([])
     const [loading, setLoading] = useState(false)
@@ -797,7 +860,7 @@ export default function PatientPage() {
         patientTypes: [],
     })
 
-    // Server Filters
+    // Server filter
     const [patientTypeFilter, setPatientTypeFilter] = useState('')
 
     // Export
@@ -805,7 +868,7 @@ export default function PatientPage() {
     const [toDate, setToDate] = useState('')
     const [exporting, setExporting] = useState(false)
 
-    // Extreme Filters (client-side)
+    // Local filters
     const [filters, setFilters] = useState({ ...FILTER_DEFAULT })
     const [filtersOpen, setFiltersOpen] = useState(false)
 
@@ -819,6 +882,10 @@ export default function PatientPage() {
             return []
         }
     })
+
+    // Pagination
+    const [pageSize, setPageSize] = useState(20)
+    const [page, setPage] = useState(1)
 
     const patientTypeOptions = useMemo(() => lookups.patientTypes || [], [lookups.patientTypes])
 
@@ -881,7 +948,8 @@ export default function PatientPage() {
     // ⌘K / Ctrl+K
     useEffect(() => {
         const onKeyDown = (e) => {
-            const isMac = navigator.platform?.toLowerCase?.().includes('mac')
+            const plat = (navigator?.platform || '').toLowerCase()
+            const isMac = plat.includes('mac')
             const mod = isMac ? e.metaKey : e.ctrlKey
             if (mod && e.key.toLowerCase() === 'k') {
                 e.preventDefault()
@@ -894,11 +962,13 @@ export default function PatientPage() {
 
     const handleSearchSubmit = (e) => {
         e.preventDefault()
+        setPage(1)
         loadPatients(q, patientTypeFilter)
     }
 
     const handlePatientType = (codeOrEmpty) => {
         setPatientTypeFilter(codeOrEmpty)
+        setPage(1)
         loadPatients(q, codeOrEmpty)
     }
 
@@ -906,6 +976,7 @@ export default function PatientPage() {
         setPatientTypeFilter('')
         setQ('')
         setFilters({ ...FILTER_DEFAULT })
+        setPage(1)
         loadPatients('', '')
     }
 
@@ -983,7 +1054,7 @@ export default function PatientPage() {
         }
     }
 
-    // Segmented: keep it clean (first N) + More…
+    // segmented options
     const segmented = useMemo(() => {
         const all = [{ value: '', label: 'All' }]
         const mapped = patientTypeOptions.map((x) => ({
@@ -1004,7 +1075,7 @@ export default function PatientPage() {
         color: primary,
     }
 
-    // Apply Extreme Filters (client-side)
+    // local filter flags
     const hasAnyLocalFilter = useMemo(() => {
         const f = filters
         return (
@@ -1023,6 +1094,7 @@ export default function PatientPage() {
         )
     }, [filters])
 
+    // apply local filters
     const filteredPatients = useMemo(() => {
         const f = filters
         const bgNeed = String(f.blood_group || '').trim().toLowerCase()
@@ -1034,33 +1106,27 @@ export default function PatientPage() {
         const regTo = f.reg_to ? new Date(`${f.reg_to}T23:59:59`) : null
 
         let rows = (patients || []).filter((p) => {
-            // status
             if (f.status === 'active' && p.is_active === false) return false
             if (f.status === 'inactive' && p.is_active !== false) return false
 
-            // gender
             if (f.gender !== 'all') {
                 const g = String(p.gender || '').toLowerCase()
                 if (g !== f.gender) return false
             }
 
-            // blood group
             if (bgNeed) {
                 const bg = String(p.blood_group || '').toLowerCase()
                 if (!bg.includes(bgNeed)) return false
             }
 
-            // tag contains
             if (tagNeed) {
                 const t = String(p.tag || '').toLowerCase()
                 if (!t.includes(tagNeed)) return false
             }
 
-            // has phone/email
             if (f.has_phone && !String(p.phone || '').trim()) return false
             if (f.has_email && !String(p.email || '').trim()) return false
 
-            // age range
             if (ageMin !== null || ageMax !== null) {
                 const age = extractAgeYears(p)
                 if (age === null) return false
@@ -1068,7 +1134,6 @@ export default function PatientPage() {
                 if (ageMax !== null && age > ageMax) return false
             }
 
-            // registered range
             if (regFrom || regTo) {
                 const dt = getCreatedDate(p)
                 if (!dt) return false
@@ -1079,7 +1144,6 @@ export default function PatientPage() {
             return true
         })
 
-        // sorting
         const dir = f.sort_dir === 'asc' ? 1 : -1
         rows.sort((a, b) => {
             if (f.sort_by === 'name') {
@@ -1097,7 +1161,6 @@ export default function PatientPage() {
                 const ba = extractAgeYears(b) ?? -1
                 return (aa - ba) * dir
             }
-            // recent
             const ad = getCreatedDate(a)?.getTime?.() || 0
             const bd = getCreatedDate(b)?.getTime?.() || 0
             return (ad - bd) * dir
@@ -1105,6 +1168,11 @@ export default function PatientPage() {
 
         return rows
     }, [patients, filters])
+
+    // reset page on list changes / filters changes
+    useEffect(() => {
+        setPage(1)
+    }, [q, patientTypeFilter, filters])
 
     const shownStats = useMemo(() => {
         const total = filteredPatients.length
@@ -1138,7 +1206,8 @@ export default function PatientPage() {
     const clearChip = (k) => {
         if (k === 'age') return setFilters((p) => ({ ...p, age_min: '', age_max: '' }))
         if (k === 'reg') return setFilters((p) => ({ ...p, reg_from: '', reg_to: '' }))
-        if (k === 'sort') return setFilters((p) => ({ ...p, sort_by: FILTER_DEFAULT.sort_by, sort_dir: FILTER_DEFAULT.sort_dir }))
+        if (k === 'sort')
+            return setFilters((p) => ({ ...p, sort_by: FILTER_DEFAULT.sort_by, sort_dir: FILTER_DEFAULT.sort_dir }))
         if (k === 'has_phone') return setFilters((p) => ({ ...p, has_phone: false }))
         if (k === 'has_email') return setFilters((p) => ({ ...p, has_email: false }))
         setFilters((p) => ({ ...p, [k]: FILTER_DEFAULT[k] }))
@@ -1147,10 +1216,7 @@ export default function PatientPage() {
     const saveView = () => {
         const name = window.prompt('View name? (e.g., Active OPD VIP)')
         if (!name) return
-        const next = [
-            ...views.filter((v) => v.name !== name),
-            { name, q, patientTypeFilter, filters },
-        ]
+        const next = [...views.filter((v) => v.name !== name), { name, q, patientTypeFilter, filters }]
         setViews(next)
         try {
             localStorage.setItem(VIEWS_KEY, JSON.stringify(next))
@@ -1164,6 +1230,7 @@ export default function PatientPage() {
         setQ(v.q || '')
         setPatientTypeFilter(v.patientTypeFilter || '')
         setFilters(v.filters || { ...FILTER_DEFAULT })
+        setPage(1)
         loadPatients(v.q || '', v.patientTypeFilter || '')
         toast.success('View applied.')
     }
@@ -1181,578 +1248,570 @@ export default function PatientPage() {
         toast.success('View deleted.')
     }
 
+    // pagination slice
+    const pagedPatients = useMemo(() => {
+        if (pageSize === 'All') return filteredPatients
+        const size = Number(pageSize || 20)
+        const start = (page - 1) * size
+        return filteredPatients.slice(start, start + size)
+    }, [filteredPatients, page, pageSize])
+
     return (
-        <div className="h-full min-h-0 w-full bg-slate-50">
-            <div className="mx-auto w-full max-w-12xl px-3 sm:px-5 py-4 flex flex-col gap-4 min-h-0">
-                {/* Header */}
-                <Card className="rounded-3xl border-black/50 bg-white/90 backdrop-blur shadow-[0_1px_2px_rgba(0,0,0,0.05)] overflow-hidden">
-                    <CardHeader className="pb-3">
-                        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                            <div className="min-w-0">
-                                <div
-                                    className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[12px] font-semibold tracking-tight border"
-                                    style={accentHint}
-                                >
-                                    <Users className="h-4 w-4" />
-                                    Patient Registry
+        <div className="h-full min-h-0 w-full bg-slate-50 flex flex-col overflow-hidden">
+            {/* main scroll container (fix: always scrollable on ALL layouts) */}
+            <div className="flex-1 min-h-0 overflow-y-auto">
+                <div className="mx-auto w-full max-w-[1680px] px-3 sm:px-5 lg:px-6 py-4 flex flex-col gap-4">
+                    {/* Header */}
+                    <Card className="rounded-3xl border-black/10 bg-white/90 backdrop-blur shadow-[0_1px_2px_rgba(0,0,0,0.05)] overflow-hidden">
+                        <CardHeader className="pb-3">
+                            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                                <div className="min-w-0">
+                                    <div className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[12px] font-semibold tracking-tight border" style={accentHint}>
+                                        <Users className="h-4 w-4" />
+                                        Patient Registry
+                                    </div>
+
+                                    <CardTitle className="mt-2 text-[22px] sm:text-[26px] tracking-tight font-semibold">
+                                        Patient Management
+                                    </CardTitle>
+
+                                    <p className="mt-1 text-[13px] text-slate-600 max-w-2xl leading-relaxed">
+                                        UHID search, responsive filters, saved views, export, and quick profile actions.
+                                    </p>
+
+                                    <div className="mt-3 flex flex-wrap gap-2">
+                                        <StatPill label="Showing" value={`${shownStats.total}/${baseStats.total}`} tone="sky" />
+                                        <StatPill label="Active" value={shownStats.active} tone="emerald" />
+                                        {shownStats.inactive > 0 && <StatPill label="Inactive" value={shownStats.inactive} tone="rose" />}
+                                        <div className="inline-flex items-center gap-2 rounded-full bg-black/[0.04] px-3 py-1 text-[12px] font-semibold text-slate-700">
+                                            <Tag className="h-4 w-4 opacity-70" />
+                                            Type: {activeTypeLabel}
+                                        </div>
+                                    </div>
                                 </div>
 
-                                <CardTitle className="mt-2 text-[22px] sm:text-[26px] tracking-tight font-semibold">
-                                    Patient Management
-                                </CardTitle>
+                                {/* Actions: extreme responsive layout */}
+                                <div className="w-full lg:w-auto">
+                                    <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:justify-end">
+                                        <ViewsMenu primary={primary} onSave={saveView} views={views} onApply={applyView} onDelete={deleteView} />
 
-                                <p className="mt-1 text-[13px] text-slate-600 max-w-2xl leading-relaxed">
-                                    UHID search, extreme filters, saved views, export, and quick profile actions.
-                                </p>
+                                        <Button
+                                            variant="outline"
+                                            className="rounded-2xl border-black/10 bg-white hover:bg-black/[0.03]"
+                                            onClick={() => setFiltersOpen(true)}
+                                            title="Advanced Filters"
+                                        >
+                                            <SlidersHorizontal className="h-4 w-4 mr-2" />
+                                            Filters
+                                        </Button>
 
-                                <div className="mt-3 flex flex-wrap gap-2">
-                                    <StatPill label="Showing" value={`${shownStats.total}/${baseStats.total}`} tone="sky" />
-                                    <StatPill label="Active" value={shownStats.active} tone="emerald" />
-                                    {shownStats.inactive > 0 && <StatPill label="Inactive" value={shownStats.inactive} tone="rose" />}
-                                    <div className="inline-flex items-center gap-2 rounded-full bg-black/[0.04] px-3 py-1 text-[12px] font-semibold text-slate-700">
-                                        <Tag className="h-4 w-4 opacity-70" />
-                                        Type: {activeTypeLabel}
+                                        <Button
+                                            variant="outline"
+                                            className="rounded-2xl border-black/10 bg-white hover:bg-black/[0.03]"
+                                            onClick={() => loadPatients(q, patientTypeFilter)}
+                                            title="Reload"
+                                        >
+                                            <RefreshCcw className="h-4 w-4 mr-2" />
+                                            Reload
+                                        </Button>
+
+                                        <Button
+                                            className="rounded-2xl shadow-sm active:scale-[0.99] transition"
+                                            style={{ backgroundColor: primary }}
+                                            onClick={handleNew}
+                                        >
+                                            <Plus className="h-4 w-4 mr-2" />
+                                            New Patient
+                                        </Button>
                                     </div>
                                 </div>
                             </div>
+                        </CardHeader>
 
-                            <div className="flex flex-wrap gap-2 md:justify-end">
-                                <ViewsMenu
-                                    primary={primary}
-                                    onSave={saveView}
-                                    views={views}
-                                    onApply={applyView}
-                                    onDelete={deleteView}
-                                />
+                        <CardContent className="pt-0">
+                            <div className="grid gap-3">
+                                {/* Search bar */}
+                                <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+                                    <form onSubmit={handleSearchSubmit} className="w-full lg:max-w-xl">
+                                        <div className="relative">
+                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                                            <Input
+                                                className="h-11 rounded-2xl pl-10 pr-24 border-black/10 bg-white focus-visible:ring-black/10"
+                                                placeholder="Search UHID, Name, Mobile, Email..."
+                                                value={q}
+                                                onChange={(e) => setQ(e.target.value)}
+                                            />
 
-                                <Button
-                                    variant="outline"
-                                    className="rounded-2xl border-black/50 bg-white hover:bg-black/[0.03]"
-                                    onClick={() => setFiltersOpen(true)}
-                                    title="Advanced Filters"
-                                >
-                                    <SlidersHorizontal className="h-4 w-4 mr-2" />
-                                    Filters
-                                </Button>
+                                            <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
+                                                {!!q && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => {
+                                                            setQ('')
+                                                            setPage(1)
+                                                            loadPatients('', patientTypeFilter)
+                                                        }}
+                                                        className="inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-black/[0.04]"
+                                                        title="Clear"
+                                                    >
+                                                        <X className="h-4 w-4 text-slate-500" />
+                                                    </button>
+                                                )}
 
-                                <Button
-                                    variant="outline"
-                                    className="rounded-2xl border-black/50 bg-white hover:bg-black/[0.03]"
-                                    onClick={() => loadPatients(q, patientTypeFilter)}
-                                    title="Reload"
-                                >
-                                    <RefreshCcw className="h-4 w-4 mr-2" />
-                                    Reload
-                                </Button>
-
-                                <Button
-                                    className="rounded-2xl shadow-sm active:scale-[0.99] transition"
-                                    style={{ backgroundColor: primary }}
-                                    onClick={handleNew}
-                                >
-                                    <Plus className="h-4 w-4 mr-2" />
-                                    New Patient
-                                </Button>
-                            </div>
-                        </div>
-                    </CardHeader>
-
-                    <CardContent className="pt-0">
-                        <div className="grid gap-3">
-                            {/* Search bar + CmdK */}
-                            <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
-                                <form onSubmit={handleSearchSubmit} className="w-full lg:max-w-xl">
-                                    <div className="relative">
-                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-                                        <Input
-                                            className="h-11 rounded-2xl pl-10 pr-24 border-black/50 bg-white focus-visible:ring-black/10"
-                                            placeholder="Search UHID, Name, Mobile, Email..."
-                                            value={q}
-                                            onChange={(e) => setQ(e.target.value)}
-                                        />
-
-                                        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-2">
-                                            {!!q && (
                                                 <button
                                                     type="button"
-                                                    onClick={() => {
-                                                        setQ('')
-                                                        loadPatients('', patientTypeFilter)
-                                                    }}
-                                                    className="inline-flex h-8 w-8 items-center justify-center rounded-full hover:bg-black/[0.04]"
-                                                    title="Clear"
+                                                    onClick={() => setPaletteOpen(true)}
+                                                    className="hidden sm:inline-flex items-center gap-1 rounded-full border border-black/10 bg-black/[0.03] px-2 py-1 text-[11px] text-slate-600 hover:bg-black/[0.05]"
+                                                    title="Quick Search"
                                                 >
-                                                    <X className="h-4 w-4 text-slate-500" />
+                                                    <Command className="h-3.5 w-3.5" />
+                                                    <span>⌘K</span>
                                                 </button>
+                                            </div>
+                                        </div>
+                                    </form>
+
+                                    <div className="grid grid-cols-2 sm:flex gap-2">
+                                        <Button
+                                            variant="outline"
+                                            className="rounded-2xl border-black/10 bg-white hover:bg-black/[0.03]"
+                                            onClick={handleResetAll}
+                                        >
+                                            Reset All
+                                        </Button>
+                                        <Button
+                                            variant="outline"
+                                            className="rounded-2xl border-black/10 bg-white hover:bg-black/[0.03]"
+                                            onClick={() => {
+                                                setPage(1)
+                                                loadPatients(q, patientTypeFilter)
+                                            }}
+                                        >
+                                            Apply Server
+                                        </Button>
+                                    </div>
+                                </div>
+
+                                {/* Patient Type segmented (server) */}
+                                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                                    <div className="text-[12px] font-semibold text-slate-600 shrink-0">Patient Type</div>
+                                    <SegmentedControl
+                                        value={patientTypeFilter}
+                                        onChange={handlePatientType}
+                                        primary={primary}
+                                        options={segmented.main}
+                                        moreOptions={segmented.rest}
+                                    />
+                                </div>
+
+                                {/* Active filter chips */}
+                                {hasAnyLocalFilter && (
+                                    <div className="flex flex-wrap gap-2">
+                                        {chips.map((c) => (
+                                            <FilterChip key={c.k} label={c.label} onRemove={() => clearChip(c.k)} />
+                                        ))}
+                                        <Button
+                                            variant="outline"
+                                            className="h-8 rounded-2xl border-black/10 bg-white hover:bg-black/[0.03]"
+                                            onClick={() => setFilters({ ...FILTER_DEFAULT })}
+                                        >
+                                            Clear Filters
+                                        </Button>
+                                    </div>
+                                )}
+
+                                {/* Export */}
+                                <div className="rounded-3xl border border-black/10 bg-black/[0.02] p-3">
+                                    <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
+                                        <div className="flex items-center gap-2 text-[12px] font-semibold text-slate-700">
+                                            <CalendarDays className="h-4 w-4 text-slate-500" />
+                                            Export Patients
+                                        </div>
+
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 w-full lg:max-w-[720px]">
+                                            <div className="grid gap-1">
+                                                <label className="text-[11px] font-semibold text-slate-600">From</label>
+                                                <Input
+                                                    type="date"
+                                                    className="h-10 rounded-2xl border-black/10 bg-white focus-visible:ring-black/10"
+                                                    value={fromDate}
+                                                    onChange={(e) => setFromDate(e.target.value)}
+                                                />
+                                            </div>
+                                            <div className="grid gap-1">
+                                                <label className="text-[11px] font-semibold text-slate-600">To</label>
+                                                <Input
+                                                    type="date"
+                                                    className="h-10 rounded-2xl border-black/10 bg-white focus-visible:ring-black/10"
+                                                    value={toDate}
+                                                    onChange={(e) => setToDate(e.target.value)}
+                                                />
+                                            </div>
+                                            <div className="flex items-end">
+                                                <Button
+                                                    className="w-full h-10 rounded-2xl shadow-sm"
+                                                    disabled={exporting}
+                                                    onClick={handleExportExcel}
+                                                    style={{ backgroundColor: secondary }}
+                                                >
+                                                    <FileDown className="h-4 w-4 mr-2" />
+                                                    {exporting ? 'Exporting…' : 'Export Excel'}
+                                                </Button>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {!!error && (
+                                    <div className="rounded-3xl border border-rose-200 bg-rose-50 px-3 py-2 flex items-start gap-2 text-rose-700">
+                                        <AlertCircle className="h-4 w-4 mt-0.5" />
+                                        <div className="min-w-0">
+                                            <div className="text-[13px] font-semibold">Unable to load patients</div>
+                                            <div className="text-[12px] break-words">{error}</div>
+                                        </div>
+                                    </div>
+                                )}
+                            </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* LIST AREA */}
+                    <div className="grid gap-3">
+                        {/* Desktop table */}
+                        <div className="hidden md:block">
+                            <Card className="rounded-3xl border-black/10 bg-white/90 backdrop-blur shadow-[0_1px_2px_rgba(0,0,0,0.05)] overflow-hidden">
+                                {/* FIX: explicit max-height so table always scrolls even if parent layout height is weird */}
+                                <div className="max-h-[calc(100vh-320px)] overflow-auto">
+                                    <table className="min-w-full text-sm">
+                                        <thead className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-black/10">
+                                            <tr>
+                                                <th className="px-5 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                                                    Patient
+                                                </th>
+                                                <th className="px-5 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                                                    Demographics
+                                                </th>
+                                                <th className="px-5 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                                                    Contact
+                                                </th>
+                                                <th className="px-5 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                                                    Tags
+                                                </th>
+                                                <th className="px-5 py-3 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                                                    Actions
+                                                </th>
+                                            </tr>
+                                        </thead>
+
+                                        <tbody className="divide-y divide-black/5">
+                                            {loading && (
+                                                <tr>
+                                                    <td colSpan={5} className="px-5 py-12 text-center text-slate-500">
+                                                        Loading patients…
+                                                    </td>
+                                                </tr>
                                             )}
 
-                                            <button
-                                                type="button"
-                                                onClick={() => setPaletteOpen(true)}
-                                                className="hidden sm:inline-flex items-center gap-1 rounded-full border border-black/50 bg-black/[0.03] px-2 py-1 text-[11px] text-slate-600 hover:bg-black/[0.05]"
-                                                title="Quick Search"
-                                            >
-                                                <Command className="h-3.5 w-3.5" />
-                                                <span>⌘K</span>
-                                            </button>
-                                        </div>
-                                    </div>
-                                </form>
+                                            {!loading && pagedPatients.length === 0 && (
+                                                <tr>
+                                                    <td colSpan={5} className="px-5 py-14 text-center">
+                                                        <div className="flex flex-col items-center gap-2">
+                                                            <div className="h-12 w-12 rounded-3xl bg-black/[0.04] grid place-items-center">
+                                                                <Inbox className="h-6 w-6 text-slate-400" />
+                                                            </div>
+                                                            <div className="font-semibold text-slate-900">
+                                                                {patients.length === 0 ? 'No patients found' : 'No matches for filters'}
+                                                            </div>
+                                                            <div className="text-[12px] text-slate-500">
+                                                                {patients.length === 0
+                                                                    ? 'Try search / filters or create a new patient.'
+                                                                    : 'Clear filters or widen conditions.'}
+                                                            </div>
 
-                                <div className="flex flex-wrap gap-2">
-                                    <Button
-                                        variant="outline"
-                                        className="rounded-2xl border-black/50 bg-white hover:bg-black/[0.03]"
-                                        onClick={handleResetAll}
-                                    >
-                                        Reset All
-                                    </Button>
-                                    <Button
-                                        variant="outline"
-                                        className="rounded-2xl border-black/50 bg-white hover:bg-black/[0.03]"
-                                        onClick={() => loadPatients(q, patientTypeFilter)}
-                                    >
-                                        Apply Server
-                                    </Button>
+                                                            <div className="flex flex-wrap gap-2 mt-2 justify-center">
+                                                                {patients.length === 0 ? (
+                                                                    <Button className="rounded-2xl mt-1 shadow-sm" style={{ backgroundColor: primary }} onClick={handleNew}>
+                                                                        <Plus className="h-4 w-4 mr-2" />
+                                                                        New Patient
+                                                                    </Button>
+                                                                ) : (
+                                                                    <>
+                                                                        <Button
+                                                                            variant="outline"
+                                                                            className="rounded-2xl border-black/10 bg-white hover:bg-black/[0.03]"
+                                                                            onClick={() => setFilters({ ...FILTER_DEFAULT })}
+                                                                        >
+                                                                            Clear Filters
+                                                                        </Button>
+                                                                        <Button className="rounded-2xl shadow-sm" style={{ backgroundColor: primary }} onClick={() => setFiltersOpen(true)}>
+                                                                            <SlidersHorizontal className="h-4 w-4 mr-2" />
+                                                                            Edit Filters
+                                                                        </Button>
+                                                                    </>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </td>
+                                                </tr>
+                                            )}
+
+                                            {!loading &&
+                                                pagedPatients.map((p) => {
+                                                    const fullName = `${p.first_name || ''} ${p.last_name || ''}`.trim() || '—'
+                                                    const active = p.is_active !== false
+
+                                                    return (
+                                                        <tr
+                                                            key={p.id}
+                                                            className="group hover:bg-black/[0.02] cursor-pointer transition"
+                                                            onClick={() => handleView(p)}
+                                                        >
+                                                            <td className="px-5 py-4 align-top">
+                                                                <div className="flex items-start gap-3">
+                                                                    <div
+                                                                        className="h-11 w-11 rounded-2xl grid place-items-center border"
+                                                                        style={{
+                                                                            backgroundColor: alphaHex(primary, '12') || '#eff6ff',
+                                                                            borderColor: alphaHex(primary, '22') || '#bfdbfe',
+                                                                            color: primary,
+                                                                        }}
+                                                                    >
+                                                                        <span className="text-[12px] font-extrabold">{initials(p.first_name, p.last_name)}</span>
+                                                                    </div>
+
+                                                                    <div className="min-w-0 flex-1">
+                                                                        <div className="flex items-start justify-between gap-3">
+                                                                            <div className="min-w-0">
+                                                                                <div className="font-semibold text-slate-900 truncate">{fullName}</div>
+                                                                                <div className="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-slate-500">
+                                                                                    <span className="font-mono text-[11px] bg-black/[0.04] border border-black/10 rounded-full px-2 py-0.5">
+                                                                                        {p.uhid || '—'}
+                                                                                    </span>
+                                                                                    <span>Age: {p.age_text || '—'}</span>
+                                                                                    <span className="text-slate-300">•</span>
+                                                                                    <span>{p.gender || '—'}</span>
+                                                                                    <Badge variant="secondary" className="rounded-full border border-black/10 bg-black/[0.03] text-slate-700">
+                                                                                        {active ? 'Active' : 'Inactive'}
+                                                                                    </Badge>
+                                                                                </div>
+                                                                            </div>
+
+                                                                            <ChevronRight className="h-5 w-5 text-slate-300 opacity-0 group-hover:opacity-100 transition" />
+                                                                        </div>
+                                                                    </div>
+                                                                </div>
+                                                            </td>
+
+                                                            <td className="px-5 py-4 align-top text-[12px] text-slate-700">
+                                                                <div>Blood: {p.blood_group || '—'}</div>
+                                                                <div className="mt-1">Marital: {p.marital_status || '—'}</div>
+                                                                <div className="mt-1">Type: {p.patient_type || '—'}</div>
+                                                            </td>
+
+                                                            <td className="px-5 py-4 align-top text-[12px] text-slate-700">
+                                                                <div className="flex items-center gap-2">
+                                                                    <Phone className="h-4 w-4 text-slate-400" />
+                                                                    <span>{p.phone || '—'}</span>
+                                                                </div>
+                                                                <div className="flex items-center gap-2 mt-1">
+                                                                    <Mail className="h-4 w-4 text-slate-400" />
+                                                                    <span className="truncate max-w-[260px]">{p.email || '—'}</span>
+                                                                </div>
+                                                            </td>
+
+                                                            <td className="px-5 py-4 align-top">
+                                                                <div className="flex flex-wrap gap-2">
+                                                                    {p.patient_type && (
+                                                                        <span className="inline-flex items-center gap-1 rounded-full bg-black/[0.04] border border-black/10 px-2.5 py-1 text-[11px] text-slate-800">
+                                                                            <Tag className="h-3.5 w-3.5 text-slate-400" />
+                                                                            {p.patient_type}
+                                                                        </span>
+                                                                    )}
+                                                                    {p.tag && (
+                                                                        <span className="inline-flex items-center rounded-full bg-emerald-50 border border-emerald-100 px-2.5 py-1 text-[11px] text-emerald-700">
+                                                                            {p.tag}
+                                                                        </span>
+                                                                    )}
+                                                                </div>
+                                                            </td>
+
+                                                            <td className="px-5 py-4 align-top text-right" onClick={(e) => e.stopPropagation()}>
+                                                                <RowActions onView={() => handleView(p)} onEdit={() => handleEdit(p)} onDeactivate={() => handleDeactivate(p)} />
+                                                            </td>
+                                                        </tr>
+                                                    )
+                                                })}
+                                        </tbody>
+                                    </table>
                                 </div>
-                            </div>
 
-                            {/* Patient Type segmented (server) */}
-                            <div className="flex flex-col sm:flex-row sm:items-center gap-2">
-                                <div className="text-[12px] font-semibold text-slate-600">Patient Type</div>
-                                <SegmentedControl
-                                    value={patientTypeFilter}
-                                    onChange={handlePatientType}
-                                    primary={primary}
-                                    options={segmented.main}
-                                    moreOptions={segmented.rest}
-                                />
-                            </div>
-
-                            {/* Active filter chips */}
-                            {hasAnyLocalFilter && (
-                                <div className="flex flex-wrap gap-2">
-                                    {chips.map((c) => (
-                                        <FilterChip key={c.k} label={c.label} onRemove={() => clearChip(c.k)} />
-                                    ))}
-                                    <Button
-                                        variant="outline"
-                                        className="h-8 rounded-2xl border-black/50 bg-white hover:bg-black/[0.03]"
-                                        onClick={() => setFilters({ ...FILTER_DEFAULT })}
-                                    >
-                                        Clear Filters
-                                    </Button>
-                                </div>
-                            )}
-
-                            {/* Export */}
-                            <div className="rounded-3xl border border-black/50 bg-black/[0.02] p-3">
-                                <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
-                                    <div className="flex items-center gap-2 text-[12px] font-semibold text-slate-700">
-                                        <CalendarDays className="h-4 w-4 text-slate-500" />
-                                        Export Patients
-                                    </div>
-
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                                        <div className="grid gap-1">
-                                            <label className="text-[11px] font-semibold text-slate-600">From</label>
-                                            <Input
-                                                type="date"
-                                                className="h-10 rounded-2xl border-black/50 bg-white focus-visible:ring-black/10"
-                                                value={fromDate}
-                                                onChange={(e) => setFromDate(e.target.value)}
-                                            />
-                                        </div>
-                                        <div className="grid gap-1">
-                                            <label className="text-[11px] font-semibold text-slate-600">To</label>
-                                            <Input
-                                                type="date"
-                                                className="h-10 rounded-2xl border-black/50 bg-white focus-visible:ring-black/10"
-                                                value={toDate}
-                                                onChange={(e) => setToDate(e.target.value)}
-                                            />
-                                        </div>
-                                        <div className="flex items-end">
-                                            <Button
-                                                className="w-full h-10 rounded-2xl shadow-sm"
-                                                disabled={exporting}
-                                                onClick={handleExportExcel}
-                                                style={{ backgroundColor: '#16a34a' }}
-                                            >
-                                                <FileDown className="h-4 w-4 mr-2" />
-                                                {exporting ? 'Exporting…' : 'Export Excel'}
-                                            </Button>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-
-                            {!!error && (
-                                <div className="rounded-3xl border border-rose-200 bg-rose-50 px-3 py-2 flex items-start gap-2 text-rose-700">
-                                    <AlertCircle className="h-4 w-4 mt-0.5" />
-                                    <div className="min-w-0">
-                                        <div className="text-[13px] font-semibold">Unable to load patients</div>
-                                        <div className="text-[12px] break-words">{error}</div>
-                                    </div>
-                                </div>
-                            )}
+                                <PaginationBar total={filteredPatients.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize} />
+                            </Card>
                         </div>
-                    </CardContent>
-                </Card>
 
-                {/* LIST AREA */}
-                <div className="flex-1 min-h-0">
-                    {/* Desktop */}
-                    <div className="hidden md:block h-full min-h-0">
-                        <Card className="h-full min-h-0 rounded-3xl border-black/50 bg-white/90 backdrop-blur shadow-[0_1px_2px_rgba(0,0,0,0.05)] overflow-hidden">
-                            <div className="h-full min-h-0 overflow-auto">
-                                <table className="min-w-full text-sm">
-                                    <thead className="sticky top-0 z-10 bg-white/85 backdrop-blur border-b border-black/50">
-                                        <tr>
-                                            <th className="px-5 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                                                Patient
-                                            </th>
-                                            <th className="px-5 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                                                Demographics
-                                            </th>
-                                            <th className="px-5 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                                                Contact
-                                            </th>
-                                            <th className="px-5 py-3 text-left text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                                                Tags
-                                            </th>
-                                            <th className="px-5 py-3 text-right text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-                                                Actions
-                                            </th>
-                                        </tr>
-                                    </thead>
-
-                                    <tbody className="divide-y divide-black/5">
+                        {/* Mobile cards */}
+                        <div className="md:hidden">
+                            <Card className="rounded-3xl border-black/10 bg-white/90 shadow-[0_1px_2px_rgba(0,0,0,0.05)] overflow-hidden">
+                                {/* FIX: explicit max-height so cards always scroll */}
+                                <div className="max-h-[calc(100vh-280px)] overflow-auto p-3">
+                                    <div className="grid gap-3">
                                         {loading && (
-                                            <tr>
-                                                <td colSpan={5} className="px-5 py-12 text-center text-slate-500">
-                                                    Loading patients…
-                                                </td>
-                                            </tr>
+                                            <Card className="rounded-3xl border-black/10 bg-white">
+                                                <CardContent className="py-6 text-center text-slate-500">Loading…</CardContent>
+                                            </Card>
                                         )}
 
-                                        {!loading && filteredPatients.length === 0 && (
-                                            <tr>
-                                                <td colSpan={5} className="px-5 py-14 text-center">
-                                                    <div className="flex flex-col items-center gap-2">
-                                                        <div className="h-12 w-12 rounded-3xl bg-black/[0.04] grid place-items-center">
-                                                            <Inbox className="h-6 w-6 text-slate-400" />
-                                                        </div>
-                                                        <div className="font-semibold text-slate-900">
-                                                            {patients.length === 0 ? 'No patients found' : 'No matches for filters'}
-                                                        </div>
-                                                        <div className="text-[12px] text-slate-500">
-                                                            {patients.length === 0
-                                                                ? 'Try search / filters or create a new patient.'
-                                                                : 'Clear filters or widen conditions.'}
-                                                        </div>
-
-                                                        <div className="flex flex-wrap gap-2 mt-2 justify-center">
-                                                            {patients.length === 0 ? (
-                                                                <Button
-                                                                    className="rounded-2xl mt-1 shadow-sm"
-                                                                    style={{ backgroundColor: primary }}
-                                                                    onClick={handleNew}
-                                                                >
-                                                                    <Plus className="h-4 w-4 mr-2" />
-                                                                    New Patient
-                                                                </Button>
-                                                            ) : (
-                                                                <>
-                                                                    <Button
-                                                                        variant="outline"
-                                                                        className="rounded-2xl border-black/50 bg-white hover:bg-black/[0.03]"
-                                                                        onClick={() => setFilters({ ...FILTER_DEFAULT })}
-                                                                    >
-                                                                        Clear Filters
-                                                                    </Button>
-                                                                    <Button
-                                                                        className="rounded-2xl shadow-sm"
-                                                                        style={{ backgroundColor: primary }}
-                                                                        onClick={() => setFiltersOpen(true)}
-                                                                    >
-                                                                        <SlidersHorizontal className="h-4 w-4 mr-2" />
-                                                                        Edit Filters
-                                                                    </Button>
-                                                                </>
-                                                            )}
-                                                        </div>
+                                        {!loading && pagedPatients.length === 0 && (
+                                            <Card className="rounded-3xl border-black/10 bg-white">
+                                                <CardContent className="py-8 text-center">
+                                                    <div className="mx-auto h-12 w-12 rounded-3xl bg-black/[0.04] grid place-items-center">
+                                                        <Inbox className="h-6 w-6 text-slate-400" />
                                                     </div>
-                                                </td>
-                                            </tr>
+                                                    <div className="mt-3 font-semibold text-slate-900">
+                                                        {patients.length === 0 ? 'No patients found' : 'No matches for filters'}
+                                                    </div>
+                                                    <div className="mt-1 text-[12px] text-slate-500">
+                                                        {patients.length === 0 ? 'Try search or create a patient.' : 'Clear filters or widen conditions.'}
+                                                    </div>
+                                                    <div className="flex flex-wrap justify-center gap-2 mt-4">
+                                                        {patients.length === 0 ? (
+                                                            <Button className="rounded-2xl shadow-sm" style={{ backgroundColor: primary }} onClick={handleNew}>
+                                                                <Plus className="h-4 w-4 mr-2" />
+                                                                New Patient
+                                                            </Button>
+                                                        ) : (
+                                                            <>
+                                                                <Button
+                                                                    variant="outline"
+                                                                    className="rounded-2xl border-black/10 bg-white hover:bg-black/[0.03]"
+                                                                    onClick={() => setFilters({ ...FILTER_DEFAULT })}
+                                                                >
+                                                                    Clear Filters
+                                                                </Button>
+                                                                <Button className="rounded-2xl shadow-sm" style={{ backgroundColor: primary }} onClick={() => setFiltersOpen(true)}>
+                                                                    <SlidersHorizontal className="h-4 w-4 mr-2" />
+                                                                    Filters
+                                                                </Button>
+                                                            </>
+                                                        )}
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
                                         )}
 
                                         {!loading &&
-                                            filteredPatients.map((p) => {
+                                            pagedPatients.map((p) => {
                                                 const fullName = `${p.first_name || ''} ${p.last_name || ''}`.trim() || '—'
                                                 const active = p.is_active !== false
 
                                                 return (
-                                                    <tr
+                                                    <Card
                                                         key={p.id}
-                                                        className="group hover:bg-black/[0.02] cursor-pointer transition"
+                                                        className="rounded-3xl border-black/10 bg-white shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
                                                         onClick={() => handleView(p)}
                                                     >
-                                                        <td className="px-5 py-4 align-top">
+                                                        <CardContent className="p-4">
                                                             <div className="flex items-start gap-3">
                                                                 <div
-                                                                    className="h-11 w-11 rounded-2xl grid place-items-center border"
+                                                                    className="h-11 w-11 rounded-3xl grid place-items-center border"
                                                                     style={{
                                                                         backgroundColor: alphaHex(primary, '12') || '#eff6ff',
                                                                         borderColor: alphaHex(primary, '22') || '#bfdbfe',
                                                                         color: primary,
                                                                     }}
                                                                 >
-                                                                    <span className="text-[12px] font-extrabold">
-                                                                        {initials(p.first_name, p.last_name)}
-                                                                    </span>
+                                                                    <span className="text-[12px] font-extrabold">{initials(p.first_name, p.last_name)}</span>
                                                                 </div>
 
                                                                 <div className="min-w-0 flex-1">
-                                                                    <div className="flex items-start justify-between gap-3">
+                                                                    <div className="flex items-start justify-between gap-2">
                                                                         <div className="min-w-0">
-                                                                            <div className="font-semibold text-slate-900 truncate">{fullName}</div>
+                                                                            <div className="flex items-center justify-between gap-2">
+                                                                                <div className="truncate font-semibold text-slate-900">{fullName}</div>
+                                                                                <ChevronRight className="h-5 w-5 text-slate-300" />
+                                                                            </div>
+
                                                                             <div className="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-slate-500">
-                                                                                <span className="font-mono text-[11px] bg-black/[0.04] border border-black/50 rounded-full px-2 py-0.5">
+                                                                                <span className="font-mono text-[11px] bg-black/[0.04] border border-black/10 rounded-full px-2 py-0.5">
                                                                                     {p.uhid || '—'}
                                                                                 </span>
                                                                                 <span>Age: {p.age_text || '—'}</span>
                                                                                 <span className="text-slate-300">•</span>
                                                                                 <span>{p.gender || '—'}</span>
-                                                                                <Badge
-                                                                                    variant="secondary"
-                                                                                    className="rounded-full border border-black/50 bg-black/[0.03] text-slate-700"
-                                                                                >
-                                                                                    {active ? 'Active' : 'Inactive'}
-                                                                                </Badge>
                                                                             </div>
                                                                         </div>
 
-                                                                        <ChevronRight className="h-5 w-5 text-slate-300 opacity-0 group-hover:opacity-100 transition" />
+                                                                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                                                                            <Badge variant="secondary" className="rounded-full border border-black/10 bg-black/[0.03] text-slate-700">
+                                                                                {active ? 'Active' : 'Inactive'}
+                                                                            </Badge>
+                                                                            <RowActions onView={() => handleView(p)} onEdit={() => handleEdit(p)} onDeactivate={() => handleDeactivate(p)} />
+                                                                        </div>
+                                                                    </div>
+
+                                                                    <div className="mt-2 grid gap-1 text-[12px] text-slate-700">
+                                                                        <div className="flex items-center gap-2">
+                                                                            <Phone className="h-4 w-4 text-slate-400" />
+                                                                            <span>{p.phone || '—'}</span>
+                                                                        </div>
+                                                                        {p.email && (
+                                                                            <div className="flex items-center gap-2">
+                                                                                <Mail className="h-4 w-4 text-slate-400" />
+                                                                                <span className="truncate">{p.email}</span>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+
+                                                                    <div className="mt-3 flex flex-wrap gap-2">
+                                                                        {p.patient_type && (
+                                                                            <span className="inline-flex items-center gap-1 rounded-full bg-black/[0.04] border border-black/10 px-2.5 py-1 text-[11px] text-slate-800">
+                                                                                <Tag className="h-3.5 w-3.5 text-slate-400" />
+                                                                                {p.patient_type}
+                                                                            </span>
+                                                                        )}
+                                                                        {p.tag && (
+                                                                            <span className="inline-flex items-center rounded-full bg-emerald-50 border border-emerald-100 px-2.5 py-1 text-[11px] text-emerald-700">
+                                                                                {p.tag}
+                                                                            </span>
+                                                                        )}
                                                                     </div>
                                                                 </div>
                                                             </div>
-                                                        </td>
-
-                                                        <td className="px-5 py-4 align-top text-[12px] text-slate-700">
-                                                            <div>Blood: {p.blood_group || '—'}</div>
-                                                            <div className="mt-1">Marital: {p.marital_status || '—'}</div>
-                                                            <div className="mt-1">Type: {p.patient_type || '—'}</div>
-                                                        </td>
-
-                                                        <td className="px-5 py-4 align-top text-[12px] text-slate-700">
-                                                            <div className="flex items-center gap-2">
-                                                                <Phone className="h-4 w-4 text-slate-400" />
-                                                                <span>{p.phone || '—'}</span>
-                                                            </div>
-                                                            <div className="flex items-center gap-2 mt-1">
-                                                                <Mail className="h-4 w-4 text-slate-400" />
-                                                                <span className="truncate max-w-[260px]">{p.email || '—'}</span>
-                                                            </div>
-                                                        </td>
-
-                                                        <td className="px-5 py-4 align-top">
-                                                            <div className="flex flex-wrap gap-2">
-                                                                {p.patient_type && (
-                                                                    <span className="inline-flex items-center gap-1 rounded-full bg-black/[0.04] border border-black/50 px-2.5 py-1 text-[11px] text-slate-800">
-                                                                        <Tag className="h-3.5 w-3.5 text-slate-400" />
-                                                                        {p.patient_type}
-                                                                    </span>
-                                                                )}
-                                                                {p.tag && (
-                                                                    <span className="inline-flex items-center rounded-full bg-emerald-50 border border-emerald-100 px-2.5 py-1 text-[11px] text-emerald-700">
-                                                                        {p.tag}
-                                                                    </span>
-                                                                )}
-                                                            </div>
-                                                        </td>
-
-                                                        <td className="px-5 py-4 align-top text-right" onClick={(e) => e.stopPropagation()}>
-                                                            <RowActions
-                                                                onView={() => handleView(p)}
-                                                                onEdit={() => handleEdit(p)}
-                                                                onDeactivate={() => handleDeactivate(p)}
-                                                            />
-                                                        </td>
-                                                    </tr>
+                                                        </CardContent>
+                                                    </Card>
                                                 )
                                             })}
-                                    </tbody>
-                                </table>
-                            </div>
-                        </Card>
+                                    </div>
+                                </div>
+
+                                <PaginationBar total={filteredPatients.length} page={page} setPage={setPage} pageSize={pageSize} setPageSize={setPageSize} />
+                            </Card>
+                        </div>
                     </div>
 
-                    {/* Mobile */}
-                    <div className="md:hidden grid gap-3">
-                        {loading && (
-                            <Card className="rounded-3xl border-black/50 bg-white/90 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
-                                <CardContent className="py-6 text-center text-slate-500">Loading…</CardContent>
-                            </Card>
-                        )}
+                    {/* Modals / Drawer */}
+                    <PatientFormModal
+                        open={formOpen}
+                        onClose={() => setFormOpen(false)}
+                        onSaved={() => {
+                            setPage(1)
+                            loadPatients(q, patientTypeFilter)
+                        }}
+                        initialPatient={editingPatient}
+                        lookups={lookups}
+                    />
 
-                        {!loading && filteredPatients.length === 0 && (
-                            <Card className="rounded-3xl border-black/50 bg-white/90 shadow-[0_1px_2px_rgba(0,0,0,0.05)]">
-                                <CardContent className="py-8 text-center">
-                                    <div className="mx-auto h-12 w-12 rounded-3xl bg-black/[0.04] grid place-items-center">
-                                        <Inbox className="h-6 w-6 text-slate-400" />
-                                    </div>
-                                    <div className="mt-3 font-semibold text-slate-900">
-                                        {patients.length === 0 ? 'No patients found' : 'No matches for filters'}
-                                    </div>
-                                    <div className="mt-1 text-[12px] text-slate-500">
-                                        {patients.length === 0 ? 'Try search or create a patient.' : 'Clear filters or widen conditions.'}
-                                    </div>
-                                    <div className="flex flex-wrap justify-center gap-2 mt-4">
-                                        {patients.length === 0 ? (
-                                            <Button
-                                                className="rounded-2xl shadow-sm"
-                                                style={{ backgroundColor: primary }}
-                                                onClick={handleNew}
-                                            >
-                                                <Plus className="h-4 w-4 mr-2" />
-                                                New Patient
-                                            </Button>
-                                        ) : (
-                                            <>
-                                                <Button
-                                                    variant="outline"
-                                                    className="rounded-2xl border-black/50 bg-white hover:bg-black/[0.03]"
-                                                    onClick={() => setFilters({ ...FILTER_DEFAULT })}
-                                                >
-                                                    Clear Filters
-                                                </Button>
-                                                <Button
-                                                    className="rounded-2xl shadow-sm"
-                                                    style={{ backgroundColor: primary }}
-                                                    onClick={() => setFiltersOpen(true)}
-                                                >
-                                                    <SlidersHorizontal className="h-4 w-4 mr-2" />
-                                                    Filters
-                                                </Button>
-                                            </>
-                                        )}
-                                    </div>
-                                </CardContent>
-                            </Card>
-                        )}
-
-                        {!loading &&
-                            filteredPatients.map((p) => {
-                                const fullName = `${p.first_name || ''} ${p.last_name || ''}`.trim() || '—'
-                                const active = p.is_active !== false
-
-                                return (
-                                    <Card
-                                        key={p.id}
-                                        className="rounded-3xl border-black/50 bg-white/90 shadow-[0_1px_2px_rgba(0,0,0,0.05)]"
-                                        onClick={() => handleView(p)}
-                                    >
-                                        <CardContent className="p-4">
-                                            <div className="flex items-start gap-3">
-                                                <div
-                                                    className="h-11 w-11 rounded-3xl grid place-items-center border"
-                                                    style={{
-                                                        backgroundColor: alphaHex(primary, '12') || '#eff6ff',
-                                                        borderColor: alphaHex(primary, '22') || '#bfdbfe',
-                                                        color: primary,
-                                                    }}
-                                                >
-                                                    <span className="text-[12px] font-extrabold">{initials(p.first_name, p.last_name)}</span>
-                                                </div>
-
-                                                <div className="min-w-0 flex-1">
-                                                    <div className="flex items-start justify-between gap-2">
-                                                        <div className="min-w-0">
-                                                            <div className="flex items-center justify-between gap-2">
-                                                                <div className="truncate font-semibold text-slate-900">{fullName}</div>
-                                                                <ChevronRight className="h-5 w-5 text-slate-300" />
-                                                            </div>
-
-                                                            <div className="mt-1 flex flex-wrap items-center gap-2 text-[12px] text-slate-500">
-                                                                <span className="font-mono text-[11px] bg-black/[0.04] border border-black/50 rounded-full px-2 py-0.5">
-                                                                    {p.uhid || '—'}
-                                                                </span>
-                                                                <span>Age: {p.age_text || '—'}</span>
-                                                                <span className="text-slate-300">•</span>
-                                                                <span>{p.gender || '—'}</span>
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                                                            <Badge
-                                                                variant="secondary"
-                                                                className="rounded-full border border-black/50 bg-black/[0.03] text-slate-700"
-                                                            >
-                                                                {active ? 'Active' : 'Inactive'}
-                                                            </Badge>
-                                                            <RowActions
-                                                                onView={() => handleView(p)}
-                                                                onEdit={() => handleEdit(p)}
-                                                                onDeactivate={() => handleDeactivate(p)}
-                                                            />
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="mt-2 grid gap-1 text-[12px] text-slate-700">
-                                                        <div className="flex items-center gap-2">
-                                                            <Phone className="h-4 w-4 text-slate-400" />
-                                                            <span>{p.phone || '—'}</span>
-                                                        </div>
-                                                        {p.email && (
-                                                            <div className="flex items-center gap-2">
-                                                                <Mail className="h-4 w-4 text-slate-400" />
-                                                                <span className="truncate">{p.email}</span>
-                                                            </div>
-                                                        )}
-                                                    </div>
-
-                                                    <div className="mt-3 flex flex-wrap gap-2">
-                                                        {p.patient_type && (
-                                                            <span className="inline-flex items-center gap-1 rounded-full bg-black/[0.04] border border-black/50 px-2.5 py-1 text-[11px] text-slate-800">
-                                                                <Tag className="h-3.5 w-3.5 text-slate-400" />
-                                                                {p.patient_type}
-                                                            </span>
-                                                        )}
-                                                        {p.tag && (
-                                                            <span className="inline-flex items-center rounded-full bg-emerald-50 border border-emerald-100 px-2.5 py-1 text-[11px] text-emerald-700">
-                                                                {p.tag}
-                                                            </span>
-                                                        )}
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-                                )
-                            })}
-                    </div>
+                    <PatientDetailDrawer
+                        open={detailOpen}
+                        onClose={() => setDetailOpen(false)}
+                        patient={selectedPatient}
+                        onUpdated={updatePatientInList}
+                        onEdit={(p) => {
+                            setDetailOpen(false)
+                            handleEdit(p)
+                        }}
+                    />
                 </div>
-
-                {/* Modals / Drawer */}
-                <PatientFormModal
-                    open={formOpen}
-                    onClose={() => setFormOpen(false)}
-                    onSaved={() => loadPatients(q, patientTypeFilter)}
-                    initialPatient={editingPatient}
-                    lookups={lookups}
-                />
-
-                <PatientDetailDrawer
-                    open={detailOpen}
-                    onClose={() => setDetailOpen(false)}
-                    patient={selectedPatient}
-                    onUpdated={updatePatientInList}
-                    onEdit={(p) => {
-                        setDetailOpen(false)
-                        handleEdit(p)
-                    }}
-                />
             </div>
 
             {/* ⌘K Palette */}
@@ -1769,13 +1828,7 @@ export default function PatientPage() {
             />
 
             {/* Advanced Filters */}
-            <FiltersDialog
-                open={filtersOpen}
-                onOpenChange={setFiltersOpen}
-                filters={filters}
-                setFilters={setFilters}
-                primary={primary}
-            />
+            <FiltersDialog open={filtersOpen} onOpenChange={setFiltersOpen} filters={filters} setFilters={setFilters} primary={primary} />
         </div>
     )
 }
