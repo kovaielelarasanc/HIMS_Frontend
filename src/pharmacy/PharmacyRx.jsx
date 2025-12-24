@@ -217,12 +217,18 @@ const calcAutoQty = (line) => {
   const days = Number(line?.duration_days || 0)
   if (!Number.isFinite(days) || days <= 0) return ""
 
-  const perDay = parseFrequencyToPerDay(line?.frequency || "")
+  // ✅ primary: dose_slots (M/A/E/N)
+  const slots = line?.dose_slots
+  const perDayFromSlot = slots ? perDayFromSlots(slots) : 0
+
+  // fallback: string frequency (OD/BD/1-0-0-1...)
+  const perDay = perDayFromSlot > 0 ? perDayFromSlot : parseFrequencyToPerDay(line?.frequency || "")
   if (!perDay) return ""
 
-  const doseMul = parseDoseMultiplier(line?.dose || "") // keep 1 if you don't want dose based qty
+  const doseMul = parseDoseMultiplier(line?.dose || "")
   return String(Math.round(perDay * days * doseMul))
 }
+
 
 function getPatientDisplay(p) {
   if (!p) return '—'
@@ -315,11 +321,16 @@ const FREQ_PRESETS = [
   { label: 'BD', value: 'BD' },
   { label: 'TID', value: 'TID' },
   { label: 'QID', value: 'QID' },
-  { label: '1-0-1', value: '1-0-1' },
-  { label: '1-1-1', value: '1-1-1' },
-  { label: '0-0-1', value: '0-0-1' },
-  { label: '0-1-0', value: '0-1-0' },
+
+  // 4-slot explicit (M-A-E-N)
+  { label: '1-0-0-0', value: '1-0-0-0' }, // Morning only
+  { label: '1-0-0-1', value: '1-0-0-1' }, // Morning + Night
+  { label: '1-1-0-1', value: '1-1-0-1' }, // Morning + Afternoon + Night
+  { label: '1-1-1-1', value: '1-1-1-1' }, // QID perfect
+  { label: '0-0-0-1', value: '0-0-0-1' }, // Night only
+  { label: '0-1-0-0', value: '0-1-0-0' }, // Afternoon only
 ]
+
 
 const ROUTE_PRESETS = ['PO', 'IV', 'IM', 'SC', 'PR', 'INH', 'TOP']
 
@@ -522,30 +533,44 @@ function slotsToFrequency(slots) {
 }
 
 function frequencyToSlots(freq) {
-  // supports: "1-0-1-0" or "OD/BD/TID/QID"
   const f = safeStr(freq).trim().toUpperCase()
   const s = emptySlots()
 
+  // ✅ Standard 4-slot mapping (M-A-E-N)
   const preset = {
-    OD: { M: 1 },
-    BD: { M: 1, N: 1 },
-    TID: { M: 1, A: 1, N: 1 },
-    TDS: { M: 1, A: 1, N: 1 },
-    QID: { M: 1, A: 1, E: 1, N: 1 },
+    OD:  { M: 1, A: 0, E: 0, N: 0 }, // 1-0-0-0
+    QD:  { M: 1, A: 0, E: 0, N: 0 },
+    ONCE:{ M: 1, A: 0, E: 0, N: 0 },
+
+    BD:  { M: 1, A: 0, E: 0, N: 1 }, // 1-0-0-1
+    BID: { M: 1, A: 0, E: 0, N: 1 },
+
+    TID: { M: 1, A: 1, E: 1, N: 0 }, // 1-1-1-0
+    TDS: { M: 1, A: 1, E: 1, N: 0 },
+
+    QID: { M: 1, A: 1, E: 1, N: 1 }, // 1-1-1-1
+    QDS: { M: 1, A: 1, E: 1, N: 1 },
+
+    // Optional bedtime aliases
+    HS:  { M: 0, A: 0, E: 0, N: 1 }, // 0-0-0-1
+    QHS: { M: 0, A: 0, E: 0, N: 1 },
   }
+
   if (preset[f]) return { ...s, ...preset[f] }
 
-  if (f.includes('-')) {
-    const parts = f.split('-').map((x) => clampInt(x || 0, 0, 9))
-    // map first 4 parts → M A E N
+  // numeric pattern: "1-0-0-1" etc
+  if (f.includes("-")) {
+    const parts = f.split("-").map((x) => clampInt(x || 0, 0, 9))
     s.M = parts[0] ?? 0
     s.A = parts[1] ?? 0
     s.E = parts[2] ?? 0
     s.N = parts[3] ?? 0
     return s
   }
+
   return s
 }
+
 
 function perDayFromSlots(slots) {
   const s = slots || emptySlots()
@@ -1025,7 +1050,7 @@ export default function PharmacyRx() {
           route: line.route || null,
 
           // ✅ frequency always a string like "1-0-1-0"
-          frequency: slotsToFrequency(line.dose_slots),
+          frequency_code: slotsToFrequency(line.dose_slots),
 
           duration_days: toInt(line.duration_days),
           requested_qty: qty,
@@ -1982,16 +2007,9 @@ export default function PharmacyRx() {
                                         <Input
                                           value={currentLine.duration_days}
                                           onChange={(e) =>
-                                            setCurrentLine((prev) => {
-                                              const next = {
-                                                ...prev,
-                                                duration_days: e.target.value,
-                                                _qtyTouched: false,
-                                              }
-                                              next.total_qty = calcAutoQty(next) // ✅ always auto
-                                              return next
-                                            })
+                                            setCurrentLine((prev) => applyAuto({ ...prev, duration_days: e.target.value, _qtyTouched: false }))
                                           }
+
                                           placeholder="e.g. 5"
                                           className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
                                         />
@@ -2039,153 +2057,105 @@ export default function PharmacyRx() {
                                     </div>
 
                                     {/* Frequency selection (checkboxes) */}
+                                    {/* ✅ Dosage schedule (M/A/E/N) — this drives frequency_code correctly */}
                                     <div className="space-y-1.5">
                                       <div className="flex items-center justify-between gap-2">
                                         <Label className="text-[11px] text-slate-600">
-                                          Dosage frequency (checkboxes)
+                                          Dosage schedule (M / A / E / N)
                                         </Label>
+
                                         <div className="text-[10px] text-slate-500">
                                           Stored as:{" "}
                                           <span className="font-medium">
-                                            {(() => {
-                                              const f = normalizeFreq(currentLine.frequency)
-                                              if (f.includes("-")) return f
-                                              if (["BD", "BID"].includes(f)) return "1-0-1"
-                                              if (["TID", "TDS"].includes(f)) return "1-1-1"
-                                              if (["OD", "QD", "ONCE", "HS", "QHS"].includes(f)) return "1-0-0"
-                                              return f || "—"
-                                            })()}
+                                            {slotsToFrequency(currentLine.dose_slots || emptySlots())}
                                           </span>
                                         </div>
                                       </div>
 
                                       {(() => {
-                                        const f = normalizeFreq(currentLine.frequency)
-                                        let parts = [0, 0, 0] // M-A-N
-                                        if (f.includes("-")) {
-                                          const p = f.split("-")
-                                          parts = [
-                                            Number(p[0] || 0) ? 1 : 0,
-                                            Number(p[1] || 0) ? 1 : 0,
-                                            Number(p[2] || 0) ? 1 : 0,
-                                          ]
-                                        } else if (["BD", "BID"].includes(f)) {
-                                          parts = [1, 0, 1]
-                                        } else if (["TID", "TDS"].includes(f)) {
-                                          parts = [1, 1, 1]
-                                        } else if (["OD", "QD", "ONCE", "HS", "QHS"].includes(f)) {
-                                          parts = [1, 0, 0]
+                                        const slots = currentLine.dose_slots || emptySlots()
+
+                                        const toggleSlot = (key) => {
+                                          setCurrentLine((prev) => {
+                                            const nextSlots = { ...(prev.dose_slots || emptySlots()) }
+                                            nextSlots[key] = nextSlots[key] ? 0 : 1
+                                            return applyAuto({ ...prev, dose_slots: nextSlots, _qtyTouched: false })
+                                          })
                                         }
 
-                                        const toggleAt = (idx) => {
+                                        const setPreset = (value) => {
                                           setCurrentLine((prev) => {
-                                            const pf = normalizeFreq(prev.frequency)
-                                            let p = [0, 0, 0]
-                                            if (pf.includes("-")) {
-                                              const sp = pf.split("-")
-                                              p = [
-                                                Number(sp[0] || 0) ? 1 : 0,
-                                                Number(sp[1] || 0) ? 1 : 0,
-                                                Number(sp[2] || 0) ? 1 : 0,
-                                              ]
-                                            } else if (["BD", "BID"].includes(pf)) {
-                                              p = [1, 0, 1]
-                                            } else if (["TID", "TDS"].includes(pf)) {
-                                              p = [1, 1, 1]
-                                            } else if (["OD", "QD", "ONCE", "HS", "QHS"].includes(pf)) {
-                                              p = [1, 0, 0]
-                                            }
+                                            const nextSlots = frequencyToSlots(value) // OD/BD/TID/QID or 1-1-1-1 etc.
+                                            return applyAuto({ ...prev, dose_slots: nextSlots, _qtyTouched: false })
+                                          })
+                                        }
 
-                                            p[idx] = p[idx] ? 0 : 1
-                                            const next = {
-                                              ...prev,
-                                              frequency: `${p[0]}-${p[1]}-${p[2]}`,
-                                              _qtyTouched: false,
-                                            }
-                                            next.total_qty = calcAutoQty(next) // ✅ always auto
-                                            return next
+                                        const clearAll = () => {
+                                          setCurrentLine((prev) => {
+                                            const next = { ...prev, dose_slots: emptySlots(), _qtyTouched: false }
+                                            // applyAuto will make qty blank because perDay becomes 0
+                                            const out = applyAuto(next)
+                                            out.total_qty = ""
+                                            out.requested_qty = ""
+                                            return out
                                           })
                                         }
 
                                         return (
-                                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                            {[
-                                              { label: "Morning", idx: 0 },
-                                              { label: "Afternoon", idx: 1 },
-                                              { label: "Night", idx: 2 },
-                                            ].map((x) => (
-                                              <label
-                                                key={x.label}
-                                                className={[
-                                                  "h-10 rounded-full border px-3 flex items-center gap-2 cursor-pointer select-none",
-                                                  "bg-white/70 backdrop-blur",
-                                                  parts[x.idx]
-                                                    ? "border-slate-900"
-                                                    : "border-slate-500",
-                                                ].join(" ")}
+                                          <>
+                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                              {SLOT_KEYS.map((k) => (
+                                                <label
+                                                  key={k}
+                                                  className={[
+                                                    "h-10 rounded-full border px-3 flex items-center gap-2 cursor-pointer select-none",
+                                                    "bg-white/70 backdrop-blur",
+                                                    slots?.[k] ? "border-slate-900" : "border-slate-500",
+                                                  ].join(" ")}
+                                                >
+                                                  <input
+                                                    type="checkbox"
+                                                    className="h-4 w-4 accent-slate-900"
+                                                    checked={!!slots?.[k]}
+                                                    onChange={() => toggleSlot(k)}
+                                                  />
+                                                  <span className="text-sm text-slate-700">{SLOT_META[k].label}</span>
+                                                </label>
+                                              ))}
+                                            </div>
+
+                                            {/* Quick presets */}
+                                            <div className="flex flex-wrap gap-1.5 pt-1">
+                                              {FREQ_PRESETS.map((f) => (
+                                                <button
+                                                  key={f.value}
+                                                  type="button"
+                                                  onClick={() => setPreset(f.value)}
+                                                  className={[
+                                                    "px-3 py-1 rounded-full text-[11px] border shadow-sm transition",
+                                                    slotsToFrequency(currentLine.dose_slots || emptySlots()) ===
+                                                      slotsToFrequency(frequencyToSlots(f.value))
+                                                      ? "bg-slate-900 text-white border-slate-900"
+                                                      : "bg-white/70 text-slate-700 border-slate-500 backdrop-blur",
+                                                  ].join(" ")}
+                                                >
+                                                  {f.label}
+                                                </button>
+                                              ))}
+
+                                              <button
+                                                type="button"
+                                                onClick={clearAll}
+                                                className="px-3 py-1 rounded-full text-[11px] border shadow-sm transition bg-white/70 text-slate-600 border-slate-500"
                                               >
-                                                <input
-                                                  type="checkbox"
-                                                  className="h-4 w-4 accent-slate-900"
-                                                  checked={!!parts[x.idx]}
-                                                  onChange={() => toggleAt(x.idx)}
-                                                />
-                                                <span className="text-sm text-slate-700">
-                                                  {x.label}
-                                                </span>
-                                              </label>
-                                            ))}
-                                          </div>
+                                                Clear
+                                              </button>
+                                            </div>
+                                          </>
                                         )
                                       })()}
-
-                                      {/* Quick presets (still useful + updates auto qty) */}
-                                      <div className="flex flex-wrap gap-1.5 pt-1">
-                                        {FREQ_PRESETS.map((f) => (
-                                          <button
-                                            key={f.value}
-                                            type="button"
-                                            onClick={() =>
-                                              setCurrentLine((prev) => {
-                                                const next = {
-                                                  ...prev,
-                                                  frequency: f.value,
-                                                  _qtyTouched: false,
-                                                }
-                                                next.total_qty = calcAutoQty(next) // ✅ always auto
-                                                return next
-                                              })
-                                            }
-                                            className={[
-                                              "px-3 py-1 rounded-full text-[11px] border shadow-sm transition",
-                                              normalizeFreq(currentLine.frequency) === f.value
-                                                ? "bg-slate-900 text-white border-slate-900"
-                                                : "bg-white/70 text-slate-700 border-slate-500 backdrop-blur",
-                                            ].join(" ")}
-                                          >
-                                            {f.label}
-                                          </button>
-                                        ))}
-
-                                        <button
-                                          type="button"
-                                          onClick={() =>
-                                            setCurrentLine((prev) => {
-                                              const next = {
-                                                ...prev,
-                                                frequency: "",
-                                                _qtyTouched: false,
-                                              }
-                                              next.total_qty = ""
-                                              return next
-                                            })
-                                          }
-                                          className="px-3 py-1 rounded-full text-[11px] border shadow-sm transition bg-white/70 text-slate-600 border-slate-500"
-                                        >
-                                          Clear
-                                        </button>
-                                      </div>
                                     </div>
+
 
                                     {/* Route + Strength auto */}
                                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
