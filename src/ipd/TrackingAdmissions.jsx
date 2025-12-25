@@ -22,6 +22,7 @@ import {
     User,
 } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { formatIST } from './components/timeZONE'
 
 const PAGE_SIZE = 10
 
@@ -595,7 +596,7 @@ export default function TrackingAdmissions() {
                                                                 {bed?.state || 'unknown'}
                                                             </span>
                                                         </td>
-                                                        <td className="px-4 py-3 text-slate-700">{prettyDateTime(r.admitted_at)}</td>
+                                                        <td className="px-4 py-3 text-slate-700">{formatIST(r.admitted_at)}</td>
                                                         <td className="px-4 py-3 text-right">
                                                             <Link
                                                                 to={`/ipd/admission/${r.id}`}

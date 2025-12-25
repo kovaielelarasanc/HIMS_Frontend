@@ -64,7 +64,14 @@ const isPosInt = (v) => {
     return false
 }
 
-const toIsoSecs = (v) => (!v ? undefined : v.length === 16 ? `${v}:00` : v)
+export function toIsoSecs(v) {
+    if (!v) return undefined
+  
+    const d = new Date(v) // for datetime-local, this becomes local time
+    if (Number.isNaN(d.getTime())) return undefined
+  
+    return d.toISOString() // ✅ always UTC with Z
+  }
 
 // ---------- Small Toast (top) ----------
 function Toast({ kind = 'success', title, message, onClose }) {
@@ -291,6 +298,7 @@ export default function Admissions() {
                 patient_id: Number(patientId),
                 bed_id: Number(bedId),
                 admission_type: form.admission_type || 'planned',
+                admitted_at: new Date().toISOString(),
                 expected_discharge_at: toIsoSecs(form.expected_discharge_at),
                 department_id: isPosInt(departmentId) ? Number(departmentId) : undefined,
                 practitioner_user_id: isPosInt(doctorUserId) ? Number(doctorUserId) : undefined,

@@ -19,6 +19,27 @@ import {
 const PAGE_SIZE = 10
 
 export default function MyAdmissions() {
+
+
+    function parseApiDateUTC(s) {
+        if (!s) return null
+        const hasTZ = /Z$|[+-]\d{2}:\d{2}$/.test(s)
+        return new Date(hasTZ ? s : `${s}Z`) // ✅ treat timezone-missing as UTC
+    }
+
+    function formatIST(s) {
+        const d = parseApiDateUTC(s)
+        if (!d) return ''
+        return d.toLocaleString('en-IN', {
+            timeZone: 'Asia/Kolkata',
+            year: 'numeric',
+            month: '2-digit',
+            day: '2-digit',
+            hour: 'numeric',
+            minute: '2-digit',
+            second: '2-digit',
+        })
+    }
     const me = useAuth((s) => s.user)
 
     const [rows, setRows] = useState([])
@@ -92,7 +113,7 @@ export default function MyAdmissions() {
             console.error('MyAdmissions loadData error', e)
             setError(
                 e?.response?.data?.detail ||
-                    'Failed to load your admissions. Please try again.'
+                'Failed to load your admissions. Please try again.'
             )
             setRows([])
             setBedsById({})
@@ -105,10 +126,10 @@ export default function MyAdmissions() {
     useEffect(() => {
         if (!me?.id) return
         let alive = true
-        ;(async () => {
-            await loadData()
-            if (!alive) return
-        })()
+            ; (async () => {
+                await loadData()
+                if (!alive) return
+            })()
         return () => {
             alive = false
         }
@@ -339,11 +360,12 @@ export default function MyAdmissions() {
                                                     )}
                                                 </td>
                                                 <td className="px-4 py-2 align-middle text-slate-700">
-                                                    {r.admitted_at
+                                                    {/* {r.admitted_at
                                                         ? new Date(
-                                                              r.admitted_at
-                                                          ).toLocaleString()
-                                                        : '—'}
+                                                            r.admitted_at
+                                                        ).toLocaleString()
+                                                        : '—'} */}
+                                                        {formatIST(r.admitted_at)}
                                                 </td>
                                                 <td className="px-4 py-2 align-middle text-right">
                                                     <Link
@@ -420,8 +442,8 @@ export default function MyAdmissions() {
                                                     <div className="text-[11px]">
                                                         {r.admitted_at
                                                             ? new Date(
-                                                                  r.admitted_at
-                                                              ).toLocaleString()
+                                                                r.admitted_at
+                                                            ).toLocaleString()
                                                             : '—'}
                                                     </div>
                                                 </div>
