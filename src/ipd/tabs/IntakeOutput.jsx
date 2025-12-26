@@ -2,665 +2,554 @@
 import { useEffect, useMemo, useState } from 'react'
 import { listIO, addIO } from '../../api/ipd'
 import PermGate from '../../components/PermGate'
+import { formatIST } from '../components/timeZONE'
+
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import {
+  Droplets,
+  ArrowDownCircle,
+  ArrowUpCircle,
+  Waves,
+  ClipboardList,
+  Clock,
+  RefreshCw,
+  Plus,
+  AlertTriangle,
+} from 'lucide-react'
+
+const cn = (...xs) => xs.filter(Boolean).join(' ')
+
+const n0 = (v) => {
+  const x = Number(v)
+  return Number.isFinite(x) ? x : 0
+}
+
+const fmtMl = (v) => {
+  const x = Number(v || 0)
+  return x === 0 ? '—' : `${x} ml`
+}
+
+const fmtNet = (v) => {
+  const x = Number(v || 0)
+  if (x === 0) return '0 ml'
+  const sign = x > 0 ? '+' : ''
+  return `${sign}${x} ml`
+}
+
+const getShift = (dateStr) => {
+  if (!dateStr) return 'Night'
+  const d = new Date(dateStr)
+  if (Number.isNaN(d.getTime())) return 'Night'
+  const h = d.getHours()
+  if (h >= 6 && h < 14) return 'Morning'
+  if (h >= 14 && h < 22) return 'Evening'
+  return 'Night'
+}
+
+// prefers split fields, falls back to old intake_ml/urine_ml if present
+const rowIntakeTotal = (r) => {
+  const oral = n0(r?.intake_oral_ml)
+  const iv = n0(r?.intake_iv_ml)
+  const blood = n0(r?.intake_blood_ml)
+  const split = oral + iv + blood
+  if (split > 0) return split
+  return n0(r?.intake_ml)
+}
+
+const rowUrineTotal = (r) => {
+  const foley = n0(r?.urine_foley_ml)
+  const voided = n0(r?.urine_voided_ml)
+  const split = foley + voided
+  if (split > 0) return split
+  return n0(r?.urine_ml)
+}
+
+const rowOutputTotal = (r) => rowUrineTotal(r) + n0(r?.drains_ml)
+
+function Chip({ icon: Icon, label, value, tone = 'slate' }) {
+  const toneCls =
+    tone === 'sky'
+      ? 'bg-sky-50 text-sky-800 ring-sky-100'
+      : tone === 'emerald'
+      ? 'bg-emerald-50 text-emerald-800 ring-emerald-100'
+      : tone === 'rose'
+      ? 'bg-rose-50 text-rose-800 ring-rose-100'
+      : 'bg-slate-50 text-slate-800 ring-slate-100'
+
+  return (
+    <div className={cn('inline-flex items-center gap-2 rounded-full px-3 py-1.5 text-[11px] ring-1', toneCls)}>
+      <Icon className="h-3.5 w-3.5 opacity-80" />
+      <span className="font-medium">{label}:</span>
+      <span className="font-semibold">{value}</span>
+    </div>
+  )
+}
+
+function MetricTile({ title, value, icon: Icon, tone = 'slate' }) {
+  const toneCls =
+    tone === 'sky'
+      ? 'text-sky-700'
+      : tone === 'emerald'
+      ? 'text-emerald-700'
+      : tone === 'rose'
+      ? 'text-rose-700'
+      : 'text-slate-700'
+
+  return (
+    <div className="rounded-3xl bg-slate-50 p-3 ring-1 ring-slate-100">
+      <div className="flex items-center justify-between">
+        <div className="text-[11px] font-medium text-slate-500">{title}</div>
+        <Icon className={cn('h-4 w-4', toneCls)} />
+      </div>
+      <div className={cn('mt-1 text-lg font-semibold', toneCls)}>{value}</div>
+    </div>
+  )
+}
+
+function HistoryCard({ r }) {
+  const oral = n0(r.intake_oral_ml)
+  const iv = n0(r.intake_iv_ml)
+  const blood = n0(r.intake_blood_ml)
+  const intake = rowIntakeTotal(r)
+
+  const foley = n0(r.urine_foley_ml)
+  const voided = n0(r.urine_voided_ml)
+  const urine = rowUrineTotal(r)
+
+  const drains = n0(r.drains_ml)
+  const output = rowOutputTotal(r)
+  const net = intake - output
+  const shift = getShift(r.recorded_at)
+
+  return (
+    <div className="group rounded-3xl bg-white p-4 shadow-sm ring-1 ring-slate-100 transition hover:-translate-y-0.5 hover:shadow-md">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="inline-flex items-center gap-2 rounded-full bg-white px-3 py-1.5 text-[11px] text-slate-700 ring-1 ring-slate-100">
+          <Clock className="h-3.5 w-3.5 text-slate-500" />
+          {r?.recorded_at ? formatIST(r.recorded_at) : '—'}
+        </div>
+
+        <div className="flex items-center gap-2">
+          <span className="rounded-full bg-slate-50 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide text-slate-600 ring-1 ring-slate-100">
+            {shift}
+          </span>
+
+          <span
+            className={cn(
+              'rounded-full px-2.5 py-1 text-[10px] font-semibold ring-1',
+              net >= 0 ? 'bg-sky-50 text-sky-800 ring-sky-100' : 'bg-rose-50 text-rose-800 ring-rose-100',
+            )}
+          >
+            Net {fmtNet(net)}
+          </span>
+        </div>
+      </div>
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        <MetricTile title="Total Intake" value={fmtMl(intake)} icon={ArrowDownCircle} tone="sky" />
+        <MetricTile title="Total Output" value={fmtMl(output)} icon={ArrowUpCircle} tone="emerald" />
+        <MetricTile title="Urine (Total)" value={fmtMl(urine)} icon={Droplets} tone="emerald" />
+      </div>
+
+      <div className="mt-3 flex flex-wrap gap-2">
+        <Chip icon={ArrowDownCircle} label="Oral" value={fmtMl(oral)} tone="sky" />
+        <Chip icon={ArrowDownCircle} label="IV" value={fmtMl(iv)} tone="sky" />
+        <Chip icon={ArrowDownCircle} label="Blood" value={fmtMl(blood)} tone="sky" />
+
+        <Chip icon={Droplets} label="Foley" value={fmtMl(foley)} tone="emerald" />
+        <Chip icon={Droplets} label="Voided" value={fmtMl(voided)} tone="emerald" />
+        <Chip icon={Waves} label="Drains" value={fmtMl(drains)} tone="emerald" />
+
+        <Chip
+          icon={ClipboardList}
+          label="Stools"
+          value={r?.stools_count ? String(r.stools_count) : '—'}
+          tone="slate"
+        />
+      </div>
+
+      {r?.remarks ? (
+        <div className="mt-3 rounded-2xl bg-slate-50 px-3 py-2 text-[12px] text-slate-700 ring-1 ring-slate-100">
+          <span className="font-semibold text-slate-900">Remarks:</span> {r.remarks}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+function SkeletonCard() {
+  return (
+    <div className="rounded-3xl bg-white p-4 shadow-sm ring-1 ring-slate-100">
+      <div className="h-8 w-48 rounded-2xl bg-slate-100" />
+      <div className="mt-3 grid gap-2 sm:grid-cols-3">
+        <div className="h-20 rounded-3xl bg-slate-100" />
+        <div className="h-20 rounded-3xl bg-slate-100" />
+        <div className="h-20 rounded-3xl bg-slate-100" />
+      </div>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {Array.from({ length: 6 }).map((_, i) => (
+          <div key={i} className="h-8 w-24 rounded-full bg-slate-100" />
+        ))}
+      </div>
+    </div>
+  )
+}
 
 export default function IntakeOutput({ admissionId }) {
-    const [rows, setRows] = useState([])
-    const [err, setErr] = useState('')
-    const [loading, setLoading] = useState(false)
-    const [saving, setSaving] = useState(false)
+  const [tab, setTab] = useState('history')
+  const [rows, setRows] = useState([])
+  const [err, setErr] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [saving, setSaving] = useState(false)
 
-    const [form, setForm] = useState({
+  const [form, setForm] = useState({
+    recorded_at: '',
+    intake_oral_ml: '',
+    intake_iv_ml: '',
+    intake_blood_ml: '',
+    urine_foley_ml: '',
+    urine_voided_ml: '',
+    drains_ml: '',
+    stools_count: '',
+    remarks: '',
+  })
+
+  const updateField = (field, value) => setForm((prev) => ({ ...prev, [field]: value }))
+
+  const load = async () => {
+    if (!admissionId) return
+    setErr('')
+    setLoading(true)
+    try {
+      const { data } = await listIO(admissionId)
+      const sorted = (data || []).slice().sort((a, b) => new Date(b.recorded_at || 0) - new Date(a.recorded_at || 0))
+      setRows(sorted)
+    } catch (e) {
+      console.error('I/O load error:', e)
+      setErr(e?.response?.data?.detail || 'Failed to load intake / output')
+      setRows([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    load()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [admissionId])
+
+  // Live totals for current form
+  const formTotals = useMemo(() => {
+    const intake = n0(form.intake_oral_ml) + n0(form.intake_iv_ml) + n0(form.intake_blood_ml)
+    const urine = n0(form.urine_foley_ml) + n0(form.urine_voided_ml)
+    const output = urine + n0(form.drains_ml)
+    return { intake, urine, output, net: intake - output }
+  }, [form])
+
+  const handleSubmit = async (e) => {
+    e.preventDefault()
+    setErr('')
+
+    const hasAnyValue =
+      form.intake_oral_ml ||
+      form.intake_iv_ml ||
+      form.intake_blood_ml ||
+      form.urine_foley_ml ||
+      form.urine_voided_ml ||
+      form.drains_ml ||
+      form.stools_count
+
+    if (!hasAnyValue) {
+      setErr('Enter at least one value (Intake / Urine / Drains / Stools).')
+      return
+    }
+
+    try {
+      setSaving(true)
+
+      const payload = {
+        recorded_at: form.recorded_at ? new Date(form.recorded_at).toISOString() : undefined,
+
+        intake_oral_ml: n0(form.intake_oral_ml),
+        intake_iv_ml: n0(form.intake_iv_ml),
+        intake_blood_ml: n0(form.intake_blood_ml),
+
+        urine_foley_ml: n0(form.urine_foley_ml),
+        urine_voided_ml: n0(form.urine_voided_ml),
+
+        drains_ml: n0(form.drains_ml),
+        stools_count: n0(form.stools_count),
+        remarks: form.remarks || '',
+
+        // Optional compatibility totals (remove if backend rejects unknown fields)
+        intake_ml: formTotals.intake,
+        urine_ml: formTotals.urine,
+      }
+
+      await addIO(admissionId, payload)
+
+      setForm({
         recorded_at: '',
-
-        // Intake split (ml)
         intake_oral_ml: '',
         intake_iv_ml: '',
         intake_blood_ml: '',
-
-        // Output split (ml)
         urine_foley_ml: '',
         urine_voided_ml: '',
         drains_ml: '',
-
         stools_count: '',
         remarks: '',
-    })
+      })
 
-    const updateField = (field, value) => {
-        setForm(prev => ({ ...prev, [field]: value }))
+      await load()
+      setTab('history')
+    } catch (e1) {
+      console.error('I/O save error:', e1)
+      setErr(e1?.response?.data?.detail || 'Failed to add intake / output')
+    } finally {
+      setSaving(false)
     }
-
-    const toISO = v => {
-        if (!v) return undefined
-        // datetime-local returns "YYYY-MM-DDTHH:MM"
-        if (v.length === 16) return `${v}:00`
-        return v
-    }
-
-    const load = async () => {
-        if (!admissionId) return
-        setErr('')
-        setLoading(true)
-        try {
-            const { data } = await listIO(admissionId)
-            const sorted = (data || []).slice().sort(
-                (a, b) => new Date(b.recorded_at || 0) - new Date(a.recorded_at || 0)
-            )
-            setRows(sorted)
-        } catch (e) {
-            console.error('I/O load error:', e)
-            setErr(e?.response?.data?.detail || 'Failed to load intake / output')
-            setRows([])
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    useEffect(() => {
-        load()
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [admissionId])
-
-    // --------- helpers: totals (supports old + new fields) ----------
-    const n0 = v => {
-        const x = Number(v)
-        return Number.isFinite(x) ? x : 0
-    }
-
-    const rowIntakeTotal = r => {
-        // prefer split fields if present, otherwise fallback to old intake_ml
-        const oral = n0(r?.intake_oral_ml)
-        const iv = n0(r?.intake_iv_ml)
-        const blood = n0(r?.intake_blood_ml)
-        const split = oral + iv + blood
-        if (split > 0) return split
-        return n0(r?.intake_ml)
-    }
-
-    const rowUrineTotal = r => {
-        const foley = n0(r?.urine_foley_ml)
-        const voided = n0(r?.urine_voided_ml)
-        const split = foley + voided
-        if (split > 0) return split
-        return n0(r?.urine_ml)
-    }
-
-    const rowOutputTotal = r => rowUrineTotal(r) + n0(r?.drains_ml)
-
-    const formatDateTime = dt => {
-        if (!dt) return '—'
-        try {
-            const d = new Date(dt)
-            if (Number.isNaN(d.getTime())) return '—'
-            return d.toLocaleString(undefined, { dateStyle: 'short', timeStyle: 'short' })
-        } catch {
-            return '—'
-        }
-    }
-
-    const getShift = dateStr => {
-        if (!dateStr) return 'Night'
-        const d = new Date(dateStr)
-        if (Number.isNaN(d.getTime())) return 'Night'
-        const h = d.getHours()
-        if (h >= 6 && h < 14) return 'Morning'
-        if (h >= 14 && h < 22) return 'Evening'
-        return 'Night'
-    }
-
-    const formatMl = v => (!v || Number(v) === 0 ? '—' : `${Number(v)} ml`)
-    const formatNet = v => {
-        const x = Number(v || 0)
-        if (x === 0) return '0 ml'
-        const sign = x > 0 ? '+' : ''
-        return `${sign}${x} ml`
-    }
-
-    // Live totals for current form (nice UX)
-    const formTotals = useMemo(() => {
-        const intake =
-            n0(form.intake_oral_ml) + n0(form.intake_iv_ml) + n0(form.intake_blood_ml)
-
-        const urine = n0(form.urine_foley_ml) + n0(form.urine_voided_ml)
-        const output = urine + n0(form.drains_ml)
-
-        return {
-            intake,
-            urine,
-            output,
-            net: intake - output,
-        }
-    }, [form])
-
-    // --- 24-hr & shift summary (doctor-friendly) ---
-    const todaySummary = useMemo(() => {
-        if (!rows || rows.length === 0) return null
-
-        const now = new Date()
-        const start = new Date(now)
-        start.setHours(0, 0, 0, 0)
-        const end = new Date(start)
-        end.setDate(end.getDate() + 1)
-
-        const shifts = {
-            Morning: { intake: 0, output: 0, net: 0 },
-            Evening: { intake: 0, output: 0, net: 0 },
-            Night: { intake: 0, output: 0, net: 0 },
-        }
-
-        let totalIntake = 0
-        let totalOutput = 0
-
-        rows.forEach(r => {
-            const dt = new Date(r.recorded_at)
-            if (Number.isNaN(dt.getTime())) return
-            if (dt < start || dt >= end) return
-
-            const intake = rowIntakeTotal(r)
-            const output = rowOutputTotal(r)
-
-            totalIntake += intake
-            totalOutput += output
-
-            const shift = getShift(r.recorded_at)
-            shifts[shift].intake += intake
-            shifts[shift].output += output
-            shifts[shift].net += intake - output
-        })
-
-        return {
-            date: start,
-            intake: totalIntake,
-            output: totalOutput,
-            net: totalIntake - totalOutput,
-            shifts,
-        }
-    }, [rows])
-
-    const handleSubmit = async e => {
-        e.preventDefault()
-        setErr('')
-
-        const hasAnyValue =
-            form.intake_oral_ml ||
-            form.intake_iv_ml ||
-            form.intake_blood_ml ||
-            form.urine_foley_ml ||
-            form.urine_voided_ml ||
-            form.drains_ml ||
-            form.stools_count
-
-        if (!hasAnyValue) {
-            setErr('Enter at least one value (Intake / Urine / Drains / Stools).')
-            return
-        }
-
-        try {
-            setSaving(true)
-
-            const payload = {
-                recorded_at: toISO(form.recorded_at),
-
-                // split fields
-                intake_oral_ml: n0(form.intake_oral_ml),
-                intake_iv_ml: n0(form.intake_iv_ml),
-                intake_blood_ml: n0(form.intake_blood_ml),
-
-                urine_foley_ml: n0(form.urine_foley_ml),
-                urine_voided_ml: n0(form.urine_voided_ml),
-
-                drains_ml: n0(form.drains_ml),
-                stools_count: n0(form.stools_count),
-                remarks: form.remarks || '',
-
-                // OPTIONAL totals for compatibility (if backend still expects these)
-                // If your backend rejects unknown fields, remove these 2 lines OR update backend schema.
-                intake_ml: formTotals.intake,
-                urine_ml: formTotals.urine,
-            }
-
-            await addIO(admissionId, payload)
-
-            setForm({
-                recorded_at: '',
-                intake_oral_ml: '',
-                intake_iv_ml: '',
-                intake_blood_ml: '',
-                urine_foley_ml: '',
-                urine_voided_ml: '',
-                drains_ml: '',
-                stools_count: '',
-                remarks: '',
-            })
-
-            await load()
-        } catch (e1) {
-            console.error('I/O save error:', e1)
-            setErr(e1?.response?.data?.detail || 'Failed to add intake / output')
-        } finally {
-            setSaving(false)
-        }
-    }
-
-    return (
-        <div className="space-y-4">
-            {/* Header + Today Summary */}
-            <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-                <div>
-                    <h2 className="text-base font-semibold text-slate-900">
-                        Intake / Output Chart
-                    </h2>
-                    <p className="text-xs text-slate-500">
-                        Record split intake & output. Automatically shows today&apos;s
-                        24-hr totals + net balance and shift summary.
-                    </p>
-                </div>
-
-                <div className="flex flex-col gap-2 rounded-2xl border border-slate-500 bg-slate-50 px-3 py-2 text-xs text-slate-800">
-                    <div className="flex items-center justify-between gap-3">
-                        <span className="font-medium text-[11px] uppercase tracking-wide text-slate-500">
-                            Today&apos;s 24-hr balance
-                        </span>
-                        <span className="text-[11px] text-slate-500">
-                            {todaySummary ? todaySummary.date.toLocaleDateString() : 'No data'}
-                        </span>
-                    </div>
-
-                    <div className="mt-1 grid grid-cols-3 gap-2">
-                        <div className="rounded-xl bg-white px-2 py-1.5 text-center shadow-sm">
-                            <div className="text-[10px] font-medium text-slate-500">
-                                Total Intake
-                            </div>
-                            <div className="text-xs font-semibold text-sky-700">
-                                {todaySummary ? `${todaySummary.intake} ml` : '0 ml'}
-                            </div>
-                        </div>
-                        <div className="rounded-xl bg-white px-2 py-1.5 text-center shadow-sm">
-                            <div className="text-[10px] font-medium text-slate-500">
-                                Total Output
-                            </div>
-                            <div className="text-xs font-semibold text-emerald-700">
-                                {todaySummary ? `${todaySummary.output} ml` : '0 ml'}
-                            </div>
-                        </div>
-                        <div className="rounded-xl bg-white px-2 py-1.5 text-center shadow-sm">
-                            <div className="text-[10px] font-medium text-slate-500">
-                                Net Balance
-                            </div>
-                            <div
-                                className={`text-xs font-semibold ${todaySummary
-                                        ? todaySummary.net >= 0
-                                            ? 'text-sky-800'
-                                            : 'text-rose-700'
-                                        : 'text-slate-400'
-                                    }`}
-                            >
-                                {todaySummary ? formatNet(todaySummary.net) : '0 ml'}
-                            </div>
-                        </div>
-                    </div>
-
-                    {todaySummary && (
-                        <div className="mt-1 grid grid-cols-3 gap-1 text-[10px] text-slate-600">
-                            {['Morning', 'Evening', 'Night'].map(shift => (
-                                <div
-                                    key={shift}
-                                    className="rounded-lg border border-slate-500 bg-white px-1.5 py-1"
-                                >
-                                    <div className="font-medium text-[10px]">{shift}</div>
-                                    <div className="mt-0.5 flex flex-col gap-0.5">
-                                        <span>
-                                            In:{' '}
-                                            {todaySummary.shifts[shift].intake ||
-                                                todaySummary.shifts[shift].output
-                                                ? `${todaySummary.shifts[shift].intake} ml`
-                                                : '—'}
-                                        </span>
-                                        <span>
-                                            Out:{' '}
-                                            {todaySummary.shifts[shift].output ||
-                                                todaySummary.shifts[shift].intake
-                                                ? `${todaySummary.shifts[shift].output} ml`
-                                                : '—'}
-                                        </span>
-                                    </div>
-                                </div>
-                            ))}
-                        </div>
-                    )}
-                </div>
-            </div>
-
-            {/* Form (only for ipd.nursing) */}
-            <PermGate anyOf={['ipd.nursing']}>
-                <form
-                    onSubmit={handleSubmit}
-                    className="space-y-3 rounded-2xl border border-slate-500 bg-white p-4 shadow-sm"
-                >
-                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                        <div>
-                            <h3 className="text-sm font-medium text-slate-900">
-                                Record Intake / Output
-                            </h3>
-                            <div className="text-[11px] text-slate-500">
-                                Fill only measured values. Totals update automatically.
-                            </div>
-                        </div>
-
-                        {/* live total chips */}
-                        <div className="flex flex-wrap items-center gap-2">
-                            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-700">
-                                Intake: <span className="font-semibold">{formTotals.intake} ml</span>
-                            </span>
-                            <span className="rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-700">
-                                Output: <span className="font-semibold">{formTotals.output} ml</span>
-                            </span>
-                            <span
-                                className={`rounded-full border px-2.5 py-1 text-[11px] ${formTotals.net >= 0
-                                        ? 'border-sky-200 bg-sky-50 text-sky-800'
-                                        : 'border-rose-200 bg-rose-50 text-rose-800'
-                                    }`}
-                            >
-                                Net: <span className="font-semibold">{formatNet(formTotals.net)}</span>
-                            </span>
-                        </div>
-                    </div>
-
-                    <div className="grid gap-3 md:grid-cols-12">
-                        <div className="md:col-span-3">
-                            <label className="mb-1 block text-xs font-medium text-slate-600">
-                                Date &amp; Time
-                            </label>
-                            <input
-                                type="datetime-local"
-                                className="w-full rounded-lg border border-slate-500 bg-slate-50 px-2.5 py-1.5 text-xs text-slate-900 outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-                                value={form.recorded_at}
-                                onChange={e => updateField('recorded_at', e.target.value)}
-                            />
-                        </div>
-
-                        {/* Intake group */}
-                        <div className="md:col-span-9">
-                            <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 md:grid-cols-12">
-                                <div className="md:col-span-12">
-                                    <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                                        Intake (ml)
-                                    </div>
-                                </div>
-
-                                <div className="md:col-span-4">
-                                    <label className="mb-1 block text-xs font-medium text-slate-600">
-                                        Oral
-                                    </label>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-                                        placeholder="Water / Feed / ORS"
-                                        value={form.intake_oral_ml}
-                                        onChange={e => updateField('intake_oral_ml', e.target.value)}
-                                    />
-                                </div>
-
-                                <div className="md:col-span-4">
-                                    <label className="mb-1 block text-xs font-medium text-slate-600">
-                                        IV
-                                    </label>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-                                        placeholder="NS / RL / Dextrose"
-                                        value={form.intake_iv_ml}
-                                        onChange={e => updateField('intake_iv_ml', e.target.value)}
-                                    />
-                                </div>
-
-                                <div className="md:col-span-4">
-                                    <label className="mb-1 block text-xs font-medium text-slate-600">
-                                        Blood
-                                    </label>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-                                        placeholder="PRBC / FFP"
-                                        value={form.intake_blood_ml}
-                                        onChange={e => updateField('intake_blood_ml', e.target.value)}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-
-                        {/* Output group */}
-                        <div className="md:col-span-12">
-                            <div className="grid gap-3 rounded-xl border border-slate-200 bg-slate-50 p-3 md:grid-cols-12">
-                                <div className="md:col-span-12">
-                                    <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                                        Output (ml)
-                                    </div>
-                                </div>
-
-                                <div className="md:col-span-4">
-                                    <label className="mb-1 block text-xs font-medium text-slate-600">
-                                        Urine – Foley
-                                    </label>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                                        placeholder="Catheter output"
-                                        value={form.urine_foley_ml}
-                                        onChange={e => updateField('urine_foley_ml', e.target.value)}
-                                    />
-                                </div>
-
-                                <div className="md:col-span-4">
-                                    <label className="mb-1 block text-xs font-medium text-slate-600">
-                                        Urine – Voided
-                                    </label>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                                        placeholder="Measured void"
-                                        value={form.urine_voided_ml}
-                                        onChange={e => updateField('urine_voided_ml', e.target.value)}
-                                    />
-                                </div>
-
-                                <div className="md:col-span-4">
-                                    <label className="mb-1 block text-xs font-medium text-slate-600">
-                                        Drains
-                                    </label>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500"
-                                        placeholder="Chest / Abdominal"
-                                        value={form.drains_ml}
-                                        onChange={e => updateField('drains_ml', e.target.value)}
-                                    />
-                                </div>
-
-                                <div className="md:col-span-3">
-                                    <label className="mb-1 block text-xs font-medium text-slate-600">
-                                        Stools (count)
-                                    </label>
-                                    <input
-                                        type="number"
-                                        min="0"
-                                        className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-slate-700 focus:ring-1 focus:ring-slate-400"
-                                        placeholder="Number of times"
-                                        value={form.stools_count}
-                                        onChange={e => updateField('stools_count', e.target.value)}
-                                    />
-                                </div>
-
-                                <div className="md:col-span-9">
-                                    <label className="mb-1 block text-xs font-medium text-slate-600">
-                                        Remarks / Description
-                                    </label>
-                                    <input
-                                        className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-                                        placeholder="Eg: RL 500ml, Urine via Foley, Drain: ICD..."
-                                        value={form.remarks}
-                                        onChange={e => updateField('remarks', e.target.value)}
-                                    />
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-1">
-                        {err && <div className="text-xs text-rose-600">{err}</div>}
-                        <button
-                            type="submit"
-                            disabled={saving}
-                            className="inline-flex items-center gap-1 rounded-lg bg-sky-600 px-4 py-1.5 text-xs font-medium text-white shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
-                        >
-                            {saving && (
-                                <span className="h-3 w-3 animate-spin rounded-full border border-white border-t-transparent" />
-                            )}
-                            <span>{saving ? 'Saving…' : 'Save entry'}</span>
-                        </button>
-                    </div>
-                </form>
-            </PermGate>
-
-            {/* History table */}
-            <div className="overflow-hidden rounded-2xl border border-slate-500 bg-white shadow-sm">
-                <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2 text-xs">
-                    <div className="font-medium text-slate-700">I/O history</div>
-                    <div className="text-[11px] text-slate-500">
-                        {loading
-                            ? 'Loading…'
-                            : `${rows?.length || 0} record${(rows?.length || 0) === 1 ? '' : 's'}`}
-                    </div>
-                </div>
-
-                <div className="max-h-[360px] overflow-auto text-xs">
-                    <table className="min-w-[1100px] w-full border-collapse">
-                        <thead className="sticky top-0 bg-slate-50 text-[11px] uppercase tracking-wide text-slate-500">
-                            <tr>
-                                <th className="px-3 py-2 text-left font-medium">Time</th>
-
-                                <th className="px-3 py-2 text-left font-medium">Oral</th>
-                                <th className="px-3 py-2 text-left font-medium">IV</th>
-                                <th className="px-3 py-2 text-left font-medium">Blood</th>
-                                <th className="px-3 py-2 text-left font-medium">Intake (Total)</th>
-
-                                <th className="px-3 py-2 text-left font-medium">Foley</th>
-                                <th className="px-3 py-2 text-left font-medium">Voided</th>
-                                <th className="px-3 py-2 text-left font-medium">Urine (Total)</th>
-                                <th className="px-3 py-2 text-left font-medium">Drains</th>
-                                <th className="px-3 py-2 text-left font-medium">Output (Total)</th>
-
-                                <th className="px-3 py-2 text-left font-medium">Net</th>
-                                <th className="px-3 py-2 text-left font-medium">Stools</th>
-                                <th className="px-3 py-2 text-left font-medium">Shift</th>
-                                <th className="px-3 py-2 text-left font-medium">Remarks</th>
-                            </tr>
-                        </thead>
-
-                        <tbody>
-                            {!loading &&
-                                rows &&
-                                rows.map(r => {
-                                    const oral = n0(r.intake_oral_ml)
-                                    const iv = n0(r.intake_iv_ml)
-                                    const blood = n0(r.intake_blood_ml)
-                                    const intakeTotal = rowIntakeTotal(r)
-
-                                    const foley = n0(r.urine_foley_ml)
-                                    const voided = n0(r.urine_voided_ml)
-                                    const urineTotal = rowUrineTotal(r)
-
-                                    const drains = n0(r.drains_ml)
-                                    const outputTotal = urineTotal + drains
-                                    const net = intakeTotal - outputTotal
-
-                                    return (
-                                        <tr
-                                            key={r.id}
-                                            className="border-t border-slate-100 hover:bg-slate-50/60"
-                                        >
-                                            <td className="px-3 py-2 align-top text-slate-700">
-                                                {formatDateTime(r.recorded_at)}
-                                            </td>
-
-                                            {/* Intake */}
-                                            <td className="px-3 py-2 align-top text-slate-700">
-                                                {formatMl(oral)}
-                                            </td>
-                                            <td className="px-3 py-2 align-top text-slate-700">
-                                                {formatMl(iv)}
-                                            </td>
-                                            <td className="px-3 py-2 align-top text-slate-700">
-                                                {formatMl(blood)}
-                                            </td>
-                                            <td className="px-3 py-2 align-top font-semibold text-slate-800">
-                                                {formatMl(intakeTotal)}
-                                            </td>
-
-                                            {/* Output */}
-                                            <td className="px-3 py-2 align-top text-slate-700">
-                                                {formatMl(foley)}
-                                            </td>
-                                            <td className="px-3 py-2 align-top text-slate-700">
-                                                {formatMl(voided)}
-                                            </td>
-                                            <td className="px-3 py-2 align-top font-semibold text-slate-800">
-                                                {formatMl(urineTotal)}
-                                            </td>
-                                            <td className="px-3 py-2 align-top text-slate-700">
-                                                {formatMl(drains)}
-                                            </td>
-                                            <td className="px-3 py-2 align-top font-semibold text-slate-800">
-                                                {formatMl(outputTotal)}
-                                            </td>
-
-                                            <td
-                                                className={`px-3 py-2 align-top font-semibold ${net >= 0 ? 'text-sky-800' : 'text-rose-700'
-                                                    }`}
-                                            >
-                                                {formatNet(net)}
-                                            </td>
-
-                                            <td className="px-3 py-2 align-top text-slate-700">
-                                                {r.stools_count || '—'}
-                                            </td>
-
-                                            <td className="px-3 py-2 align-top text-slate-700">
-                                                {getShift(r.recorded_at)}
-                                            </td>
-
-                                            <td className="px-3 py-2 align-top text-slate-700">
-                                                {r.remarks || '—'}
-                                            </td>
-                                        </tr>
-                                    )
-                                })}
-
-                            {!loading && (!rows || rows.length === 0) && (
-                                <tr>
-                                    <td colSpan={14} className="px-3 py-4 text-center text-slate-400">
-                                        No intake / output entries yet.
-                                    </td>
-                                </tr>
-                            )}
-
-                            {loading && (
-                                <tr>
-                                    <td colSpan={14} className="px-3 py-4 text-center text-slate-400">
-                                        Loading intake / output…
-                                    </td>
-                                </tr>
-                            )}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
+  }
+
+  return (
+    <div className="space-y-3">
+      {/* Compact header row */}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          {/* <div className="text-sm font-semibold text-slate-900">Intake / Output</div> */}
+          {/* <div className="text-[12px] text-slate-500">Time shown in IST • split intake/output</div> */}
         </div>
-    )
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={load}
+            disabled={loading}
+            className={cn(
+              'inline-flex items-center gap-2 rounded-2xl bg-white px-3 py-2 text-xs font-semibold text-slate-800 shadow-sm ring-1 ring-slate-100 transition hover:bg-slate-50',
+              loading && 'opacity-60',
+            )}
+          >
+            <RefreshCw className={cn('h-4 w-4', loading && 'animate-spin')} />
+            Refresh
+          </button>
+
+          <div className="hidden sm:flex items-center gap-2">
+            <Chip icon={ArrowDownCircle} label="Intake" value={`${formTotals.intake} ml`} tone="sky" />
+            <Chip icon={ArrowUpCircle} label="Output" value={`${formTotals.output} ml`} tone="emerald" />
+            <Chip icon={Waves} label="Net" value={fmtNet(formTotals.net)} tone={formTotals.net >= 0 ? 'sky' : 'rose'} />
+          </div>
+        </div>
+      </div>
+
+      {err && (
+        <div className="rounded-3xl bg-rose-50 px-4 py-3 text-sm text-rose-700 shadow-sm ring-1 ring-rose-100">
+          {err}
+        </div>
+      )}
+
+      {/* Tabs */}
+      <Tabs value={tab} onValueChange={setTab} className="w-full">
+        <TabsList className="h-auto w-full justify-start gap-2 overflow-x-auto rounded-2xl bg-slate-50 p-1.5">
+          <TabsTrigger
+            value="history"
+            className="shrink-0 rounded-2xl px-3 py-2 text-[12px] data-[state=active]:bg-gradient-to-r data-[state=active]:from-sky-600 data-[state=active]:to-violet-600 data-[state=active]:text-white"
+          >
+            I/O history
+            <span className="ml-2 rounded-full bg-white/20 px-2 py-0.5 text-[10px]">{rows?.length || 0}</span>
+          </TabsTrigger>
+
+          <TabsTrigger
+            value="record"
+            className="shrink-0 rounded-2xl px-3 py-2 text-[12px] data-[state=active]:bg-gradient-to-r data-[state=active]:from-sky-600 data-[state=active]:to-violet-600 data-[state=active]:text-white"
+          >
+            Record Intake / Output
+          </TabsTrigger>
+        </TabsList>
+
+        {/* HISTORY: card design on ALL screens */}
+        <TabsContent value="history" className="mt-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4">
+            {loading && Array.from({ length: 6 }).map((_, i) => <SkeletonCard key={i} />)}
+
+            {!loading && (!rows || rows.length === 0) && (
+              <div className="sm:col-span-2 lg:col-span-3 2xl:col-span-4 rounded-3xl bg-slate-50 px-4 py-8 text-center text-sm text-slate-500 ring-1 ring-slate-100">
+                No intake / output entries yet.
+              </div>
+            )}
+
+            {!loading && rows?.map((r) => <HistoryCard key={r.id} r={r} />)}
+          </div>
+        </TabsContent>
+
+        {/* RECORD */}
+        <TabsContent value="record" className="mt-3">
+          <PermGate anyOf={['ipd.io.create', 'ipd.io.update', 'ipd.io.manage', 'ipd.nursing']}>
+            <form onSubmit={handleSubmit} className="rounded-3xl bg-white p-3 shadow-sm ring-1 ring-slate-100 md:p-4">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <div className="text-sm font-semibold text-slate-900">Record Intake / Output</div>
+                  <div className="text-[12px] text-slate-500">Totals update automatically (Intake, Output, Net)</div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 sm:justify-end">
+                  <Chip icon={ArrowDownCircle} label="Intake" value={`${formTotals.intake} ml`} tone="sky" />
+                  <Chip icon={ArrowUpCircle} label="Output" value={`${formTotals.output} ml`} tone="emerald" />
+                  <Chip
+                    icon={Waves}
+                    label="Net"
+                    value={fmtNet(formTotals.net)}
+                    tone={formTotals.net >= 0 ? 'sky' : 'rose'}
+                  />
+                </div>
+              </div>
+
+              <div className="mt-4 grid gap-3 lg:grid-cols-12">
+                <div className="lg:col-span-3">
+                  <label className="mb-1 block text-xs font-medium text-slate-600">Date &amp; Time</label>
+                  <input
+                    type="datetime-local"
+                    className="h-10 w-full rounded-2xl bg-slate-50 px-3 text-xs text-slate-900 outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-sky-400"
+                    value={form.recorded_at}
+                    onChange={(e) => updateField('recorded_at', e.target.value)}
+                  />
+                  <div className="mt-1 text-[11px] text-slate-400">Leave blank to use current time.</div>
+                </div>
+
+                {/* Intake */}
+                <div className="lg:col-span-9 rounded-3xl bg-slate-50 p-3 ring-1 ring-slate-100">
+                  <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600">Intake (ml)</div>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">Oral</label>
+                      <input
+                        type="number"
+                        min="0"
+                        className="h-10 w-full rounded-2xl bg-white px-3 text-xs outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-sky-400"
+                        placeholder="Water / Feed"
+                        value={form.intake_oral_ml}
+                        onChange={(e) => updateField('intake_oral_ml', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">IV</label>
+                      <input
+                        type="number"
+                        min="0"
+                        className="h-10 w-full rounded-2xl bg-white px-3 text-xs outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-sky-400"
+                        placeholder="NS / RL"
+                        value={form.intake_iv_ml}
+                        onChange={(e) => updateField('intake_iv_ml', e.target.value)}
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">Blood</label>
+                      <input
+                        type="number"
+                        min="0"
+                        className="h-10 w-full rounded-2xl bg-white px-3 text-xs outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-sky-400"
+                        placeholder="PRBC / FFP"
+                        value={form.intake_blood_ml}
+                        onChange={(e) => updateField('intake_blood_ml', e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                {/* Output */}
+                <div className="lg:col-span-12 rounded-3xl bg-slate-50 p-3 ring-1 ring-slate-100">
+                  <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600">Output</div>
+
+                  <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">Urine – Foley (ml)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        className="h-10 w-full rounded-2xl bg-white px-3 text-xs outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-emerald-400"
+                        placeholder="Catheter"
+                        value={form.urine_foley_ml}
+                        onChange={(e) => updateField('urine_foley_ml', e.target.value)}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">Urine – Voided (ml)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        className="h-10 w-full rounded-2xl bg-white px-3 text-xs outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-emerald-400"
+                        placeholder="Measured void"
+                        value={form.urine_voided_ml}
+                        onChange={(e) => updateField('urine_voided_ml', e.target.value)}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">Drains (ml)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        className="h-10 w-full rounded-2xl bg-white px-3 text-xs outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-emerald-400"
+                        placeholder="ICD / Wound"
+                        value={form.drains_ml}
+                        onChange={(e) => updateField('drains_ml', e.target.value)}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="mb-1 block text-xs font-medium text-slate-600">Stools (count)</label>
+                      <input
+                        type="number"
+                        min="0"
+                        className="h-10 w-full rounded-2xl bg-white px-3 text-xs outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-slate-400"
+                        placeholder="0"
+                        value={form.stools_count}
+                        onChange={(e) => updateField('stools_count', e.target.value)}
+                      />
+                    </div>
+
+                    <div className="sm:col-span-2 lg:col-span-4">
+                      <label className="mb-1 block text-xs font-medium text-slate-600">Remarks</label>
+                      <input
+                        className="h-10 w-full rounded-2xl bg-white px-3 text-xs outline-none ring-1 ring-slate-200 focus:ring-2 focus:ring-sky-400"
+                        placeholder="Eg: RL 500ml, Urine via Foley, ICD drain…"
+                        value={form.remarks}
+                        onChange={(e) => updateField('remarks', e.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                {err ? (
+                  <div className="inline-flex items-start gap-2 rounded-2xl bg-rose-50 px-3 py-2 text-xs text-rose-700 ring-1 ring-rose-100">
+                    <AlertTriangle className="mt-0.5 h-4 w-4" />
+                    <span>{err}</span>
+                  </div>
+                ) : (
+                  <div className="text-[11px] text-slate-500">Tip: record every shift for best 24-hr balance tracking.</div>
+                )}
+
+                <button
+                  type="submit"
+                  disabled={saving}
+                  className={cn(
+                    'inline-flex w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-sky-600 to-violet-600 px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:opacity-95 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto',
+                  )}
+                >
+                  {saving ? (
+                    <span className="h-4 w-4 animate-spin rounded-full border border-white border-t-transparent" />
+                  ) : (
+                    <Plus className="h-4 w-4" />
+                  )}
+                  {saving ? 'Saving…' : 'Save entry'}
+                </button>
+              </div>
+            </form>
+          </PermGate>
+        </TabsContent>
+      </Tabs>
+    </div>
+  )
 }
