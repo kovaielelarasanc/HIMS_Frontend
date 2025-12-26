@@ -1,8 +1,16 @@
 // frontend/src/opd/components/DoctorPicker.jsx
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { fetchDepartments, fetchDepartmentUsers } from '../../api/opd'
-import { Building2, Stethoscope, Loader2, AlertCircle, CheckCircle2 } from 'lucide-react'
+import { Building2, Stethoscope, Loader2, AlertCircle, CheckCircle2, ChevronDown } from 'lucide-react'
+
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from '@/components/ui/select'
 
 /**
  * Props:
@@ -21,7 +29,7 @@ export default function DoctorPicker({
     label = 'Primary Doctor — Department · Role · User',
 }) {
     const [depts, setDepts] = useState([])
-    const [deptId, setDeptId] = useState('') // string for <select>
+    const [deptId, setDeptId] = useState('') // '' => all departments (we map to "all" for Select)
     const [users, setUsers] = useState([])
 
     const [loadingDepts, setLoadingDepts] = useState(false)
@@ -30,7 +38,7 @@ export default function DoctorPicker({
 
     const deptObj = useMemo(
         () => (deptId ? depts.find((d) => Number(d.id) === Number(deptId)) : null),
-        [depts, deptId]
+        [depts, deptId],
     )
 
     // Load departments once
@@ -55,7 +63,9 @@ export default function DoctorPicker({
                 setLoadingDepts(false)
             })
 
-        return () => { alive = false }
+        return () => {
+            alive = false
+        }
     }, [])
 
     // Whenever department changes:
@@ -70,7 +80,7 @@ export default function DoctorPicker({
         const deptNum = deptId ? Number(deptId) : null
         const deptName = deptObj?.name || null
 
-        // Tell parent: doctor cleared, dept changed (so parent can treat this as a filter)
+        // Tell parent: doctor cleared, dept changed
         onChange?.(null, { department_id: deptNum, department_name: deptName })
 
         if (!deptId) return
@@ -97,33 +107,39 @@ export default function DoctorPicker({
                 setLoadingUsers(false)
             })
 
-        return () => { alive = false }
+        return () => {
+            alive = false
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [deptId])
 
     const selectedDoctor = useMemo(
         () => users.find((u) => Number(u.id) === Number(value)) || null,
-        [users, value]
+        [users, value],
     )
 
-    const handleDeptChange = (e) => {
-        const newDeptId = e.target.value
-        setDeptId(newDeptId)
-        // doctor will be cleared + parent notified in useEffect above
+    // ---------- Handlers (Radix Select) ----------
+    const deptSelectValue = deptId ? String(deptId) : 'all'
+    const doctorSelectValue = value ? String(value) : 'all'
+
+    const handleDeptValueChange = (v) => {
+        const newDept = v === 'all' ? '' : v
+        setDeptId(newDept)
+        // doctor cleared + parent notified in useEffect above
     }
 
-    const handleDoctorChange = (e) => {
-        const id = e.target.value
-        const numId = id ? Number(id) : null
+    const handleDoctorValueChange = (v) => {
         const deptNum = deptId ? Number(deptId) : null
         const deptName = deptObj?.name || null
 
-        if (!numId) {
+        if (!v || v === 'all') {
             onChange?.(null, { department_id: deptNum, department_name: deptName })
             return
         }
 
+        const numId = Number(v)
         const doc = users.find((u) => Number(u.id) === Number(numId)) || null
+
         onChange?.(numId, {
             department_id: deptNum,
             department_name: deptName,
@@ -131,6 +147,8 @@ export default function DoctorPicker({
             doctor_email: doc?.email || null,
         })
     }
+
+    const doctorDisabled = !deptId || loadingUsers || users.length === 0
 
     return (
         <div className="space-y-3">
@@ -147,61 +165,133 @@ export default function DoctorPicker({
             </div>
 
             <div className="grid gap-3 md:grid-cols-2">
+                {/* Department */}
                 <div className="space-y-1">
                     <div className="flex items-center gap-2 text-xs text-slate-600">
                         <Building2 className="h-4 w-4 text-slate-500" />
                         <span className="font-medium">Department</span>
                     </div>
+
                     <div className="relative">
                         {loadingDepts && (
-                            <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-slate-400" />
+                            <Loader2 className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-slate-400" />
                         )}
-                        <select
-                            className="input w-full rounded-2xl border border-slate-500 bg-white text-sm shadow-sm focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                            value={deptId}
-                            onChange={handleDeptChange}
-                            disabled={loadingDepts}
-                        >
-                            <option value="">
-                                {loadingDepts ? 'Loading departments…' : 'All departments'}
-                            </option>
-                            {depts.map((d) => (
-                                <option key={d.id} value={d.id}>{d.name}</option>
-                            ))}
-                        </select>
+
+                        <Select value={deptSelectValue} onValueChange={handleDeptValueChange} disabled={loadingDepts}>
+                            <SelectTrigger
+                                className={[
+                                    'h-10 w-full rounded-2xl border border-slate-500 bg-white',
+                                    'px-3 text-[12px] font-semibold text-slate-900',
+                                    'shadow-sm outline-none transition',
+                                    'focus:border-sky-500 focus:ring-2 focus:ring-sky-100',
+                                ].join(' ')}
+                            >
+                                <SelectValue placeholder={loadingDepts ? 'Loading departments…' : 'All departments'} />
+                                {/* <ChevronDown className="h-4 w-4 opacity-60" /> */}
+                            </SelectTrigger>
+
+                            <SelectContent
+                                position="popper"
+                                sideOffset={6}
+                                className={[
+                                    'z-[90] w-[--radix-select-trigger-width]',
+                                    'max-h-[280px] overflow-auto',
+                                    'rounded-2xl border border-black/10 bg-white/95 backdrop-blur-xl',
+                                    'shadow-[0_18px_40px_rgba(2,6,23,0.18)]',
+                                    'p-1',
+                                ].join(' ')}
+                            >
+                                <SelectItem value="all" className="text-[12px] font-semibold leading-snug">
+                                    {loadingDepts ? 'Loading departments…' : 'All departments'}
+                                </SelectItem>
+
+                                {depts.map((d) => (
+                                    <SelectItem
+                                        key={d.id}
+                                        value={String(d.id)}
+                                        className="text-[12px] leading-snug whitespace-normal break-words"
+                                    >
+                                        {d.name}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
                 </div>
 
+                {/* Doctor */}
                 <div className="space-y-1">
                     <div className="flex items-center gap-2 text-xs text-slate-600">
                         <Stethoscope className="h-4 w-4 text-slate-500" />
                         <span className="font-medium">Doctor</span>
                     </div>
+
                     <div className="relative">
                         {loadingUsers && (
-                            <Loader2 className="absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-slate-400" />
+                            <Loader2 className="pointer-events-none absolute right-3 top-1/2 h-4 w-4 -translate-y-1/2 animate-spin text-slate-400" />
                         )}
-                        <select
-                            className="input w-full rounded-2xl border border-slate-500 bg-white text-sm shadow-sm focus:border-sky-500 focus:ring-2 focus:ring-sky-100"
-                            value={value || ''}
-                            onChange={handleDoctorChange}
-                            disabled={!deptId || loadingUsers || users.length === 0}
+
+                        <Select
+                            value={doctorSelectValue}
+                            onValueChange={handleDoctorValueChange}
+                            disabled={doctorDisabled}
                         >
-                            <option value="">
-                                {loadingUsers
-                                    ? 'Loading doctors…'
-                                    : !deptId
-                                        ? 'Select department first'
-                                        : users.length === 0
-                                            ? 'No doctors in this department'
-                                            : 'All doctors (in this dept)'}
-                            </option>
-                            {users.map((u) => (
-                                <option key={u.id} value={u.id}>
-                                    {u.name}{u.email ? ` (${u.email})` : ''}
-                                </option>
-                            ))}
-                        </select>
+                            <SelectTrigger
+                                className={[
+                                    'h-10 w-full rounded-2xl border border-slate-500 bg-white',
+                                    'px-3 text-[12px] font-semibold text-slate-900',
+                                    'shadow-sm outline-none transition',
+                                    doctorDisabled ? 'opacity-60' : '',
+                                    'focus:border-sky-500 focus:ring-2 focus:ring-sky-100',
+                                ].join(' ')}
+                            >
+                                <SelectValue
+                                    placeholder={
+                                        loadingUsers
+                                            ? 'Loading doctors…'
+                                            : !deptId
+                                                ? 'Select department first'
+                                                : users.length === 0
+                                                    ? 'No doctors in this department'
+                                                    : 'All doctors (in this dept)'
+                                    }
+                                />
+                              
+                            </SelectTrigger>
+
+                            <SelectContent
+                                position="popper"
+                                sideOffset={6}
+                                className={[
+                                    'z-[90] w-[--radix-select-trigger-width]',
+                                    'max-h-[280px] overflow-auto',
+                                    'rounded-2xl border border-black/10 bg-white/95 backdrop-blur-xl',
+                                    'shadow-[0_18px_40px_rgba(2,6,23,0.18)]',
+                                    'p-1',
+                                ].join(' ')}
+                            >
+                                <SelectItem value="all" className="text-[12px] font-semibold leading-snug">
+                                    {loadingUsers
+                                        ? 'Loading doctors…'
+                                        : !deptId
+                                            ? 'Select department first'
+                                            : users.length === 0
+                                                ? 'No doctors in this department'
+                                                : 'All doctors (in this dept)'}
+                                </SelectItem>
+
+                                {users.map((u) => (
+                                    <SelectItem
+                                        key={u.id}
+                                        value={String(u.id)}
+                                        className="text-[12px] leading-snug whitespace-normal break-words"
+                                    >
+                                        {u.name}
+                                        {u.email ? ` (${u.email})` : ''}
+                                    </SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
                     </div>
                 </div>
             </div>
