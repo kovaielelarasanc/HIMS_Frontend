@@ -3,6 +3,10 @@ import { useEffect, useState } from 'react'
 import {
     addDressingTransfusion,
     listDressingTransfusions,
+    listDressingRecords,
+    addDressingRecord,
+    listTransfusions,
+    addTransfusion
 } from '../../api/ipd'
 
 export default function DressingTransfusionTab({ admissionId, canWrite }) {

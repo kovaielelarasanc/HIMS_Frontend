@@ -33,6 +33,7 @@ function MedicationsTab({ admissionId, canWrite = true }) {
     const [loadingAll, setLoadingAll] = useState(false)
     const [downloadBusy, setDownloadBusy] = useState(false)
 
+
     // Meta header
     const [meta, setMeta] = useState({
         allergies: '',
@@ -49,18 +50,47 @@ function MedicationsTab({ admissionId, canWrite = true }) {
         diet_remarks: '',
     })
 
-    // IV fluids
-    const [ivRows, setIvRows] = useState([])
+    // helpers (put near top of component)
+    const toIsoSecs = (v) => (!v ? null : v.length === 16 ? `${v}:00` : v)
+
+    const strOrNull = (v) => {
+        const s = String(v ?? '').trim()
+        return s ? s : null
+    }
+
+    const numOrNull = (v) => {
+        const s = String(v ?? '').trim()
+        if (!s) return null
+        const n = Number(s)
+        return Number.isFinite(n) ? n : null
+    }
+
+    const formatIST = (iso) => {
+        if (!iso) return '—'
+        const d = new Date(iso)
+        if (Number.isNaN(d.getTime())) return String(iso)
+        return d.toLocaleString('en-IN', { timeZone: 'Asia/Kolkata' })
+    }
+
+    // state
     const [ivForm, setIvForm] = useState({
-        date: '',
+        ordered_datetime: '',
         fluid: '',
         additive: '',
-        dose: '',
+        dose_ml: '',
         rate_ml_per_hr: '',
-        start_time: '',
-        stop_time: '',
+        start_datetime: '',
+        stop_datetime: '',
         remarks: '',
     })
+
+    const handleIvChange = (k) => (e) =>
+        setIvForm((p) => ({ ...p, [k]: e.target.value }))
+
+
+    // IV fluids
+    const [ivRows, setIvRows] = useState([])
+
     const [ivSaving, setIvSaving] = useState(false)
 
     // Nurses
@@ -175,17 +205,17 @@ function MedicationsTab({ admissionId, canWrite = true }) {
             const { data } = await getDrugChartMeta(admissionId)
             if (data) {
                 setMeta({
-                    allergies: data.allergies || '',
+                    allergies: data.allergic_to || '',
                     diagnosis: data.diagnosis || '',
                     weight_kg: data.weight_kg ?? '',
                     height_cm: data.height_cm ?? '',
                     blood_group: data.blood_group || '',
                     bsa: data.bsa ?? '',
                     bmi: data.bmi ?? '',
-                    diet_oral_fluid_per_day: data.diet_oral_fluid_per_day ?? '',
-                    diet_salt_gm_per_day: data.diet_salt_gm_per_day ?? '',
-                    diet_calorie_per_day: data.diet_calorie_per_day ?? '',
-                    diet_protein_gm_per_day: data.diet_protein_gm_per_day ?? '',
+                    diet_oral_fluid_per_day: data.oral_fluid_per_day_ml ?? '',
+                    diet_salt_gm_per_day: data.salt_gm_per_day ?? '',
+                    diet_calorie_per_day: data.calorie_per_day_kcal ?? '',
+                    diet_protein_gm_per_day: data.protein_gm_per_day ?? '',
                     diet_remarks: data.diet_remarks || '',
                 })
             }
@@ -236,6 +266,7 @@ function MedicationsTab({ admissionId, canWrite = true }) {
         setMedErr('')
         try {
             const { data } = await listMedications(admissionId)
+            console.log(data, "listMedications");
             setMedRows(Array.isArray(data) ? data : [])
         } catch (e) {
             const msg = extractApiErrorMessage(e, 'Failed to load medications')
@@ -275,7 +306,7 @@ function MedicationsTab({ admissionId, canWrite = true }) {
         if (!admissionId) return
         try {
             const payload = {
-                allergies: meta.allergies || '',
+                allergic_to: meta.allergies || '',
                 diagnosis: meta.diagnosis || '',
                 weight_kg:
                     meta.weight_kg !== '' && !Number.isNaN(Number(meta.weight_kg))
@@ -294,22 +325,22 @@ function MedicationsTab({ admissionId, canWrite = true }) {
                     meta.bmi !== '' && !Number.isNaN(Number(meta.bmi))
                         ? Number(meta.bmi)
                         : NoneOrNull(meta.bmi),
-                diet_oral_fluid_per_day:
+                oral_fluid_per_day_ml:
                     meta.diet_oral_fluid_per_day !== '' &&
                         !Number.isNaN(Number(meta.diet_oral_fluid_per_day))
                         ? Number(meta.diet_oral_fluid_per_day)
                         : NoneOrNull(meta.diet_oral_fluid_per_day),
-                diet_salt_gm_per_day:
+                salt_gm_per_day:
                     meta.diet_salt_gm_per_day !== '' &&
                         !Number.isNaN(Number(meta.diet_salt_gm_per_day))
                         ? Number(meta.diet_salt_gm_per_day)
                         : NoneOrNull(meta.diet_salt_gm_per_day),
-                diet_calorie_per_day:
+                calorie_per_day_kcal:
                     meta.diet_calorie_per_day !== '' &&
                         !Number.isNaN(Number(meta.diet_calorie_per_day))
                         ? Number(meta.diet_calorie_per_day)
                         : NoneOrNull(meta.diet_calorie_per_day),
-                diet_protein_gm_per_day:
+                protein_gm_per_day:
                     meta.diet_protein_gm_per_day !== '' &&
                         !Number.isNaN(Number(meta.diet_protein_gm_per_day))
                         ? Number(meta.diet_protein_gm_per_day)
@@ -328,48 +359,48 @@ function MedicationsTab({ admissionId, canWrite = true }) {
 
     // ------------ HANDLERS: IV FLUIDS ------------
 
-    const handleIvChange = (field) => (e) => {
-        const value = e.target.value
-        setIvForm((s) => ({ ...s, [field]: value }))
-    }
+
 
     const addIv = async (e) => {
         e.preventDefault()
         if (!canWrite || !admissionId) return
+
         if (!ivForm.fluid.trim()) {
             toast.error('Please enter IV fluid')
             return
         }
+
         try {
             setIvSaving(true)
+
             const payload = {
-                date: ivForm.date || null,
+                ordered_datetime: toIsoSecs(ivForm.ordered_datetime),
                 fluid: ivForm.fluid.trim(),
-                additive: ivForm.additive || '',
-                dose: ivForm.dose || '',
-                rate_ml_per_hr:
-                    ivForm.rate_ml_per_hr && !Number.isNaN(Number(ivForm.rate_ml_per_hr))
-                        ? Number(ivForm.rate_ml_per_hr)
-                        : null,
-                start_time: ivForm.start_time || null,
-                stop_time: ivForm.stop_time || null,
-                remarks: ivForm.remarks || '',
+                additive: strOrNull(ivForm.additive),
+                dose_ml: numOrNull(ivForm.dose_ml),
+                rate_ml_per_hr: numOrNull(ivForm.rate_ml_per_hr),
+                start_datetime: toIsoSecs(ivForm.start_datetime),
+                stop_datetime: toIsoSecs(ivForm.stop_datetime),
+                remarks: strOrNull(ivForm.remarks),
             }
+
             await addIvFluid(admissionId, payload)
+
             setIvForm({
-                date: '',
+                ordered_datetime: '',
                 fluid: '',
                 additive: '',
-                dose: '',
+                dose_ml: '',
                 rate_ml_per_hr: '',
-                start_time: '',
-                stop_time: '',
+                start_datetime: '',
+                stop_datetime: '',
                 remarks: '',
             })
+
             await loadIvFluids()
             toast.success('IV fluid order added')
         } catch (e) {
-            const msg = extractApiErrorMessage(e, 'Failed to load medications')
+            const msg = extractApiErrorMessage(e, 'Failed to add IV fluid')
             toast.error(msg)
         } finally {
             setIvSaving(false)
@@ -407,8 +438,9 @@ function MedicationsTab({ admissionId, canWrite = true }) {
         try {
             setNurseSaving(true)
             const payload = {
-                name: nurseForm.name.trim(),
-                specimen: nurseForm.specimen || '',
+                admission_id: admissionId,
+                nurse_name: nurseForm.name.trim(),
+                specimen_sign: nurseForm.specimen || '',
                 emp_no: nurseForm.emp_no || '',
             }
             await addDrugChartNurse(admissionId, payload)
@@ -425,7 +457,7 @@ function MedicationsTab({ admissionId, canWrite = true }) {
 
     const removeNurse = async (row) => {
         if (!canWrite) return
-        const ok = window.confirm(`Remove nurse "${row.name}"?`)
+        const ok = window.confirm(`Remove nurse "${row.nurse_name}"?`)
         if (!ok) return
         try {
             await deleteDrugChartNurse(row.id)
@@ -454,7 +486,8 @@ function MedicationsTab({ admissionId, canWrite = true }) {
         try {
             setAuthSaving(true)
             const payload = {
-                date: authForm.date,
+                admission_id:admissionId,
+                auth_date: authForm.date,
                 remarks: authForm.remarks || '',
             }
             await addDoctorAuth(admissionId, payload)
@@ -586,6 +619,7 @@ function MedicationsTab({ admissionId, canWrite = true }) {
 
 
     const stopMed = async (row) => {
+        console.log(row, "roe");
         if (!canWrite) return
         if ((row.order_status || 'active') === 'stopped') return
 
@@ -873,118 +907,120 @@ function MedicationsTab({ admissionId, canWrite = true }) {
                 </div>
 
                 {canWrite && (
-                    <form
-                        onSubmit={addIv}
-                        className="grid gap-2 md:grid-cols-6"
-                    >
-                        <div>
+                    <form onSubmit={addIv} className="grid gap-2 md:grid-cols-12">
+                        <div className="md:col-span-3">
                             <label className="mb-1 block text-[11px] font-medium text-slate-600">
-                                Date
+                                Ordered date & time
                             </label>
                             <input
-                                type="date"
-                                className="input h-9 text-sm"
-                                value={ivForm.date}
-                                onChange={handleIvChange('date')}
+                                type="datetime-local"
+                                className="input h-9 text-sm w-full"
+                                value={ivForm.ordered_datetime}
+                                onChange={handleIvChange('ordered_datetime')}
                             />
                         </div>
-                        <div className="md:col-span-2">
+
+                        <div className="md:col-span-3">
                             <label className="mb-1 block text-[11px] font-medium text-slate-600">
                                 Fluid
                             </label>
                             <input
-                                className="input h-9 text-sm"
-                                placeholder="e.g. DNS 500 ml"
+                                className="input h-9 text-sm w-full"
+                                placeholder="e.g. DNS"
                                 value={ivForm.fluid}
                                 onChange={handleIvChange('fluid')}
                             />
                         </div>
-                        <div>
+
+                        <div className="md:col-span-2">
                             <label className="mb-1 block text-[11px] font-medium text-slate-600">
                                 Additive (if any)
                             </label>
                             <input
-                                className="input h-9 text-sm"
+                                className="input h-9 text-sm w-full"
                                 value={ivForm.additive}
                                 onChange={handleIvChange('additive')}
                             />
                         </div>
-                        <div>
+
+                        <div className="md:col-span-2">
                             <label className="mb-1 block text-[11px] font-medium text-slate-600">
-                                Dose
+                                Dose (ml)
                             </label>
                             <input
-                                className="input h-9 text-sm"
-                                placeholder="e.g. 1 amp"
-                                value={ivForm.dose}
-                                onChange={handleIvChange('dose')}
+                                type="text"
+                                inputMode="decimal"
+                                className="input h-9 text-sm w-full"
+                                placeholder="e.g. 500"
+                                value={ivForm.dose_ml}
+                                onChange={handleIvChange('dose_ml')}
                             />
                         </div>
-                        <div>
+
+                        <div className="md:col-span-2">
                             <label className="mb-1 block text-[11px] font-medium text-slate-600">
                                 Rate (ml/hr)
                             </label>
                             <input
                                 type="text"
                                 inputMode="decimal"
-                                className="input h-9 text-sm"
+                                className="input h-9 text-sm w-full"
                                 value={ivForm.rate_ml_per_hr}
                                 onChange={handleIvChange('rate_ml_per_hr')}
                             />
                         </div>
-                        <div>
-                            <label className="mb-1 block text-[11px] font-medium text-slate-600">
-                                Start time (hrs)
-                            </label>
-                            <input
-                                type="time"
-                                className="input h-9 text-sm"
-                                value={ivForm.start_time}
-                                onChange={handleIvChange('start_time')}
-                            />
-                        </div>
-                        <div>
-                            <label className="mb-1 block text-[11px] font-medium text-slate-600">
-                                Stop time (hrs)
-                            </label>
-                            <input
-                                type="time"
-                                className="input h-9 text-sm"
-                                value={ivForm.stop_time}
-                                onChange={handleIvChange('stop_time')}
-                            />
-                        </div>
+
                         <div className="md:col-span-3">
+                            <label className="mb-1 block text-[11px] font-medium text-slate-600">
+                                Start date & time
+                            </label>
+                            <input
+                                type="datetime-local"
+                                className="input h-9 text-sm w-full"
+                                value={ivForm.start_datetime}
+                                onChange={handleIvChange('start_datetime')}
+                            />
+                        </div>
+
+                        <div className="md:col-span-3">
+                            <label className="mb-1 block text-[11px] font-medium text-slate-600">
+                                Stop date & time
+                            </label>
+                            <input
+                                type="datetime-local"
+                                className="input h-9 text-sm w-full"
+                                value={ivForm.stop_datetime}
+                                onChange={handleIvChange('stop_datetime')}
+                            />
+                        </div>
+
+                        <div className="md:col-span-4">
                             <label className="mb-1 block text-[11px] font-medium text-slate-600">
                                 Remarks
                             </label>
                             <input
-                                className="input h-9 text-sm"
+                                className="input h-9 text-sm w-full"
                                 placeholder="Doctor sign / notes"
                                 value={ivForm.remarks}
                                 onChange={handleIvChange('remarks')}
                             />
                         </div>
-                        <div className="flex items-end justify-end">
-                            <button
-                                type="submit"
-                                className="btn w-full md:w-auto"
-                                disabled={ivSaving}
-                            >
+
+                        <div className="md:col-span-2 flex items-end justify-end">
+                            <button type="submit" className="btn w-full md:w-auto" disabled={ivSaving}>
                                 {ivSaving ? 'Saving…' : 'Add IV fluid'}
                             </button>
                         </div>
                     </form>
                 )}
-
                 <div className="overflow-auto rounded-xl border bg-slate-50">
                     <table className="w-full text-[11px] md:text-xs">
                         <thead>
                             <tr className="bg-slate-100 text-slate-600">
-                                <th className="px-2 py-2 text-left">Date</th>
+                                <th className="px-2 py-2 text-left">Ordered</th>
                                 <th className="px-2 py-2 text-left">Fluid</th>
                                 <th className="px-2 py-2 text-left">Additive</th>
-                                <th className="px-2 py-2 text-left">Dose</th>
+                                <th className="px-2 py-2 text-left">Dose (ml)</th>
                                 <th className="px-2 py-2 text-left">Rate (ml/hr)</th>
                                 <th className="px-2 py-2 text-left">Start</th>
                                 <th className="px-2 py-2 text-left">Stop</th>
@@ -992,23 +1028,25 @@ function MedicationsTab({ admissionId, canWrite = true }) {
                                 {canWrite && <th className="px-2 py-2" />}
                             </tr>
                         </thead>
+
                         <tbody>
                             {ivRows.length ? (
                                 ivRows.map((r) => (
                                     <tr key={r.id} className="border-t bg-white">
-                                        <td className="px-2 py-1">
-                                            {formatDate(r.date)}
-                                        </td>
+                                        <td className="px-2 py-1">{formatIST(r.ordered_datetime)}</td>
                                         <td className="px-2 py-1">{r.fluid || '—'}</td>
                                         <td className="px-2 py-1">{r.additive || '—'}</td>
-                                        <td className="px-2 py-1">{r.dose || '—'}</td>
+                                        <td className="px-2 py-1">
+                                            {r.dose_ml != null ? r.dose_ml : '—'}
+                                        </td>
                                         <td className="px-2 py-1">
                                             {r.rate_ml_per_hr != null ? r.rate_ml_per_hr : '—'}
                                         </td>
-                                        <td className="px-2 py-1">{r.start_time || '—'}</td>
-                                        <td className="px-2 py-1">{r.stop_time || '—'}</td>
+                                        <td className="px-2 py-1">{formatIST(r.start_datetime)}</td>
+                                        <td className="px-2 py-1">{formatIST(r.stop_datetime)}</td>
                                         <td className="px-2 py-1">{r.remarks || '—'}</td>
-                                        {canWrite && (
+
+                                        {/* {canWrite && (
                                             <td className="px-2 py-1 text-right">
                                                 <button
                                                     type="button"
@@ -1018,7 +1056,7 @@ function MedicationsTab({ admissionId, canWrite = true }) {
                                                     Remove
                                                 </button>
                                             </td>
-                                        )}
+                                        )} */}
                                     </tr>
                                 ))
                             ) : (
@@ -1415,10 +1453,10 @@ function MedicationsTab({ admissionId, canWrite = true }) {
                                 nurseRows.map((r, idx) => (
                                     <tr key={r.id} className="border-t bg-white">
                                         <td className="px-2 py-1">{idx + 1}</td>
-                                        <td className="px-2 py-1">{r.name || '—'}</td>
-                                        <td className="px-2 py-1">{r.specimen || '—'}</td>
+                                        <td className="px-2 py-1">{r.nurse_name || '—'}</td>
+                                        <td className="px-2 py-1">{r.specimen_sign || '—'}</td>
                                         <td className="px-2 py-1">{r.emp_no || '—'}</td>
-                                        {canWrite && (
+                                        {/* {canWrite && (
                                             <td className="px-2 py-1 text-right">
                                                 <button
                                                     type="button"
@@ -1428,7 +1466,7 @@ function MedicationsTab({ admissionId, canWrite = true }) {
                                                     Remove
                                                 </button>
                                             </td>
-                                        )}
+                                        )} */}
                                     </tr>
                                 ))
                             ) : (
@@ -1507,12 +1545,12 @@ function MedicationsTab({ admissionId, canWrite = true }) {
                                 authRows.map((r) => (
                                     <tr key={r.id} className="border-t bg-white">
                                         <td className="px-2 py-1">
-                                            {formatDate(r.date)}
+                                            {formatDate(r.auth_date)}
                                         </td>
                                         <td className="px-2 py-1">{r.remarks || '—'}</td>
                                         <td className="px-2 py-1">{r.doctor_name || '—'}</td>
                                         <td className="px-2 py-1">{r.doctor_sign || '—'}</td>
-                                        {canWrite && (
+                                        {/* {canWrite && (
                                             <td className="px-2 py-1 text-right">
                                                 <button
                                                     type="button"
@@ -1522,7 +1560,7 @@ function MedicationsTab({ admissionId, canWrite = true }) {
                                                     Remove
                                                 </button>
                                             </td>
-                                        )}
+                                        )} */}
                                     </tr>
                                 ))
                             ) : (

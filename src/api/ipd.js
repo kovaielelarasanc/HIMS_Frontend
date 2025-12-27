@@ -255,14 +255,14 @@ export const addIpdOrder = (admission_id, payload) =>
 // ---------------- IPD MEDICATIONS (ORDERS) ----------------
 
 export const listMedications = (admission_id) =>
-  API.get(`/ipd/admissions/${admission_id}/medications`)
+  API.get(`/ipd/admissions/${admission_id}/medications-order`)
 
 export const addMedication = (admission_id, payload) =>
-  API.post(`/ipd/admissions/${admission_id}/medications`, payload)
+  API.post(`/ipd/admissions/${admission_id}/medications-order`, payload)
 
 // Backend route: PUT /ipd/medications/{order_id}
 export const updateMedication = (order_id, payload) =>
-  API.put(`/ipd/medications/${order_id}`, payload)
+  API.put(`/ipd/medications-order/${order_id}`, payload)
 
 // ---------------- DRUG CHART META (HEADER) ----------------
 
@@ -540,7 +540,7 @@ export const addIpdFeedback = (admission_id, payload) =>
 
 
 
-export const addDressingTransfusion = (admission_id, payload) =>
-  API.post(`/ipd/admissions / ${admission_id} / dressing - transfusion, payload`)
+// export const addDressingTransfusion = (admission_id, payload) =>
+//   API.post(`/ipd/admissions/${admission_id}/dressing-transfusion`)
 
-export const listDressingTransfusions = (admission_id) => API.get(`/ipd/admissions/${admission_id}/dressing-transfusion`)
+// export const listDressingTransfusions = (admission_id) => API.get(`/ipd/admissions/${admission_id}/dressing-transfusion`)

@@ -27,7 +27,7 @@ import BedCharges from './tabs/BedCharges'
 // NEW TABS
 import AssessmentsTab from './tabs/Assessments'
 import MedicationsTab from './tabs/Medications'
-import DressingTransfusionTab from './tabs/DressingTransfusion'
+// import DressingTransfusionTab from './tabs/DressingTransfusion'
 import DischargeMedsTab from './tabs/DischargeMeds'
 import FeedbackTab from './tabs/Feedback'
 
@@ -73,6 +73,7 @@ import {
     AlertTriangle,
     X,
 } from 'lucide-react'
+import NursingProcedures from './nursing/NursingProcedures'
 
 // ---------------------------------------------------------------------
 // Helpers
@@ -554,7 +555,7 @@ const TABS = [
 
     { key: 'assessments', label: 'Assessments', el: AssessmentsTab, writePerm: 'ipd.nursing', icon: FileText },
     { key: 'medications', label: 'Medications / Drug Chart', el: MedicationsTab, writePerm: 'ipd.doctor', icon: Pill },
-    { key: 'dressing', label: 'Dressing / Transfusion', el: DressingTransfusionTab, writePerm: 'ipd.nursing', icon: Sparkles },
+    { key: 'nursing_procedures', label: 'Nursing Procedures', el: NursingProcedures, writePerm: 'ipd.nursing', icon: Sparkles },
     { key: 'discharge-meds', label: 'Discharge Meds', el: DischargeMedsTab, writePerm: 'ipd.doctor', icon: Pill },
 
     { key: 'bed-transfer', label: 'Bed / Transfer', el: BedTransferTab, writePerm: 'ipd.manage', icon: BedDouble },
@@ -567,7 +568,7 @@ const TABS = [
 
 const NAV_GROUPS = [
     { title: 'Overview', keys: ['dashboard', 'quick-orders', 'nursing', 'vitals', 'io'] },
-    { title: 'Clinical', keys: ['assessments', 'medications', 'dressing', 'discharge-meds'] },
+    { title: 'Clinical', keys: ['assessments', 'medications', 'nursing_procedures', 'discharge-meds'] },
     { title: 'Operations', keys: ['bed-transfer', 'referrals', 'discharge', 'charges', 'feedback'] },
 ]
 
@@ -786,36 +787,79 @@ export default function AdmissionDetail() {
     )
 
     const TopHeader = ({ onOpenNav }) => (
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-            {/* ✅ FIXED WRAP: left gets flex-1, right is shrink-0 */}
-            <div className="min-w-0 md:flex-1">
-                <h1 className="text-lg font-semibold text-slate-900 md:text-xl">IPD Admission</h1>
-                <p className="mt-0.5 text-[12px] text-slate-500">
-                    Premium clinical workspace • fast, clean, and audit-friendly
-                </p>
-            </div>
+        <>
+            {/* =========================
+              MOBILE ONLY
+              ========================= */}
+            <div className="md:hidden">
+                <div className="rounded-[28px] border border-slate-200/70 bg-white/85 px-3 py-1.5 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/75">
+                    <div className="flex items-center gap-2">
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={onOpenNav}
+                            className="h-9 w-9 rounded-2xl px-0"
+                        >
+                            <Menu className="h-4 w-4" />
+                            <span className="sr-only">Menu</span>
+                        </Button>
 
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end md:shrink-0">
-                <div className="flex items-center gap-2 sm:hidden">
-                    <Button type="button" variant="outline" className="rounded-2xl" onClick={onOpenNav}>
-                        <Menu className="h-4 w-4" />
-                        <span className="ml-2 text-sm">Menu</span>
-                    </Button>
+                        <div className="min-w-0 flex-1">
+                            <h1 className="truncate text-[15px] font-semibold text-slate-900">
+                                IPD Admission
+                            </h1>
+                        </div>
+
+                        {canManage && (
+                            <Button
+                                type="button"
+                                onClick={doCancel}
+                                className="h-9 rounded-2xl bg-rose-600 px-3 text-sm text-white shadow-sm hover:bg-rose-700"
+                            >
+                                Cancel
+                            </Button>
+                        )}
+                    </div>
                 </div>
-
-
-                {canManage && (
-                    <Button
-                        type="button"
-                        onClick={doCancel}
-                        className="h-10 rounded-2xl bg-rose-600 text-white shadow-sm hover:bg-rose-700"
-                    >
-                        Cancel
-                    </Button>
-                )}
             </div>
-        </div>
+
+            {/* =========================
+              WEB / TABLET (md+)
+              unchanged UI, just hidden on mobile
+              ========================= */}
+            <div className="hidden md:block">
+                <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                    {/* ✅ FIXED WRAP: left gets flex-1, right is shrink-0 */}
+                    <div className="min-w-0 md:flex-1">
+                        <h1 className="text-lg font-semibold text-slate-900 md:text-xl">IPD Admission</h1>
+                        <p className="mt-0.5 text-[12px] text-slate-500">
+                            Premium clinical workspace • fast, clean, and audit-friendly
+                        </p>
+                    </div>
+
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end md:shrink-0">
+                        <div className="flex items-center gap-2 sm:hidden">
+                            <Button type="button" variant="outline" className="rounded-2xl" onClick={onOpenNav}>
+                                <Menu className="h-4 w-4" />
+                                <span className="ml-2 text-sm">Menu</span>
+                            </Button>
+                        </div>
+
+                        {canManage && (
+                            <Button
+                                type="button"
+                                onClick={doCancel}
+                                className="h-10 rounded-2xl bg-rose-600 text-white shadow-sm hover:bg-rose-700"
+                            >
+                                Cancel
+                            </Button>
+                        )}
+                    </div>
+                </div>
+            </div>
+        </>
     )
+
 
 
 
