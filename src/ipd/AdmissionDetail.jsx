@@ -5,7 +5,7 @@ import { useCan } from '../hooks/useCan'
 import {
     getAdmission,
     cancelAdmission,
-    transferBed,
+    // transferBed,
     listBeds,
     getPatient,
 } from '../api/ipd'
@@ -74,6 +74,7 @@ import {
     X,
 } from 'lucide-react'
 import NursingProcedures from './nursing/NursingProcedures'
+import BedTransferTab from './tabs/BedTransferTab'
 
 // ---------------------------------------------------------------------
 // Helpers
@@ -453,93 +454,6 @@ function QuickOrdersTab({ admission, patient, beds }) {
     )
 }
 
-// ---------------------------------------------------------------------
-// Bed / Transfer tab
-// ---------------------------------------------------------------------
-function BedTransferTab({ admission, beds, canWrite, onTransfer }) {
-    const currentBed =
-        admission?.current_bed_id && beds.find((b) => b.id === admission.current_bed_id)
-
-    return (
-        <div className="space-y-4">
-            <Card className="rounded-3xl border-0 bg-gradient-to-r from-sky-50 via-white to-violet-50 shadow-sm">
-                <CardHeader className="pb-2">
-                    <CardTitle className="flex items-center gap-2 text-sm text-slate-900">
-                        <BedDouble className="h-4 w-4 text-sky-600" />
-                        Bed / Transfer
-                    </CardTitle>
-                    <div className="text-[12px] text-slate-600">
-                        View current bed and transfer the patient to another available bed with proper
-                        tracking (occupancy + billing).
-                    </div>
-                </CardHeader>
-                <CardContent className="pt-0">
-                    <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                        <div className="text-[12px] text-slate-600">
-                            Current bed:{' '}
-                            <span className="font-semibold text-slate-900">{currentBed?.code || '—'}</span>
-                            {currentBed?.ward_name ? (
-                                <span className="ml-1 text-slate-500">({currentBed.ward_name})</span>
-                            ) : null}
-                        </div>
-
-                        <Badge
-                            className={cn(
-                                'w-fit rounded-full',
-                                canWrite
-                                    ? 'bg-emerald-50 text-emerald-700 hover:bg-emerald-50'
-                                    : 'bg-slate-100 text-slate-700 hover:bg-slate-100',
-                            )}
-                        >
-                            {canWrite ? 'Transfer enabled' : 'View only'}
-                        </Badge>
-                    </div>
-                </CardContent>
-            </Card>
-
-            <Card className="rounded-3xl border-0 bg-white shadow-sm">
-                <CardHeader className="pb-2">
-                    <CardTitle className="text-sm text-slate-900">Transfer to another bed</CardTitle>
-                    {!canWrite && (
-                        <div className="flex items-start gap-2 rounded-2xl bg-amber-50 px-3 py-2 text-[12px] text-amber-800">
-                            <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
-                            You have view-only access. Contact IPD Incharge / Admin to perform transfers.
-                        </div>
-                    )}
-                </CardHeader>
-
-                <CardContent className="grid gap-4 md:grid-cols-[minmax(0,340px)_1fr]">
-                    <div className="rounded-2xl bg-slate-50 p-3">
-                        <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                            Select new bed
-                        </div>
-                        <WardRoomBedPicker
-                            value=""
-                            onChange={(bedId) => {
-                                if (!canWrite || !bedId) return
-                                onTransfer(bedId)
-                            }}
-                        />
-                        <div className="mt-3 text-[11px] text-slate-500">
-                            Only vacant beds can be selected.
-                        </div>
-                    </div>
-
-                    <div className="rounded-2xl bg-white p-3 md:p-4">
-                        <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                            Notes
-                        </div>
-                        <ul className="mt-2 list-disc space-y-1 pl-4 text-[12px] text-slate-600">
-                            <li>Transfer updates bed occupancy and subsequent bed charges automatically.</li>
-                            <li>Ensure the new bed type matches clinical needs (ICU / HDU / Ward etc.).</li>
-                            <li>Transfers are auditable for compliance and billing traceability.</li>
-                        </ul>
-                    </div>
-                </CardContent>
-            </Card>
-        </div>
-    )
-}
 
 // ---------------------------------------------------------------------
 // Tabs config (✅ added Dashboard + Quick Orders)
@@ -647,15 +561,15 @@ export default function AdmissionDetail() {
         }
     }
 
-    const doTransfer = async (newBedId) => {
-        if (!admission || !newBedId) return
-        try {
-            await transferBed(admission.id, { to_bed_id: Number(newBedId), reason: 'Transfer' })
-            await load()
-        } catch (e1) {
-            setError(e1?.response?.data?.detail || 'Transfer failed')
-        }
-    }
+    // const doTransfer = async (newBedId) => {
+    //     if (!admission || !newBedId) return
+    //     try {
+    //         await transferBed(admission.id, { to_bed_id: Number(newBedId), reason: 'Transfer' })
+    //         await load()
+    //     } catch (e1) {
+    //         setError(e1?.response?.data?.detail || 'Transfer failed')
+    //     }
+    // }
 
     if (!canView && !canManage) {
         return <div className="p-4 text-sm text-rose-700">Access denied (need ipd.view).</div>
@@ -987,7 +901,7 @@ export default function AdmissionDetail() {
                                                         patient={patient}
                                                         canWrite={canWriteThis}
                                                         beds={beds}
-                                                        onTransfer={doTransfer}
+                                                        // onTransfer={doTransfer}
                                                         onNavigateTab={setActive}
                                                     />
                                                 </div>

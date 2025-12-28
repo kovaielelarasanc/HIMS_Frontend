@@ -1,6 +1,8 @@
+// FILE: src/ipd/nursing/TransfusionModule.jsx
+
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { toast } from 'sonner'
-import { CalendarClock, Plus, AlertTriangle } from 'lucide-react'
+import { Plus, AlertTriangle, X, Pencil } from 'lucide-react'
 
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -72,22 +74,19 @@ function splitBP(bpStr) {
 function normalizeVitals(v) {
   const obj = safeJson(v, {}) || {}
   const pulse = obj.pulse ?? ''
-  const temp = obj.temp ?? ''
+  const temp = obj.temp ?? obj.temp_c ?? ''
   const rr = obj.rr ?? ''
   const spo2 = obj.spo2 ?? ''
 
-  // accept either:
-  // - bp: "120/80"
-  // - bp_sys + bp_dia
   const fromBp = splitBP(obj.bp)
-  const bp_sys = obj.bp_sys ?? fromBp.bp_sys ?? ''
-  const bp_dia = obj.bp_dia ?? fromBp.bp_dia ?? ''
+  const bp_sys = obj.bp_sys ?? obj.bp_systolic ?? fromBp.bp_sys ?? ''
+  const bp_dia = obj.bp_dia ?? obj.bp_diastolic ?? fromBp.bp_dia ?? ''
   const bp = bp_sys && bp_dia ? `${bp_sys}/${bp_dia}` : (obj.bp ?? '')
 
   return {
     bp_sys,
     bp_dia,
-    bp, // keep for backward compatibility in history
+    bp,
     pulse,
     temp,
     rr,
@@ -98,52 +97,42 @@ function normalizeVitals(v) {
 
 function vitalsForPayload(v) {
   const vv = normalizeVitals(v)
-  // Keep both bp + sys/dia so old + new code both work
   return {
     bp: vv.bp || (vv.bp_sys && vv.bp_dia ? `${vv.bp_sys}/${vv.bp_dia}` : ''),
-    bp_sys: vv.bp_sys,
-    bp_dia: vv.bp_dia,
-    pulse: vv.pulse,
-    temp: vv.temp,
-    rr: vv.rr,
-    spo2: vv.spo2,
+    bp_sys: vv.bp_sys ? Number(vv.bp_sys) : undefined,
+    bp_dia: vv.bp_dia ? Number(vv.bp_dia) : undefined,
+    bp_systolic: vv.bp_sys ? Number(vv.bp_sys) : undefined,     // compatibility
+    bp_diastolic: vv.bp_dia ? Number(vv.bp_dia) : undefined,     // compatibility
+    pulse: vv.pulse ? Number(vv.pulse) : undefined,
+    temp: vv.temp ? Number(vv.temp) : undefined,
+    temp_c: vv.temp ? Number(vv.temp) : undefined,
+    rr: vv.rr ? Number(vv.rr) : undefined,
+    spo2: vv.spo2 ? Number(vv.spo2) : undefined,
     notes: vv.notes || '',
   }
 }
 
-function normalizeRow(r) {
-  const pre = normalizeVitals(r?.pre_vitals)
-  const post = normalizeVitals(r?.post_vitals)
+function dtLocalValue(v) {
+  if (!v) return ''
+  const s = String(v)
+  return s.length >= 16 ? s.slice(0, 16) : s
+}
 
-  const mv = safeJson(r?.monitoring_vitals, [])
-  const monitoring_vitals = Array.isArray(mv)
-    ? mv.filter(Boolean).map((p) => {
-        const point = typeof p === 'object' ? p : safeJson(p, {})
-        return {
-          at: point?.at || point?.time || null,
-          ...normalizeVitals(point),
-        }
-      })
-    : []
-
-  return {
-    ...r,
-    pre_vitals: pre,
-    post_vitals: post,
-    monitoring_vitals,
-  }
+function displayUser(u, fallbackId) {
+  if (u?.name) return u.name
+  if (fallbackId) return `User #${fallbackId}`
+  return '—'
 }
 
 // ------------------------------
-// Vitals Grid (separate inputs)
+// Vitals Grid
 // ------------------------------
 function VitalsGrid({ value, onChange, title = 'Vitals' }) {
   const v = normalizeVitals(value)
-
   const set = (patch) => onChange?.({ ...v, ...patch })
 
   return (
-    <SectionCard title={title} subtitle="Separate fields — stored as an object.">
+    <SectionCard title={title} subtitle="Separate fields (safe) — stored in JSON.">
       <div className="grid gap-3 md:grid-cols-5">
         <Field label="BP (Sys)">
           <Input
@@ -236,10 +225,13 @@ export default function TransfusionModule({ admissionId, chips, alerts, canWrite
   const [rows, setRows] = useState([])
   const [submitting, setSubmitting] = useState(false)
 
+  // edit mode
+  const [editingId, setEditingId] = useState(null)
+
   const [editReasonOpen, setEditReasonOpen] = useState(false)
   const pendingUpdateRef = useRef(null)
 
-  const empty = {
+  const freshEmpty = () => ({
     component_type: '',
     bag_number: '',
     start_time: '',
@@ -248,13 +240,53 @@ export default function TransfusionModule({ admissionId, chips, alerts, canWrite
     post_vitals: normalizeVitals({}),
     reaction_occurred: false,
     reaction_notes: '',
+  })
+
+  const [form, setForm] = useState(freshEmpty())
+
+  const normalizeRow = (r) => {
+    const unit = safeJson(r?.unit, {}) || {}
+    const admin = safeJson(r?.administration, {}) || {}
+    const baseline = safeJson(r?.baseline_vitals, {}) || {}
+    const endVitals = safeJson(admin?.end_vitals, {}) || {}
+
+    const mv = safeJson(r?.monitoring_vitals, [])
+    const monitoring_vitals = Array.isArray(mv)
+      ? mv.filter(Boolean).map((p) => {
+        const point = typeof p === 'object' ? p : safeJson(p, {})
+        return {
+          at: point?.at || point?.time || null,
+          ...normalizeVitals(point),
+          notes: point?.notes ?? '',
+        }
+      })
+      : []
+
+    const reaction = safeJson(r?.reaction, {}) || {}
+
+    return {
+      ...r,
+      unit,
+      administration: admin,
+      baseline_vitals: baseline,
+      monitoring_vitals,
+
+      // UI-friendly mirrors:
+      component_type: unit?.component_type ?? '',
+      bag_number: unit?.bag_number ?? '',
+      start_time: admin?.start_time ?? null,
+      end_time: admin?.end_time ?? null,
+      pre_vitals: normalizeVitals(baseline),
+      post_vitals: normalizeVitals(endVitals),
+      reaction_occurred: !!reaction?.occurred,
+      reaction_notes: reaction?.notes ?? '',
+    }
   }
-  const [form, setForm] = useState(empty)
 
   const load = async () => {
     try {
       const data = await listTransfusions(admissionId)
-      const arr = Array.isArray(data) ? data : []
+      const arr = Array.isArray(data) ? data : (data?.items || data?.results || [])
       setRows(arr.map(normalizeRow))
     } catch (e) {
       toast.error(e?.message || 'Failed to load transfusions')
@@ -265,13 +297,12 @@ export default function TransfusionModule({ admissionId, chips, alerts, canWrite
     if (!admissionId) return
     load()
 
-    // draft restore
     const d = localStorage.getItem(draftKey(admissionId, 'transfusion'))
     if (d) {
       try {
         const parsed = JSON.parse(d)
         setForm({
-          ...empty,
+          ...freshEmpty(),
           ...parsed,
           pre_vitals: normalizeVitals(parsed?.pre_vitals),
           post_vitals: normalizeVitals(parsed?.post_vitals),
@@ -290,28 +321,49 @@ export default function TransfusionModule({ admissionId, chips, alerts, canWrite
     return () => clearTimeout(t)
   }, [form, admissionId])
 
-  const submit = async () => {
+  const clearEdit = () => {
+    setEditingId(null)
+    setForm(freshEmpty())
+    localStorage.removeItem(draftKey(admissionId, 'transfusion'))
+  }
+
+  const buildCreatePayload = () => ({
+    unit: {
+      component_type: form.component_type,
+      bag_number: form.bag_number,
+    },
+    administration: {
+      start_time: form.start_time ? toIso(form.start_time) : undefined,
+      end_time: form.end_time ? toIso(form.end_time) : null,
+      // ✅ store “post” vitals inside administration JSON (no DB migration needed)
+      end_vitals: vitalsForPayload(form.post_vitals),
+    },
+    baseline_vitals: vitalsForPayload(form.pre_vitals),
+    reaction: form.reaction_occurred
+      ? { occurred: true, notes: form.reaction_notes || '' }
+      : {},
+  })
+
+  const buildUpdatePayload = (reason) => ({
+    edit_reason: reason,
+    unit: {
+      component_type: form.component_type,
+      bag_number: form.bag_number,
+    },
+    administration: {
+      start_time: form.start_time ? toIso(form.start_time) : undefined,
+      end_time: form.end_time ? toIso(form.end_time) : null,
+      end_vitals: vitalsForPayload(form.post_vitals),
+    },
+    baseline_vitals: vitalsForPayload(form.pre_vitals),
+  })
+
+  const submitCreate = async () => {
     setSubmitting(true)
     try {
-      const payload = {
-        component_type: form.component_type,
-        bag_number: form.bag_number,
-        start_time: form.start_time ? toIso(form.start_time) : undefined,
-        end_time: form.end_time ? toIso(form.end_time) : null,
-
-        // ✅ OBJECT (not JSON string)
-        pre_vitals: vitalsForPayload(form.pre_vitals),
-        post_vitals: vitalsForPayload(form.post_vitals),
-
-        reaction_occurred: !!form.reaction_occurred,
-        reaction_notes: form.reaction_notes,
-      }
-
-      await createTransfusion(admissionId, payload)
-
+      await createTransfusion(admissionId, buildCreatePayload())
       toast.success('Transfusion saved')
-      localStorage.removeItem(draftKey(admissionId, 'transfusion'))
-      setForm(empty)
+      clearEdit()
       await load()
     } catch (e) {
       toast.error(e?.message || 'Save failed')
@@ -320,11 +372,12 @@ export default function TransfusionModule({ admissionId, chips, alerts, canWrite
     }
   }
 
-  const requestEdit = (row) => {
+  const requestUpdate = () => {
     pendingUpdateRef.current = async (reason) => {
       try {
-        await updateTransfusion(row.id, { ...row, edit_reason: reason })
+        await updateTransfusion(editingId, buildUpdatePayload(reason))
         toast.success('Updated')
+        clearEdit()
         await load()
       } catch (e) {
         toast.error(e?.message || 'Update failed')
@@ -333,21 +386,37 @@ export default function TransfusionModule({ admissionId, chips, alerts, canWrite
     setEditReasonOpen(true)
   }
 
+  const startEditFromRow = (r) => {
+    if (!canEdit) return
+    setEditingId(r.id)
+    setForm({
+      component_type: r.component_type || '',
+      bag_number: r.bag_number || '',
+      start_time: dtLocalValue(r.start_time || r?.administration?.start_time),
+      end_time: dtLocalValue(r.end_time || r?.administration?.end_time),
+      pre_vitals: normalizeVitals(r.pre_vitals || r?.baseline_vitals),
+      post_vitals: normalizeVitals(r.post_vitals || r?.administration?.end_vitals),
+      reaction_occurred: !!(r?.reaction?.occurred),
+      reaction_notes: r?.reaction?.notes || '',
+    })
+    toast.message('Edit mode enabled — update values and click “Update”.')
+    window.scrollTo({ top: 0, behavior: 'smooth' })
+  }
+
   const quickVitals = async (row) => {
     try {
-      // ✅ send a complete point (prevents undefined reads)
+      const pre = normalizeVitals(row.pre_vitals || row?.baseline_vitals)
       const point = {
         at: new Date().toISOString(),
-        bp: row?.post_vitals?.bp || row?.pre_vitals?.bp || '120/80',
-        bp_sys: row?.post_vitals?.bp_sys || row?.pre_vitals?.bp_sys || '120',
-        bp_dia: row?.post_vitals?.bp_dia || row?.pre_vitals?.bp_dia || '80',
-        pulse: row?.post_vitals?.pulse || '80',
-        temp: row?.post_vitals?.temp || '37.0',
-        rr: row?.post_vitals?.rr || '18',
-        spo2: row?.post_vitals?.spo2 || '98',
+        bp: pre.bp || '120/80',
+        bp_sys: pre.bp_sys ? Number(pre.bp_sys) : 120,
+        bp_dia: pre.bp_dia ? Number(pre.bp_dia) : 80,
+        pulse: pre.pulse ? Number(pre.pulse) : 80,
+        temp: pre.temp ? Number(pre.temp) : 37.0,
+        rr: pre.rr ? Number(pre.rr) : 18,
+        spo2: pre.spo2 ? Number(pre.spo2) : 98,
         notes: 'Stable',
       }
-
       await addTransfusionVital(row.id, { point })
       toast.success('Vitals logged')
       await load()
@@ -362,9 +431,10 @@ export default function TransfusionModule({ admissionId, chips, alerts, canWrite
     try {
       await markTransfusionReaction(row.id, {
         occurred: true,
+        started_at: new Date().toISOString(), // ✅ backend expects started_at
         symptoms: ['Fever'],
+        actions_taken: 'Flagged from UI',
         notes: 'Flagged from UI',
-        at: new Date().toISOString(),
       })
       toast.error('Reaction flagged')
       await load()
@@ -383,7 +453,7 @@ export default function TransfusionModule({ admissionId, chips, alerts, canWrite
     <>
       <ClinicalRecordWorkspace
         title="Blood Transfusion"
-        subtitle="Unit details + vitals + reaction flagging for patient safety."
+        subtitle="Unit details + baseline/monitoring vitals + reaction flagging (NABH patient safety)."
         patientChips={chips}
         alertsChips={
           alerts?.transfusion_needs_monitoring
@@ -391,19 +461,32 @@ export default function TransfusionModule({ admissionId, chips, alerts, canWrite
             : []
         }
         canWrite={canWrite}
-        permissionHint="Need ipd.nursing (or ipd.manage) to create transfusion records."
+        permissionHint="Need ipd.transfusion.create or ipd.nursing.create (or ipd.manage)."
         search={search}
         setSearch={setSearch}
         form={
           <div className="space-y-4">
-            <SectionCard title="Unit details" subtitle="Enter component and bag number correctly.">
+            {/* ✅ clear edit banner */}
+            {editingId ? (
+              <div className="rounded-2xl border bg-amber-50 p-3 flex items-center justify-between">
+                <div className="text-sm text-amber-900 flex items-center gap-2">
+                  <Pencil className="h-4 w-4" />
+                  Editing record #{editingId}
+                </div>
+                <Button variant="outline" className="rounded-xl" onClick={clearEdit}>
+                  <X className="h-4 w-4 mr-1" /> Cancel edit
+                </Button>
+              </div>
+            ) : null}
+
+            <SectionCard title="Unit details" subtitle="Component + bag number must match blood bank label.">
               <div className="grid gap-3 md:grid-cols-2">
                 <Field label="Component type">
                   <Input
                     className="h-10 rounded-xl"
                     value={form.component_type}
                     onChange={(e) => setForm({ ...form, component_type: e.target.value })}
-                    placeholder="e.g., PRBC / FFP / Platelets"
+                    placeholder="PRBC / FFP / Platelets"
                   />
                 </Field>
 
@@ -436,20 +519,19 @@ export default function TransfusionModule({ admissionId, chips, alerts, canWrite
               </div>
             </SectionCard>
 
-            {/* ✅ Separate inputs → object */}
             <VitalsGrid
-              title="Vitals (Pre)"
+              title="Baseline vitals (Pre)"
               value={form.pre_vitals}
               onChange={(v) => setForm({ ...form, pre_vitals: normalizeVitals(v) })}
             />
 
             <VitalsGrid
-              title="Vitals (Post)"
+              title="Completion vitals (Post)"
               value={form.post_vitals}
               onChange={(v) => setForm({ ...form, post_vitals: normalizeVitals(v) })}
             />
 
-            <SectionCard title="Reaction" subtitle="Flag reaction with notes (audit).">
+            <SectionCard title="Reaction (optional)" subtitle="Use only when reaction occurred. Otherwise keep off.">
               <div className="grid gap-3 md:grid-cols-2">
                 <ToggleRow
                   label="Reaction occurred"
@@ -470,9 +552,15 @@ export default function TransfusionModule({ admissionId, chips, alerts, canWrite
                 </div>
 
                 <div className="md:col-span-2 hidden md:flex justify-end gap-2">
-                  <Button className="rounded-xl" disabled={!canWrite || submitting} onClick={submit}>
-                    {submitting ? 'Saving…' : 'Save'}
-                  </Button>
+                  {!editingId ? (
+                    <Button className="rounded-xl" disabled={!canWrite || submitting} onClick={submitCreate}>
+                      {submitting ? 'Saving…' : 'Save'}
+                    </Button>
+                  ) : (
+                    <Button className="rounded-xl" disabled={!canEdit || submitting} onClick={requestUpdate}>
+                      {submitting ? 'Updating…' : 'Update'}
+                    </Button>
+                  )}
                 </div>
               </div>
             </SectionCard>
@@ -483,17 +571,25 @@ export default function TransfusionModule({ admissionId, chips, alerts, canWrite
             {filtered.length === 0 ? <EmptyState /> : null}
 
             {filtered.map((r) => {
-              const pre = normalizeVitals(r.pre_vitals)
-              const post = normalizeVitals(r.post_vitals)
+              const pre = normalizeVitals(r.pre_vitals || r?.baseline_vitals)
+              const post = normalizeVitals(r.post_vitals || r?.administration?.end_vitals)
               const points = Array.isArray(r.monitoring_vitals) ? r.monitoring_vitals.filter(Boolean) : []
+
+              const createdByName = displayUser(r.created_by, r.created_by_id)
+              const updatedByName = displayUser(r.updated_by, r.updated_by_id)
 
               return (
                 <TimelineCard
                   key={r.id}
                   title={`${r.component_type || 'Transfusion'} • ${r.bag_number || '—'}`}
-                  subtitle={`${fmtIST(r.start_time)} → ${r.end_time ? fmtIST(r.end_time) : '—'}`}
-                  status={r.reaction_occurred ? 'reaction' : 'completed'}
-                  metaLeft={<span>By: {r.created_by_id ?? r.notified_to ?? '—'}</span>}
+                  subtitle={`${r.start_time ? fmtIST(r.start_time) : '—'} → ${r.end_time ? fmtIST(r.end_time) : '—'}`}
+                  status={r.reaction_occurred ? 'reaction' : r.status || 'completed'}
+                  metaLeft={
+                    <span className="text-zinc-700">
+                      Created by: <span className="font-medium">{createdByName}</span>
+                      {r.created_at ? <span className="text-zinc-500"> • {fmtIST(r.created_at)}</span> : null}
+                    </span>
+                  }
                   metaRight={
                     <span className="inline-flex items-center gap-2">
                       <button
@@ -516,37 +612,35 @@ export default function TransfusionModule({ admissionId, chips, alerts, canWrite
                     </span>
                   }
                   canEdit={canEdit}
-                  onEdit={() => requestEdit(r)}
+                  onEdit={() => startEditFromRow(r)}
                   audit={
                     <AuditRow
                       createdAt={r.created_at || r.start_time}
-                      createdBy={r.created_by_id}
+                      createdBy={createdByName}
                       updatedAt={r.updated_at}
-                      updatedBy={r.updated_by_id}
+                      updatedBy={r.updated_at ? updatedByName : null}
                       editReason={r.edit_reason}
                     />
                   }
                 >
-                  {/* ✅ Readable summary (no JSON dump) */}
                   <div className="grid gap-3 md:grid-cols-2">
                     <div className="rounded-2xl border bg-white p-3">
-                      <div className="text-[11px] font-semibold text-zinc-600 mb-2">Pre vitals</div>
+                      <div className="text-[11px] font-semibold text-zinc-600 mb-2">Baseline vitals (Pre)</div>
                       <div className="text-sm text-zinc-700">
                         BP: {pre.bp || '—'} • Pulse: {pre.pulse || '—'} • Temp: {pre.temp || '—'} • RR: {pre.rr || '—'} • SpO₂: {pre.spo2 || '—'}
                       </div>
                     </div>
 
                     <div className="rounded-2xl border bg-white p-3">
-                      <div className="text-[11px] font-semibold text-zinc-600 mb-2">Post vitals</div>
+                      <div className="text-[11px] font-semibold text-zinc-600 mb-2">Completion vitals (Post)</div>
                       <div className="text-sm text-zinc-700">
                         BP: {post.bp || '—'} • Pulse: {post.pulse || '—'} • Temp: {post.temp || '—'} • RR: {post.rr || '—'} • SpO₂: {post.spo2 || '—'}
                       </div>
                     </div>
                   </div>
 
-                  {/* ✅ Monitoring points (safe map) */}
                   <div className="mt-3 space-y-2">
-                    <div className="text-[11px] font-semibold text-zinc-600">Monitoring</div>
+                    <div className="text-[11px] font-semibold text-zinc-600">Monitoring points</div>
                     {points.length === 0 ? (
                       <div className="text-xs text-zinc-500">No monitoring vitals logged.</div>
                     ) : (
@@ -579,7 +673,10 @@ export default function TransfusionModule({ admissionId, chips, alerts, canWrite
           localStorage.setItem(draftKey(admissionId, 'transfusion'), JSON.stringify(form))
           toast.success('Draft saved')
         }}
-        onSubmit={submit}
+        onSubmit={() => {
+          if (editingId) requestUpdate()
+          else submitCreate()
+        }}
         submitting={submitting}
       />
 

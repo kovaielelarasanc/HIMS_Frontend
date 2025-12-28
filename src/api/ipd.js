@@ -123,8 +123,21 @@ export const cancelAdmission = (id) =>
   API.patch(`/ipd/admissions/${id}/cancel`)
 
 // Bed transfer
-export const transferBed = (id, payload) =>
-  API.post(`/ipd/admissions/${id}/transfer`, payload)
+const unwrap = (res) => {
+  const payload = res?.data
+  if (!payload?.status) {
+    const msg = payload?.error?.msg || 'Something went wrong'
+    throw new Error(msg)
+  }
+  return payload.data
+}
+
+export const listTransfers = async (admissionId) => unwrap(await API.get(`/ipd/admissions/${admissionId}/transfers`))
+export const requestTransfer = async (admissionId, payload) => unwrap(await API.post(`/ipd/admissions/${admissionId}/transfers`, payload))
+export const approveTransfer = async (transferId, payload) => unwrap(await API.post(`/ipd/transfers/${transferId}/approve`, payload))
+export const assignTransferBed = async (transferId, payload) => unwrap(await API.post(`/ipd/transfers/${transferId}/assign`, payload))
+export const completeTransfer = async (transferId, payload) => unwrap(await API.post(`/ipd/transfers/${transferId}/complete`, payload))
+export const cancelTransfer = async (transferId, payload) => unwrap(await API.post(`/ipd/transfers/${transferId}/cancel`, payload))
 
 // My admissions (for logged-in doctor / nurse)
 export const listMyIpdAdmissions = (filters = {}) =>

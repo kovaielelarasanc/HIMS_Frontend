@@ -1,4 +1,5 @@
 // FILE: frontend/src/ipd/nursing/ui/ClinicalRecordWorkspace.jsx
+
 import { Search, Lock } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
@@ -22,12 +23,14 @@ export default function ClinicalRecordWorkspace({
       <div className="mb-4">
         <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
           <div>
-            <div className="text-xl md:text-2xl font-semibold tracking-tight text-zinc-900">{title}</div>
+            <div className="text-xl md:text-2xl font-semibold tracking-tight text-zinc-900">
+              {title}
+            </div>
             {subtitle ? <div className="text-sm text-zinc-500 mt-1">{subtitle}</div> : null}
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {patientChips.map((c) => (
+            {(patientChips || []).map((c) => (
               <Badge key={c} variant="secondary" className="rounded-full bg-zinc-100 text-zinc-700">
                 {c}
               </Badge>
@@ -71,14 +74,15 @@ export default function ClinicalRecordWorkspace({
                 <div className="relative flex-1">
                   <Search className="h-4 w-4 text-zinc-400 absolute left-3 top-1/2 -translate-y-1/2" />
                   <Input
-                    value={search}
-                    onChange={(e) => setSearch(e.target.value)}
+                    value={search ?? ''}
+                    onChange={(e) => setSearch?.(e.target.value)}
                     placeholder="Search notes, staff, status…"
                     className="h-10 pl-9 rounded-xl bg-white"
                   />
                 </div>
               </div>
             </CardHeader>
+
             <CardContent className="pt-2">{history}</CardContent>
           </Card>
         </div>
