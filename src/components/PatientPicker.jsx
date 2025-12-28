@@ -1,40 +1,93 @@
 // FILE: src/components/PatientPicker.jsx
-import React, { useEffect, useState } from "react";
-import { lookupPatients } from "../api/emr";
+import React, { useEffect, useMemo, useRef, useState } from "react"
+import { emrSearchPatients } from "../api/emr"
 
-export default function PatientPicker({ value, onChange, onSelect }) {
-    const [q, setQ] = useState("");
-    const [items, setItems] = useState([]);
-    const [loading, setLoading] = useState(false);
+const norm = (v) => String(v ?? "").toLowerCase().trim()
+
+const getDisplayName = (p) =>
+    (
+        p.name ||
+        [p.first_name, p.last_name].filter(Boolean).join(" ") ||
+        "Unnamed"
+    ).trim()
+
+const getHaystack = (p) => {
+    const name = getDisplayName(p)
+    return [
+        p.uhid,
+        p.phone,
+        p.mobile,
+        p.contact_no,
+        p.first_name,
+        p.last_name,
+        name,
+        p.id,
+    ]
+        .filter(Boolean)
+        .map(norm)
+        .join(" ")
+}
+
+export default function PatientPicker({ value, onChange, onSelect, limit = 20 }) {
+    const [q, setQ] = useState("")
+    const [items, setItems] = useState([])
+    const [loading, setLoading] = useState(false)
+
+    // prevent old responses overriding new searches
+    const reqSeq = useRef(0)
 
     useEffect(() => {
-        const run = async () => {
-            const term = (q || "").trim();
-            if (term.length < 2) {
-                setItems([]);
-                return;
-            }
-            setLoading(true);
-            try {
-                const { data } = await lookupPatients(term);
-                const list = data?.results || data?.items || data || [];
-                setItems(list);
-            } catch (err) {
-                console.error("lookupPatients failed", err);
-                setItems([]);
-            } finally {
-                setLoading(false);
-            }
-        };
+        const term = (q || "").trim()
 
-        const h = setTimeout(run, 300);
-        return () => clearTimeout(h);
-    }, [q]);
+        if (term.length < 2) {
+            setItems([])
+            setLoading(false)
+            return
+        }
+
+        const seq = ++reqSeq.current
+
+        const run = async () => {
+            setLoading(true)
+            try {
+                // ✅ pass object (not string)
+                const res = await emrSearchPatients({ q: term, limit, offset: 0 })
+
+                const data = res?.data
+                const list = Array.isArray(data)
+                    ? data
+                    : data?.items || data?.results || []
+
+                // ignore stale responses
+                if (seq !== reqSeq.current) return
+
+                // ✅ client-side filter (prevents "all patients" showing)
+                const t = norm(term)
+                const filtered = list.filter((p) => getHaystack(p).includes(t))
+
+                setItems(filtered)
+            } catch (err) {
+                if (seq !== reqSeq.current) return
+                console.error("emrSearchPatients failed", err)
+                setItems([])
+            } finally {
+                if (seq === reqSeq.current) setLoading(false)
+            }
+        }
+
+        const h = setTimeout(run, 300)
+        return () => clearTimeout(h)
+    }, [q, limit])
 
     function handlePick(p) {
-        // Primary callback = onChange (for forms), fallback = onSelect
-        const cb = onChange || onSelect;
-        if (cb) cb(p.id, p);
+        const cb = onChange || onSelect
+        if (cb) cb(p.id, p)
+
+        // optional: set input to selected patient label and close list
+        const uhid = p.uhid || `NH-${String(p.id ?? "").padStart(6, "0")}`
+        const name = getDisplayName(p)
+        setQ(`${uhid} — ${name}`)
+        setItems([])
     }
 
     return (
@@ -53,19 +106,22 @@ export default function PatientPicker({ value, onChange, onSelect }) {
                     </div>
                 )}
 
-                {!loading && items.length === 0 && (
+                {!loading && q.trim().length < 2 && (
                     <div className="px-3 py-2 text-[11px] text-slate-400">
                         Type at least 2 characters to search.
                     </div>
                 )}
 
+                {!loading && q.trim().length >= 2 && items.length === 0 && (
+                    <div className="px-3 py-2 text-[11px] text-slate-400">
+                        No patients found.
+                    </div>
+                )}
+
                 {items.map((p) => {
                     const uhid =
-                        p.uhid || `NH-${String(p.id ?? "").toString().padStart(6, "0")}`;
-                    const name =
-                        p.name ||
-                        [p.first_name, p.last_name].filter(Boolean).join(" ") ||
-                        "Unnamed";
+                        p.uhid || `NH-${String(p.id ?? "").padStart(6, "0")}`
+                    const name = getDisplayName(p)
 
                     return (
                         <button
@@ -79,10 +135,10 @@ export default function PatientPicker({ value, onChange, onSelect }) {
                             </span>
                             <span className="text-[11px] text-slate-500">
                                 {p.gender ? `${p.gender} • ` : ""}
-                                {p.phone || "No phone"}
+                                {p.phone || p.mobile || "No phone"}
                             </span>
                         </button>
-                    );
+                    )
                 })}
             </div>
 
@@ -93,5 +149,5 @@ export default function PatientPicker({ value, onChange, onSelect }) {
                 </div>
             )}
         </div>
-    );
+    )
 }

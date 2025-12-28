@@ -1,13 +1,12 @@
 // FILE: frontend/src/ot/tabs/SafetyTab.jsx
 import { useEffect, useMemo, useState } from 'react'
-import {
-    getSafetyChecklist,
-    createSafetyChecklist,
-    updateSafetyChecklist,
-} from '../../api/ot'
+import { toast } from 'sonner'
+import { motion, AnimatePresence } from 'framer-motion'
+import { ShieldCheck, CheckCircle2, AlertCircle, Clock3 } from 'lucide-react'
+
+import { getSafetyChecklist, updateSafetyChecklist } from '../../api/ot'
 import { useCan } from '../../hooks/useCan'
-import { ShieldCheck, CheckCircle2, AlertCircle } from 'lucide-react'
-import { motion } from 'framer-motion'
+import { formatIST } from '@/ipd/components/timeZONE'
 
 // ---------- helpers ----------
 function safeDate(value) {
@@ -16,19 +15,6 @@ function safeDate(value) {
     if (Number.isNaN(d.getTime())) return null
     return d
 }
-
-function formatDateTime(value) {
-    const d = safeDate(value)
-    if (!d) return '—'
-    return d.toLocaleString('en-IN', {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-    })
-}
-
 function toTimeInput(value) {
     if (!value) return ''
     if (/^\d{2}:\d{2}$/.test(value)) return value
@@ -36,7 +22,6 @@ function toTimeInput(value) {
     if (!Number.isNaN(d.getTime())) return d.toISOString().slice(11, 16)
     return ''
 }
-
 function nowHHMM() {
     const d = new Date()
     const hh = String(d.getHours()).padStart(2, '0')
@@ -44,12 +29,12 @@ function nowHHMM() {
     return `${hh}:${mm}`
 }
 
-// ---------- default phase objects ----------
+// ---------- defaults (must match backend schema keys) ----------
 const DEFAULT_SIGN_IN = {
     identity_site_procedure_consent_confirmed: false,
-    site_marked: '', // 'yes' | 'no' | 'na'
+    site_marked: '', // 'yes' | 'no' | 'na' | ''
     machine_and_medication_check_complete: false,
-    known_allergy: '', // 'yes' | 'no'
+    known_allergy: '', // 'yes' | 'no' | ''
     difficult_airway_or_aspiration_risk: '', // 'yes' | 'no' | ''
     blood_loss_risk_gt500ml_or_7mlkg: '', // 'yes' | 'no' | 'na' | ''
     equipment_assistance_available: false,
@@ -59,14 +44,14 @@ const DEFAULT_SIGN_IN = {
 const DEFAULT_TIME_OUT = {
     team_members_introduced: false,
     patient_name_procedure_incision_site_confirmed: false,
-    antibiotic_prophylaxis_given: '', // 'yes' | 'no' | 'na'
+    antibiotic_prophylaxis_given: '', // 'yes' | 'no' | 'na' | ''
     surgeon_critical_steps: '',
     surgeon_case_duration_estimate: '',
     surgeon_anticipated_blood_loss: '',
     anaesthetist_patient_specific_concerns: '',
     sterility_confirmed: false,
     equipment_issues_or_concerns: false,
-    essential_imaging_displayed: '', // 'yes' | 'no' | 'na'
+    essential_imaging_displayed: '', // 'yes' | 'no' | 'na' | ''
 }
 
 const DEFAULT_SIGN_OUT = {
@@ -89,81 +74,46 @@ const DEFAULT_FORM = () => ({
     sign_out: { ...DEFAULT_SIGN_OUT },
 })
 
-export default function SafetyTab({ caseId }) {
-    const canView =
-        useCan('ot.safety_checklist.view') ||
-        useCan('ot.cases.view') ||
-        useCan('ipd.view')
+function hydrateForm(s) {
+    const base = DEFAULT_FORM()
+    if (!s) return base
+    return {
+        sign_in_done: !!s.sign_in_done,
+        sign_in_time: toTimeInput(s.sign_in_time),
+        time_out_done: !!s.time_out_done,
+        time_out_time: toTimeInput(s.time_out_time),
+        sign_out_done: !!s.sign_out_done,
+        sign_out_time: toTimeInput(s.sign_out_time),
+        sign_in: { ...DEFAULT_SIGN_IN, ...(s.sign_in || {}) },
+        time_out: { ...DEFAULT_TIME_OUT, ...(s.time_out || {}) },
+        sign_out: { ...DEFAULT_SIGN_OUT, ...(s.sign_out || {}) },
+    }
+}
 
-    const canEdit =
-        useCan('ot.safety_checklist.update') ||
-        useCan('ot.safety_checklist.create') ||
-        useCan('ot.cases.update') ||
-        useCan('ipd.doctor')
+export default function SafetyTab({ caseId }) {
+    // ✅ match backend perms in your router
+    const canView = useCan('ot.safety.view') || useCan('ot.cases.view') || useCan('ipd.view')
+    const canEdit = useCan('ot.safety.manage') || useCan('ot.cases.update') || useCan('ipd.doctor')
 
     const [data, setData] = useState(null)
-    const [form, setForm] = useState(DEFAULT_FORM())
+    const [form, setForm] = useState(() => DEFAULT_FORM())
     const [loading, setLoading] = useState(false)
     const [saving, setSaving] = useState(false)
     const [error, setError] = useState(null)
-    const [success, setSuccess] = useState(null)
-
-    const banner = useMemo(() => {
-        if (error) {
-            return (
-                <div className="mb-3 flex items-start gap-2 rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
-                    <AlertCircle className="mt-0.5 h-3.5 w-3.5" />
-                    <span>{error}</span>
-                </div>
-            )
-        }
-        if (success) {
-            return (
-                <div className="mb-3 flex items-start gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-700">
-                    <CheckCircle2 className="mt-0.5 h-3.5 w-3.5" />
-                    <span>{success}</span>
-                </div>
-            )
-        }
-        return null
-    }, [error, success])
 
     const load = async () => {
-        if (!canView) return
+        if (!canView || !caseId) return
         try {
             setLoading(true)
             setError(null)
-            setSuccess(null)
 
-            const raw = await getSafetyChecklist(caseId)
-            const s = raw?.data ?? raw
-
-            if (!s) {
-                setData(null)
-                setForm(DEFAULT_FORM())
-                return
-            }
-
+            // ✅ returns null when 404 (not created yet)
+            const s = await getSafetyChecklist(caseId)
             setData(s)
-            setForm({
-                sign_in_done: !!s.sign_in_done,
-                sign_in_time: toTimeInput(s.sign_in_time),
-                time_out_done: !!s.time_out_done,
-                time_out_time: toTimeInput(s.time_out_time),
-                sign_out_done: !!s.sign_out_done,
-                sign_out_time: toTimeInput(s.sign_out_time),
-                sign_in: { ...DEFAULT_SIGN_IN, ...(s.sign_in || {}) },
-                time_out: { ...DEFAULT_TIME_OUT, ...(s.time_out || {}) },
-                sign_out: { ...DEFAULT_SIGN_OUT, ...(s.sign_out || {}) },
-            })
-        } catch (err) {
-            if (err?.response?.status === 404) {
-                setData(null)
-                setForm(DEFAULT_FORM())
-            } else {
-                console.error('Failed to load Surgical Safety checklist', err)
-                setError(err?.response?.data?.detail || 'Failed to load Surgical Safety checklist')
-            }
+            setForm(hydrateForm(s))
+        } catch (e) {
+            console.error(e)
+            setError(e?.response?.data?.detail || 'Failed to load safety checklist')
         } finally {
             setLoading(false)
         }
@@ -182,26 +132,19 @@ export default function SafetyTab({ caseId }) {
         )
     }
 
-    const setField = (field, value) => {
-        setForm((prev) => ({ ...prev, [field]: value }))
-    }
+    const progress = useMemo(() => {
+        const doneCount = [form.sign_in_done, form.time_out_done, form.sign_out_done].filter(Boolean).length
+        return { done: doneCount, total: 3 }
+    }, [form.sign_in_done, form.time_out_done, form.sign_out_done])
 
     const setPhaseField = (phase, field, value) => {
-        setForm((prev) => ({
-            ...prev,
-            [phase]: {
-                ...prev[phase],
-                [field]: value,
-            },
-        }))
+        setForm((prev) => ({ ...prev, [phase]: { ...prev[phase], [field]: value } }))
     }
 
-    const togglePhaseDone = (doneField, timeField) => (checked) => {
+    const toggleDone = (doneField, timeField) => (checked) => {
         setForm((prev) => {
             const next = { ...prev, [doneField]: checked }
-            if (checked && !prev[timeField]) {
-                next[timeField] = nowHHMM()
-            }
+            if (checked && !prev[timeField]) next[timeField] = nowHHMM()
             return next
         })
     }
@@ -212,7 +155,6 @@ export default function SafetyTab({ caseId }) {
 
         setSaving(true)
         setError(null)
-        setSuccess(null)
 
         try {
             const payload = {
@@ -227,18 +169,14 @@ export default function SafetyTab({ caseId }) {
                 sign_out: form.sign_out,
             }
 
-            if (data) await updateSafetyChecklist(caseId, payload)
-            else await createSafetyChecklist(caseId, payload)
-
-            await load()
-            setSuccess('Safety checklist saved.')
-        } catch (err) {
-            console.error('Failed to save Surgical Safety checklist', err)
-            const msg =
-                err?.response?.data?.detail ||
-                err?.message ||
-                'Failed to save Surgical Safety checklist'
-            setError(msg)
+            // ✅ Always PUT (backend will create if missing)
+            const saved = await updateSafetyChecklist(caseId, payload)
+            setData(saved)
+            setForm(hydrateForm(saved))
+            toast.success('Safety checklist saved')
+        } catch (e) {
+            console.error(e)
+            setError(e?.response?.data?.detail || e?.message || 'Failed to save safety checklist')
         } finally {
             setSaving(false)
         }
@@ -249,49 +187,64 @@ export default function SafetyTab({ caseId }) {
     return (
         <form
             onSubmit={handleSubmit}
-            className="space-y-4 rounded-2xl border border-slate-500 bg-white/90 px-3 py-3 shadow-sm md:px-4 md:py-4"
+            className="space-y-4 rounded-3xl border border-slate-200 bg-white/80 p-3 shadow-[0_18px_50px_rgba(2,6,23,0.08)] backdrop-blur-xl md:p-4"
         >
-            {/* Header */}
+            {/* Apple Header */}
             <motion.div
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                className="flex flex-wrap items-center justify-between gap-2"
+                className="flex flex-wrap items-start justify-between gap-3"
             >
-                <div className="flex items-center gap-2 text-sky-800">
-                    <div className="flex h-8 w-8 items-center justify-center rounded-full bg-sky-50 text-sky-700">
-                        <ShieldCheck className="h-4 w-4" />
+                <div className="flex items-start gap-3">
+                    <div className="mt-0.5 inline-flex h-10 w-10 items-center justify-center rounded-2xl bg-sky-50 text-sky-700">
+                        <ShieldCheck className="h-5 w-5" />
                     </div>
-                    <div className="flex flex-col">
-                        <span className="text-sm font-semibold md:text-base">
-                            WHO Surgical Safety Checklist
-                        </span>
-                        <span className="text-[11px] text-slate-500">
-                            Sign-in · Time-out · Sign-out
-                        </span>
+                    <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                            <div className="text-sm font-semibold text-slate-900 md:text-base">
+                                WHO Surgical Safety Checklist
+                            </div>
+                            <span className="rounded-full bg-slate-100 px-2.5 py-1 text-[11px] font-semibold text-slate-700">
+                                Progress: {progress.done}/{progress.total}
+                            </span>
+                            {lastStamp ? (
+                                <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
+                                    <CheckCircle2 className="h-3.5 w-3.5" />
+                                    Updated: {formatIST(lastStamp)}
+                                </span>
+                            ) : null}
+                        </div>
+                        <div className="mt-0.5 text-[12px] text-slate-500">
+                            Sign-in · Time-out · Sign-out (fast + clean workflow)
+                        </div>
                     </div>
                 </div>
 
-                {lastStamp && (
-                    <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
-                        <CheckCircle2 className="h-3.5 w-3.5" />
-                        Updated: {formatDateTime(lastStamp)}
-                    </span>
-                )}
+                {!canEdit ? (
+                    <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800">
+                        View only — no edit permission
+                    </div>
+                ) : null}
             </motion.div>
 
-            {banner}
-
-            {loading && (
-                <div className="space-y-2">
-                    <div className="h-10 w-full animate-pulse rounded-xl bg-slate-100" />
-                    <div className="h-10 w-full animate-pulse rounded-xl bg-slate-100" />
-                    <div className="h-10 w-full animate-pulse rounded-xl bg-slate-100" />
+            {/* Error */}
+            {error ? (
+                <div className="flex items-start gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+                    <AlertCircle className="mt-0.5 h-4 w-4" />
+                    <span>{error}</span>
                 </div>
-            )}
+            ) : null}
 
-            {!loading && (
+            {/* Loading */}
+            {loading ? (
+                <div className="space-y-2">
+                    <div className="h-12 w-full animate-pulse rounded-2xl bg-slate-100" />
+                    <div className="h-40 w-full animate-pulse rounded-2xl bg-slate-100" />
+                    <div className="h-40 w-full animate-pulse rounded-2xl bg-slate-100" />
+                </div>
+            ) : (
                 <>
-                    {/* Phase completion row */}
+                    {/* Phase Top Cards */}
                     <div className="grid gap-3 md:grid-cols-3">
                         <PhaseCard
                             title="Sign-in"
@@ -299,8 +252,8 @@ export default function SafetyTab({ caseId }) {
                             done={!!form.sign_in_done}
                             time={form.sign_in_time}
                             disabled={!canEdit}
-                            onDoneChange={togglePhaseDone('sign_in_done', 'sign_in_time')}
-                            onTimeChange={(v) => setField('sign_in_time', v)}
+                            onDoneChange={toggleDone('sign_in_done', 'sign_in_time')}
+                            onTimeChange={(v) => setForm((p) => ({ ...p, sign_in_time: v }))}
                         />
                         <PhaseCard
                             title="Time-out"
@@ -308,8 +261,8 @@ export default function SafetyTab({ caseId }) {
                             done={!!form.time_out_done}
                             time={form.time_out_time}
                             disabled={!canEdit}
-                            onDoneChange={togglePhaseDone('time_out_done', 'time_out_time')}
-                            onTimeChange={(v) => setField('time_out_time', v)}
+                            onDoneChange={toggleDone('time_out_done', 'time_out_time')}
+                            onTimeChange={(v) => setForm((p) => ({ ...p, time_out_time: v }))}
                         />
                         <PhaseCard
                             title="Sign-out"
@@ -317,13 +270,13 @@ export default function SafetyTab({ caseId }) {
                             done={!!form.sign_out_done}
                             time={form.sign_out_time}
                             disabled={!canEdit}
-                            onDoneChange={togglePhaseDone('sign_out_done', 'sign_out_time')}
-                            onTimeChange={(v) => setField('sign_out_time', v)}
+                            onDoneChange={toggleDone('sign_out_done', 'sign_out_time')}
+                            onTimeChange={(v) => setForm((p) => ({ ...p, sign_out_time: v }))}
                         />
                     </div>
 
                     {/* SIGN IN */}
-                    <Section title="Sign-in checklist">
+                    <Section title="Sign-in">
                         <div className="grid gap-3 md:grid-cols-2">
                             <ToggleRow
                                 label="Identity / site / procedure / consent confirmed"
@@ -337,7 +290,6 @@ export default function SafetyTab({ caseId }) {
                                 disabled={!canEdit}
                                 onChange={(v) => setPhaseField('sign_in', 'machine_and_medication_check_complete', v)}
                             />
-
                             <SelectPills
                                 label="Site marked"
                                 value={form.sign_in.site_marked || ''}
@@ -350,7 +302,6 @@ export default function SafetyTab({ caseId }) {
                                 ]}
                                 onChange={(v) => setPhaseField('sign_in', 'site_marked', v)}
                             />
-
                             <SelectPills
                                 label="Known allergy"
                                 value={form.sign_in.known_allergy || ''}
@@ -362,7 +313,6 @@ export default function SafetyTab({ caseId }) {
                                 ]}
                                 onChange={(v) => setPhaseField('sign_in', 'known_allergy', v)}
                             />
-
                             <SelectPills
                                 label="Difficult airway / aspiration risk"
                                 value={form.sign_in.difficult_airway_or_aspiration_risk || ''}
@@ -372,11 +322,8 @@ export default function SafetyTab({ caseId }) {
                                     { value: 'yes', label: 'Yes' },
                                     { value: 'no', label: 'No' },
                                 ]}
-                                onChange={(v) =>
-                                    setPhaseField('sign_in', 'difficult_airway_or_aspiration_risk', v)
-                                }
+                                onChange={(v) => setPhaseField('sign_in', 'difficult_airway_or_aspiration_risk', v)}
                             />
-
                             <SelectPills
                                 label="Blood loss risk > 500 ml / 7 ml/kg"
                                 value={form.sign_in.blood_loss_risk_gt500ml_or_7mlkg || ''}
@@ -387,11 +334,8 @@ export default function SafetyTab({ caseId }) {
                                     { value: 'no', label: 'No' },
                                     { value: 'na', label: 'N/A' },
                                 ]}
-                                onChange={(v) =>
-                                    setPhaseField('sign_in', 'blood_loss_risk_gt500ml_or_7mlkg', v)
-                                }
+                                onChange={(v) => setPhaseField('sign_in', 'blood_loss_risk_gt500ml_or_7mlkg', v)}
                             />
-
                             <ToggleRow
                                 label="Equipment / assistance available"
                                 checked={!!form.sign_in.equipment_assistance_available}
@@ -408,7 +352,7 @@ export default function SafetyTab({ caseId }) {
                     </Section>
 
                     {/* TIME OUT */}
-                    <Section title="Time-out checklist">
+                    <Section title="Time-out">
                         <div className="grid gap-3 md:grid-cols-2">
                             <ToggleRow
                                 label="Team members introduced"
@@ -424,7 +368,6 @@ export default function SafetyTab({ caseId }) {
                                     setPhaseField('time_out', 'patient_name_procedure_incision_site_confirmed', v)
                                 }
                             />
-
                             <SelectPills
                                 label="Antibiotic prophylaxis given"
                                 value={form.time_out.antibiotic_prophylaxis_given || ''}
@@ -437,7 +380,6 @@ export default function SafetyTab({ caseId }) {
                                 ]}
                                 onChange={(v) => setPhaseField('time_out', 'antibiotic_prophylaxis_given', v)}
                             />
-
                             <SelectPills
                                 label="Essential imaging displayed"
                                 value={form.time_out.essential_imaging_displayed || ''}
@@ -450,7 +392,6 @@ export default function SafetyTab({ caseId }) {
                                 ]}
                                 onChange={(v) => setPhaseField('time_out', 'essential_imaging_displayed', v)}
                             />
-
                             <TextArea
                                 label="Surgeon – critical steps"
                                 value={form.time_out.surgeon_critical_steps}
@@ -473,9 +414,10 @@ export default function SafetyTab({ caseId }) {
                                 label="Anaesthetist – patient concerns"
                                 value={form.time_out.anaesthetist_patient_specific_concerns}
                                 disabled={!canEdit}
-                                onChange={(v) => setPhaseField('time_out', 'anaesthetist_patient_specific_concerns', v)}
+                                onChange={(v) =>
+                                    setPhaseField('time_out', 'anaesthetist_patient_specific_concerns', v)
+                                }
                             />
-
                             <ToggleRow
                                 label="Sterility confirmed"
                                 checked={!!form.time_out.sterility_confirmed}
@@ -492,7 +434,7 @@ export default function SafetyTab({ caseId }) {
                     </Section>
 
                     {/* SIGN OUT */}
-                    <Section title="Sign-out checklist">
+                    <Section title="Sign-out">
                         <div className="grid gap-3 md:grid-cols-2">
                             <ToggleRow
                                 label="Procedure name confirmed"
@@ -512,12 +454,13 @@ export default function SafetyTab({ caseId }) {
                                 disabled={!canEdit}
                                 onChange={(v) => setPhaseField('sign_out', 'specimens_labelled_correctly', v)}
                             />
-
                             <TextArea
                                 label="Equipment problems to be addressed"
                                 value={form.sign_out.equipment_problems_to_be_addressed}
                                 disabled={!canEdit}
-                                onChange={(v) => setPhaseField('sign_out', 'equipment_problems_to_be_addressed', v)}
+                                onChange={(v) =>
+                                    setPhaseField('sign_out', 'equipment_problems_to_be_addressed', v)
+                                }
                             />
                             <TextArea
                                 label="Key concerns for recovery & management"
@@ -531,52 +474,63 @@ export default function SafetyTab({ caseId }) {
                     </Section>
 
                     {/* Save */}
-                    {canEdit && (
+                    {canEdit ? (
                         <div className="flex justify-end pt-1">
                             <button
                                 type="submit"
                                 disabled={saving}
-                                className="inline-flex items-center gap-1.5 rounded-full border border-sky-600 bg-sky-600 px-4 py-1.5 text-[12px] font-semibold text-white shadow-sm hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+                                className="inline-flex items-center gap-2 rounded-full bg-slate-900 px-5 py-2 text-[12px] font-semibold text-white shadow-sm hover:bg-black disabled:cursor-not-allowed disabled:opacity-60"
                             >
-                                {saving && (
-                                    <span className="h-3 w-3 animate-spin rounded-full border-[2px] border-white border-b-transparent" />
+                                {saving ? (
+                                    <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-white border-b-transparent" />
+                                ) : (
+                                    <Clock3 className="h-4 w-4 opacity-80" />
                                 )}
                                 Save safety checklist
                             </button>
                         </div>
-                    )}
+                    ) : null}
                 </>
             )}
         </form>
     )
 }
 
-/* ----------------- UI Components ----------------- */
+/* ----------------- UI Helpers ----------------- */
 
 function PhaseCard({ title, subtitle, done, time, onDoneChange, onTimeChange, disabled }) {
     return (
-        <div className="rounded-2xl border border-slate-500 bg-slate-50/80 px-3 py-2.5 text-xs">
-            <div className="mb-1 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
-                {title}{' '}
-                <span className="font-normal normal-case text-slate-500">({subtitle})</span>
+        <div
+            className={
+                'rounded-3xl border p-3 shadow-sm ' +
+                (done ? 'border-emerald-200 bg-emerald-50/60' : 'border-slate-200 bg-slate-50/60')
+            }
+        >
+            <div className="flex items-start justify-between gap-2">
+                <div>
+                    <div className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                        {title}
+                    </div>
+                    <div className="text-[12px] text-slate-600">{subtitle}</div>
+                </div>
+
+                <label className="inline-flex items-center gap-2">
+                    <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500 disabled:cursor-not-allowed disabled:opacity-60"
+                        checked={!!done}
+                        disabled={disabled}
+                        onChange={(e) => onDoneChange(e.target.checked)}
+                    />
+                    <span className="text-[11px] font-semibold text-slate-700">Done</span>
+                </label>
             </div>
 
-            <label className="flex items-center gap-2">
-                <input
-                    type="checkbox"
-                    className="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500 disabled:cursor-not-allowed disabled:opacity-60"
-                    checked={!!done}
-                    disabled={disabled}
-                    onChange={(e) => onDoneChange(e.target.checked)}
-                />
-                <span className="text-[11px] text-slate-800">Checklist completed</span>
-            </label>
-
-            <div className="mt-2 space-y-1">
-                <label className="text-[11px] text-slate-600">Time</label>
+            <div className="mt-2">
+                <div className="text-[11px] font-semibold text-slate-700">Time</div>
                 <input
                     type="time"
-                    className="w-full rounded-xl border border-slate-500 bg-white px-2.5 py-1.5 text-[11px] text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500 disabled:cursor-not-allowed disabled:opacity-60"
+                    className="mt-1 w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-900 outline-none focus:border-sky-300 focus:ring-1 focus:ring-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
                     value={time || ''}
                     disabled={disabled}
                     onChange={(e) => onTimeChange(e.target.value)}
@@ -588,8 +542,8 @@ function PhaseCard({ title, subtitle, done, time, onDoneChange, onTimeChange, di
 
 function Section({ title, children }) {
     return (
-        <div className="rounded-2xl border border-slate-500 bg-white/90 p-3 md:p-4">
-            <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-600">
+        <div className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm md:p-4">
+            <div className="mb-3 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                 {title}
             </div>
             {children}
@@ -599,8 +553,8 @@ function Section({ title, children }) {
 
 function ToggleRow({ label, checked, onChange, disabled }) {
     return (
-        <label className="flex cursor-pointer items-center justify-between gap-3 rounded-xl border border-slate-500 bg-slate-50 px-3 py-2 text-[11px] text-slate-800">
-            <span className="font-medium">{label}</span>
+        <label className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-[12px]">
+            <span className="font-medium text-slate-800">{label}</span>
             <input
                 type="checkbox"
                 className="h-4 w-4 rounded border-slate-300 text-sky-600 focus:ring-sky-500 disabled:cursor-not-allowed disabled:opacity-60"
@@ -614,7 +568,7 @@ function ToggleRow({ label, checked, onChange, disabled }) {
 
 function SelectPills({ label, value, options, onChange, disabled }) {
     return (
-        <div className="rounded-xl border border-slate-500 bg-slate-50 px-3 py-2">
+        <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
             <div className="mb-1 text-[11px] font-semibold text-slate-700">{label}</div>
             <div className="flex flex-wrap gap-2">
                 {options.map((opt) => {
@@ -629,7 +583,7 @@ function SelectPills({ label, value, options, onChange, disabled }) {
                                 'rounded-full px-3 py-1 text-[11px] font-semibold transition ' +
                                 (active
                                     ? 'bg-slate-900 text-white shadow-sm'
-                                    : 'bg-white text-slate-700 hover:bg-slate-100') +
+                                    : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200') +
                                 ' disabled:cursor-not-allowed disabled:opacity-60'
                             }
                         >
@@ -644,11 +598,11 @@ function SelectPills({ label, value, options, onChange, disabled }) {
 
 function TextArea({ label, value, onChange, disabled, rows = 2 }) {
     return (
-        <label className="flex flex-col gap-1 rounded-xl border border-slate-500 bg-slate-50 px-3 py-2">
+        <label className="flex flex-col gap-1 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
             <span className="text-[11px] font-semibold text-slate-700">{label}</span>
             <textarea
                 rows={rows}
-                className="w-full resize-none rounded-md border border-slate-500 bg-white px-3 py-2 text-[12px] text-slate-900 outline-none transition focus:border-slate-400 focus:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                className="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2 text-[12px] text-slate-900 outline-none focus:border-sky-300 focus:ring-1 focus:ring-sky-200 disabled:cursor-not-allowed disabled:opacity-60"
                 value={value ?? ''}
                 disabled={disabled}
                 onChange={(e) => onChange(e.target.value)}

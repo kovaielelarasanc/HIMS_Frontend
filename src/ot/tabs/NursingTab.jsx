@@ -9,6 +9,7 @@ import {
     createNursingRecord,
     updateNursingRecord,
 } from '../../api/ot'
+import { formatIST } from '@/ipd/components/timeZONE'
 
 // ---------- helpers ----------
 
@@ -263,7 +264,7 @@ function NursingTab({ caseId }) {
                 {lastStamp && (
                     <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2.5 py-1 text-[11px] font-medium text-emerald-700">
                         <CheckCircle2 className="h-3.5 w-3.5" />
-                        Updated: {formatDateTime(lastStamp)}
+                        Updated: {formatIST(lastStamp)}
                     </span>
                 )}
             </motion.div>

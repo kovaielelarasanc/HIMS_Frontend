@@ -1,1000 +1,1159 @@
-// FILE: frontend/src/ot/OtMastersPage.jsx
-import { useEffect, useMemo, useState } from 'react'
+// FILE: frontend/src/ot/OtMasters.jsx
+import { useEffect, useMemo, useState, useCallback } from 'react'
+import { toast } from 'sonner'
 import {
-    listOtSpecialities,
-    createOtSpeciality,
-    updateOtSpeciality,
-    deleteOtSpeciality,
+    Plus,
+    RefreshCw,
+    Pencil,
+    Trash2,
+    Search,
+    Filter,
+    Stethoscope,
+    Building2,
+    Boxes,
+    Activity,
+    ShieldCheck,
+    Wrench,
+} from 'lucide-react'
+
+import { useCanAny } from '../hooks/useCan'
+
+import {
+    listOtSurgeries,
+    createOtSurgery,
+    updateOtSurgery,
+    deleteOtSurgery,
+    listOtTheaters,
+    createOtTheater,
+    updateOtTheater,
+    deleteOtTheater,
+    listOtInstruments,
+    createOtInstrument,
+    updateOtInstrument,
+    deleteOtInstrument,
+    listOtDevices,
+    createOtDevice,
+    updateOtDevice,
+    deleteOtDevice,
     listOtProcedures,
     createOtProcedure,
     updateOtProcedure,
     deleteOtProcedure,
-} from '../api/ot'
+    listOtSpecialities,
+    createOtSpeciality,
+    updateOtSpeciality,
+    deleteOtSpeciality,
+    listOtEquipment,
+    createOtEquipment,
+    updateOtEquipment,
+    deleteOtEquipment,
+} from '../api/otMasters'
 
-import {
-    Beaker,
-    Sparkles,
-    Search,
-    Plus,
-    Pencil,
-    Trash2,
-    X,
-    AlertTriangle,
-} from 'lucide-react'
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Badge } from '@/components/ui/badge'
+import { Separator } from '@/components/ui/separator'
+import { Skeleton } from '@/components/ui/skeleton'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
+import { Textarea } from '@/components/ui/textarea'
+import { Checkbox } from '@/components/ui/checkbox'
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
 
-// small helper
-const toBool = (v) => v === true || v === 'true' || v === 1 || v === '1'
+/* =========================================================
+   Helpers
+   ========================================================= */
+const money = (v) => {
+    const n = Number(v || 0)
+    try {
+        return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(n)
+    } catch {
+        return `₹ ${n.toFixed(2)}`
+    }
+}
 
-// ---------------------------------------------------------------------
-// Generic modal shell
-// ---------------------------------------------------------------------
-function ModalShell({ open, title, subtitle, onClose, children }) {
-    if (!open) return null
+const cx = (...a) => a.filter(Boolean).join(' ')
+
+// sentinel for Radix Select "None" option (Radix forbids empty string for SelectItem)
+const NONE = '__NONE__'
+
+function Pill({ children, variant = 'default' }) {
     return (
-        <div className="fixed inset-0 z-40 flex items-center justify-center bg-slate-900/40 backdrop-blur-sm">
-            <div className="relative w-full max-w-2xl rounded-2xl bg-white shadow-xl">
-                <div className="flex items-start justify-between border-b px-5 py-3.5">
-                    <div>
-                        <h2 className="text-sm font-semibold text-slate-900">{title}</h2>
-                        {subtitle && (
-                            <p className="text-xs text-slate-500">{subtitle}</p>
-                        )}
-                    </div>
-                    <button
-                        type="button"
-                        onClick={onClose}
-                        className="rounded-full p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                    >
-                        <X className="h-4 w-4" />
-                    </button>
-                </div>
-                {children}
-            </div>
+        <Badge variant={variant} className="rounded-full px-2.5 py-0.5 text-[11px]">
+            {children}
+        </Badge>
+    )
+}
+
+function EmptyState({ title = 'No items', hint = 'Try changing filters or create a new one.' }) {
+    return (
+        <div className="py-10 text-center">
+            <div className="text-sm font-medium text-slate-900">{title}</div>
+            <div className="mt-1 text-xs text-slate-500">{hint}</div>
         </div>
     )
 }
 
-// ---------------------------------------------------------------------
-// Specialities Tab  (NO frontend permission checks)
-// ---------------------------------------------------------------------
-function OtSpecialitiesTab() {
-    const [items, setItems] = useState([])
-    const [loading, setLoading] = useState(false)
-    const [error, setError] = useState(null)
-    const [search, setSearch] = useState('')
-
-    const [modalOpen, setModalOpen] = useState(false)
-    const [editing, setEditing] = useState(null)
-    const [saving, setSaving] = useState(false)
-    const [formError, setFormError] = useState(null)
-    const [form, setForm] = useState({
-        name: '',
-        code: '',
-        description: '',
-        is_active: true,
-    })
-
-    const filtered = useMemo(() => {
-        const term = search.trim().toLowerCase()
-        if (!term) return items
-        return items.filter((it) =>
-            (it.name || '').toLowerCase().includes(term) ||
-            (it.code || '').toLowerCase().includes(term)
-        )
-    }, [items, search])
-
-    const load = async () => {
-        try {
-            setLoading(true)
-            setError(null)
-            const res = await listOtSpecialities({})
-            setItems(res.data || [])
-        } catch (err) {
-            console.error('Failed to load OT specialities', err)
-            const msg =
-                err?.response?.data?.detail ||
-                err?.message ||
-                'Failed to load OT specialities'
-            setError(msg)
-        } finally {
-            setLoading(false)
-        }
-    }
-
-    useEffect(() => {
-        load()
-    }, [])
-
-    const openCreate = () => {
-        setEditing(null)
-        setForm({
-            name: '',
-            code: '',
-            description: '',
-            is_active: true,
-        })
-        setFormError(null)
-        setModalOpen(true)
-    }
-
-    const openEdit = (item) => {
-        setEditing(item)
-        setForm({
-            name: item.name || '',
-            code: item.code || '',
-            description: item.description || '',
-            is_active: toBool(item.is_active),
-        })
-        setFormError(null)
-        setModalOpen(true)
-    }
-
-    const handleSave = async (e) => {
-        e.preventDefault()
-        if (!form.name) {
-            setFormError('Please enter speciality name')
-            return
-        }
-        if (!form.code) {
-            setFormError('Please enter code')
-            return
-        }
-        setSaving(true)
-        setFormError(null)
-        try {
-            const payload = {
-                name: form.name,
-                code: form.code,
-                description: form.description || null,
-                is_active: !!form.is_active,
-            }
-            if (editing) {
-                await updateOtSpeciality(editing.id, payload)
-            } else {
-                await createOtSpeciality(payload)
-            }
-            setModalOpen(false)
-            setEditing(null)
-            load()
-        } catch (err) {
-            console.error('Failed to save OT speciality', err)
-            const msg =
-                err?.response?.data?.detail ||
-                err?.message ||
-                'Failed to save speciality'
-            setFormError(msg)
-        } finally {
-            setSaving(false)
-        }
-    }
-
-    const handleDelete = async (item) => {
-        if (!window.confirm(`Delete speciality "${item.name}"?`)) return
-        try {
-            await deleteOtSpeciality(item.id)
-            load()
-        } catch (err) {
-            console.error('Failed to delete OT speciality', err)
-            alert('Failed to delete')
-        }
-    }
-
+/* =========================================================
+   Generic table shell
+   ========================================================= */
+function DataTable({
+    columns = [],
+    rows = [],
+    loading = false,
+    onEdit,
+    onDelete,
+    canUpdate,
+    canDelete,
+}) {
     return (
-        <>
-            <div className="flex flex-col gap-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 text-slate-700">
-                        <Beaker className="h-4 w-4" />
-                        <span className="text-sm font-semibold">OT Specialities</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className="relative">
-                            <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-slate-400" />
-                            <input
-                                type="text"
-                                className="w-44 rounded-lg border border-slate-500 bg-white pl-7 pr-2 py-1.5 text-xs text-slate-800 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                                placeholder="Search..."
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                            />
-                        </div>
-                        <button
-                            type="button"
-                            onClick={openCreate}
-                            className="inline-flex items-center gap-1.5 rounded-xl border border-sky-600 bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-700"
-                        >
-                            <Plus className="h-3.5 w-3.5" />
-                            New
-                        </button>
-                    </div>
-                </div>
+        <div className="rounded-2xl border bg-white overflow-x-auto shadow-sm">
+            <table className="min-w-full text-xs sm:text-sm">
+                <thead className="bg-slate-50 text-slate-600">
+                    <tr>
+                        {columns.map((c) => (
+                            <th
+                                key={c.key}
+                                className={cx(
+                                    'px-2 sm:px-3 py-2 text-left text-[11px] sm:text-[12px] font-medium whitespace-nowrap',
+                                    c.className
+                                )}
+                            >
+                                {c.header}
+                            </th>
+                        ))}
+                        {(canUpdate || canDelete) && (
+                            <th className="px-2 sm:px-3 py-2 text-right text-[11px] sm:text-[12px] font-medium whitespace-nowrap">
+                                Actions
+                            </th>
+                        )}
+                    </tr>
+                </thead>
 
-                {error && (
-                    <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
-                        {error}
-                    </div>
-                )}
+                <tbody>
+                    {loading && (
+                        <tr>
+                            <td className="px-3 py-4" colSpan={columns.length + 1}>
+                                <div className="grid gap-2">
+                                    <Skeleton className="h-8 w-full" />
+                                    <Skeleton className="h-8 w-full" />
+                                    <Skeleton className="h-8 w-full" />
+                                </div>
+                            </td>
+                        </tr>
+                    )}
 
-                <div className="overflow-hidden rounded-2xl border bg-white">
-                    <table className="min-w-full text-left text-xs text-slate-700">
-                        <thead className="bg-slate-50">
-                            <tr>
-                                <th className="px-4 py-2 text-[11px] font-semibold text-slate-500">
-                                    Code
-                                </th>
-                                <th className="px-4 py-2 text-[11px] font-semibold text-slate-500">
-                                    Name
-                                </th>
-                                <th className="px-4 py-2 text-[11px] font-semibold text-slate-500">
-                                    Description
-                                </th>
-                                <th className="px-4 py-2 text-[11px] font-semibold text-slate-500">
-                                    Active
-                                </th>
-                                <th className="px-4 py-2 text-right text-[11px] font-semibold text-slate-500">
-                                    Actions
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {loading && (
-                                <>
-                                    {Array.from({ length: 4 }).map((_, idx) => (
-                                        <tr key={idx} className="animate-pulse border-t">
-                                            {Array.from({ length: 5 }).map((__, cIdx) => (
-                                                <td key={cIdx} className="px-4 py-2">
-                                                    <div className="h-3 w-3/4 rounded bg-slate-100" />
-                                                </td>
-                                            ))}
-                                        </tr>
-                                    ))}
-                                </>
-                            )}
+                    {!loading && rows?.length === 0 && (
+                        <tr>
+                            <td className="px-3" colSpan={columns.length + 1}>
+                                <EmptyState />
+                            </td>
+                        </tr>
+                    )}
 
-                            {!loading && filtered.length === 0 && (
-                                <tr>
-                                    <td
-                                        colSpan={5}
-                                        className="px-4 py-6 text-center text-xs text-slate-500"
-                                    >
-                                        <div className="flex flex-col items-center justify-center gap-1">
-                                            <AlertTriangle className="h-4 w-4 text-amber-500" />
-                                            <span>No OT specialities found.</span>
-                                        </div>
+                    {!loading &&
+                        rows?.map((r) => (
+                            <tr key={r.id} className="border-t align-top hover:bg-slate-50/60">
+                                {columns.map((c) => (
+                                    <td key={c.key} className={cx('px-2 sm:px-3 py-2 whitespace-nowrap', c.tdClassName)}>
+                                        {c.render ? c.render(r) : r[c.key]}
                                     </td>
-                                </tr>
-                            )}
+                                ))}
 
-                            {!loading &&
-                                filtered.map((it) => (
-                                    <tr key={it.id} className="border-t">
-                                        <td className="px-4 py-2 text-xs font-medium text-slate-800">
-                                            {it.code}
-                                        </td>
-                                        <td className="px-4 py-2 text-xs text-slate-800">
-                                            {it.name}
-                                        </td>
-                                        <td className="px-4 py-2 text-xs text-slate-600">
-                                            {it.description || '—'}
-                                        </td>
-                                        <td className="px-4 py-2 text-xs">
-                                            <span
-                                                className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${it.is_active
-                                                    ? 'bg-emerald-50 text-emerald-700'
-                                                    : 'bg-slate-100 text-slate-500'
-                                                    }`}
+                                {(canUpdate || canDelete) && (
+                                    <td className="px-2 sm:px-3 py-2 text-right whitespace-nowrap">
+                                        {canUpdate && (
+                                            <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => onEdit?.(r)}>
+                                                <Pencil className="h-4 w-4" />
+                                            </Button>
+                                        )}
+                                        {canDelete && (
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="rounded-xl text-red-600 hover:text-red-600"
+                                                onClick={() => onDelete?.(r)}
                                             >
-                                                {it.is_active ? 'Active' : 'Inactive'}
-                                            </span>
-                                        </td>
-                                        <td className="px-4 py-2 text-right text-xs">
-                                            <div className="inline-flex items-center gap-1.5">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => openEdit(it)}
-                                                    className="inline-flex items-center gap-1 rounded-lg border border-slate-500 bg-white px-2 py-1 text-[11px] text-slate-700 hover:border-sky-400 hover:text-sky-700"
-                                                >
-                                                    <Pencil className="h-3 w-3" />
-                                                    Edit
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => handleDelete(it)}
-                                                    className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-white px-2 py-1 text-[11px] text-rose-600 hover:bg-rose-50"
-                                                >
-                                                    <Trash2 className="h-3 w-3" />
-                                                    Delete
-                                                </button>
-                                            </div>
-                                        </td>
-                                    </tr>
-                                ))}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            {/* Modal */}
-            <ModalShell
-                open={modalOpen}
-                title={editing ? 'Edit OT Speciality' : 'New OT Speciality'}
-                subtitle="Map OT workload by speciality for scheduling and reporting."
-                onClose={() => setModalOpen(false)}
-            >
-                <form onSubmit={handleSave}>
-                    <div className="grid grid-cols-1 gap-3 px-5 py-4">
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1">
-                                <label className="text-xs font-medium text-slate-700">
-                                    Code <span className="text-rose-500">*</span>
-                                </label>
-                                <input
-                                    type="text"
-                                    className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                                    value={form.code}
-                                    onChange={(e) =>
-                                        setForm((f) => ({ ...f, code: e.target.value }))
-                                    }
-                                />
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-xs font-medium text-slate-700">
-                                    Name <span className="text-rose-500">*</span>
-                                </label>
-                                <input
-                                    type="text"
-                                    className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                                    value={form.name}
-                                    onChange={(e) =>
-                                        setForm((f) => ({ ...f, name: e.target.value }))
-                                    }
-                                />
-                            </div>
-                        </div>
-
-                        <div className="space-y-1">
-                            <label className="text-xs font-medium text-slate-700">
-                                Description
-                            </label>
-                            <textarea
-                                rows={2}
-                                className="w-full resize-none rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                                value={form.description}
-                                onChange={(e) =>
-                                    setForm((f) => ({ ...f, description: e.target.value }))
-                                }
-                            />
-                        </div>
-
-                        <div className="flex items-center gap-2">
-                            <input
-                                id="ot_spec_active"
-                                type="checkbox"
-                                className="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-                                checked={!!form.is_active}
-                                onChange={(e) =>
-                                    setForm((f) => ({ ...f, is_active: e.target.checked }))
-                                }
-                            />
-                            <label
-                                htmlFor="ot_spec_active"
-                                className="text-xs text-slate-700"
-                            >
-                                Active
-                            </label>
-                        </div>
-
-                        {formError && (
-                            <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
-                                {formError}
-                            </div>
-                        )}
-                    </div>
-
-                    <div className="flex items-center justify-end gap-2 border-t px-5 py-3">
-                        <button
-                            type="button"
-                            onClick={() => setModalOpen(false)}
-                            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-500 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                            disabled={saving}
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            className="inline-flex items-center gap-1.5 rounded-xl border border-sky-600 bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-700 disabled:opacity-60"
-                            disabled={saving}
-                        >
-                            {saving && (
-                                <span className="h-3 w-3 animate-spin rounded-full border-[2px] border-white border-b-transparent" />
-                            )}
-                            Save
-                        </button>
-                    </div>
-                </form>
-            </ModalShell>
-        </>
+                                                <Trash2 className="h-4 w-4" />
+                                            </Button>
+                                        )}
+                                    </td>
+                                )}
+                            </tr>
+                        ))}
+                </tbody>
+            </table>
+        </div>
     )
 }
 
-// ---------------------------------------------------------------------
-// Procedures Tab (NO frontend permission checks)
-// ---------------------------------------------------------------------
-function OtProceduresTab() {
-    const [items, setItems] = useState([])
+/* =========================================================
+   Main page
+   ========================================================= */
+export default function OtMasters() {
+    // =========================================================
+    // Permissions
+    // =========================================================
+    const canViewAny = useCanAny([
+        'ot.masters.view',
+        'ot.procedures.view',
+        'ot.theaters.view',
+        'ot.instruments.view',
+        'ot.devices.view',
+        'ot.specialities.view',
+        'ot.equipment.view',
+        'ot.surgeries.view',
+    ])
+
+    const perms = {
+        procedures: {
+            view: useCanAny(['ot.masters.view', 'ot.procedures.view']),
+            create: useCanAny(['ot.masters.manage', 'ot.procedures.create']),
+            update: useCanAny(['ot.masters.manage', 'ot.procedures.update']),
+            delete: useCanAny(['ot.masters.manage', 'ot.procedures.delete']),
+        },
+        theaters: {
+            view: useCanAny(['ot.masters.view', 'ot.theaters.view']),
+            create: useCanAny(['ot.masters.create', 'ot.theaters.create']),
+            update: useCanAny(['ot.masters.update', 'ot.theaters.update']),
+            delete: useCanAny(['ot.masters.delete', 'ot.theaters.delete']),
+        },
+        instruments: {
+            view: useCanAny(['ot.masters.view', 'ot.instruments.view']),
+            create: useCanAny(['ot.masters.create', 'ot.instruments.create']),
+            update: useCanAny(['ot.masters.update', 'ot.instruments.update']),
+            delete: useCanAny(['ot.masters.delete', 'ot.instruments.delete']),
+        },
+        devices: {
+            view: useCanAny(['ot.masters.view', 'ot.devices.view']),
+            create: useCanAny(['ot.masters.create', 'ot.devices.create']),
+            update: useCanAny(['ot.masters.update', 'ot.devices.update']),
+            delete: useCanAny(['ot.masters.delete', 'ot.devices.delete']),
+        },
+        specialities: {
+            view: useCanAny(['ot.masters.view', 'ot.specialities.view']),
+            create: useCanAny(['ot.masters.create', 'ot.specialities.create']),
+            update: useCanAny(['ot.masters.update', 'ot.specialities.update']),
+            delete: useCanAny(['ot.masters.delete', 'ot.specialities.delete']),
+        },
+        equipment: {
+            view: useCanAny(['ot.masters.view', 'ot.equipment.view']),
+            create: useCanAny(['ot.masters.create', 'ot.equipment.create']),
+            update: useCanAny(['ot.masters.update', 'ot.equipment.update']),
+            delete: useCanAny(['ot.masters.delete', 'ot.equipment.delete']),
+        },
+        surgeries: {
+            view: useCanAny(['ot.masters.view', 'ot.surgeries.view']),
+            create: useCanAny(['ot.masters.create', 'ot.surgeries.create']),
+            update: useCanAny(['ot.masters.update', 'ot.surgeries.update']),
+            delete: useCanAny(['ot.masters.delete', 'ot.surgeries.delete']),
+        },
+    }
+
+    // =========================================================
+    // Shared UI state
+    // =========================================================
+    const [tab, setTab] = useState('procedures')
     const [loading, setLoading] = useState(false)
-    const [error, setError] = useState(null)
-    const [search, setSearch] = useState('')
+    const [q, setQ] = useState('')
+    const [activeOnly, setActiveOnly] = useState(true)
 
-    // For speciality dropdown
+    // options for procedure form
     const [specialities, setSpecialities] = useState([])
-    const [specLoading, setSpecLoading] = useState(false)
 
-    const [modalOpen, setModalOpen] = useState(false)
+    // rows per tab
+    const [rows, setRows] = useState([])
+
+    // =========================================================
+    // Dialog state
+    // =========================================================
+    const [open, setOpen] = useState(false)
+    const [mode, setMode] = useState('create') // create | edit
     const [editing, setEditing] = useState(null)
-    const [saving, setSaving] = useState(false)
-    const [formError, setFormError] = useState(null)
-    const [form, setForm] = useState({
-        code: '',
-        name: '',
-        speciality_id: '',
-        duration_hours: '',
-        duration_minutes: '',
-        rate_per_hour: '',
-        description: '',
-        is_active: true,
-    })
 
-    const filtered = useMemo(() => {
-        const term = search.trim().toLowerCase()
-        if (!term) return items
-        return items.filter((it) => {
-            const name = (it.name || '').toLowerCase()
-            const code = (it.code || '').toLowerCase()
-            const specName = (it.speciality?.name || '').toLowerCase()
-            return (
-                name.includes(term) ||
-                code.includes(term) ||
-                specName.includes(term)
-            )
-        })
-    }, [items, search])
+    // forms
+    const [form, setForm] = useState({})
 
-    const loadProcedures = async () => {
+    const closeDialog = () => {
+        setOpen(false)
+        setMode('create')
+        setEditing(null)
+        setForm({})
+    }
+
+    const openCreate = () => {
+        const p = perms[tab]
+        if (!p?.create) return toast.error('No permission to create')
+        setMode('create')
+        setEditing(null)
+
+        if (tab === 'procedures') {
+            setForm({
+                code: '',
+                name: '',
+                speciality_id: '', // keep "" for placeholder, do NOT use SelectItem value=""
+                default_duration_min: '',
+                rate_per_hour: '',
+                base_cost: '',
+                anesthesia_cost: '',
+                surgeon_cost: '',
+                petitory_cost: '',
+                asst_doctor_cost: '',
+                description: '',
+                is_active: true,
+            })
+        } else if (tab === 'theaters') {
+            setForm({ code: '', name: '', cost_per_hour: '', description: '', is_active: true })
+        } else if (tab === 'instruments') {
+            setForm({
+                code: '',
+                name: '',
+                available_qty: 0,
+                cost_per_qty: '',
+                uom: 'Nos',
+                description: '',
+                is_active: true,
+            })
+        } else if (tab === 'devices') {
+            setForm({ category: 'AIRWAY', code: '', name: '', cost: '', description: '', is_active: true })
+        } else if (tab === 'specialities') {
+            setForm({ code: '', name: '', description: '', is_active: true })
+        } else if (tab === 'equipment') {
+            setForm({ code: '', name: '', category: '', description: '', is_critical: false, is_active: true })
+        } else if (tab === 'surgeries') {
+            setForm({ code: '', name: '', default_cost: '', hourly_cost: '', description: '', active: true })
+        }
+
+        setOpen(true)
+    }
+
+    const openEdit = (r) => {
+        const p = perms[tab]
+        if (!p?.update) return toast.error('No permission to update')
+
+        setMode('edit')
+        setEditing(r)
+
+        if (tab === 'procedures') {
+            setForm({
+                code: r.code || '',
+                name: r.name || '',
+                speciality_id: r.speciality_id ? String(r.speciality_id) : '',
+                default_duration_min: r.default_duration_min ?? '',
+                rate_per_hour: r.rate_per_hour ?? '',
+                base_cost: r.base_cost ?? '',
+                anesthesia_cost: r.anesthesia_cost ?? '',
+                surgeon_cost: r.surgeon_cost ?? '',
+                petitory_cost: r.petitory_cost ?? '',
+                asst_doctor_cost: r.asst_doctor_cost ?? '',
+                description: r.description || '',
+                is_active: !!r.is_active,
+            })
+        } else if (tab === 'theaters') {
+            setForm({
+                code: r.code || '',
+                name: r.name || '',
+                cost_per_hour: r.cost_per_hour ?? '',
+                description: r.description || '',
+                is_active: !!r.is_active,
+            })
+        } else if (tab === 'instruments') {
+            setForm({
+                code: r.code || '',
+                name: r.name || '',
+                available_qty: r.available_qty ?? 0,
+                cost_per_qty: r.cost_per_qty ?? '',
+                uom: r.uom || 'Nos',
+                description: r.description || '',
+                is_active: !!r.is_active,
+            })
+        } else if (tab === 'devices') {
+            setForm({
+                category: r.category || 'AIRWAY',
+                code: r.code || '',
+                name: r.name || '',
+                cost: r.cost ?? '',
+                description: r.description || '',
+                is_active: !!r.is_active,
+            })
+        } else if (tab === 'specialities') {
+            setForm({
+                code: r.code || '',
+                name: r.name || '',
+                description: r.description || '',
+                is_active: !!r.is_active,
+            })
+        } else if (tab === 'equipment') {
+            setForm({
+                code: r.code || '',
+                name: r.name || '',
+                category: r.category || '',
+                description: r.description || '',
+                is_critical: !!r.is_critical,
+                is_active: !!r.is_active,
+            })
+        } else if (tab === 'surgeries') {
+            setForm({
+                code: r.code || '',
+                name: r.name || '',
+                default_cost: r.default_cost ?? '',
+                hourly_cost: r.hourly_cost ?? '',
+                description: r.description || '',
+                active: !!r.active,
+            })
+        }
+
+        setOpen(true)
+    }
+
+    const onDelete = async (r) => {
+        const p = perms[tab]
+        if (!p?.delete) return toast.error('No permission to delete')
+
+        const ok = confirm('Are you sure you want to delete / deactivate this item?')
+        if (!ok) return
+
         try {
-            setLoading(true)
-            setError(null)
-            const res = await listOtProcedures({})
-            setItems(res.data || [])
-        } catch (err) {
-            console.error('Failed to load OT procedures', err)
-            const msg =
-                err?.response?.data?.detail ||
-                err?.message ||
-                'Failed to load OT procedures'
-            setError(msg)
+            if (tab === 'procedures') await deleteOtProcedure(r.id)
+            if (tab === 'theaters') await deleteOtTheater(r.id)
+            if (tab === 'instruments') await deleteOtInstrument(r.id)
+            if (tab === 'devices') await deleteOtDevice(r.id)
+            if (tab === 'specialities') await deleteOtSpeciality(r.id)
+            if (tab === 'equipment') await deleteOtEquipment(r.id)
+            if (tab === 'surgeries') await deleteOtSurgery(r.id)
+
+            toast.success('Deleted')
+            await load()
+        } catch (e) {
+            toast.error(e?.response?.data?.detail || 'Delete failed')
+        }
+    }
+
+    // =========================================================
+    // Loaders
+    // =========================================================
+    const loadSpecialities = useCallback(async () => {
+        try {
+            const { data } = await listOtSpecialities({ active: true })
+            setSpecialities(data || [])
+        } catch {
+            // silent
+        }
+    }, [])
+
+    const load = useCallback(async () => {
+        const p = perms[tab]
+        if (!p?.view) return
+
+        setLoading(true)
+        try {
+            if (tab === 'procedures') {
+                const { data } = await listOtProcedures({
+                    search: q || undefined,
+                    is_active: activeOnly ? true : undefined,
+                    limit: 200,
+                })
+                setRows(data || [])
+            }
+
+            if (tab === 'theaters') {
+                const { data } = await listOtTheaters({
+                    search: q || undefined,
+                    active: activeOnly ? true : undefined,
+                    limit: 200,
+                })
+                setRows(data || [])
+            }
+
+            if (tab === 'instruments') {
+                const { data } = await listOtInstruments({
+                    search: q || undefined,
+                    active: activeOnly ? true : undefined,
+                    limit: 200,
+                })
+                setRows(data || [])
+            }
+
+            if (tab === 'devices') {
+                const { data } = await listOtDevices({
+                    search: q || undefined,
+                    active: activeOnly ? true : undefined,
+                    limit: 200,
+                })
+                setRows(data || [])
+            }
+
+            if (tab === 'specialities') {
+                const { data } = await listOtSpecialities({
+                    search: q || undefined,
+                    active: activeOnly ? true : undefined,
+                })
+                setRows(data || [])
+            }
+
+            if (tab === 'equipment') {
+                const { data } = await listOtEquipment({
+                    search: q || undefined,
+                    active: activeOnly ? true : undefined,
+                })
+                setRows(data || [])
+            }
+
+            if (tab === 'surgeries') {
+                const { data } = await listOtSurgeries({
+                    q: q || undefined,
+                    active: activeOnly ? true : undefined,
+                    page: 1,
+                    page_size: 200,
+                })
+                setRows(data?.items || [])
+            }
+        } catch (e) {
+            toast.error(e?.response?.data?.detail || 'Failed to load')
+            setRows([])
         } finally {
             setLoading(false)
         }
-    }
+    }, [tab, q, activeOnly]) // eslint-disable-line
 
-    const loadSpecialities = async () => {
+    // initial loads
+    useEffect(() => {
+        if (tab === 'procedures') loadSpecialities()
+        load()
+    }, [tab]) // eslint-disable-line
+
+    // ✅ Debounced reload when search / active filter changes (all devices friendly)
+    useEffect(() => {
+        const t = setTimeout(() => {
+            load()
+        }, 350)
+        return () => clearTimeout(t)
+    }, [q, activeOnly, tab]) // eslint-disable-line
+
+    // =========================================================
+    // Save
+    // =========================================================
+    const onSave = async () => {
+        const p = perms[tab]
+        const isEdit = mode === 'edit'
+        if (isEdit && !p?.update) return toast.error('No permission to update')
+        if (!isEdit && !p?.create) return toast.error('No permission to create')
+
         try {
-            setSpecLoading(true)
-            const res = await listOtSpecialities({})
-            setSpecialities(res.data || [])
-        } catch (err) {
-            console.error('Failed to load OT specialities for procedures', err)
-        } finally {
-            setSpecLoading(false)
+            if (tab === 'procedures') {
+                if (!form.code?.trim() || !form.name?.trim()) return toast.error('Code & Name required')
+
+                const payload = {
+                    code: form.code.trim(),
+                    name: form.name.trim(),
+                    speciality_id: form.speciality_id ? Number(form.speciality_id) : null,
+                    default_duration_min: form.default_duration_min === '' ? null : Number(form.default_duration_min || 0),
+                    rate_per_hour: form.rate_per_hour === '' ? null : Number(form.rate_per_hour || 0),
+                    description: form.description || null,
+                    is_active: !!form.is_active,
+
+                    base_cost: Number(form.base_cost || 0),
+                    anesthesia_cost: Number(form.anesthesia_cost || 0),
+                    surgeon_cost: Number(form.surgeon_cost || 0),
+                    petitory_cost: Number(form.petitory_cost || 0),
+                    asst_doctor_cost: Number(form.asst_doctor_cost || 0),
+                }
+
+                if (isEdit) await updateOtProcedure(editing.id, payload)
+                else await createOtProcedure(payload)
+            }
+
+            if (tab === 'theaters') {
+                if (!form.code?.trim() || !form.name?.trim()) return toast.error('Code & Name required')
+
+                const payload = {
+                    code: form.code.trim(),
+                    name: form.name.trim(),
+                    cost_per_hour: Number(form.cost_per_hour || 0),
+                    description: form.description || '',
+                    is_active: !!form.is_active,
+                }
+
+                if (isEdit) await updateOtTheater(editing.id, payload)
+                else await createOtTheater(payload)
+            }
+
+            if (tab === 'instruments') {
+                if (!form.code?.trim() || !form.name?.trim()) return toast.error('Code & Name required')
+
+                const payload = {
+                    code: form.code.trim(),
+                    name: form.name.trim(),
+                    available_qty: Number(form.available_qty || 0),
+                    cost_per_qty: Number(form.cost_per_qty || 0),
+                    uom: (form.uom || 'Nos').trim(),
+                    description: form.description || '',
+                    is_active: !!form.is_active,
+                }
+
+                if (isEdit) await updateOtInstrument(editing.id, payload)
+                else await createOtInstrument(payload)
+            }
+
+            if (tab === 'devices') {
+                if (!form.code?.trim() || !form.name?.trim()) return toast.error('Code & Name required')
+
+                const payload = {
+                    category: (form.category || 'AIRWAY').toUpperCase(),
+                    code: form.code.trim(),
+                    name: form.name.trim(),
+                    cost: Number(form.cost || 0),
+                    description: form.description || '',
+                    is_active: !!form.is_active,
+                }
+
+                if (isEdit) await updateOtDevice(editing.id, payload)
+                else await createOtDevice(payload)
+            }
+
+            if (tab === 'specialities') {
+                if (!form.code?.trim() || !form.name?.trim()) return toast.error('Code & Name required')
+
+                const payload = {
+                    code: form.code.trim(),
+                    name: form.name.trim(),
+                    description: form.description || null,
+                    is_active: !!form.is_active,
+                }
+
+                if (isEdit) await updateOtSpeciality(editing.id, payload)
+                else await createOtSpeciality(payload)
+            }
+
+            if (tab === 'equipment') {
+                if (!form.code?.trim() || !form.name?.trim()) return toast.error('Code & Name required')
+
+                const payload = {
+                    code: form.code.trim(),
+                    name: form.name.trim(),
+                    category: form.category || null,
+                    description: form.description || null,
+                    is_critical: !!form.is_critical,
+                    is_active: !!form.is_active,
+                }
+
+                if (isEdit) await updateOtEquipment(editing.id, payload)
+                else await createOtEquipment(payload)
+            }
+
+            if (tab === 'surgeries') {
+                if (!form.code?.trim() || !form.name?.trim()) return toast.error('Code & Name required')
+
+                const payload = {
+                    code: form.code.trim(),
+                    name: form.name.trim(),
+                    default_cost: Number(form.default_cost || 0),
+                    hourly_cost: Number(form.hourly_cost || 0),
+                    description: form.description || '',
+                    active: !!form.active,
+                }
+
+                if (isEdit) await updateOtSurgery(editing.id, payload)
+                else await createOtSurgery(payload)
+            }
+
+            toast.success(isEdit ? 'Updated' : 'Created')
+            closeDialog()
+            await load()
+        } catch (e) {
+            toast.error(e?.response?.data?.detail || 'Save failed')
         }
     }
 
-    useEffect(() => {
-        loadProcedures()
-        loadSpecialities()
+    // =========================================================
+    // Columns per tab
+    // =========================================================
+    const columns = useMemo(() => {
+        if (tab === 'procedures') {
+            return [
+                { key: 'code', header: 'Code' },
+                { key: 'name', header: 'Procedure' },
+                {
+                    key: 'total_fixed_cost',
+                    header: 'Total Fixed Cost',
+                    render: (r) => <span className="font-medium">{money(r.total_fixed_cost || 0)}</span>,
+                },
+                { key: 'anesthesia_cost', header: 'Anesthesia', render: (r) => money(r.anesthesia_cost || 0) },
+                { key: 'surgeon_cost', header: 'Surgeon', render: (r) => money(r.surgeon_cost || 0) },
+                { key: 'petitory_cost', header: 'Petitory', render: (r) => money(r.petitory_cost || 0) },
+                { key: 'asst_doctor_cost', header: 'Asst', render: (r) => money(r.asst_doctor_cost || 0) },
+                {
+                    key: 'is_active',
+                    header: 'Active',
+                    render: (r) => (r.is_active ? <Pill>Yes</Pill> : <Pill variant="secondary">No</Pill>),
+                },
+            ]
+        }
+
+        if (tab === 'theaters') {
+            return [
+                { key: 'code', header: 'Code' },
+                { key: 'name', header: 'Theater' },
+                { key: 'cost_per_hour', header: 'Cost / Hour', render: (r) => <span className="font-medium">{money(r.cost_per_hour || 0)}</span> },
+                { key: 'is_active', header: 'Active', render: (r) => (r.is_active ? <Pill>Yes</Pill> : <Pill variant="secondary">No</Pill>) },
+            ]
+        }
+
+        if (tab === 'instruments') {
+            return [
+                { key: 'code', header: 'Code' },
+                { key: 'name', header: 'Instrument' },
+                { key: 'available_qty', header: 'Available', render: (r) => <span className="font-medium">{r.available_qty ?? 0}</span> },
+                { key: 'uom', header: 'UOM', render: (r) => <Pill variant="secondary">{r.uom || 'Nos'}</Pill> },
+                { key: 'cost_per_qty', header: 'Cost / Qty', render: (r) => money(r.cost_per_qty || 0) },
+                { key: 'is_active', header: 'Active', render: (r) => (r.is_active ? <Pill>Yes</Pill> : <Pill variant="secondary">No</Pill>) },
+            ]
+        }
+
+        if (tab === 'devices') {
+            return [
+                { key: 'category', header: 'Category', render: (r) => <Pill variant="secondary">{r.category}</Pill> },
+                { key: 'code', header: 'Code' },
+                { key: 'name', header: 'Device' },
+                { key: 'cost', header: 'Cost', render: (r) => <span className="font-medium">{money(r.cost || 0)}</span> },
+                { key: 'is_active', header: 'Active', render: (r) => (r.is_active ? <Pill>Yes</Pill> : <Pill variant="secondary">No</Pill>) },
+            ]
+        }
+
+        if (tab === 'specialities') {
+            return [
+                { key: 'code', header: 'Code' },
+                { key: 'name', header: 'Speciality' },
+                { key: 'is_active', header: 'Active', render: (r) => (r.is_active ? <Pill>Yes</Pill> : <Pill variant="secondary">No</Pill>) },
+            ]
+        }
+
+        if (tab === 'equipment') {
+            return [
+                { key: 'code', header: 'Code' },
+                { key: 'name', header: 'Equipment' },
+                { key: 'category', header: 'Category', render: (r) => (r.category ? <Pill variant="secondary">{r.category}</Pill> : <span className="text-slate-400">—</span>) },
+                { key: 'is_critical', header: 'Critical', render: (r) => (r.is_critical ? <Pill>Yes</Pill> : <Pill variant="secondary">No</Pill>) },
+                { key: 'is_active', header: 'Active', render: (r) => (r.is_active ? <Pill>Yes</Pill> : <Pill variant="secondary">No</Pill>) },
+            ]
+        }
+
+        // surgeries
+        return [
+            { key: 'code', header: 'Code' },
+            { key: 'name', header: 'Surgery' },
+            { key: 'default_cost', header: 'Package Cost', render: (r) => <span className="font-medium">{money(r.default_cost || 0)}</span> },
+            { key: 'hourly_cost', header: 'Hourly Cost', render: (r) => money(r.hourly_cost || 0) },
+            { key: 'active', header: 'Active', render: (r) => (r.active ? <Pill>Yes</Pill> : <Pill variant="secondary">No</Pill>) },
+        ]
+    }, [tab])
+
+    // =========================================================
+    // Header titles per tab
+    // =========================================================
+    const tabMeta = useMemo(() => {
+        return {
+            procedures: { title: 'Procedures', icon: Stethoscope, desc: 'Fixed-cost split (anesthesia/surgeon/etc) + legacy hourly fields.' },
+            theaters: { title: 'OT Theaters', icon: Building2, desc: 'Hourly charges per theater for OT billing.' },
+            instruments: { title: 'Instruments', icon: Boxes, desc: 'Instrument tracking with available quantity and cost per unit.' },
+            devices: { title: 'Airway & Monitor Devices', icon: Activity, desc: 'Device masters categorized as AIRWAY or MONITOR.' },
+            specialities: { title: 'Specialities', icon: ShieldCheck, desc: 'OT specialities for procedure grouping.' },
+            equipment: { title: 'Equipment', icon: Wrench, desc: 'OT equipment checklist master with critical flag.' },
+            surgeries: { title: 'Surgery Master', icon: Stethoscope, desc: 'Legacy: package + hourly costs (optional use).' },
+        }
     }, [])
 
-    const openCreate = () => {
-        setEditing(null)
-        setForm({
-            code: '',
-            name: '',
-            speciality_id: '',
-            duration_hours: '',
-            duration_minutes: '',
-            rate_per_hour: '',
-            description: '',
-            is_active: true,
-        })
-        setFormError(null)
-        setModalOpen(true)
+    if (!canViewAny) {
+        return <div className="p-4 text-sm text-slate-500">You do not have permission to view OT Masters.</div>
     }
 
-    const openEdit = (item) => {
-        const totalMin = item.default_duration_min ?? null
-        const h = totalMin != null ? Math.floor(totalMin / 60) : ''
-        const m = totalMin != null ? totalMin % 60 : ''
-        setEditing(item)
-        setForm({
-            code: item.code || '',
-            name: item.name || '',
-            speciality_id: item.speciality_id || '',
-            duration_hours: h === 0 && m === 0 ? '' : String(h || ''),
-            duration_minutes: m === 0 && h === 0 ? '' : String(m || ''),
-            rate_per_hour:
-                item.rate_per_hour != null ? String(item.rate_per_hour) : '',
-            description: item.description || '',
-            is_active: !!item.is_active,
-        })
-        setFormError(null)
-        setModalOpen(true)
-    }
-
-    const handleSave = async (e) => {
-        e.preventDefault()
-        if (!form.code) return setFormError('Please enter procedure code')
-        if (!form.name) return setFormError('Please enter procedure name')
-
-        const h = form.duration_hours ? Number(form.duration_hours) : 0
-        const m = form.duration_minutes ? Number(form.duration_minutes) : 0
-        const totalMinutes = h * 60 + m
-        const default_duration_min = totalMinutes > 0 ? totalMinutes : null
-
-        const rate =
-            form.rate_per_hour === '' || form.rate_per_hour === null
-                ? null
-                : Number(form.rate_per_hour)
-
-        setSaving(true)
-        setFormError(null)
-        try {
-            const payload = {
-                code: form.code,
-                name: form.name,
-                speciality_id: form.speciality_id ? Number(form.speciality_id) : null,
-                default_duration_min,
-                rate_per_hour: rate,
-                description: form.description || null,
-                is_active: !!form.is_active,
-            }
-
-            if (editing) {
-                await updateOtProcedure(editing.id, payload)
-            } else {
-                await createOtProcedure(payload)
-            }
-            setModalOpen(false)
-            setEditing(null)
-            loadProcedures()
-        } catch (err) {
-            console.error('Failed to save OT procedure', err)
-            const msg =
-                err?.response?.data?.detail ||
-                err?.message ||
-                'Failed to save procedure'
-            setFormError(msg)
-        } finally {
-            setSaving(false)
-        }
-    }
-
-    const handleDelete = async (item) => {
-        if (!window.confirm(`Delete procedure "${item.name}"?`)) return
-        try {
-            await deleteOtProcedure(item.id)
-            loadProcedures()
-        } catch (err) {
-            console.error('Failed to delete OT procedure', err)
-            alert('Failed to delete procedure')
-        }
-    }
+    const p = perms[tab] || {}
+    const Icon = tabMeta[tab]?.icon || Stethoscope
 
     return (
-        <>
-            <div className="flex flex-col gap-3">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 text-slate-700">
-                        <Sparkles className="h-4 w-4" />
-                        <span className="text-sm font-semibold">OT Procedures</span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className="relative">
-                            <Search className="absolute left-2 top-2 h-3.5 w-3.5 text-slate-400" />
-                            <input
-                                type="text"
-                                className="w-56 rounded-lg border border-slate-500 bg-white pl-7 pr-2 py-1.5 text-xs text-slate-800 placeholder:text-slate-400 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                                placeholder="Search by code, name, speciality..."
-                                value={search}
-                                onChange={(e) => setSearch(e.target.value)}
-                            />
+        <div className="p-3 sm:p-4 space-y-4 text-slate-900">
+            <Card className="rounded-2xl border-slate-200 shadow-sm">
+                <CardHeader className="space-y-1">
+                    <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-3">
+                        <div className="flex items-start gap-3">
+                            <div className="mt-0.5 rounded-2xl border bg-slate-50 p-2.5">
+                                <Icon className="h-5 w-5 text-slate-700" />
+                            </div>
+                            <div>
+                                <CardTitle className="text-xl">OT Masters</CardTitle>
+                                <CardDescription className="text-slate-500">
+                                    Premium masters management — fast search, strong RBAC, mobile friendly.
+                                </CardDescription>
+                            </div>
                         </div>
-                        <button
-                            type="button"
-                            onClick={openCreate}
-                            className="inline-flex items-center gap-1.5 rounded-xl border border-sky-600 bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-700"
-                        >
-                            <Plus className="h-3.5 w-3.5" />
-                            New
-                        </button>
+
+                        <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2">
+                            <div className="relative w-full sm:w-[260px]">
+                                <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
+                                <Input
+                                    className="pl-9 w-full rounded-xl"
+                                    placeholder="Search code / name…"
+                                    value={q}
+                                    onChange={(e) => setQ(e.target.value)}
+                                />
+                            </div>
+
+                            <div className="flex gap-2">
+                                <Button variant="outline" className="rounded-xl" onClick={load}>
+                                    <RefreshCw className="h-4 w-4 mr-2" />
+                                    Refresh
+                                </Button>
+
+                                <Button variant="outline" className="rounded-xl" onClick={() => setActiveOnly((v) => !v)}>
+                                    <Filter className="h-4 w-4 mr-2" />
+                                    {activeOnly ? 'Active Only' : 'All'}
+                                </Button>
+
+                                {p.create && (
+                                    <Button className="rounded-xl" onClick={openCreate}>
+                                        <Plus className="h-4 w-4 mr-2" />
+                                        New
+                                    </Button>
+                                )}
+                            </div>
+                        </div>
                     </div>
-                </div>
 
-                {error && (
-                    <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
-                        {error}
-                    </div>
-                )}
+                    <Separator className="my-2" />
 
-                <div className="overflow-x-auto rounded-2xl border bg-white">
-                    <table className="min-w-full text-left text-xs text-slate-700">
-                        <thead className="bg-slate-50">
-                            <tr>
-                                <th className="px-4 py-2 text-[11px] font-semibold text-slate-500">
-                                    Code
-                                </th>
-                                <th className="px-4 py-2 text-[11px] font-semibold text-slate-500">
-                                    Name
-                                </th>
-                                <th className="px-4 py-2 text-[11px] font-semibold text-slate-500">
-                                    Speciality
-                                </th>
-                                <th className="px-4 py-2 text-[11px] font-semibold text-slate-500">
-                                    Default Duration
-                                </th>
-                                <th className="px-4 py-2 text-[11px] font-semibold text-slate-500">
-                                    Rate / hour
-                                </th>
-                                <th className="px-4 py-2 text-[11px] font-semibold text-slate-500">
-                                    Active
-                                </th>
-                                <th className="px-4 py-2 text-right text-[11px] font-semibold text-slate-500">
-                                    Actions
-                                </th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            {loading && (
-                                <>
-                                    {Array.from({ length: 4 }).map((_, idx) => (
-                                        <tr key={idx} className="animate-pulse border-t">
-                                            {Array.from({ length: 7 }).map((__, cIdx) => (
-                                                <td key={cIdx} className="px-4 py-2">
-                                                    <div className="h-3 w-3/4 rounded bg-slate-100" />
-                                                </td>
-                                            ))}
-                                        </tr>
-                                    ))}
-                                </>
+                    <Tabs value={tab} onValueChange={setTab}>
+                        <TabsList className="flex flex-wrap h-auto rounded-2xl bg-slate-50 p-1">
+                            <TabsTrigger value="procedures" className="rounded-xl">Procedures</TabsTrigger>
+                            <TabsTrigger value="theaters" className="rounded-xl">Theaters</TabsTrigger>
+                            <TabsTrigger value="instruments" className="rounded-xl">Instruments</TabsTrigger>
+                            <TabsTrigger value="devices" className="rounded-xl">Devices</TabsTrigger>
+                            <TabsTrigger value="specialities" className="rounded-xl">Specialities</TabsTrigger>
+                            <TabsTrigger value="equipment" className="rounded-xl">Equipment</TabsTrigger>
+                            <TabsTrigger value="surgeries" className="rounded-xl">Surgery</TabsTrigger>
+                        </TabsList>
+
+                        <div className="mt-3 text-xs text-slate-500">
+                            <span className="font-medium text-slate-700">{tabMeta[tab]?.title}</span>
+                            {' — '}
+                            {tabMeta[tab]?.desc}
+                        </div>
+
+                        <TabsContent value={tab} className="mt-4">
+                            {!p.view ? (
+                                <div className="rounded-2xl border bg-white p-4 text-sm text-slate-500">
+                                    You do not have permission to view <b>{tabMeta[tab]?.title}</b>.
+                                </div>
+                            ) : (
+                                <DataTable
+                                    columns={columns}
+                                    rows={rows}
+                                    loading={loading}
+                                    onEdit={openEdit}
+                                    onDelete={onDelete}
+                                    canUpdate={!!p.update}
+                                    canDelete={!!p.delete}
+                                />
                             )}
+                        </TabsContent>
+                    </Tabs>
+                </CardHeader>
 
-                            {!loading && filtered.length === 0 && (
-                                <tr>
-                                    <td
-                                        colSpan={7}
-                                        className="px-4 py-6 text-center text-xs text-slate-500"
-                                    >
-                                        <div className="flex flex-col items-center justify-center gap-1">
-                                            <AlertTriangle className="h-4 w-4 text-amber-500" />
-                                            <span>No OT procedures found.</span>
-                                        </div>
-                                    </td>
-                                </tr>
-                            )}
+                <CardContent className="pt-0" />
+            </Card>
 
-                            {!loading &&
-                                filtered.map((it) => {
-                                    const total = it.default_duration_min ?? null
-                                    let durLabel = '—'
-                                    if (total != null && total > 0) {
-                                        const h = Math.floor(total / 60)
-                                        const m = total % 60
-                                        durLabel =
-                                            h > 0 && m > 0
-                                                ? `${h}h ${m}min`
-                                                : h > 0
-                                                    ? `${h}h`
-                                                    : `${m}min`
-                                    }
-                                    return (
-                                        <tr key={it.id} className="border-t">
-                                            <td className="px-4 py-2 text-xs font-medium text-slate-800">
-                                                {it.code}
-                                            </td>
-                                            <td className="px-4 py-2 text-xs text-slate-800">
-                                                {it.name}
-                                            </td>
-                                            <td className="px-4 py-2 text-xs text-slate-600">
-                                                {it.speciality?.name ||
-                                                    (it.speciality_id && `#${it.speciality_id}`) ||
-                                                    '—'}
-                                            </td>
-                                            <td className="px-4 py-2 text-xs text-slate-600">
-                                                {durLabel}
-                                            </td>
-                                            <td className="px-4 py-2 text-xs text-slate-600">
-                                                {it.rate_per_hour != null
-                                                    ? `₹ ${Number(it.rate_per_hour).toFixed(2)}`
-                                                    : '—'}
-                                            </td>
-                                            <td className="px-4 py-2 text-xs">
-                                                <span
-                                                    className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-medium ${it.is_active
-                                                        ? 'bg-emerald-50 text-emerald-700'
-                                                        : 'bg-slate-100 text-slate-500'
-                                                        }`}
-                                                >
-                                                    {it.is_active ? 'Active' : 'Inactive'}
-                                                </span>
-                                            </td>
-                                            <td className="px-4 py-2 text-right text-xs">
-                                                <div className="inline-flex items-center gap-1.5">
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => openEdit(it)}
-                                                        className="inline-flex items-center gap-1 rounded-lg border border-slate-500 bg-white px-2 py-1 text-[11px] text-slate-700 hover:border-sky-400 hover:text-sky-700"
-                                                    >
-                                                        <Pencil className="h-3 w-3" />
-                                                        Edit
-                                                    </button>
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => handleDelete(it)}
-                                                        className="inline-flex items-center gap-1 rounded-lg border border-rose-200 bg-white px-2 py-1 text-[11px] text-rose-600 hover:bg-rose-50"
-                                                    >
-                                                        <Trash2 className="h-3 w-3" />
-                                                        Delete
-                                                    </button>
-                                                </div>
-                                            </td>
-                                        </tr>
-                                    )
-                                })}
-                        </tbody>
-                    </table>
-                </div>
-            </div>
-
-            {/* Modal */}
-            <ModalShell
-                open={modalOpen}
-                title={editing ? 'Edit OT Procedure' : 'New OT Procedure'}
-                subtitle="Define procedures with default duration and hour-based rate for billing."
-                onClose={() => setModalOpen(false)}
+            {/* Dialog */}
+            <Dialog
+                open={open}
+                onOpenChange={(v) => {
+                    if (!v) closeDialog()
+                }}
             >
-                <form onSubmit={handleSave}>
-                    <div className="grid grid-cols-1 gap-3 px-5 py-4">
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1">
-                                <label className="text-xs font-medium text-slate-700">
-                                    Code <span className="text-rose-500">*</span>
-                                </label>
-                                <input
-                                    type="text"
-                                    className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                                    value={form.code}
-                                    onChange={(e) =>
-                                        setForm((f) => ({ ...f, code: e.target.value }))
-                                    }
-                                />
-                            </div>
-                            <div className="space-y-1">
-                                <label className="text-xs font-medium text-slate-700">
-                                    Name <span className="text-rose-500">*</span>
-                                </label>
-                                <input
-                                    type="text"
-                                    className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                                    value={form.name}
-                                    onChange={(e) =>
-                                        setForm((f) => ({ ...f, name: e.target.value }))
-                                    }
-                                />
-                            </div>
-                        </div>
+                <DialogContent className="w-[calc(100vw-1.25rem)] sm:max-w-3xl rounded-2xl max-h-[85vh] overflow-y-auto">
+                    <DialogHeader>
+                        <DialogTitle className="text-lg">
+                            {mode === 'edit' ? 'Edit' : 'Create'} {tabMeta[tab]?.title}
+                        </DialogTitle>
+                        <DialogDescription className="text-slate-500">
+                            Fill the fields carefully — this master affects OT scheduling & billing workflow.
+                        </DialogDescription>
+                    </DialogHeader>
 
-                        <div className="space-y-1">
-                            <label className="text-xs font-medium text-slate-700">
-                                Default speciality (optional)
-                            </label>
-                            <select
-                                className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                                value={form.speciality_id}
-                                onChange={(e) =>
-                                    setForm((f) => ({ ...f, speciality_id: e.target.value }))
-                                }
-                            >
-                                <option value="">Not mapped</option>
-                                {specialities.map((s) => (
-                                    <option key={s.id} value={s.id}>
-                                        {(s.code ? `${s.code} – ` : '') + s.name}
-                                    </option>
-                                ))}
-                            </select>
-                            {specLoading && (
-                                <p className="mt-0.5 text-[10px] text-slate-400">
-                                    Loading specialities...
-                                </p>
-                            )}
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1">
-                                <label className="text-xs font-medium text-slate-700">
-                                    Default duration – hours
-                                </label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                                    value={form.duration_hours}
-                                    onChange={(e) =>
-                                        setForm((f) => ({
-                                            ...f,
-                                            duration_hours: e.target.value,
-                                        }))
-                                    }
-                                    placeholder="e.g., 2"
+                    {/* FORM BODY */}
+                    <div className="grid gap-4">
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div className="grid gap-1.5">
+                                <Label>Code</Label>
+                                <Input
+                                    className="rounded-xl"
+                                    value={form.code ?? ''}
+                                    onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
+                                    placeholder="Ex: OT-001"
                                 />
                             </div>
-                            <div className="space-y-1">
-                                <label className="text-xs font-medium text-slate-700">
-                                    Default duration – minutes
-                                </label>
-                                <input
-                                    type="number"
-                                    min="0"
-                                    max="59"
-                                    className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                                    value={form.duration_minutes}
-                                    onChange={(e) =>
-                                        setForm((f) => ({
-                                            ...f,
-                                            duration_minutes: e.target.value,
-                                        }))
-                                    }
-                                    placeholder="e.g., 30"
+
+                            <div className="grid gap-1.5">
+                                <Label>Name</Label>
+                                <Input
+                                    className="rounded-xl"
+                                    value={form.name ?? ''}
+                                    onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
+                                    placeholder="Ex: Lap Chole"
                                 />
                             </div>
                         </div>
 
-                        <div className="space-y-1">
-                            <label className="text-xs font-medium text-slate-700">
-                                Rate per hour (₹)
-                            </label>
-                            <input
-                                type="number"
-                                step="0.01"
-                                min="0"
-                                className="w-full rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                                value={form.rate_per_hour}
-                                onChange={(e) =>
-                                    setForm((f) => ({
-                                        ...f,
-                                        rate_per_hour: e.target.value,
-                                    }))
-                                }
-                                placeholder="e.g., 5000"
-                            />
-                        </div>
+                        {/* PROCEDURES */}
+                        {tab === 'procedures' && (
+                            <>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                    <div className="grid gap-1.5">
+                                        <Label>Speciality</Label>
 
-                        <div className="space-y-1">
-                            <label className="text-xs font-medium text-slate-700">
-                                Description / notes
-                            </label>
-                            <textarea
-                                rows={2}
-                                className="w-full resize-none rounded-lg border border-slate-500 bg-white px-2.5 py-1.5 text-xs text-slate-800 focus:border-sky-500 focus:outline-none focus:ring-1 focus:ring-sky-500"
-                                value={form.description}
-                                onChange={(e) =>
-                                    setForm((f) => ({ ...f, description: e.target.value }))
-                                }
-                                placeholder="E.g., Includes surgeon charges only; anaesthesia separate."
-                            />
-                        </div>
+                                        {/* ✅ FIXED: No SelectItem value="" (Radix forbids it).
+                        We use sentinel NONE and convert to "" to clear selection. */}
+                                        <Select
+                                            value={form.speciality_id || ''}
+                                            onValueChange={(v) => {
+                                                if (v === NONE) setForm((f) => ({ ...f, speciality_id: '' }))
+                                                else setForm((f) => ({ ...f, speciality_id: v }))
+                                            }}
+                                        >
+                                            <SelectTrigger className="rounded-xl">
+                                                <SelectValue placeholder="Select speciality (optional)" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value={NONE}>None</SelectItem>
+                                                {specialities
+                                                    .filter((s) => s?.id) // safety
+                                                    .map((s) => (
+                                                        <SelectItem key={s.id} value={String(s.id)}>
+                                                            {s.name}
+                                                        </SelectItem>
+                                                    ))}
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
 
-                        <div className="flex items-center gap-2">
-                            <input
-                                id="ot_proc_active"
-                                type="checkbox"
-                                className="h-3.5 w-3.5 rounded border-slate-300 text-sky-600 focus:ring-sky-500"
-                                checked={!!form.is_active}
-                                onChange={(e) =>
-                                    setForm((f) => ({ ...f, is_active: e.target.checked }))
-                                }
-                            />
-                            <label
-                                htmlFor="ot_proc_active"
-                                className="text-xs text-slate-700"
-                            >
-                                Active
-                            </label>
-                        </div>
+                                    <div className="grid gap-1.5">
+                                        <Label>Default Duration (min)</Label>
+                                        <Input
+                                            className="rounded-xl"
+                                            type="number"
+                                            inputMode="numeric"
+                                            value={form.default_duration_min ?? ''}
+                                            onChange={(e) => setForm((f) => ({ ...f, default_duration_min: e.target.value }))}
+                                            placeholder="Ex: 60"
+                                        />
+                                    </div>
 
-                        {formError && (
-                            <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
-                                {formError}
+                                    <div className="grid gap-1.5">
+                                        <Label>Rate / Hour (legacy)</Label>
+                                        <Input
+                                            className="rounded-xl"
+                                            type="number"
+                                            inputMode="decimal"
+                                            value={form.rate_per_hour ?? ''}
+                                            onChange={(e) => setForm((f) => ({ ...f, rate_per_hour: e.target.value }))}
+                                            placeholder="Ex: 2500"
+                                        />
+                                    </div>
+                                </div>
+
+                                <div className="rounded-2xl border bg-slate-50 p-3">
+                                    <div className="text-sm font-medium text-slate-800 mb-2">Fixed Cost Split-up</div>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
+                                        <div className="grid gap-1.5">
+                                            <Label>Base</Label>
+                                            <Input className="rounded-xl" type="number" inputMode="decimal" value={form.base_cost ?? ''} onChange={(e) => setForm((f) => ({ ...f, base_cost: e.target.value }))} />
+                                        </div>
+                                        <div className="grid gap-1.5">
+                                            <Label>Anesthesia</Label>
+                                            <Input className="rounded-xl" type="number" inputMode="decimal" value={form.anesthesia_cost ?? ''} onChange={(e) => setForm((f) => ({ ...f, anesthesia_cost: e.target.value }))} />
+                                        </div>
+                                        <div className="grid gap-1.5">
+                                            <Label>Surgeon</Label>
+                                            <Input className="rounded-xl" type="number" inputMode="decimal" value={form.surgeon_cost ?? ''} onChange={(e) => setForm((f) => ({ ...f, surgeon_cost: e.target.value }))} />
+                                        </div>
+                                        <div className="grid gap-1.5">
+                                            <Label>Petitory (opt)</Label>
+                                            <Input className="rounded-xl" type="number" inputMode="decimal" value={form.petitory_cost ?? ''} onChange={(e) => setForm((f) => ({ ...f, petitory_cost: e.target.value }))} />
+                                        </div>
+                                        <div className="grid gap-1.5">
+                                            <Label>Asst (opt)</Label>
+                                            <Input className="rounded-xl" type="number" inputMode="decimal" value={form.asst_doctor_cost ?? ''} onChange={(e) => setForm((f) => ({ ...f, asst_doctor_cost: e.target.value }))} />
+                                        </div>
+                                    </div>
+                                </div>
+                            </>
+                        )}
+
+                        {/* THEATERS */}
+                        {tab === 'theaters' && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div className="grid gap-1.5">
+                                    <Label>Cost per Hour</Label>
+                                    <Input
+                                        className="rounded-xl"
+                                        type="number"
+                                        inputMode="decimal"
+                                        value={form.cost_per_hour ?? ''}
+                                        onChange={(e) => setForm((f) => ({ ...f, cost_per_hour: e.target.value }))}
+                                        placeholder="Ex: 3000"
+                                    />
+                                </div>
                             </div>
                         )}
+
+                        {/* INSTRUMENTS */}
+                        {tab === 'instruments' && (
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <div className="grid gap-1.5">
+                                    <Label>Available Qty</Label>
+                                    <Input
+                                        className="rounded-xl"
+                                        type="number"
+                                        inputMode="numeric"
+                                        value={form.available_qty ?? 0}
+                                        onChange={(e) => setForm((f) => ({ ...f, available_qty: e.target.value }))}
+                                    />
+                                </div>
+                                <div className="grid gap-1.5">
+                                    <Label>Cost per Qty</Label>
+                                    <Input
+                                        className="rounded-xl"
+                                        type="number"
+                                        inputMode="decimal"
+                                        value={form.cost_per_qty ?? ''}
+                                        onChange={(e) => setForm((f) => ({ ...f, cost_per_qty: e.target.value }))}
+                                    />
+                                </div>
+                                <div className="grid gap-1.5">
+                                    <Label>UOM</Label>
+                                    <Input
+                                        className="rounded-xl"
+                                        value={form.uom ?? 'Nos'}
+                                        onChange={(e) => setForm((f) => ({ ...f, uom: e.target.value }))}
+                                        placeholder="Nos / Sets / Pcs"
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {/* DEVICES */}
+                        {tab === 'devices' && (
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                                <div className="grid gap-1.5">
+                                    <Label>Category</Label>
+                                    <Select value={form.category || 'AIRWAY'} onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}>
+                                        <SelectTrigger className="rounded-xl">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="AIRWAY">AIRWAY</SelectItem>
+                                            <SelectItem value="MONITOR">MONITOR</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+                                <div className="grid gap-1.5">
+                                    <Label>Cost</Label>
+                                    <Input
+                                        className="rounded-xl"
+                                        type="number"
+                                        inputMode="decimal"
+                                        value={form.cost ?? ''}
+                                        onChange={(e) => setForm((f) => ({ ...f, cost: e.target.value }))}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {/* EQUIPMENT */}
+                        {tab === 'equipment' && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div className="grid gap-1.5">
+                                    <Label>Category</Label>
+                                    <Input
+                                        className="rounded-xl"
+                                        value={form.category ?? ''}
+                                        onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
+                                        placeholder="Anaesthesia / Monitoring / OT Table…"
+                                    />
+                                </div>
+
+                                <div className="flex items-center gap-2 mt-7">
+                                    <Checkbox checked={!!form.is_critical} onCheckedChange={(v) => setForm((f) => ({ ...f, is_critical: !!v }))} />
+                                    <span className="text-sm text-slate-700">Critical Equipment</span>
+                                </div>
+                            </div>
+                        )}
+
+                        {/* SURGERIES */}
+                        {tab === 'surgeries' && (
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                <div className="grid gap-1.5">
+                                    <Label>Package Cost</Label>
+                                    <Input
+                                        className="rounded-xl"
+                                        type="number"
+                                        inputMode="decimal"
+                                        value={form.default_cost ?? ''}
+                                        onChange={(e) => setForm((f) => ({ ...f, default_cost: e.target.value }))}
+                                    />
+                                </div>
+                                <div className="grid gap-1.5">
+                                    <Label>Hourly Cost</Label>
+                                    <Input
+                                        className="rounded-xl"
+                                        type="number"
+                                        inputMode="decimal"
+                                        value={form.hourly_cost ?? ''}
+                                        onChange={(e) => setForm((f) => ({ ...f, hourly_cost: e.target.value }))}
+                                    />
+                                </div>
+                            </div>
+                        )}
+
+                        {/* Description + Active */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                            <div className="grid gap-1.5">
+                                <Label>Description</Label>
+                                <Textarea
+                                    className="rounded-xl min-h-[92px]"
+                                    value={form.description ?? ''}
+                                    onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
+                                    placeholder="Optional notes…"
+                                />
+                            </div>
+
+                            <div className="rounded-2xl border bg-slate-50 p-3">
+                                <div className="text-sm font-medium text-slate-800">Status</div>
+                                <div className="mt-2 flex items-center gap-2">
+                                    <Checkbox
+                                        checked={tab === 'surgeries' ? !!form.active : !!form.is_active}
+                                        onCheckedChange={(v) => {
+                                            if (tab === 'surgeries') setForm((f) => ({ ...f, active: !!v }))
+                                            else setForm((f) => ({ ...f, is_active: !!v }))
+                                        }}
+                                    />
+                                    <span className="text-sm text-slate-700">Active</span>
+                                </div>
+                                <div className="mt-2 text-xs text-slate-500">Inactive items can be hidden from selection lists.</div>
+                            </div>
+                        </div>
                     </div>
 
-                    <div className="flex items-center justify-end gap-2 border-t px-5 py-3">
-                        <button
-                            type="button"
-                            onClick={() => setModalOpen(false)}
-                            className="inline-flex items-center gap-1.5 rounded-xl border border-slate-500 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                            disabled={saving}
-                        >
+                    <DialogFooter className="gap-2">
+                        <Button variant="outline" className="rounded-xl" onClick={closeDialog}>
                             Cancel
-                        </button>
-                        <button
-                            type="submit"
-                            className="inline-flex items-center gap-1.5 rounded-xl border border-sky-600 bg-sky-600 px-3 py-1.5 text-xs font-medium text-white hover:bg-sky-700 disabled:opacity-60"
-                            disabled={saving}
-                        >
-                            {saving && (
-                                <span className="h-3 w-3 animate-spin rounded-full border-[2px] border-white border-b-transparent" />
-                            )}
-                            Save
-                        </button>
-                    </div>
-                </form>
-            </ModalShell>
-        </>
-    )
-}
-
-// ---------------------------------------------------------------------
-// MAIN PAGE WRAPPER with ONLY TWO TABS
-// ---------------------------------------------------------------------
-
-const TABS = [
-    { id: 'specialities', label: 'Specialities' },
-    { id: 'procedures', label: 'Procedures' },
-]
-
-export default function OtMastersPage() {
-    const [tab, setTab] = useState('specialities')
-
-    return (
-        <div className="flex h-full flex-col gap-3 p-4">
-            <div className="flex flex-wrap items-center justify-between gap-3">
-                <div>
-                    <h1 className="text-lg font-semibold text-slate-900">
-                        OT Masters
-                    </h1>
-                    <p className="text-xs text-slate-500">
-                        Configure OT specialities and procedures as per NABH.
-                    </p>
-                </div>
-            </div>
-
-            <div className="flex gap-2 border-b border-slate-500">
-                {TABS.map((t) => {
-                    const active = t.id === tab
-                    return (
-                        <button
-                            key={t.id}
-                            type="button"
-                            onClick={() => setTab(t.id)}
-                            className={`relative px-3 py-1.5 text-xs font-medium transition-colors ${active
-                                    ? 'text-sky-700'
-                                    : 'text-slate-500 hover:text-slate-800'
-                                }`}
-                        >
-                            {t.label}
-                            {active && (
-                                <span className="absolute inset-x-0 bottom-0 h-0.5 rounded-full bg-sky-600" />
-                            )}
-                        </button>
-                    )
-                })}
-            </div>
-
-            <div className="flex-1 overflow-auto pt-2">
-                {tab === 'specialities' && <OtSpecialitiesTab />}
-                {tab === 'procedures' && <OtProceduresTab />}
-            </div>
+                        </Button>
+                        <Button className="rounded-xl" onClick={onSave}>
+                            {mode === 'edit' ? 'Update' : 'Create'}
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
         </div>
     )
 }

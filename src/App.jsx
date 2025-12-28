@@ -38,7 +38,7 @@ import RisOrderDetail from "./ris/OrderDetail";
 import OtTheatreSchedulePage from "./ot/OtTheatreSchedulePage";
 import OtMastersPage from "./ot/OtMastersPage";
 import OtCaseDetailPage from "./ot/OtCaseDetailPage";
-import OtLogsAdmin from "./ot/OtLogsAdmin";
+// import OtLogsAdmin from "./ot/OtLogsAdmin";
 
 import AnalyzerStagingResults from "./lab/AnalyzerStagingResults";
 import AnalyzerDeviceMapping from "./lab/AnalyzerDeviceMapping";
@@ -189,7 +189,7 @@ export default function App() {
             <Route path="/ot/schedule" element={<OtTheatreSchedulePage />} />
             <Route path="/ot/masters" element={<OtMastersPage />} />
             <Route path="/ot/cases/:caseId" element={<OtCaseDetailPage />} />
-            <Route path="/ot/logs" element={<OtLogsAdmin />} />
+            {/* <Route path="/ot/logs" element={<OtLogsAdmin />} /> */}
 
             {/* Billing */}
             <Route path="/billing" element={<BillingConsole />} />

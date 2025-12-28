@@ -438,6 +438,7 @@ export default function Queue() {
     }, [user?.id])
 
     // inside Queue component, before load() definition OR inside load()
+    // inside Queue component, replace your load() with this
     const load = useCallback(async () => {
         if (!canViewQueue) {
             setRows([])
@@ -451,15 +452,33 @@ export default function Queue() {
 
         try {
             setLoading(true)
+
+            // base params
             const params = { for_date: date }
 
             if (myOnly) params.my_only = true
             else params.doctor_user_id = Number(effectiveDoctorId)
 
-            if (user?.department_id) params.department_id = user.department_id
+            // ✅ ONLY doctors send department_id, others send null (i.e., don't send)
+            if (user?.is_doctor && user?.department_id) {
+                params.department_id = Number(user.department_id)
+            } else {
+                // will be removed by toParams() in fetchQueue()
+                params.department_id = null
+            }
 
-            const { data } = await fetchQueue(params)
-            setRows(Array.isArray(data) ? data : [])
+            // 1) first call
+            const res1 = await fetchQueue(params)
+            let list = Array.isArray(res1?.data) ? res1.data : []
+
+            // ✅ OPTIONAL SAFETY: if doctor dept filter caused empty, retry without department_id
+            if (list.length === 0 && user?.is_doctor && user?.department_id) {
+                const { department_id, ...rest } = params
+                const res2 = await fetchQueue(rest)
+                list = Array.isArray(res2?.data) ? res2.data : []
+            }
+
+            setRows(list)
         } catch (e) {
             console.error(e)
             setRows([])

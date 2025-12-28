@@ -42,6 +42,7 @@ import {
     Lock,
     Building2,
 } from 'lucide-react'
+import { formatIST } from '@/ipd/components/timeZONE'
 
 /* ----------------------------- Helpers ----------------------------- */
 const todayStr = () => new Date().toISOString().slice(0, 10)
@@ -952,7 +953,7 @@ export default function Triage() {
                                                         </div>
                                                         <div className="mt-0.5 text-[12px] text-slate-500 flex flex-wrap items-center gap-2">
                                                             <span>UHID {patientUHID(target)}</span>
-                                                            <span className="text-slate-300">•</span>
+                                                            <span className="text-slate-300"></span>
                                                             <span>Time {target?.time || '—'}</span>
                                                             <span className="text-slate-300">•</span>
                                                             <span className={statusPill(target?.status)}>{target?.status}</span>
@@ -970,7 +971,7 @@ export default function Triage() {
                                                                 <>
                                                                     <span className="text-slate-300">•</span>
                                                                     <span>
-                                                                        Last: <span className="font-semibold text-slate-700">{niceDT(vitalsMeta.created_at)}</span>
+                                                                        Last: <span className="font-semibold text-slate-700">{vitalsMeta?.created_at? formatIST(vitalsMeta.created_at): ''}</span>
                                                                     </span>
                                                                 </>
                                                             )}
@@ -1224,7 +1225,7 @@ export default function Triage() {
                                                             <div key={h.id} className="rounded-3xl border border-black/50 bg-white/75 backdrop-blur px-4 py-3 shadow-[0_10px_24px_rgba(2,6,23,0.08)]">
                                                                 <div className="flex items-start justify-between gap-3">
                                                                     <div className="min-w-0">
-                                                                        <div className="text-[12px] text-slate-500">{niceDT(h.created_at)}</div>
+                                                                        <div className="text-[12px] text-slate-500">{formatIST(h.created_at)}</div>
                                                                         <div className="mt-2 flex flex-wrap gap-2 text-[11px] font-semibold">
                                                                             <ChipMini label="Temp" value={toStr(h.temp_c) || '—'} />
                                                                             <ChipMini label="SpO₂" value={toStr(h.spo2) || '—'} />

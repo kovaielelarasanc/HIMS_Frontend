@@ -1,16 +1,24 @@
 // frontend/src/api/emr.js
+// frontend/src/api/emr.js
 import API from "./client"
-import { listPatients } from "./patients" // ✅ reuse your existing patients API
+import { listPatients } from "./patients"
 
 // Optional: keep if you already have backend lookup endpoint
 export function lookupPatients(q) {
     return API.get("/emr/patients/lookup", { params: { q } })
 }
 
-// ✅ Align: Use /api/patients (your real endpoint)
-export const emrSearchPatients = ({ q = "", limit = 20, offset = 0 } = {}) =>
-    listPatients({ q, limit, offset })
+// ✅ FIX: accept string OR object
+export const emrSearchPatients = (qOrParams = {}) => {
+    // If someone calls emrSearchPatients("vasanthi")
+    if (typeof qOrParams === "string") {
+        const term = qOrParams
+        return listPatients({ q: term, limit: 20, offset: 0 })
+    }
 
+    const { q = "", limit = 20, offset = 0 } = qOrParams || {}
+    return listPatients({ q, limit, offset })
+}
 
 // OPD
 
@@ -52,23 +60,23 @@ export const emrDownloadPatientLabHistoryPdf = (patient_id, params = {}) =>
 
 // List prescriptions (your backend supports filters)
 export const emrGetPatientPharmacyPrescriptions = (
-  patientId,
-  { type = null, status = null, date_from = null, date_to = null } = {}
+    patientId,
+    { type = null, status = null, date_from = null, date_to = null } = {}
 ) =>
-  API.get("/pharmacy/prescriptions", {
-    params: {
-      patient_id: patientId,
-      type,
-      status,
-      date_from,
-      date_to,
-    },
-  })
+    API.get("/pharmacy/prescriptions", {
+        params: {
+            patient_id: patientId,
+            type,
+            status,
+            date_from,
+            date_to,
+        },
+    })
 
 // Details (includes lines + patient + doctor)
 export const emrGetPharmacyPrescription = (rxId) =>
-  API.get(`/pharmacy/prescriptions/${rxId}`)
+    API.get(`/pharmacy/prescriptions/${rxId}`)
 
 // PDF (StreamingResponse)
 export const emrDownloadPharmacyPrescriptionPdf = (rxId) =>
-  API.get(`/pharmacy/prescriptions/${rxId}/pdf`, { responseType: "blob" })
+    API.get(`/pharmacy/prescriptions/${rxId}/pdf`, { responseType: "blob" })

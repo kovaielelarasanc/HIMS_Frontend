@@ -26,6 +26,8 @@ import {
     Phone,
     Mail,
 } from 'lucide-react'
+import { formatIST } from '@/ipd/components/timeZONE'
+
 
 function safe(val) {
     if (val === null || val === undefined) return '—'
@@ -728,7 +730,7 @@ export default function PatientDetailDrawer({ open, onClose, patient, onUpdated 
                                                         {safe(log.action || 'UPDATE')}
                                                         <span className="ml-2 text-[12px] font-normal text-slate-500">{safe(actor)}</span>
                                                     </div>
-                                                    <div className="text-[11px] text-slate-500">{ts}</div>
+                                                    <div className="text-[11px] text-slate-500">{log?.created_at ? formatIST(log.created_at) : " "}</div>
                                                 </div>
 
                                                 {changes.length > 0 ? (

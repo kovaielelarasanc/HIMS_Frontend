@@ -9,6 +9,7 @@ import {
     updateOtBloodTransfusion,
     deleteOtBloodTransfusion,
 } from '../../api/ot'
+import { formatIST } from '@/ipd/components/timeZONE'
 
 // ---------- helpers ----------
 function safeDate(value) {
@@ -155,8 +156,8 @@ function BloodTab({ caseId }) {
             const payload = {
                 component: form.component || null,
                 units: form.units === '' ? null : Number(form.units || 1),
-                start_time: hhmmToIsoToday(form.start_time),
-                end_time: hhmmToIsoToday(form.end_time),
+                start_time: formatIST(form.start_time),
+                end_time: formatIST(form.end_time),
                 reaction: form.reaction || null,
                 notes: form.notes || null,
                 // blood_group, bag_no, reaction_action are UI-only for now
@@ -253,10 +254,10 @@ function BloodTab({ caseId }) {
                                         <td className="px-3 py-2">{it.component || '—'}</td>
                                         <td className="px-3 py-2">{it.units ?? '—'}</td>
                                         <td className="px-3 py-2">
-                                            {it.start_time ? formatDateTime(it.start_time) : '—'}
+                                            {it.start_time ? formatIST(it.start_time) : '—'}
                                         </td>
                                         <td className="px-3 py-2">
-                                            {it.end_time ? formatDateTime(it.end_time) : '—'}
+                                            {it.end_time ? formatIST(it.end_time) : '—'}
                                         </td>
                                         <td className="px-3 py-2">{it.reaction || 'None'}</td>
                                         <td className="px-3 py-2 text-right">
