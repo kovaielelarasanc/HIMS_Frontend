@@ -476,7 +476,7 @@ const TABS = [
 
     { key: 'referrals', label: 'Referrals', el: Referrals, writePerm: 'ipd.manage', icon: Users },
     { key: 'discharge', label: 'Discharge Summary', el: Discharge, writePerm: 'ipd.manage', icon: FileText },
-    { key: 'charges', label: 'Bed Charges', el: BedCharges, writePerm: 'ipd.manage', icon: Wallet },
+    // { key: 'charges', label: 'Bed Charges', el: BedCharges, writePerm: 'ipd.manage', icon: Wallet },
     { key: 'feedback', label: 'Feedback', el: FeedbackTab, writePerm: 'ipd.manage', icon: ShieldCheck },
 ]
 
