@@ -75,6 +75,7 @@ import {
 } from 'lucide-react'
 import NursingProcedures from './nursing/NursingProcedures'
 import BedTransferTab from './tabs/BedTransferTab'
+import ReportsTab from './tabs/ReportsTab'
 
 // ---------------------------------------------------------------------
 // Helpers
@@ -435,12 +436,12 @@ function QuickOrdersTab({ admission, patient, beds }) {
 
     return (
         <Card className="rounded-3xl border-0 bg-white shadow-sm">
-            <CardHeader className="pb-2">
+            {/* <CardHeader className="pb-2">
                 <CardTitle className="text-sm text-slate-900">Quick Orders</CardTitle>
                 <div className="text-[12px] text-slate-500">
                     Order labs / radiology / procedures quickly — linked to this admission.
                 </div>
-            </CardHeader>
+            </CardHeader> */}
             <CardContent className="pt-0">
                 <QuickOrders
                     patient={patient}
@@ -478,12 +479,13 @@ const TABS = [
     { key: 'discharge', label: 'Discharge Summary', el: Discharge, writePerm: 'ipd.manage', icon: FileText },
     // { key: 'charges', label: 'Bed Charges', el: BedCharges, writePerm: 'ipd.manage', icon: Wallet },
     { key: 'feedback', label: 'Feedback', el: FeedbackTab, writePerm: 'ipd.manage', icon: ShieldCheck },
+    { key: 'reports', label: 'Reports', el: ReportsTab, writePerm: 'ipd.manage', icon: ShieldCheck },
 ]
 
 const NAV_GROUPS = [
     { title: 'Overview', keys: ['dashboard', 'quick-orders', 'nursing', 'vitals', 'io'] },
     { title: 'Clinical', keys: ['assessments', 'medications', 'nursing_procedures', 'discharge-meds'] },
-    { title: 'Operations', keys: ['bed-transfer', 'referrals', 'discharge', 'charges', 'feedback'] },
+    { title: 'Operations', keys: ['bed-transfer', 'referrals', 'discharge', 'charges', 'feedback', 'reports'] },
 ]
 
 // ---------------------------------------------------------------------
