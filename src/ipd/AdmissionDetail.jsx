@@ -76,6 +76,7 @@ import {
 import NursingProcedures from './nursing/NursingProcedures'
 import BedTransferTab from './tabs/BedTransferTab'
 import ReportsTab from './tabs/ReportsTab'
+import NewbornResuscitation from './nursing/NewbornResuscitation'
 
 // ---------------------------------------------------------------------
 // Helpers
@@ -479,13 +480,14 @@ const TABS = [
     { key: 'discharge', label: 'Discharge Summary', el: Discharge, writePerm: 'ipd.manage', icon: FileText },
     // { key: 'charges', label: 'Bed Charges', el: BedCharges, writePerm: 'ipd.manage', icon: Wallet },
     { key: 'feedback', label: 'Feedback', el: FeedbackTab, writePerm: 'ipd.manage', icon: ShieldCheck },
+    { key: 'newborn_resuscitation', label: 'Newborn Resuscitation ', el: NewbornResuscitation, writePerm: 'ipd.manage', icon: ShieldCheck },
     { key: 'reports', label: 'Reports', el: ReportsTab, writePerm: 'ipd.manage', icon: ShieldCheck },
 ]
 
 const NAV_GROUPS = [
     { title: 'Overview', keys: ['dashboard', 'quick-orders', 'nursing', 'vitals', 'io'] },
     { title: 'Clinical', keys: ['assessments', 'medications', 'nursing_procedures', 'discharge-meds'] },
-    { title: 'Operations', keys: ['bed-transfer', 'referrals', 'discharge', 'charges', 'feedback', 'reports'] },
+    { title: 'Operations', keys: ['bed-transfer', 'referrals', 'discharge', 'charges', 'feedback', 'newborn_resuscitation', 'reports'] },
 ]
 
 // ---------------------------------------------------------------------
