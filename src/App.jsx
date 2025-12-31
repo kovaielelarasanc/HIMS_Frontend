@@ -98,6 +98,7 @@ import MigrationsConsole from "./pages/master/MigrationsConsole";
 import { Toaster } from "sonner";
 import EmrPage from "./pages/emr/Emr";
 import EmrConsole from "./pages/emr/EmrConsole";
+import AdmissionsDashboard from "./ipd/AdmissionsDashboard";
 
 export default function App() {
   useEffect(() => {
@@ -161,6 +162,7 @@ export default function App() {
             <Route path="/opd/doctor-fees" element={<DoctorFees />} />
 
             {/* IPD */}
+            <Route path="/ipd/dashboard" element={<AdmissionsDashboard />} />
             <Route path="/ipd/admissions" element={<Admissions />} />
             <Route path="/ipd/admission/:id" element={<AdmissionDetail />} />
             <Route path="/ipd/tracking" element={<TrackingAdmissions />} />
@@ -168,6 +170,7 @@ export default function App() {
             <Route path="/ipd/discharged" element={<DischargedList />} />
             <Route path="/ipd/bedboard" element={<BedBoard />} />
             <Route path="/ipd/masters" element={<IpMasters />} />
+           
 
             {/* Lab */}
             <Route path="/lab/orders" element={<OrdersList />} />

@@ -46,6 +46,7 @@ import {
   BookOpenText,
   Wallet,
   Database,
+  Gauge,
 } from 'lucide-react'
 
 const defaultPrimary = '#2563eb'
@@ -260,16 +261,25 @@ const GROUPS = [
 
   // IP
   {
-    key: 'ip',
-    label: 'IP',
+    key: "ip",
+    label: "IP",
     icon: BedDouble,
     items: [
-      { key: 'ipd-admissions', label: 'Admissions', to: '/ipd/admissions', icon: FilePlus2, reqAny: ['ipd.view', 'ipd.manage'] },
-      { key: 'ipd-tracking', label: 'Tracking', to: '/ipd/tracking', icon: LayoutDashboard, reqAny: ['ipd.tracking.view'] },
-      { key: 'ipd-my', label: 'My Admissions', to: '/ipd/my', icon: NotebookPen, reqAny: ['ipd.my.view', 'ipd.doctor'] },
-      { key: 'ipd-discharged', label: 'Discharged', to: '/ipd/discharged', icon: Package, reqAny: ['ipd.discharged.view'] },
-      { key: 'ipd-bedboard', label: 'Bedboard', to: '/ipd/bedboard', icon: BedDouble, reqAny: ['ipd.bedboard.view'] },
-      { key: 'ipd-masters', label: 'IPD Masters', to: '/ipd/masters', icon: KeyRound, reqAny: ['ipd.masters.manage', 'ipd.packages.manage'] },
+      // ✅ NEW: IPD Dashboard
+      {
+        key: "ipd-dashboard",
+        label: "Dashboard",
+        to: "/ipd/dashboard",
+        icon: Gauge, // or LayoutDashboard for same look
+        reqAny: ["ipd.dashboard.view", "ipd.view", "ipd.manage"],
+      },
+
+      { key: "ipd-admissions", label: "Admissions", to: "/ipd/admissions", icon: FilePlus2, reqAny: ["ipd.view", "ipd.manage"] },
+      { key: "ipd-tracking", label: "Tracking", to: "/ipd/tracking", icon: LayoutDashboard, reqAny: ["ipd.tracking.view"] },
+      { key: "ipd-my", label: "My Admissions", to: "/ipd/my", icon: NotebookPen, reqAny: ["ipd.my.view", "ipd.doctor"] },
+      { key: "ipd-discharged", label: "Discharged", to: "/ipd/discharged", icon: Package, reqAny: ["ipd.discharged.view"] },
+      { key: "ipd-bedboard", label: "Bedboard", to: "/ipd/bedboard", icon: BedDouble, reqAny: ["ipd.bedboard.view"] },
+      { key: "ipd-masters", label: "IPD Masters", to: "/ipd/masters", icon: KeyRound, reqAny: ["ipd.masters.manage", "ipd.packages.manage"] },
     ],
   },
 
@@ -574,9 +584,9 @@ export default function Sidebar() {
               style={{ backgroundColor: iconBgColor, borderColor: makeActiveBorder(primary) }}
               title={orgName}
             >
-            <span className="text-sm font-extrabold tracking-tight" style={{ color: primary }}>
-                  {initials}
-                </span>
+              <span className="text-sm font-extrabold tracking-tight" style={{ color: primary }}>
+                {initials}
+              </span>
             </div>
 
             {!effectiveCollapsed && (

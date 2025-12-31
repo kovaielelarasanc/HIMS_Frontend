@@ -27,7 +27,6 @@ import BedCharges from './tabs/BedCharges'
 // NEW TABS
 import AssessmentsTab from './tabs/Assessments'
 import MedicationsTab from './tabs/Medications'
-// import DressingTransfusionTab from './tabs/DressingTransfusion'
 import DischargeMedsTab from './tabs/DischargeMeds'
 import FeedbackTab from './tabs/Feedback'
 
@@ -73,6 +72,7 @@ import {
     AlertTriangle,
     X,
 } from 'lucide-react'
+
 import NursingProcedures from './nursing/NursingProcedures'
 import BedTransferTab from './tabs/BedTransferTab'
 import ReportsTab from './tabs/ReportsTab'
@@ -83,7 +83,10 @@ import NewbornResuscitation from './nursing/NewbornResuscitation'
 // ---------------------------------------------------------------------
 const cn = (...xs) => xs.filter(Boolean).join(' ')
 
-const admissionCode = (aid) => `ADM-${String(aid).padStart(6, '0')}`
+const admissionCode = (aid) => {
+    if (!aid && aid !== 0) return '—'
+    return `ADM-${String(aid).padStart(6, '0')}`
+}
 
 const formatIST = (dt) => {
     if (!dt) return '—'
@@ -97,7 +100,7 @@ const formatIST = (dt) => {
             minute: '2-digit',
         })
     } catch {
-        return new Date(dt).toLocaleString()
+        return String(dt)
     }
 }
 
@@ -110,6 +113,31 @@ const initials = (name = '') => {
 }
 
 const clamp01 = (n) => Math.max(0, Math.min(1, n))
+
+const pickData = (res) => {
+    // supports:
+    // axios: res.data
+    // wrapped: {status:true, data:...}
+    // direct object/array
+    const d = res?.data ?? res
+    if (d && typeof d === 'object' && 'status' in d && 'data' in d) return d.data
+    return d
+}
+
+const buildPatientName = (patient) =>
+    patient?.full_name ||
+    patient?.name ||
+    [patient?.prefix, patient?.first_name, patient?.last_name].filter(Boolean).join(' ') ||
+    '—'
+
+const toneForStatus = (statusRaw) => {
+    const status = (statusRaw || '').toLowerCase()
+    if (['active', 'admitted', 'in_progress'].includes(status)) return 'bg-emerald-50 text-emerald-700'
+    if (['cancelled', 'canceled'].includes(status)) return 'bg-rose-50 text-rose-700'
+    if (['discharged', 'completed'].includes(status)) return 'bg-slate-100 text-slate-700'
+    if (['transferred'].includes(status)) return 'bg-amber-50 text-amber-700'
+    return 'bg-slate-100 text-slate-700'
+}
 
 function ProgressRing({ value = 0.6, label = 'Progress' }) {
     const v = clamp01(value)
@@ -152,9 +180,7 @@ function ProgressRing({ value = 0.6, label = 'Progress' }) {
 
             <div className="min-w-0">
                 <div className="text-[11px] text-slate-500">{label}</div>
-                <div className="text-sm font-semibold text-slate-900">
-                    {Math.round(v * 100)}%
-                </div>
+                <div className="text-sm font-semibold text-slate-900">{Math.round(v * 100)}%</div>
             </div>
         </div>
     )
@@ -180,124 +206,51 @@ function MiniBars({ values = [30, 45, 25, 60, 50, 70, 55] }) {
     )
 }
 
-function MiniCalendar() {
-    const today = new Date()
-    const year = today.getFullYear()
-    const month = today.getMonth()
-
-    const first = new Date(year, month, 1)
-    const startDay = first.getDay()
-    const daysInMonth = new Date(year, month + 1, 0).getDate()
-
-    const cells = []
-    for (let i = 0; i < startDay; i++) cells.push(null)
-    for (let d = 1; d <= daysInMonth; d++) cells.push(d)
-    while (cells.length % 7 !== 0) cells.push(null)
-
-    const monthLabel = today.toLocaleString('en-IN', {
-        month: 'long',
-        year: 'numeric',
-    })
-
-    return (
-        <div className="space-y-3">
-            <div className="flex items-center justify-between">
-                <div className="text-sm font-semibold text-slate-900">{monthLabel}</div>
-                <Badge className="rounded-full bg-slate-100 text-slate-700 hover:bg-slate-100">
-                    Today
-                </Badge>
-            </div>
-
-            <div className="grid grid-cols-7 gap-1 text-center text-[10px] text-slate-500">
-                {['S', 'M', 'T', 'W', 'T', 'F', 'S'].map((d) => (
-                    <div key={d} className="py-1">
-                        {d}
-                    </div>
-                ))}
-            </div>
-
-            <div className="grid grid-cols-7 gap-1">
-                {cells.map((d, idx) => {
-                    const isToday = d === today.getDate()
-                    return (
-                        <div
-                            key={idx}
-                            className={cn(
-                                'flex h-8 items-center justify-center rounded-xl text-xs',
-                                d ? 'text-slate-700' : 'text-transparent',
-                                isToday &&
-                                'bg-gradient-to-r from-sky-500 to-violet-500 text-white shadow-sm',
-                                !isToday && d && 'hover:bg-slate-100',
-                            )}
-                        >
-                            {d || '0'}
-                        </div>
-                    )
-                })}
-            </div>
-        </div>
-    )
-}
-
 // ---------------------------------------------------------------------
 // NEW TAB: Dashboard
 // ---------------------------------------------------------------------
-function DashboardTab({ admission, patient, beds, onNavigateTab }) {
-    console.log(admission, "admission");
+function DashboardTab({ admission, patient, beds = [], onNavigateTab }) {
     const currentBed =
         admission?.current_bed_id && beds.find((b) => b.id === admission.current_bed_id)
 
-    const ipNumber = admission?.admission_code || admission?.ipNo || null
     const admittedAt = admission?.admitted_at ? new Date(admission.admitted_at) : null
     const losDays = admittedAt
         ? Math.max(0, Math.floor((Date.now() - admittedAt.getTime()) / (1000 * 60 * 60 * 24)))
         : 0
-    console.log(patient, "dvcjdv");
-    const patientName = patient?.full_name || `${patient?.prefix}. ${patient?.first_name}` || '—'
+
+    const patientName = buildPatientName(patient)
     const uhid = patient?.uhid || (admission?.patient_id ? `P-${admission.patient_id}` : '—')
 
     const status = (admission?.status || '—').toLowerCase()
-    const statusTone =
-        status === 'active'
-            ? 'bg-emerald-50 text-emerald-700'
-            : status === 'cancelled'
-                ? 'bg-rose-50 text-rose-700'
-                : 'bg-slate-100 text-slate-700'
+    const statusTone = toneForStatus(status)
 
-    const vitalsCompliance = status === 'active' ? 0.78 : 0.42
-    const medsCoverage = status === 'active' ? 0.66 : 0.3
+    const vitalsCompliance = ['active', 'admitted', 'in_progress'].includes(status) ? 0.78 : 0.42
+    const medsCoverage = ['active', 'admitted', 'in_progress'].includes(status) ? 0.66 : 0.3
 
     return (
         <div className="space-y-4">
-            {/* Summary cards (same as your screenshot) */}
             <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
                 <Card className="rounded-3xl border-0 bg-white shadow-sm">
                     <CardHeader className="pb-2">
-                        <CardTitle className="text-[12px] font-semibold text-slate-600">
-                            Admission
-                        </CardTitle>
+                        <CardTitle className="text-[12px] font-semibold text-slate-600">Admission</CardTitle>
                     </CardHeader>
                     <CardContent className="pt-0">
                         <div className="text-base font-semibold text-slate-900">
-                            {admissionCode(admission.id)}
+                            {admissionCode(admission?.id)}
                         </div>
                         <div className="mt-1 text-[12px] text-slate-500">
                             Admitted:{' '}
-                            <span className="text-slate-700">{formatIST(admission.admitted_at)}</span>
+                            <span className="text-slate-700">{formatIST(admission?.admitted_at)}</span>
                         </div>
                     </CardContent>
                 </Card>
 
                 <Card className="rounded-3xl border-0 bg-white shadow-sm">
                     <CardHeader className="pb-2">
-                        <CardTitle className="text-[12px] font-semibold text-slate-600">
-                            Patient
-                        </CardTitle>
+                        <CardTitle className="text-[12px] font-semibold text-slate-600">Patient</CardTitle>
                     </CardHeader>
                     <CardContent className="pt-0">
-                        <div className="text-base font-semibold text-slate-900 truncate">
-                            {patientName}
-                        </div>
+                        <div className="text-base font-semibold text-slate-900 truncate">{patientName}</div>
                         <div className="mt-1 text-[12px] text-slate-500">
                             UHID: <span className="text-slate-700">{uhid}</span>
                         </div>
@@ -306,26 +259,18 @@ function DashboardTab({ admission, patient, beds, onNavigateTab }) {
 
                 <Card className="rounded-3xl border-0 bg-white shadow-sm">
                     <CardHeader className="pb-2">
-                        <CardTitle className="text-[12px] font-semibold text-slate-600">
-                            Bed / Ward
-                        </CardTitle>
+                        <CardTitle className="text-[12px] font-semibold text-slate-600">Bed / Ward</CardTitle>
                     </CardHeader>
                     <CardContent className="pt-0">
                         <div className="text-base font-semibold text-slate-900">
                             {currentBed?.code || '—'}
                         </div>
-                        {/* <div className="mt-1 text-[12px] text-slate-500">
-                            Ward:{' '}
-                            <span className="text-slate-700">{currentBed?.ward_name || '—'}</span>
-                        </div> */}
                     </CardContent>
                 </Card>
 
                 <Card className="rounded-3xl border-0 bg-white shadow-sm">
                     <CardHeader className="pb-2">
-                        <CardTitle className="text-[12px] font-semibold text-slate-600">
-                            Status
-                        </CardTitle>
+                        <CardTitle className="text-[12px] font-semibold text-slate-600">Status</CardTitle>
                     </CardHeader>
                     <CardContent className="pt-0">
                         <div className="flex items-center gap-2">
@@ -337,15 +282,10 @@ function DashboardTab({ admission, patient, beds, onNavigateTab }) {
                                 LOS {losDays}d
                             </Badge>
                         </div>
-                        {/* <div className="mt-2 text-[12px] text-slate-500">
-                            Doctor:{' '}
-                            <span className="text-slate-700">{admission?.practitioner_user_id|| '—'}</span>
-                        </div> */}
                     </CardContent>
                 </Card>
             </div>
 
-            {/* KPI row */}
             <div className="grid gap-3 lg:grid-cols-3">
                 <Card className="rounded-3xl border-0 bg-white shadow-sm">
                     <CardHeader className="pb-2">
@@ -377,7 +317,7 @@ function DashboardTab({ admission, patient, beds, onNavigateTab }) {
                         <div className="text-right">
                             <div className="text-[11px] text-slate-500">IP No</div>
                             <div className="mt-1 text-sm font-semibold text-slate-900">
-                                {admissionCode(admission.id)}
+                                {admissionCode(admission?.id)}
                             </div>
                             <div className="text-[11px] text-slate-500">Active bed charges running</div>
                         </div>
@@ -428,26 +368,20 @@ function DashboardTab({ admission, patient, beds, onNavigateTab }) {
 // ---------------------------------------------------------------------
 // NEW TAB: Quick Orders
 // ---------------------------------------------------------------------
-function QuickOrdersTab({ admission, patient, beds }) {
+function QuickOrdersTab({ admission, patient, beds = [] }) {
     const currentBed =
         admission?.current_bed_id && beds.find((b) => b.id === admission.current_bed_id)
 
-    const ipNumber = admission?.ip_number || admission?.ipNo || null
+    const ipNumber = admission?.ip_number || admission?.ipNo || admission?.admission_code || null
     const bedLabel = currentBed?.code || null
 
     return (
         <Card className="rounded-3xl border-0 bg-white shadow-sm">
-            {/* <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-slate-900">Quick Orders</CardTitle>
-                <div className="text-[12px] text-slate-500">
-                    Order labs / radiology / procedures quickly — linked to this admission.
-                </div>
-            </CardHeader> */}
             <CardContent className="pt-0">
                 <QuickOrders
                     patient={patient}
                     contextType="ipd"
-                    contextId={admission.id}
+                    contextId={admission?.id}
                     ipNumber={ipNumber}
                     bedLabel={bedLabel}
                 />
@@ -456,10 +390,8 @@ function QuickOrdersTab({ admission, patient, beds }) {
     )
 }
 
-
 // ---------------------------------------------------------------------
-// Tabs config (✅ added Dashboard + Quick Orders)
-// NOTE: Dashboard/QuickOrders are view-only => writePerm: null
+// Tabs config
 // ---------------------------------------------------------------------
 const TABS = [
     { key: 'dashboard', label: 'Dashboard', el: DashboardTab, writePerm: null, icon: LayoutDashboard },
@@ -498,9 +430,10 @@ export default function AdmissionDetail() {
     const location = useLocation()
     const admissionFromList = location?.state?.admission || null
 
+    // ✅ ALL hooks must be before any early return (fixes crash/login redirect)
     const [admission, setAdmission] = useState(admissionFromList)
     const [beds, setBeds] = useState([])
-    const [active, setActive] = useState('dashboard') // ✅ default now dashboard
+    const [active, setActive] = useState('dashboard')
     const [error, setError] = useState('')
     const [loading, setLoading] = useState(false)
     const [patient, setPatient] = useState(null)
@@ -508,7 +441,10 @@ export default function AdmissionDetail() {
     const [searchText, setSearchText] = useState('')
     const [lang, setLang] = useState('en')
 
-    // global view perm
+    // ✅ moved up (was causing hook-order crash)
+    const [navOpen, setNavOpen] = useState(false)
+
+    // permissions
     const canView = useCan('ipd.view')
     const canManage = useCan('ipd.manage')
     const canNursingWrite = useCan('ipd.nursing')
@@ -520,22 +456,44 @@ export default function AdmissionDetail() {
         'ipd.manage': canManage,
     }
 
+    // ✅ moved up (was below early returns in your file => crash)
+    const tabByKey = useMemo(() => {
+        const map = {}
+        TABS.forEach((t) => (map[t.key] = t))
+        return map
+    }, [])
+
+    const filteredTabs = useMemo(() => {
+        const q = searchText.trim().toLowerCase()
+        if (!q) return TABS
+        return TABS.filter((t) => t.label.toLowerCase().includes(q))
+    }, [searchText])
+
     const load = async () => {
         setLoading(true)
         setError('')
         try {
-            const [{ data: a }, bedsRes] = await Promise.all([getAdmission(Number(id)), listBeds()])
-            const adm = a || admissionFromList || null
+            const [admissionRes, bedsRes] = await Promise.all([getAdmission(Number(id)), listBeds()])
+
+            const admRaw = pickData(admissionRes)
+            const bedsRaw = pickData(bedsRes)
+
+            const adm = admRaw || admissionFromList || null
             setAdmission(adm)
-            setBeds(bedsRes.data || [])
+
+            const bedArr = Array.isArray(bedsRaw) ? bedsRaw : Array.isArray(bedsRaw?.items) ? bedsRaw.items : []
+            setBeds(bedArr)
 
             if (adm?.patient_id) {
                 try {
-                    const { data: p } = await getPatient(adm.patient_id)
-                    setPatient(p)
+                    const pRes = await getPatient(adm.patient_id)
+                    const p = pickData(pRes)
+                    setPatient(p || null)
                 } catch {
-                    // ignore
+                    setPatient(null)
                 }
+            } else {
+                setPatient(null)
             }
         } catch (e) {
             const s = e?.status || e?.response?.status
@@ -565,16 +523,7 @@ export default function AdmissionDetail() {
         }
     }
 
-    // const doTransfer = async (newBedId) => {
-    //     if (!admission || !newBedId) return
-    //     try {
-    //         await transferBed(admission.id, { to_bed_id: Number(newBedId), reason: 'Transfer' })
-    //         await load()
-    //     } catch (e1) {
-    //         setError(e1?.response?.data?.detail || 'Transfer failed')
-    //     }
-    // }
-
+    // ✅ early returns are now safe (no hooks below this point)
     if (!canView && !canManage) {
         return <div className="p-4 text-sm text-rose-700">Access denied (need ipd.view).</div>
     }
@@ -582,30 +531,13 @@ export default function AdmissionDetail() {
     if (!admission) return <div className="p-4 text-sm">No data</div>
 
     const currentBed =
-        admission.current_bed_id && beds.find((b) => b.id === admission.current_bed_id)
+        admission?.current_bed_id && beds.find((b) => b.id === admission.current_bed_id)
 
-    const patientName = `${patient?.prefix}. ${patient?.first_name}` || patient?.name || '—'
-    const uhid = patient?.uhid || (admission.patient_id ? `P-${admission.patient_id}` : '—')
+    const patientName = buildPatientName(patient) // ✅ fixed (no "undefined. undefined")
+    const uhid = patient?.uhid || (admission?.patient_id ? `P-${admission.patient_id}` : '—')
 
-    const status = (admission.status || '—').toLowerCase()
-    const statusTone =
-        status === 'active'
-            ? 'bg-emerald-50 text-emerald-700'
-            : status === 'cancelled'
-                ? 'bg-rose-50 text-rose-700'
-                : 'bg-slate-100 text-slate-700'
-
-    const tabByKey = useMemo(() => {
-        const map = {}
-        TABS.forEach((t) => (map[t.key] = t))
-        return map
-    }, [])
-
-    const filteredTabs = useMemo(() => {
-        const q = searchText.trim().toLowerCase()
-        if (!q) return TABS
-        return TABS.filter((t) => t.label.toLowerCase().includes(q))
-    }, [searchText])
+    const status = (admission?.status || '—').toLowerCase()
+    const statusTone = toneForStatus(status)
 
     const Sidebar = ({ onSelect }) => (
         <div className="space-y-4">
@@ -617,7 +549,7 @@ export default function AdmissionDetail() {
                     <div className="min-w-0">
                         <div className="text-sm font-semibold text-slate-900">IPD Console</div>
                         <div className="text-[11px] text-slate-500 truncate">
-                            {admissionCode(admission.id)} • {uhid}
+                            {admissionCode(admission?.id)} • {uhid}
                         </div>
                     </div>
                 </div>
@@ -706,9 +638,7 @@ export default function AdmissionDetail() {
 
     const TopHeader = ({ onOpenNav }) => (
         <>
-            {/* =========================
-              MOBILE ONLY
-              ========================= */}
+            {/* MOBILE ONLY */}
             <div className="md:hidden">
                 <div className="rounded-[28px] border border-slate-200/70 bg-white/85 px-3 py-1.5 shadow-sm backdrop-blur supports-[backdrop-filter]:bg-white/75">
                     <div className="flex items-center gap-2">
@@ -741,13 +671,9 @@ export default function AdmissionDetail() {
                 </div>
             </div>
 
-            {/* =========================
-              WEB / TABLET (md+)
-              unchanged UI, just hidden on mobile
-              ========================= */}
+            {/* WEB / TABLET (md+) */}
             <div className="hidden md:block">
                 <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                    {/* ✅ FIXED WRAP: left gets flex-1, right is shrink-0 */}
                     <div className="min-w-0 md:flex-1">
                         <h1 className="text-lg font-semibold text-slate-900 md:text-xl">IPD Admission</h1>
                         <p className="mt-0.5 text-[12px] text-slate-500">
@@ -778,12 +704,6 @@ export default function AdmissionDetail() {
         </>
     )
 
-
-
-
-    // Mobile navigation sheet
-    const [navOpen, setNavOpen] = useState(false)
-
     return (
         <div className="min-h-screen bg-[#F7F7FB]">
             <div className="w-full px-3 py-3 md:px-6 md:py-6 2xl:px-10">
@@ -793,19 +713,13 @@ export default function AdmissionDetail() {
                         side="left"
                         className="w-[320px] bg-[#F7F7FB] p-0 flex h-[100dvh] flex-col"
                     >
-                        {/* Sticky top header inside sheet */}
                         <div className="sticky top-0 z-10 flex items-center justify-between border-b border-slate-200/60 bg-[#F7F7FB]/95 px-3 py-3 backdrop-blur">
                             <div className="text-sm font-semibold text-slate-900">Navigation</div>
-                            <Button
-                                variant="outline"
-                                className="h-9 rounded-2xl"
-                                onClick={() => setNavOpen(false)}
-                            >
+                            <Button variant="outline" className="h-9 rounded-2xl" onClick={() => setNavOpen(false)}>
                                 <X className="h-4 w-4" />
                             </Button>
                         </div>
 
-                        {/* Scrollable area */}
                         <div className="min-h-0 flex-1 overflow-y-auto px-3 py-3">
                             <Sidebar
                                 onSelect={(k) => {
@@ -833,10 +747,7 @@ export default function AdmissionDetail() {
                             </div>
                         )}
 
-                        {/* Tabs content (now includes Dashboard + Quick Orders) */}
-                        {/* Tabs content (no Workspace header) */}
                         <Card className="rounded-3xl border-0 bg-white shadow-sm">
-                            {/* <CardContent className="p-3 md:p-4"> */}
                             <UITabs value={active} onValueChange={setActive} className="w-full">
                                 {/* Mobile/Tablet tab pills */}
                                 <div className="mb-3 lg:hidden">
@@ -873,7 +784,6 @@ export default function AdmissionDetail() {
                                         return (
                                             <TabsContent key={t.key} value={t.key} className="mt-0">
                                                 <div className="rounded-3xl bg-white p-2 shadow-sm md:p-4">
-                                                    {/* Per-tab mini header */}
                                                     <div className="mb-3 flex items-center justify-between">
                                                         <div className="flex items-center gap-2">
                                                             <div className="flex h-9 w-9 items-center justify-center rounded-2xl bg-gradient-to-br from-sky-500 to-violet-500 text-white shadow-sm">
@@ -900,12 +810,11 @@ export default function AdmissionDetail() {
                                                     </div>
 
                                                     <TabEl
-                                                        admissionId={admission.id}
+                                                        admissionId={admission?.id}
                                                         admission={admission}
                                                         patient={patient}
                                                         canWrite={canWriteThis}
                                                         beds={beds}
-                                                        // onTransfer={doTransfer}
                                                         onNavigateTab={setActive}
                                                     />
                                                 </div>
@@ -914,12 +823,8 @@ export default function AdmissionDetail() {
                                     })}
                                 </div>
                             </UITabs>
-                            {/* </CardContent> */}
                         </Card>
-
                     </main>
-
-
                 </div>
             </div>
         </div>
