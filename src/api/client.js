@@ -174,6 +174,7 @@ API.interceptors.response.use(
     const meta = originalRequest?.meta || {}
 
     if (!error?.response) {
+      console.log(error, "errorerrorerrorerrorerror");
       const msg = navigator.onLine ? 'Network error / Server unreachable' : 'You are offline'
       if (!meta.silentError) toast.error(msg)
       reportClientError(error, msg)

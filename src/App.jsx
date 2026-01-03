@@ -99,6 +99,7 @@ import { Toaster } from "sonner";
 import EmrPage from "./pages/emr/Emr";
 import EmrConsole from "./pages/emr/EmrConsole";
 import AdmissionsDashboard from "./ipd/AdmissionsDashboard";
+import StockAlertsDashboard from "./pages/inventoryPharmacy/StockAlertsTab";
 
 export default function App() {
   useEffect(() => {
@@ -231,6 +232,7 @@ export default function App() {
             <Route path="/pharmacy/sales" element={<PharmacySales />} />
             <Route path="/pharmacy/returns" element={<PharmacyReturns />} />
             <Route path="/pharmacy/rx-explorer" element={<PharmacyRxExplorer />} />
+            <Route path="/pharmacy/stock/alerts" element={<StockAlertsDashboard />} />
 
             <Route path="/opd/phramacy" element={<OpdPharmacyOrder />} />
             <Route path="/ipd/phramacy" element={<IpdPharmacyOrder />} />

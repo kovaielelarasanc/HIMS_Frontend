@@ -1,6 +1,17 @@
 // FILE: src/api/inventory.js
 import API from './client'
 
+
+const unwrap = (res) => {
+    const payload = res?.data
+    if (!payload?.status) {
+        const msg = payload?.error?.msg || "Something went wrong"
+        throw new Error(msg)
+    }
+    return payload.data
+}
+
+
 // ---------- Locations ----------
 export function listInventoryLocations() {
     return API.get('/inventory/locations')
@@ -34,40 +45,51 @@ export function createInventoryLocation(payload) {
 export function updateInventoryLocation(id, payload) {
     return API.put(`/inventory/locations/${id}`, payload)
 }
-
 // ---------- Suppliers ----------
-export function listSuppliers(q = '') {
-    const params = q ? { q } : {}
-    return API.get('/inventory/suppliers', { params })
+
+function unwraps(res) {
+    const payload = res?.data ?? res
+    if (payload && typeof payload === "object" && "status" in payload && "data" in payload) {
+        return payload.data
+    }
+    return payload
+}
+
+export function listSuppliers(q = "", opts = {}) {
+    const params = {}
+    if (q && q.trim()) params.q = q.trim()
+    if (opts?.is_active !== undefined) params.is_active = opts.is_active
+    if (opts?.limit) params.limit = opts.limit
+    return API.get("/inventory/suppliers", { params }).then(unwraps)
 }
 
 export function createSupplier(payload) {
-    return API.post('/inventory/suppliers', payload)
+    return API.post("/inventory/suppliers", payload).then(unwraps)
 }
 
 export function updateSupplier(id, payload) {
-    return API.put(`/inventory/suppliers/${id}`, payload)
+    return API.put(`/inventory/suppliers/${id}`, payload).then(unwraps)
 }
-// ---------- Items ----------
+/// ---------- Items ----------
 export function listInventoryItems(params = {}) {
-    return API.get('/inventory/items', { params })
+    return API.get("/inventory/items", { params }).then(unwrap)
 }
 
 export function createInventoryItem(payload) {
-    return API.post('/inventory/items', payload)
+    return API.post("/inventory/items", payload).then(unwrap)
 }
 
 export function updateInventoryItem(id, payload) {
-    return API.put(`/inventory/items/${id}`, payload)
+    return API.put(`/inventory/items/${id}`, payload).then(unwrap)
 }
 
-// ✅ NEW: templates (CSV/XLSX)
-export function downloadItemsTemplate(format = 'csv') {
-    return API.get('/inventory/items/bulk-upload/template', {
-        params: { format }, // csv | xlsx
-        responseType: 'blob',
-    })
+// ✅ Drug schedules catalog (dropdown data)
+export function getDrugSchedulesCatalog() {
+    return API.get("/inventory/items/drug-schedules")
 }
+
+
+
 
 // ✅ NEW: preview (CSV/XLSX/TSV)
 export function previewItemsUpload(file) {
@@ -76,6 +98,57 @@ export function previewItemsUpload(file) {
     return API.post('/inventory/items/bulk-upload/preview', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
     })
+}
+
+// ---------------- Templates / Samples (Downloads) ----------------
+export function downloadSampleItemsCsv() {
+    return API.get("/inventory/items/sample-csv", { responseType: "blob" })
+}
+
+export function downloadItemsTemplate(format = "csv") {
+    return API.get("/inventory/items/bulk-upload/template", {
+        params: { format }, // "csv" | "xlsx"
+        responseType: "blob",
+    })
+}
+
+// ---------------- Bulk Upload (Preview + Commit) ----------------
+function buildFormData(file) {
+    const fd = new FormData()
+    fd.append("file", file)
+    return fd
+}
+
+// POST /inventory/items/bulk-upload/preview
+export function previewItemsBulkUpload(file) {
+    return API.post("/inventory/items/bulk-upload/preview", buildFormData(file), {
+        headers: { "Content-Type": "multipart/form-data" },
+    })
+}
+
+// POST /inventory/items/bulk-upload/commit?strict=..&update_blanks=..
+export function commitItemsBulkUpload(file, { strict = true, update_blanks = false } = {}) {
+    return API.post("/inventory/items/bulk-upload/commit", buildFormData(file), {
+        params: { strict, update_blanks },
+        headers: { "Content-Type": "multipart/form-data" },
+    })
+}
+
+/**
+ * ✅ Convenience helper (optional): preview + commit in one call
+ * Returns: { preview, commit }
+ */
+export async function bulkUploadItems(file, { strict = true, update_blanks = false } = {}) {
+    const preview = await previewItemsBulkUpload(file)
+    if (strict && Number(preview?.error_rows || 0) > 0) {
+        const first = Array.isArray(preview?.errors) ? preview.errors[0] : null
+        const msg = first?.message ? `Row ${first.row}: ${first.message}` : "File has errors"
+        const err = new Error(msg)
+        err.preview = preview
+        throw err
+    }
+    const commit = await commitItemsBulkUpload(file, { strict, update_blanks })
+    return { preview, commit }
 }
 
 // ✅ NEW: commit (strict by default)
@@ -220,8 +293,26 @@ export function dispenseStock(payload) {
 
 // ---------- Transactions ----------
 export function listStockTransactions(params = {}) {
-    return API.get('/inventory/transactions', { params })
+    return API.get("/inventory/transactions", { params })
 }
+
+export const downloadStockTransactionsPdf = async (params = {}) => {
+    const res = await API.get(`/inventory/transactions/pdf`, {
+        params,
+        responseType: "blob",
+    })
+    return res.data // Blob
+}
+
+// ---------- Schedule Medicine Report ----------
+export const downloadScheduleMedicineReportPdf = async (params = {}) => {
+    const res = await API.get("/inventory/schedule-medicine-report.pdf", {
+        params, // { date_from, date_to, location_id?, only_outgoing? }
+        responseType: "blob",
+    })
+    return res.data // Blob
+}
+
 export function getItemByQr(qrNumber) {
     return API.get(`/inventory/items/by-qr/${encodeURIComponent(qrNumber)}`)
 }

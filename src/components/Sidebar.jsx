@@ -47,6 +47,7 @@ import {
   Wallet,
   Database,
   Gauge,
+  AlertTriangle
 } from 'lucide-react'
 
 const defaultPrimary = '#2563eb'
@@ -210,6 +211,18 @@ const GROUPS = [
           'pharmacy.accounts.supplier_ledger.export',
         ],
       },
+      {
+        key: "pharmacy-stock-alerts",
+        label: "Stock Alerts",
+        to: "/pharmacy/stock/alerts",
+        icon: AlertTriangle,
+        reqAny: [
+          "pharmacy.stock.alerts.view",
+          "pharmacy.stock.alerts.manage",
+          "pharmacy.stock.alerts.export",
+        ],
+      },
+
     ],
   },
 
