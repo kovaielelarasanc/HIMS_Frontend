@@ -56,7 +56,7 @@ export default function SupplierMonthlySummaryScreen() {
       ; (async () => {
         try {
           const res = await listSuppliers()
-          setSuppliers(res.data || [])
+          setSuppliers(res || [])
         } catch {
           // interceptor toast
         }

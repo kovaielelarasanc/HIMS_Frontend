@@ -13,16 +13,16 @@ function unwrap(res) {
     return payload?.data ?? payload
 }
 
-// ✅ normalize axios cancel errors (AbortController)
-function isCanceledError(e) {
-    return (
-        e?.code === "ERR_CANCELED" ||
-        e?.name === "CanceledError" ||
-        e?.message?.toLowerCase?.().includes("canceled")
-    )
-}
+// // ✅ normalize axios cancel errors (AbortController)
+// function isCanceledError(e) {
+//     return (
+//         e?.code === "ERR_CANCELED" ||
+//         e?.name === "CanceledError" ||
+//         e?.message?.toLowerCase?.().includes("canceled")
+//     )
+// }
 
-export { isCanceledError }
+// export { isCanceledError }
 
 export async function getStockAlertsSummary(params = {}, config = {}) {
     const res = await API.get("/pharmacy/stock/alerts/summary", { params, ...config })

@@ -144,7 +144,8 @@ export default function SupplierLedgerScreen() {
     if (!canView) return
     try {
       const res = await listSuppliers()
-      setSuppliers(res.data || [])
+      console.log(res, "supplier");
+      setSuppliers(res || [])
     } catch {
       // interceptor toast
     }

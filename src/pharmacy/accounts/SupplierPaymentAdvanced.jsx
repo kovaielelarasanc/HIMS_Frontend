@@ -70,7 +70,7 @@ export default function SupplierPaymentsScreen() {
     if (!canView) return
     try {
       const res = await listSuppliers()
-      setSuppliers(res.data || [])
+      setSuppliers(res || [])
     } catch {
       // interceptor toast
     }

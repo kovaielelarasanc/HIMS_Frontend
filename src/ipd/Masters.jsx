@@ -1226,7 +1226,10 @@ function EntityModal({ open, modal, onClose, wardOptions, roomOptions, onSaved }
     const entity = modal?.entity
     const mode = modal?.mode
     const row = modal?.row
-    const defaults = modal?.defaults || {}
+    const defaults = modal?.defaults ?? null
+    const defaultsWardId = defaults?.ward_id ?? ''
+    const defaultsRoomId = defaults?.room_id ?? ''
+
 
     const title =
         mode === 'create'
@@ -1255,25 +1258,33 @@ function EntityModal({ open, modal, onClose, wardOptions, roomOptions, onSaved }
     useEffect(() => {
         if (!open) return
         setErr('')
+
         if (entity === 'ward') {
             setV({
                 code: mode === 'edit' ? row?.code || '' : '',
                 name: mode === 'edit' ? row?.name || '' : '',
                 floor: mode === 'edit' ? row?.floor || '' : '',
             })
-        } else if (entity === 'room') {
+            return
+        }
+
+        if (entity === 'room') {
             setV({
-                ward_id: mode === 'edit' ? String(row?.ward_id ?? '') : String(defaults.ward_id ?? ''),
+                ward_id: mode === 'edit' ? String(row?.ward_id ?? '') : String(defaultsWardId ?? ''),
                 number: mode === 'edit' ? row?.number || '' : '',
                 type: mode === 'edit' ? row?.type || '' : '',
             })
-        } else if (entity === 'bed') {
+            return
+        }
+
+        if (entity === 'bed') {
             setV({
-                room_id: mode === 'edit' ? String(row?.room_id ?? '') : String(defaults.room_id ?? ''),
+                room_id: mode === 'edit' ? String(row?.room_id ?? '') : String(defaultsRoomId ?? ''),
                 code: mode === 'edit' ? row?.code || '' : '',
             })
         }
-    }, [open, entity, mode, row, defaults])
+    }, [open, entity, mode, row, defaultsWardId, defaultsRoomId])
+
 
     const roomTypeOptions = useMemo(() => {
         const set = new Set(PREDEFINED_ROOM_TYPES)
@@ -1338,7 +1349,7 @@ function EntityModal({ open, modal, onClose, wardOptions, roomOptions, onSaved }
     }
 
     return (
-        <Modal open={open} title={title} subtitle={subtitle} onClose={() => (saving ? null : onClose?.())}>
+        <Modal open={open} title={title} subtitle={subtitle} onClose={saving ? undefined : onClose}>
             <div className="space-y-4">
                 {entity === 'ward' ? (
                     <div className="grid gap-3 md:grid-cols-2">
