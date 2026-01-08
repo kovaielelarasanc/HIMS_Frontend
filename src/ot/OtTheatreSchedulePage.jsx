@@ -601,8 +601,8 @@ function ScheduleCards({
                                                 type="button"
                                                 onClick={() => onOpenCase(s)}
                                                 className={`inline-flex items-center justify-center gap-1.5 rounded-full border px-3.5 py-1.5 text-xs font-semibold transition ${s.case_id
-                                                        ? 'border-slate-200 bg-white text-slate-900 hover:border-sky-400 hover:text-sky-800'
-                                                        : 'border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700'
+                                                    ? 'border-slate-200 bg-white text-slate-900 hover:border-sky-400 hover:text-sky-800'
+                                                    : 'border-emerald-600 bg-emerald-600 text-white hover:bg-emerald-700'
                                                     }`}
                                             >
                                                 <Activity className="h-4 w-4" />
@@ -770,7 +770,7 @@ function ProcedurePicker({ primaryId, additionalIds, onChange }) {
 }
 
 /* =========================================================
-   Schedule Modal (Apple-premium + sticky action bar)
+   Schedule Modal (Nutryah-premium + sticky action bar)
    - OT Theater dropdown
    - Surgeon + Anaesthetist mandatory
    - Petitory + Assistant optional

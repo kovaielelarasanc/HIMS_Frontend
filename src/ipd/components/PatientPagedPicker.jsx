@@ -57,7 +57,7 @@ function pickPatientMeta(p) {
 }
 
 /**
- * Apple-premium Patient Picker
+ * Nutryah-premium Patient Picker
  * ✅ 3 default (recent)
  * ✅ more results only on search
  * ✅ modal centered on desktop + bottom sheet on mobile

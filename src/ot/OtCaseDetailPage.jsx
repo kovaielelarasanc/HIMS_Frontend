@@ -503,7 +503,7 @@ export default function OtCaseDetailPage() {
 
     return (
         <div className="flex h-full flex-col gap-3 p-3 md:p-4">
-            {/* HERO HEADER (Apple) */}
+            {/* HERO HEADER (Nutryah) */}
             <SoftCard className="overflow-hidden">
                 <div className="border-b border-slate-200 bg-gradient-to-b from-white to-slate-50/70 px-3 py-3 md:px-5 md:py-4">
                     <div className="flex flex-wrap items-center justify-between gap-3">
@@ -703,7 +703,7 @@ export default function OtCaseDetailPage() {
                         </div>
                     )}
 
-                    {/* Team strip (Apple pill row, scrollable on mobile) */}
+                    {/* Team strip (Nutryah pill row, scrollable on mobile) */}
                     <div className="mt-3 rounded-2xl border border-slate-200 bg-white p-3">
                         <div className="flex flex-wrap items-center justify-between gap-2">
                             <div className="flex items-center gap-2">
@@ -735,7 +735,7 @@ export default function OtCaseDetailPage() {
                 </div>
             </SoftCard>
 
-            {/* Sticky Tabs (Apple segmented pills) */}
+            {/* Sticky Tabs (Nutryah segmented pills) */}
             <div className="sticky top-0 z-10">
                 <div className="rounded-[22px] border border-slate-200 bg-white/75 backdrop-blur-xl shadow-[0_10px_25px_rgba(2,6,23,0.06)]">
                     <div className="flex gap-2 overflow-x-auto p-2">

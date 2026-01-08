@@ -139,13 +139,7 @@ export default function LabReportPrint() {
                     </div>
 
                     <div className="flex items-center gap-2">
-                        <button
-                            className="inline-flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
-                            onClick={printNow}
-                        >
-                            <Printer className="h-4 w-4" />
-                            Print
-                        </button>
+                       
                         <button
                             className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-3 py-2 text-xs font-semibold text-white hover:bg-slate-800"
                             onClick={downloadPdf}

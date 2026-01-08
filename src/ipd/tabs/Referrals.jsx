@@ -328,7 +328,7 @@ export default function Referrals({ admissionId }) {
     const [detail, setDetail] = useState(null)
     const [detailLoading, setDetailLoading] = useState(false)
 
-    // Apple-ish styles
+    // Nutryah-ish styles
     const ui = {
         label: 'text-[11px] sm:text-xs font-medium text-slate-600',
         input:

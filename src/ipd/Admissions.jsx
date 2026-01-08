@@ -464,7 +464,7 @@ export default function Admissions() {
             )}
 
             <div className="mx-auto max-w-6xl px-4 py-6 space-y-4 md:px-8">
-                {/* HERO (Apple-premium: banner + activity card + 2 mini cards) */}
+                {/* HERO (Nutryah-premium: banner + activity card + 2 mini cards) */}
                 <motion.div
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}

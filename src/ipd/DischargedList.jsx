@@ -159,7 +159,7 @@ export default function DischargedList() {
     return (
         <div className="min-h-[calc(100vh-4rem)] w-full bg-gradient-to-b from-slate-50 via-white to-slate-50 px-4 py-4 text-black md:px-6 md:py-6">
             <div className="mx-auto max-w-6xl space-y-3">
-                {/* HERO (Apple-premium) */}
+                {/* HERO (Nutryah-premium) */}
                 <div className="relative overflow-hidden rounded-3xl border border-black/10 bg-white/75 backdrop-blur-xl shadow-[0_14px_40px_rgba(2,6,23,0.10)]">
                     <div className="absolute inset-0 opacity-60 bg-[radial-gradient(circle_at_top,_rgba(56,189,248,0.16),_transparent_55%)]" />
                     <div className="relative p-4 sm:p-5">

@@ -272,7 +272,7 @@ export default function RegisterAdmin() {
               </div>
 
               <div className="hidden rounded-full border border-slate-200 bg-white px-3 py-1 text-[11px] font-semibold text-slate-700 md:inline-flex">
-                Apple-premium UI
+                Nutryah-premium UI
               </div>
             </div>
 

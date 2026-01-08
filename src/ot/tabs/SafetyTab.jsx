@@ -189,7 +189,7 @@ export default function SafetyTab({ caseId }) {
             onSubmit={handleSubmit}
             className="space-y-4 rounded-3xl border border-slate-200 bg-white/80 p-3 shadow-[0_18px_50px_rgba(2,6,23,0.08)] backdrop-blur-xl md:p-4"
         >
-            {/* Apple Header */}
+            {/* Nutryah Header */}
             <motion.div
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}

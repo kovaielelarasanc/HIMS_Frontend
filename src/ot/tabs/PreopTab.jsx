@@ -244,7 +244,7 @@ export default function PreopTab({ caseId }) {
 
     return (
         <form onSubmit={handleSubmit} className="relative">
-            {/* Apple-style shell */}
+            {/* Nutryah-style shell */}
             <div className="rounded-[28px] border border-slate-200 bg-white/75 backdrop-blur-xl shadow-[0_12px_35px_rgba(2,6,23,0.10)]">
                 {/* Top header */}
                 <div className="rounded-[28px] border-b border-slate-200 bg-gradient-to-b from-white to-slate-50/70 px-4 py-4 md:px-5">

@@ -113,7 +113,7 @@ function LocLine({ label, loc }) {
     )
 }
 
-/** Apple-premium modal frame: mobile full-ish + sticky header/footer */
+/** Nutryah-premium modal frame: mobile full-ish + sticky header/footer */
 function ModalFrame({ icon: Icon, title, description, children, footer }) {
     return (
         <div className="flex max-h-[85vh] w-full flex-col overflow-hidden rounded-2xl bg-white sm:rounded-3xl">

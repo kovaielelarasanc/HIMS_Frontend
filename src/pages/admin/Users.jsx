@@ -860,7 +860,7 @@ function EmailVerifyOtpModal({ userId, email, onClose, onVerified }) {
         transition={{ duration: 0.22, ease: "easeOut" }}
         className="w-full sm:max-w-md overflow-hidden rounded-t-[28px] sm:rounded-[28px] bg-white shadow-[0_30px_80px_-25px_rgba(0,0,0,0.45)]"
       >
-        {/* Header (Apple-ish) */}
+        {/* Header (Nutryah-ish) */}
         <div className="relative px-5 pt-5 pb-4">
           <div className="absolute inset-0 bg-gradient-to-br from-teal-700 via-teal-600 to-blue-600" />
           <div className="absolute inset-0 opacity-30 bg-[radial-gradient(circle_at_top,_#e0f2fe,_transparent_55%)]" />

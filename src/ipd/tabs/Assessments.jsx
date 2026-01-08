@@ -42,12 +42,12 @@ function ToneBadge({ children, tone = 'slate' }) {
     tone === 'rose'
       ? 'bg-rose-50 text-rose-800 ring-rose-100'
       : tone === 'amber'
-      ? 'bg-amber-50 text-amber-800 ring-amber-100'
-      : tone === 'emerald'
-      ? 'bg-emerald-50 text-emerald-800 ring-emerald-100'
-      : tone === 'sky'
-      ? 'bg-sky-50 text-sky-800 ring-sky-100'
-      : 'bg-slate-50 text-slate-800 ring-slate-100'
+        ? 'bg-amber-50 text-amber-800 ring-amber-100'
+        : tone === 'emerald'
+          ? 'bg-emerald-50 text-emerald-800 ring-emerald-100'
+          : tone === 'sky'
+            ? 'bg-sky-50 text-sky-800 ring-sky-100'
+            : 'bg-slate-50 text-slate-800 ring-slate-100'
 
   return (
     <span className={cn('inline-flex items-center rounded-full px-2.5 py-1 text-[10px] font-semibold ring-1', cls)}>
@@ -91,10 +91,10 @@ function SectionShell({
     accent === 'rose'
       ? 'ring-rose-100'
       : accent === 'amber'
-      ? 'ring-amber-100'
-      : accent === 'emerald'
-      ? 'ring-emerald-100'
-      : 'ring-sky-100'
+        ? 'ring-amber-100'
+        : accent === 'emerald'
+          ? 'ring-emerald-100'
+          : 'ring-sky-100'
 
   return (
     <div className="space-y-3">
@@ -107,10 +107,10 @@ function SectionShell({
               accent === 'rose'
                 ? 'from-rose-500 to-fuchsia-500'
                 : accent === 'amber'
-                ? 'from-amber-500 to-orange-500'
-                : accent === 'emerald'
-                ? 'from-emerald-500 to-teal-500'
-                : 'from-sky-500 to-violet-500',
+                  ? 'from-amber-500 to-orange-500'
+                  : accent === 'emerald'
+                    ? 'from-emerald-500 to-teal-500'
+                    : 'from-sky-500 to-violet-500',
             )}
           >
             <Icon className="h-4 w-4" />
@@ -419,7 +419,7 @@ export default function AssessmentsTab({ admissionId, canWrite }) {
       <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <div className="text-sm font-semibold text-slate-900">Clinical Assessments</div>
-          <div className="text-[12px] text-slate-500">Fast record + clear history (Apple-premium, responsive)</div>
+          <div className="text-[12px] text-slate-500">Fast record + clear history (Nutryah-premium, responsive)</div>
         </div>
 
         <div className="flex items-center gap-2">
@@ -466,10 +466,10 @@ export default function AssessmentsTab({ admissionId, canWrite }) {
               t.key === 'pain'
                 ? painRows.length
                 : t.key === 'fall'
-                ? fallRows.length
-                : t.key === 'pressure'
-                ? pressureRows.length
-                : nutritionRows.length
+                  ? fallRows.length
+                  : t.key === 'pressure'
+                    ? pressureRows.length
+                    : nutritionRows.length
 
             return (
               <button

@@ -47,7 +47,8 @@ import {
   Wallet,
   Database,
   Gauge,
-  AlertTriangle
+  AlertTriangle,
+  PlugZap
 } from 'lucide-react'
 
 const defaultPrimary = '#2563eb'
@@ -302,14 +303,41 @@ const GROUPS = [
     label: 'Laboratory',
     icon: FlaskConical,
     items: [
-      { key: 'lab-orders', label: 'Orders & Reporting', to: '/lab/orders', icon: TestTube2, reqAny: ['lab.orders.view', 'lab.orders.create', 'orders.lab.view', 'orders.lab.create'] },
-      { key: 'lab-service-master', label: 'Lab Service Master', to: '/lab/service/masters', icon: Microscope, reqAny: ['lis.masters.services.view', 'lis.masters.services.create', 'lis.masters.services.update'] },
-      { key: 'lab-device-mapping', label: 'Analyzer Device Mapping', to: '/lis/device-mapping', icon: Cpu, reqAny: ['lab.devices.view', 'lab.devices.manage'] },
-      { key: 'lab-analyzer-staging', label: 'Analyzer Staging', to: '/lis/analyzer-staging', icon: Settings2, reqAny: ['lab.device_results.review', 'lab.devices.view'] },
-      { key: 'lab-device-logs', label: 'Analyzer Logs', to: '/lis/device-logs', icon: History, reqAny: ['lab.device_logs.view', 'lab.devices.view'] },
-      { key: 'lab-masters', label: 'Lab Masters (NABL)', to: '/lab/masters', icon: KeyRound, reqAny: ['lab.masters.manage'] },
+      {
+        key: 'lab-orders',
+        label: 'Orders & Reporting',
+        to: '/lab/orders',
+        icon: TestTube2,
+        reqAny: ['lab.orders.view', 'lab.orders.create', 'orders.lab.view', 'orders.lab.create'],
+      },
+
+      {
+        key: 'lab-service-master',
+        label: 'Lab Service Master',
+        to: '/lab/service/masters',
+        icon: Microscope,
+        reqAny: ['lis.masters.services.view', 'lis.masters.services.create', 'lis.masters.services.update'],
+      },
+
+      {
+        key: 'lab-masters',
+        label: 'Lab Masters (NABL)',
+        to: '/lab/masters',
+        icon: KeyRound,
+        reqAny: ['lab.masters.manage'],
+      },
+
+      // ✅ NEW: Lab Integration (HL7/ASTM Monitor)
+      {
+        key: 'lab-integration',
+        label: 'Lab Integration',
+        to: '/lab/integration',
+        icon: PlugZap, // import from lucide-react
+        reqAny: ['lab.integration.view', 'lab.integration.manage'],
+      },
     ],
   },
+
 
   // Radiology (RIS)
   {
