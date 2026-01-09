@@ -42,9 +42,9 @@ import OtCaseDetailPage from "./ot/OtCaseDetailPage";
 
 
 
-import InvoiceDetail from "./billing/InvoiceDetail";
-import BillingConsole from "./billing/BillingConsole";
-import Advances from "./billing/AdvanceDeposit";
+// import InvoiceDetail from "./billing/InvoiceDetail";
+// import BillingConsole from "./billing/BillingConsole";
+// import Advances from "./billing/AdvanceDeposit";
 
 // import PatientEmrTimeline from "./emr/PatientEmrTimeline";
 
@@ -99,6 +99,14 @@ import EmrConsole from "./pages/emr/EmrConsole";
 import AdmissionsDashboard from "./ipd/AdmissionsDashboard";
 import StockAlertsDashboard from "./pages/inventoryPharmacy/StockAlertsTab";
 import LabIntegrationPage from "./labIntegration/LabIntegrationPage";
+
+import BillingRoutes from "./billing/BillingRoutes";
+import BillingCaseDetail from "./billing/BillingCaseDetail";
+import InvoiceEditor from "./billing/InvoiceEditor";
+import BillingDashboard from "./billing/BillingDashboard";
+import BillingAddItem from "./billing/BillingAddItem";
+import ChargeMaster from "./billing/ChargeMaster";
+
 
 export default function App() {
   useEffect(() => {
@@ -194,9 +202,9 @@ export default function App() {
             {/* <Route path="/ot/logs" element={<OtLogsAdmin />} /> */}
 
             {/* Billing */}
-            <Route path="/billing" element={<BillingConsole />} />
+            {/* <Route path="/billing" element={<BillingConsole />} />
             <Route path="/billing/invoices/:invoiceId" element={<InvoiceDetail />} />
-            <Route path="/billing/advance" element={<Advances />} />
+            <Route path="/billing/advance" element={<Advances />} /> */}
 
             {/* EMR */}
             <Route path="/emr" element={<EmrConsole />} />
@@ -241,6 +249,19 @@ export default function App() {
             <Route path="/pharmacy/accounts/supplier-monthly-summary" element={<SupplierMonthlySummary />} />
             <Route path="/pharmacy/accounts/supplier-payments" element={<SupplierPaymentAdvanced />} />
             <Route path="/pharmacy/accounts/supplier-statement" element={<SupplierPayments />} />
+
+             {/* <Route path="/billing/dashboard" element={<BillingDashboard />} />
+            <Route path="/billing/cases" element={<BillingCasesList />} />
+            <Route path="/billing/cases/:caseId" element={<BillingCaseDetail />} />
+            <Route path="/billing/cases/:caseId/invoices/:invoiceId" element={<InvoiceDetail />} /> */}
+            <Route path="/billing/*" element={<BillingRoutes />} />
+            <Route path="/billing/dashboard" element={<BillingDashboard />} />
+            <Route path="/billing/cases/:caseId" element={<BillingCaseDetail />} />
+            <Route path="/billing/invoices/:invoiceId" element={<InvoiceEditor />} />
+            <Route path="/billing/cases/:caseId/add-item" element={<BillingAddItem />} />
+
+            <Route path="/masters/charge-master" element={<ChargeMaster />} />
+            <Route path="*" element={<Navigate to="/billing" replace />} />
           </Route>
         </Route>
 

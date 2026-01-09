@@ -484,7 +484,7 @@ export default function Dashboard() {
         <div className="absolute top-24 left-1/2 h-44 w-44 -translate-x-1/2 rounded-full bg-emerald-200/25 blur-3xl" />
       </div>
 
-      <div className="mx-auto w-full max-w-7xl space-y-4">
+      <div className="mx-auto w-full max-w-12xl space-y-4">
         {/* HEADER */}
         <div className="space-y-3">
           <motion.div

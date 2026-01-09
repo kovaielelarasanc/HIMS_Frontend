@@ -400,7 +400,15 @@ const GROUPS = [
     key: 'billing',
     label: 'Billing',
     icon: Receipt,
-    items: [{ key: 'billing-console', label: 'Billing Console', to: '/billing', icon: LayoutDashboard, reqAny: ['billing.view', 'billing.create'] }],
+    items: [
+
+      // NEW SCREENS
+      { key: 'billing-Dashboard', label: 'Billing DASHBOARD', to: '/billing/dashboard', icon: LayoutDashboard, reqAny: ['billing.view', 'billing.create'] },
+      { key: 'billing masters', label: 'Billing Masters', to: '/masters/charge-master', icon: LayoutDashboard, reqAny: ['billing.view', 'billing.create'] },
+
+
+
+    ],
   },
 
   // Settings

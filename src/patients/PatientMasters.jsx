@@ -45,7 +45,7 @@ const PAYER_TYPES = [
 ------------------------- */
 const UI = {
     page: 'bg-slate-50 min-h-full',
-    container: 'mx-auto w-full max-w-6xl px-3 sm:px-5 py-4',
+    container: 'mx-auto w-full max-w-12xl px-3 sm:px-5 py-4',
     card:
         'rounded-3xl border border-black/50 bg-white/85 backdrop-blur shadow-[0_1px_2px_rgba(0,0,0,0.06)]',
     insetCard:
@@ -366,11 +366,11 @@ export default function PatientMasters() {
     ]
 
     return (
-        <div className={UI.page}>
+        <div className={UI.page} >
             <div className={UI.container}>
                 {/* Header */}
                 <div className={cx(UI.card, 'p-5')}>
-                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                    <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between ">
                         <div className="min-w-0">
                             <div
                                 className="inline-flex items-center gap-2 rounded-full px-3 py-1 text-[12px] font-semibold border"

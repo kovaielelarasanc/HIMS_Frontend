@@ -1,6 +1,6 @@
 // FILE: frontend/src/ot/OtMasters.jsx
-import { useEffect, useMemo, useState, useCallback } from 'react'
-import { toast } from 'sonner'
+import { useEffect, useMemo, useState, useCallback } from "react"
+import { toast } from "sonner"
 import {
     Plus,
     RefreshCw,
@@ -14,9 +14,9 @@ import {
     Activity,
     ShieldCheck,
     Wrench,
-} from 'lucide-react'
+} from "lucide-react"
 
-import { useCanAny } from '../hooks/useCan'
+import { useCanAny } from "../hooks/useCan"
 
 import {
     listOtSurgeries,
@@ -47,20 +47,39 @@ import {
     createOtEquipment,
     updateOtEquipment,
     deleteOtEquipment,
-} from '../api/otMasters'
+} from "../api/otMasters"
 
-import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Badge } from '@/components/ui/badge'
-import { Separator } from '@/components/ui/separator'
-import { Skeleton } from '@/components/ui/skeleton'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Checkbox } from '@/components/ui/checkbox'
-import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select'
+import {
+    Card,
+    CardHeader,
+    CardTitle,
+    CardDescription,
+    CardContent,
+} from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
+import { Skeleton } from "@/components/ui/skeleton"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
+import {
+    Dialog,
+    DialogContent,
+    DialogHeader,
+    DialogTitle,
+    DialogDescription,
+    DialogFooter,
+} from "@/components/ui/dialog"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
+import {
+    Select,
+    SelectTrigger,
+    SelectValue,
+    SelectContent,
+    SelectItem,
+} from "@/components/ui/select"
 
 /* =========================================================
    Helpers
@@ -68,26 +87,35 @@ import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@
 const money = (v) => {
     const n = Number(v || 0)
     try {
-        return new Intl.NumberFormat('en-IN', { style: 'currency', currency: 'INR' }).format(n)
+        return new Intl.NumberFormat("en-IN", {
+            style: "currency",
+            currency: "INR",
+        }).format(n)
     } catch {
         return `₹ ${n.toFixed(2)}`
     }
 }
 
-const cx = (...a) => a.filter(Boolean).join(' ')
+const cx = (...a) => a.filter(Boolean).join(" ")
 
 // sentinel for Radix Select "None" option (Radix forbids empty string for SelectItem)
-const NONE = '__NONE__'
+const NONE = "__NONE__"
 
-function Pill({ children, variant = 'default' }) {
+function Pill({ children, variant = "default" }) {
     return (
-        <Badge variant={variant} className="rounded-full px-2.5 py-0.5 text-[11px]">
+        <Badge
+            variant={variant}
+            className="rounded-full px-2.5 py-0.5 text-[11px]"
+        >
             {children}
         </Badge>
     )
 }
 
-function EmptyState({ title = 'No items', hint = 'Try changing filters or create a new one.' }) {
+function EmptyState({
+    title = "No items",
+    hint = "Try changing filters or create a new one.",
+}) {
     return (
         <div className="py-10 text-center">
             <div className="text-sm font-medium text-slate-900">{title}</div>
@@ -117,7 +145,7 @@ function DataTable({
                             <th
                                 key={c.key}
                                 className={cx(
-                                    'px-2 sm:px-3 py-2 text-left text-[11px] sm:text-[12px] font-medium whitespace-nowrap',
+                                    "px-2 sm:px-3 py-2 text-left text-[11px] sm:text-[12px] font-medium whitespace-nowrap",
                                     c.className
                                 )}
                             >
@@ -157,7 +185,13 @@ function DataTable({
                         rows?.map((r) => (
                             <tr key={r.id} className="border-t align-top hover:bg-slate-50/60">
                                 {columns.map((c) => (
-                                    <td key={c.key} className={cx('px-2 sm:px-3 py-2 whitespace-nowrap', c.tdClassName)}>
+                                    <td
+                                        key={c.key}
+                                        className={cx(
+                                            "px-2 sm:px-3 py-2 whitespace-nowrap",
+                                            c.tdClassName
+                                        )}
+                                    >
                                         {c.render ? c.render(r) : r[c.key]}
                                     </td>
                                 ))}
@@ -165,7 +199,12 @@ function DataTable({
                                 {(canUpdate || canDelete) && (
                                     <td className="px-2 sm:px-3 py-2 text-right whitespace-nowrap">
                                         {canUpdate && (
-                                            <Button variant="ghost" size="icon" className="rounded-xl" onClick={() => onEdit?.(r)}>
+                                            <Button
+                                                variant="ghost"
+                                                size="icon"
+                                                className="rounded-xl"
+                                                onClick={() => onEdit?.(r)}
+                                            >
                                                 <Pencil className="h-4 w-4" />
                                             </Button>
                                         )}
@@ -197,67 +236,67 @@ export default function OtMasters() {
     // Permissions
     // =========================================================
     const canViewAny = useCanAny([
-        'ot.masters.view',
-        'ot.procedures.view',
-        'ot.theaters.view',
-        'ot.instruments.view',
-        'ot.devices.view',
-        'ot.specialities.view',
-        'ot.equipment.view',
-        'ot.surgeries.view',
+        "ot.masters.view",
+        "ot.procedures.view",
+        "ot.theaters.view",
+        "ot.instruments.view",
+        "ot.devices.view",
+        "ot.specialities.view",
+        "ot.equipment.view",
+        "ot.surgeries.view",
     ])
 
     const perms = {
         procedures: {
-            view: useCanAny(['ot.masters.view', 'ot.procedures.view']),
-            create: useCanAny(['ot.masters.manage', 'ot.procedures.create']),
-            update: useCanAny(['ot.masters.manage', 'ot.procedures.update']),
-            delete: useCanAny(['ot.masters.manage', 'ot.procedures.delete']),
+            view: useCanAny(["ot.masters.view", "ot.procedures.view"]),
+            create: useCanAny(["ot.masters.manage", "ot.procedures.create"]),
+            update: useCanAny(["ot.masters.manage", "ot.procedures.update"]),
+            delete: useCanAny(["ot.masters.manage", "ot.procedures.delete"]),
         },
         theaters: {
-            view: useCanAny(['ot.masters.view', 'ot.theaters.view']),
-            create: useCanAny(['ot.masters.create', 'ot.theaters.create']),
-            update: useCanAny(['ot.masters.update', 'ot.theaters.update']),
-            delete: useCanAny(['ot.masters.delete', 'ot.theaters.delete']),
+            view: useCanAny(["ot.masters.view", "ot.theaters.view"]),
+            create: useCanAny(["ot.masters.create", "ot.theaters.create"]),
+            update: useCanAny(["ot.masters.update", "ot.theaters.update"]),
+            delete: useCanAny(["ot.masters.delete", "ot.theaters.delete"]),
         },
         instruments: {
-            view: useCanAny(['ot.masters.view', 'ot.instruments.view']),
-            create: useCanAny(['ot.masters.create', 'ot.instruments.create']),
-            update: useCanAny(['ot.masters.update', 'ot.instruments.update']),
-            delete: useCanAny(['ot.masters.delete', 'ot.instruments.delete']),
+            view: useCanAny(["ot.masters.view", "ot.instruments.view"]),
+            create: useCanAny(["ot.masters.create", "ot.instruments.create"]),
+            update: useCanAny(["ot.masters.update", "ot.instruments.update"]),
+            delete: useCanAny(["ot.masters.delete", "ot.instruments.delete"]),
         },
         devices: {
-            view: useCanAny(['ot.masters.view', 'ot.devices.view']),
-            create: useCanAny(['ot.masters.create', 'ot.devices.create']),
-            update: useCanAny(['ot.masters.update', 'ot.devices.update']),
-            delete: useCanAny(['ot.masters.delete', 'ot.devices.delete']),
+            view: useCanAny(["ot.masters.view", "ot.devices.view"]),
+            create: useCanAny(["ot.masters.create", "ot.devices.create"]),
+            update: useCanAny(["ot.masters.update", "ot.devices.update"]),
+            delete: useCanAny(["ot.masters.delete", "ot.devices.delete"]),
         },
         specialities: {
-            view: useCanAny(['ot.masters.view', 'ot.specialities.view']),
-            create: useCanAny(['ot.masters.create', 'ot.specialities.create']),
-            update: useCanAny(['ot.masters.update', 'ot.specialities.update']),
-            delete: useCanAny(['ot.masters.delete', 'ot.specialities.delete']),
+            view: useCanAny(["ot.masters.view", "ot.specialities.view"]),
+            create: useCanAny(["ot.masters.create", "ot.specialities.create"]),
+            update: useCanAny(["ot.masters.update", "ot.specialities.update"]),
+            delete: useCanAny(["ot.masters.delete", "ot.specialities.delete"]),
         },
         equipment: {
-            view: useCanAny(['ot.masters.view', 'ot.equipment.view']),
-            create: useCanAny(['ot.masters.create', 'ot.equipment.create']),
-            update: useCanAny(['ot.masters.update', 'ot.equipment.update']),
-            delete: useCanAny(['ot.masters.delete', 'ot.equipment.delete']),
+            view: useCanAny(["ot.masters.view", "ot.equipment.view"]),
+            create: useCanAny(["ot.masters.create", "ot.equipment.create"]),
+            update: useCanAny(["ot.masters.update", "ot.equipment.update"]),
+            delete: useCanAny(["ot.masters.delete", "ot.equipment.delete"]),
         },
         surgeries: {
-            view: useCanAny(['ot.masters.view', 'ot.surgeries.view']),
-            create: useCanAny(['ot.masters.create', 'ot.surgeries.create']),
-            update: useCanAny(['ot.masters.update', 'ot.surgeries.update']),
-            delete: useCanAny(['ot.masters.delete', 'ot.surgeries.delete']),
+            view: useCanAny(["ot.masters.view", "ot.surgeries.view"]),
+            create: useCanAny(["ot.masters.create", "ot.surgeries.create"]),
+            update: useCanAny(["ot.masters.update", "ot.surgeries.update"]),
+            delete: useCanAny(["ot.masters.delete", "ot.surgeries.delete"]),
         },
     }
 
     // =========================================================
     // Shared UI state
     // =========================================================
-    const [tab, setTab] = useState('procedures')
+    const [tab, setTab] = useState("procedures")
     const [loading, setLoading] = useState(false)
-    const [q, setQ] = useState('')
+    const [q, setQ] = useState("")
     const [activeOnly, setActiveOnly] = useState(true)
 
     // options for procedure form
@@ -270,60 +309,58 @@ export default function OtMasters() {
     // Dialog state
     // =========================================================
     const [open, setOpen] = useState(false)
-    const [mode, setMode] = useState('create') // create | edit
+    const [mode, setMode] = useState("create") // create | edit
     const [editing, setEditing] = useState(null)
-
-    // forms
     const [form, setForm] = useState({})
 
     const closeDialog = () => {
         setOpen(false)
-        setMode('create')
+        setMode("create")
         setEditing(null)
         setForm({})
     }
 
     const openCreate = () => {
         const p = perms[tab]
-        if (!p?.create) return toast.error('No permission to create')
-        setMode('create')
+        if (!p?.create) return toast.error("No permission to create")
+        setMode("create")
         setEditing(null)
 
-        if (tab === 'procedures') {
+        if (tab === "procedures") {
             setForm({
-                code: '',
-                name: '',
-                speciality_id: '', // keep "" for placeholder, do NOT use SelectItem value=""
-                default_duration_min: '',
-                rate_per_hour: '',
-                base_cost: '',
-                anesthesia_cost: '',
-                surgeon_cost: '',
-                petitory_cost: '',
-                asst_doctor_cost: '',
-                description: '',
+                code: "",
+                name: "",
+                speciality_id: "", // keep "" for placeholder
+                default_duration_min: "",
+                rate_per_hour: "",
+                base_cost: "",
+                anesthesia_cost: "",
+                surgeon_cost: "",
+                petitory_cost: "",
+                asst_doctor_cost: "",
+                description: "",
                 is_active: true,
             })
-        } else if (tab === 'theaters') {
-            setForm({ code: '', name: '', cost_per_hour: '', description: '', is_active: true })
-        } else if (tab === 'instruments') {
+        } else if (tab === "theaters") {
+            setForm({ code: "", name: "", cost_per_hour: "", description: "", is_active: true })
+        } else if (tab === "instruments") {
             setForm({
-                code: '',
-                name: '',
+                code: "",
+                name: "",
                 available_qty: 0,
-                cost_per_qty: '',
-                uom: 'Nos',
-                description: '',
+                cost_per_qty: "",
+                uom: "Nos",
+                description: "",
                 is_active: true,
             })
-        } else if (tab === 'devices') {
-            setForm({ category: 'AIRWAY', code: '', name: '', cost: '', description: '', is_active: true })
-        } else if (tab === 'specialities') {
-            setForm({ code: '', name: '', description: '', is_active: true })
-        } else if (tab === 'equipment') {
-            setForm({ code: '', name: '', category: '', description: '', is_critical: false, is_active: true })
-        } else if (tab === 'surgeries') {
-            setForm({ code: '', name: '', default_cost: '', hourly_cost: '', description: '', active: true })
+        } else if (tab === "devices") {
+            setForm({ category: "AIRWAY", code: "", name: "", cost: "", description: "", is_active: true })
+        } else if (tab === "specialities") {
+            setForm({ code: "", name: "", description: "", is_active: true })
+        } else if (tab === "equipment") {
+            setForm({ code: "", name: "", category: "", description: "", is_critical: false, is_active: true })
+        } else if (tab === "surgeries") {
+            setForm({ code: "", name: "", default_cost: "", hourly_cost: "", description: "", active: true })
         }
 
         setOpen(true)
@@ -331,76 +368,76 @@ export default function OtMasters() {
 
     const openEdit = (r) => {
         const p = perms[tab]
-        if (!p?.update) return toast.error('No permission to update')
+        if (!p?.update) return toast.error("No permission to update")
 
-        setMode('edit')
+        setMode("edit")
         setEditing(r)
 
-        if (tab === 'procedures') {
+        if (tab === "procedures") {
             setForm({
-                code: r.code || '',
-                name: r.name || '',
-                speciality_id: r.speciality_id ? String(r.speciality_id) : '',
-                default_duration_min: r.default_duration_min ?? '',
-                rate_per_hour: r.rate_per_hour ?? '',
-                base_cost: r.base_cost ?? '',
-                anesthesia_cost: r.anesthesia_cost ?? '',
-                surgeon_cost: r.surgeon_cost ?? '',
-                petitory_cost: r.petitory_cost ?? '',
-                asst_doctor_cost: r.asst_doctor_cost ?? '',
-                description: r.description || '',
+                code: r.code || "",
+                name: r.name || "",
+                speciality_id: r.speciality_id ? String(r.speciality_id) : "",
+                default_duration_min: r.default_duration_min ?? "",
+                rate_per_hour: r.rate_per_hour ?? "",
+                base_cost: r.base_cost ?? "",
+                anesthesia_cost: r.anesthesia_cost ?? "",
+                surgeon_cost: r.surgeon_cost ?? "",
+                petitory_cost: r.petitory_cost ?? "",
+                asst_doctor_cost: r.asst_doctor_cost ?? "",
+                description: r.description || "",
                 is_active: !!r.is_active,
             })
-        } else if (tab === 'theaters') {
+        } else if (tab === "theaters") {
             setForm({
-                code: r.code || '',
-                name: r.name || '',
-                cost_per_hour: r.cost_per_hour ?? '',
-                description: r.description || '',
+                code: r.code || "",
+                name: r.name || "",
+                cost_per_hour: r.cost_per_hour ?? "",
+                description: r.description || "",
                 is_active: !!r.is_active,
             })
-        } else if (tab === 'instruments') {
+        } else if (tab === "instruments") {
             setForm({
-                code: r.code || '',
-                name: r.name || '',
+                code: r.code || "",
+                name: r.name || "",
                 available_qty: r.available_qty ?? 0,
-                cost_per_qty: r.cost_per_qty ?? '',
-                uom: r.uom || 'Nos',
-                description: r.description || '',
+                cost_per_qty: r.cost_per_qty ?? "",
+                uom: r.uom || "Nos",
+                description: r.description || "",
                 is_active: !!r.is_active,
             })
-        } else if (tab === 'devices') {
+        } else if (tab === "devices") {
             setForm({
-                category: r.category || 'AIRWAY',
-                code: r.code || '',
-                name: r.name || '',
-                cost: r.cost ?? '',
-                description: r.description || '',
+                category: r.category || "AIRWAY",
+                code: r.code || "",
+                name: r.name || "",
+                cost: r.cost ?? "",
+                description: r.description || "",
                 is_active: !!r.is_active,
             })
-        } else if (tab === 'specialities') {
+        } else if (tab === "specialities") {
             setForm({
-                code: r.code || '',
-                name: r.name || '',
-                description: r.description || '',
+                code: r.code || "",
+                name: r.name || "",
+                description: r.description || "",
                 is_active: !!r.is_active,
             })
-        } else if (tab === 'equipment') {
+        } else if (tab === "equipment") {
             setForm({
-                code: r.code || '',
-                name: r.name || '',
-                category: r.category || '',
-                description: r.description || '',
+                code: r.code || "",
+                name: r.name || "",
+                category: r.category || "",
+                description: r.description || "",
                 is_critical: !!r.is_critical,
                 is_active: !!r.is_active,
             })
-        } else if (tab === 'surgeries') {
+        } else if (tab === "surgeries") {
             setForm({
-                code: r.code || '',
-                name: r.name || '',
-                default_cost: r.default_cost ?? '',
-                hourly_cost: r.hourly_cost ?? '',
-                description: r.description || '',
+                code: r.code || "",
+                name: r.name || "",
+                default_cost: r.default_cost ?? "",
+                hourly_cost: r.hourly_cost ?? "",
+                description: r.description || "",
                 active: !!r.active,
             })
         }
@@ -410,24 +447,24 @@ export default function OtMasters() {
 
     const onDelete = async (r) => {
         const p = perms[tab]
-        if (!p?.delete) return toast.error('No permission to delete')
+        if (!p?.delete) return toast.error("No permission to delete")
 
-        const ok = confirm('Are you sure you want to delete / deactivate this item?')
+        const ok = confirm("Are you sure you want to delete / deactivate this item?")
         if (!ok) return
 
         try {
-            if (tab === 'procedures') await deleteOtProcedure(r.id)
-            if (tab === 'theaters') await deleteOtTheater(r.id)
-            if (tab === 'instruments') await deleteOtInstrument(r.id)
-            if (tab === 'devices') await deleteOtDevice(r.id)
-            if (tab === 'specialities') await deleteOtSpeciality(r.id)
-            if (tab === 'equipment') await deleteOtEquipment(r.id)
-            if (tab === 'surgeries') await deleteOtSurgery(r.id)
+            if (tab === "procedures") await deleteOtProcedure(r.id)
+            if (tab === "theaters") await deleteOtTheater(r.id)
+            if (tab === "instruments") await deleteOtInstrument(r.id)
+            if (tab === "devices") await deleteOtDevice(r.id)
+            if (tab === "specialities") await deleteOtSpeciality(r.id)
+            if (tab === "equipment") await deleteOtEquipment(r.id)
+            if (tab === "surgeries") await deleteOtSurgery(r.id)
 
-            toast.success('Deleted')
+            toast.success("Deleted")
             await load()
         } catch (e) {
-            toast.error(e?.response?.data?.detail || 'Delete failed')
+            toast.error(e?.response?.data?.detail || "Delete failed")
         }
     }
 
@@ -449,7 +486,7 @@ export default function OtMasters() {
 
         setLoading(true)
         try {
-            if (tab === 'procedures') {
+            if (tab === "procedures") {
                 const { data } = await listOtProcedures({
                     search: q || undefined,
                     is_active: activeOnly ? true : undefined,
@@ -458,7 +495,7 @@ export default function OtMasters() {
                 setRows(data || [])
             }
 
-            if (tab === 'theaters') {
+            if (tab === "theaters") {
                 const { data } = await listOtTheaters({
                     search: q || undefined,
                     active: activeOnly ? true : undefined,
@@ -467,7 +504,8 @@ export default function OtMasters() {
                 setRows(data || [])
             }
 
-            if (tab === 'instruments') {
+            if (tab === "instruments") {
+                // ✅ listOtInstruments now lists from /ot/instrument-masters (via api file)
                 const { data } = await listOtInstruments({
                     search: q || undefined,
                     active: activeOnly ? true : undefined,
@@ -476,7 +514,7 @@ export default function OtMasters() {
                 setRows(data || [])
             }
 
-            if (tab === 'devices') {
+            if (tab === "devices") {
                 const { data } = await listOtDevices({
                     search: q || undefined,
                     active: activeOnly ? true : undefined,
@@ -485,7 +523,7 @@ export default function OtMasters() {
                 setRows(data || [])
             }
 
-            if (tab === 'specialities') {
+            if (tab === "specialities") {
                 const { data } = await listOtSpecialities({
                     search: q || undefined,
                     active: activeOnly ? true : undefined,
@@ -493,7 +531,7 @@ export default function OtMasters() {
                 setRows(data || [])
             }
 
-            if (tab === 'equipment') {
+            if (tab === "equipment") {
                 const { data } = await listOtEquipment({
                     search: q || undefined,
                     active: activeOnly ? true : undefined,
@@ -501,7 +539,7 @@ export default function OtMasters() {
                 setRows(data || [])
             }
 
-            if (tab === 'surgeries') {
+            if (tab === "surgeries") {
                 const { data } = await listOtSurgeries({
                     q: q || undefined,
                     active: activeOnly ? true : undefined,
@@ -511,20 +549,19 @@ export default function OtMasters() {
                 setRows(data?.items || [])
             }
         } catch (e) {
-            toast.error(e?.response?.data?.detail || 'Failed to load')
+            toast.error(e?.response?.data?.detail || "Failed to load")
             setRows([])
         } finally {
             setLoading(false)
         }
     }, [tab, q, activeOnly]) // eslint-disable-line
 
-    // initial loads
     useEffect(() => {
-        if (tab === 'procedures') loadSpecialities()
+        if (tab === "procedures") loadSpecialities()
         load()
     }, [tab]) // eslint-disable-line
 
-    // ✅ Debounced reload when search / active filter changes (all devices friendly)
+    // ✅ Debounced reload when search / active filter changes
     useEffect(() => {
         const t = setTimeout(() => {
             load()
@@ -537,20 +574,20 @@ export default function OtMasters() {
     // =========================================================
     const onSave = async () => {
         const p = perms[tab]
-        const isEdit = mode === 'edit'
-        if (isEdit && !p?.update) return toast.error('No permission to update')
-        if (!isEdit && !p?.create) return toast.error('No permission to create')
+        const isEdit = mode === "edit"
+        if (isEdit && !p?.update) return toast.error("No permission to update")
+        if (!isEdit && !p?.create) return toast.error("No permission to create")
 
         try {
-            if (tab === 'procedures') {
-                if (!form.code?.trim() || !form.name?.trim()) return toast.error('Code & Name required')
+            if (tab === "procedures") {
+                if (!form.code?.trim() || !form.name?.trim()) return toast.error("Code & Name required")
 
                 const payload = {
                     code: form.code.trim(),
                     name: form.name.trim(),
                     speciality_id: form.speciality_id ? Number(form.speciality_id) : null,
-                    default_duration_min: form.default_duration_min === '' ? null : Number(form.default_duration_min || 0),
-                    rate_per_hour: form.rate_per_hour === '' ? null : Number(form.rate_per_hour || 0),
+                    default_duration_min: form.default_duration_min === "" ? null : Number(form.default_duration_min || 0),
+                    rate_per_hour: form.rate_per_hour === "" ? null : Number(form.rate_per_hour || 0),
                     description: form.description || null,
                     is_active: !!form.is_active,
 
@@ -565,14 +602,14 @@ export default function OtMasters() {
                 else await createOtProcedure(payload)
             }
 
-            if (tab === 'theaters') {
-                if (!form.code?.trim() || !form.name?.trim()) return toast.error('Code & Name required')
+            if (tab === "theaters") {
+                if (!form.code?.trim() || !form.name?.trim()) return toast.error("Code & Name required")
 
                 const payload = {
                     code: form.code.trim(),
                     name: form.name.trim(),
                     cost_per_hour: Number(form.cost_per_hour || 0),
-                    description: form.description || '',
+                    description: form.description || "",
                     is_active: !!form.is_active,
                 }
 
@@ -580,16 +617,16 @@ export default function OtMasters() {
                 else await createOtTheater(payload)
             }
 
-            if (tab === 'instruments') {
-                if (!form.code?.trim() || !form.name?.trim()) return toast.error('Code & Name required')
+            if (tab === "instruments") {
+                if (!form.code?.trim() || !form.name?.trim()) return toast.error("Code & Name required")
 
                 const payload = {
                     code: form.code.trim(),
                     name: form.name.trim(),
                     available_qty: Number(form.available_qty || 0),
                     cost_per_qty: Number(form.cost_per_qty || 0),
-                    uom: (form.uom || 'Nos').trim(),
-                    description: form.description || '',
+                    uom: (form.uom || "Nos").trim(),
+                    description: form.description || "",
                     is_active: !!form.is_active,
                 }
 
@@ -597,15 +634,15 @@ export default function OtMasters() {
                 else await createOtInstrument(payload)
             }
 
-            if (tab === 'devices') {
-                if (!form.code?.trim() || !form.name?.trim()) return toast.error('Code & Name required')
+            if (tab === "devices") {
+                if (!form.code?.trim() || !form.name?.trim()) return toast.error("Code & Name required")
 
                 const payload = {
-                    category: (form.category || 'AIRWAY').toUpperCase(),
+                    category: (form.category || "AIRWAY").toUpperCase(),
                     code: form.code.trim(),
                     name: form.name.trim(),
                     cost: Number(form.cost || 0),
-                    description: form.description || '',
+                    description: form.description || "",
                     is_active: !!form.is_active,
                 }
 
@@ -613,8 +650,8 @@ export default function OtMasters() {
                 else await createOtDevice(payload)
             }
 
-            if (tab === 'specialities') {
-                if (!form.code?.trim() || !form.name?.trim()) return toast.error('Code & Name required')
+            if (tab === "specialities") {
+                if (!form.code?.trim() || !form.name?.trim()) return toast.error("Code & Name required")
 
                 const payload = {
                     code: form.code.trim(),
@@ -627,8 +664,8 @@ export default function OtMasters() {
                 else await createOtSpeciality(payload)
             }
 
-            if (tab === 'equipment') {
-                if (!form.code?.trim() || !form.name?.trim()) return toast.error('Code & Name required')
+            if (tab === "equipment") {
+                if (!form.code?.trim() || !form.name?.trim()) return toast.error("Code & Name required")
 
                 const payload = {
                     code: form.code.trim(),
@@ -643,15 +680,15 @@ export default function OtMasters() {
                 else await createOtEquipment(payload)
             }
 
-            if (tab === 'surgeries') {
-                if (!form.code?.trim() || !form.name?.trim()) return toast.error('Code & Name required')
+            if (tab === "surgeries") {
+                if (!form.code?.trim() || !form.name?.trim()) return toast.error("Code & Name required")
 
                 const payload = {
                     code: form.code.trim(),
                     name: form.name.trim(),
                     default_cost: Number(form.default_cost || 0),
                     hourly_cost: Number(form.hourly_cost || 0),
-                    description: form.description || '',
+                    description: form.description || "",
                     active: !!form.active,
                 }
 
@@ -659,11 +696,11 @@ export default function OtMasters() {
                 else await createOtSurgery(payload)
             }
 
-            toast.success(isEdit ? 'Updated' : 'Created')
+            toast.success(isEdit ? "Updated" : "Created")
             closeDialog()
             await load()
         } catch (e) {
-            toast.error(e?.response?.data?.detail || 'Save failed')
+            toast.error(e?.response?.data?.detail || "Save failed")
         }
     }
 
@@ -671,82 +708,106 @@ export default function OtMasters() {
     // Columns per tab
     // =========================================================
     const columns = useMemo(() => {
-        if (tab === 'procedures') {
+        if (tab === "procedures") {
             return [
-                { key: 'code', header: 'Code' },
-                { key: 'name', header: 'Procedure' },
+                { key: "code", header: "Code" },
+                { key: "name", header: "Procedure" },
                 {
-                    key: 'total_fixed_cost',
-                    header: 'Total Fixed Cost',
+                    key: "total_fixed_cost",
+                    header: "Total Fixed Cost",
                     render: (r) => <span className="font-medium">{money(r.total_fixed_cost || 0)}</span>,
                 },
-                { key: 'anesthesia_cost', header: 'Anesthesia', render: (r) => money(r.anesthesia_cost || 0) },
-                { key: 'surgeon_cost', header: 'Surgeon', render: (r) => money(r.surgeon_cost || 0) },
-                { key: 'petitory_cost', header: 'Petitory', render: (r) => money(r.petitory_cost || 0) },
-                { key: 'asst_doctor_cost', header: 'Asst', render: (r) => money(r.asst_doctor_cost || 0) },
+                { key: "anesthesia_cost", header: "Anesthesia", render: (r) => money(r.anesthesia_cost || 0) },
+                { key: "surgeon_cost", header: "Surgeon", render: (r) => money(r.surgeon_cost || 0) },
+                { key: "petitory_cost", header: "Petitory", render: (r) => money(r.petitory_cost || 0) },
+                { key: "asst_doctor_cost", header: "Asst", render: (r) => money(r.asst_doctor_cost || 0) },
                 {
-                    key: 'is_active',
-                    header: 'Active',
+                    key: "is_active",
+                    header: "Active",
                     render: (r) => (r.is_active ? <Pill>Yes</Pill> : <Pill variant="secondary">No</Pill>),
                 },
             ]
         }
 
-        if (tab === 'theaters') {
+        if (tab === "theaters") {
             return [
-                { key: 'code', header: 'Code' },
-                { key: 'name', header: 'Theater' },
-                { key: 'cost_per_hour', header: 'Cost / Hour', render: (r) => <span className="font-medium">{money(r.cost_per_hour || 0)}</span> },
-                { key: 'is_active', header: 'Active', render: (r) => (r.is_active ? <Pill>Yes</Pill> : <Pill variant="secondary">No</Pill>) },
+                { key: "code", header: "Code" },
+                { key: "name", header: "Theater" },
+                {
+                    key: "cost_per_hour",
+                    header: "Cost / Hour",
+                    render: (r) => <span className="font-medium">{money(r.cost_per_hour || 0)}</span>,
+                },
+                {
+                    key: "is_active",
+                    header: "Active",
+                    render: (r) => (r.is_active ? <Pill>Yes</Pill> : <Pill variant="secondary">No</Pill>),
+                },
             ]
         }
 
-        if (tab === 'instruments') {
+        if (tab === "instruments") {
             return [
-                { key: 'code', header: 'Code' },
-                { key: 'name', header: 'Instrument' },
-                { key: 'available_qty', header: 'Available', render: (r) => <span className="font-medium">{r.available_qty ?? 0}</span> },
-                { key: 'uom', header: 'UOM', render: (r) => <Pill variant="secondary">{r.uom || 'Nos'}</Pill> },
-                { key: 'cost_per_qty', header: 'Cost / Qty', render: (r) => money(r.cost_per_qty || 0) },
-                { key: 'is_active', header: 'Active', render: (r) => (r.is_active ? <Pill>Yes</Pill> : <Pill variant="secondary">No</Pill>) },
+                { key: "code", header: "Code" },
+                { key: "name", header: "Instrument" },
+                { key: "available_qty", header: "Available", render: (r) => <span className="font-medium">{r.available_qty ?? 0}</span> },
+                { key: "uom", header: "UOM", render: (r) => <Pill variant="secondary">{r.uom || "Nos"}</Pill> },
+                { key: "cost_per_qty", header: "Cost / Qty", render: (r) => money(r.cost_per_qty || 0) },
+                {
+                    key: "is_active",
+                    header: "Active",
+                    render: (r) => (r.is_active ? <Pill>Yes</Pill> : <Pill variant="secondary">No</Pill>),
+                },
             ]
         }
 
-        if (tab === 'devices') {
+        if (tab === "devices") {
             return [
-                { key: 'category', header: 'Category', render: (r) => <Pill variant="secondary">{r.category}</Pill> },
-                { key: 'code', header: 'Code' },
-                { key: 'name', header: 'Device' },
-                { key: 'cost', header: 'Cost', render: (r) => <span className="font-medium">{money(r.cost || 0)}</span> },
-                { key: 'is_active', header: 'Active', render: (r) => (r.is_active ? <Pill>Yes</Pill> : <Pill variant="secondary">No</Pill>) },
+                { key: "category", header: "Category", render: (r) => <Pill variant="secondary">{r.category}</Pill> },
+                { key: "code", header: "Code" },
+                { key: "name", header: "Device" },
+                { key: "cost", header: "Cost", render: (r) => <span className="font-medium">{money(r.cost || 0)}</span> },
+                {
+                    key: "is_active",
+                    header: "Active",
+                    render: (r) => (r.is_active ? <Pill>Yes</Pill> : <Pill variant="secondary">No</Pill>),
+                },
             ]
         }
 
-        if (tab === 'specialities') {
+        if (tab === "specialities") {
             return [
-                { key: 'code', header: 'Code' },
-                { key: 'name', header: 'Speciality' },
-                { key: 'is_active', header: 'Active', render: (r) => (r.is_active ? <Pill>Yes</Pill> : <Pill variant="secondary">No</Pill>) },
+                { key: "code", header: "Code" },
+                { key: "name", header: "Speciality" },
+                {
+                    key: "is_active",
+                    header: "Active",
+                    render: (r) => (r.is_active ? <Pill>Yes</Pill> : <Pill variant="secondary">No</Pill>),
+                },
             ]
         }
 
-        if (tab === 'equipment') {
+        if (tab === "equipment") {
             return [
-                { key: 'code', header: 'Code' },
-                { key: 'name', header: 'Equipment' },
-                { key: 'category', header: 'Category', render: (r) => (r.category ? <Pill variant="secondary">{r.category}</Pill> : <span className="text-slate-400">—</span>) },
-                { key: 'is_critical', header: 'Critical', render: (r) => (r.is_critical ? <Pill>Yes</Pill> : <Pill variant="secondary">No</Pill>) },
-                { key: 'is_active', header: 'Active', render: (r) => (r.is_active ? <Pill>Yes</Pill> : <Pill variant="secondary">No</Pill>) },
+                { key: "code", header: "Code" },
+                { key: "name", header: "Equipment" },
+                {
+                    key: "category",
+                    header: "Category",
+                    render: (r) => (r.category ? <Pill variant="secondary">{r.category}</Pill> : <span className="text-slate-400">—</span>),
+                },
+                { key: "is_critical", header: "Critical", render: (r) => (r.is_critical ? <Pill>Yes</Pill> : <Pill variant="secondary">No</Pill>) },
+                { key: "is_active", header: "Active", render: (r) => (r.is_active ? <Pill>Yes</Pill> : <Pill variant="secondary">No</Pill>) },
             ]
         }
 
         // surgeries
         return [
-            { key: 'code', header: 'Code' },
-            { key: 'name', header: 'Surgery' },
-            { key: 'default_cost', header: 'Package Cost', render: (r) => <span className="font-medium">{money(r.default_cost || 0)}</span> },
-            { key: 'hourly_cost', header: 'Hourly Cost', render: (r) => money(r.hourly_cost || 0) },
-            { key: 'active', header: 'Active', render: (r) => (r.active ? <Pill>Yes</Pill> : <Pill variant="secondary">No</Pill>) },
+            { key: "code", header: "Code" },
+            { key: "name", header: "Surgery" },
+            { key: "default_cost", header: "Package Cost", render: (r) => <span className="font-medium">{money(r.default_cost || 0)}</span> },
+            { key: "hourly_cost", header: "Hourly Cost", render: (r) => money(r.hourly_cost || 0) },
+            { key: "active", header: "Active", render: (r) => (r.active ? <Pill>Yes</Pill> : <Pill variant="secondary">No</Pill>) },
         ]
     }, [tab])
 
@@ -755,18 +816,50 @@ export default function OtMasters() {
     // =========================================================
     const tabMeta = useMemo(() => {
         return {
-            procedures: { title: 'Procedures', icon: Stethoscope, desc: 'Fixed-cost split (anesthesia/surgeon/etc) + legacy hourly fields.' },
-            theaters: { title: 'OT Theaters', icon: Building2, desc: 'Hourly charges per theater for OT billing.' },
-            instruments: { title: 'Instruments', icon: Boxes, desc: 'Instrument tracking with available quantity and cost per unit.' },
-            devices: { title: 'Airway & Monitor Devices', icon: Activity, desc: 'Device masters categorized as AIRWAY or MONITOR.' },
-            specialities: { title: 'Specialities', icon: ShieldCheck, desc: 'OT specialities for procedure grouping.' },
-            equipment: { title: 'Equipment', icon: Wrench, desc: 'OT equipment checklist master with critical flag.' },
-            surgeries: { title: 'Surgery Master', icon: Stethoscope, desc: 'Legacy: package + hourly costs (optional use).' },
+            procedures: {
+                title: "Procedures",
+                icon: Stethoscope,
+                desc: "Fixed-cost split (anesthesia/surgeon/etc) + legacy hourly fields.",
+            },
+            theaters: {
+                title: "OT Theaters",
+                icon: Building2,
+                desc: "Hourly charges per theater for OT billing.",
+            },
+            instruments: {
+                title: "Instrument Masters",
+                icon: Boxes,
+                desc: "Master list used across OT modules (listing via instrument-masters).",
+            },
+            devices: {
+                title: "Airway & Monitor Devices",
+                icon: Activity,
+                desc: "Device masters categorized as AIRWAY or MONITOR.",
+            },
+            specialities: {
+                title: "Specialities",
+                icon: ShieldCheck,
+                desc: "OT specialities for procedure grouping.",
+            },
+            equipment: {
+                title: "Equipment",
+                icon: Wrench,
+                desc: "OT equipment checklist master with critical flag.",
+            },
+            surgeries: {
+                title: "Surgery Master",
+                icon: Stethoscope,
+                desc: "Legacy: package + hourly costs (optional use).",
+            },
         }
     }, [])
 
     if (!canViewAny) {
-        return <div className="p-4 text-sm text-slate-500">You do not have permission to view OT Masters.</div>
+        return (
+            <div className="p-4 text-sm text-slate-500">
+                You do not have permission to view OT Masters.
+            </div>
+        )
     }
 
     const p = perms[tab] || {}
@@ -806,9 +899,13 @@ export default function OtMasters() {
                                     Refresh
                                 </Button>
 
-                                <Button variant="outline" className="rounded-xl" onClick={() => setActiveOnly((v) => !v)}>
+                                <Button
+                                    variant="outline"
+                                    className="rounded-xl"
+                                    onClick={() => setActiveOnly((v) => !v)}
+                                >
                                     <Filter className="h-4 w-4 mr-2" />
-                                    {activeOnly ? 'Active Only' : 'All'}
+                                    {activeOnly ? "Active Only" : "All"}
                                 </Button>
 
                                 {p.create && (
@@ -825,19 +922,39 @@ export default function OtMasters() {
 
                     <Tabs value={tab} onValueChange={setTab}>
                         <TabsList className="flex flex-wrap h-auto rounded-2xl bg-slate-50 p-1">
-                            <TabsTrigger value="procedures" className="rounded-xl">Procedures</TabsTrigger>
-                            <TabsTrigger value="theaters" className="rounded-xl">Theaters</TabsTrigger>
-                            <TabsTrigger value="instruments" className="rounded-xl">Instruments</TabsTrigger>
-                            <TabsTrigger value="devices" className="rounded-xl">Devices</TabsTrigger>
-                            <TabsTrigger value="specialities" className="rounded-xl">Specialities</TabsTrigger>
-                            <TabsTrigger value="equipment" className="rounded-xl">Equipment</TabsTrigger>
-                            <TabsTrigger value="surgeries" className="rounded-xl">Surgery</TabsTrigger>
+                            <TabsTrigger value="procedures" className="rounded-xl">
+                                Procedures
+                            </TabsTrigger>
+                            <TabsTrigger value="theaters" className="rounded-xl">
+                                Theaters
+                            </TabsTrigger>
+                            <TabsTrigger value="instruments" className="rounded-xl">
+                                Instrument Masters
+                            </TabsTrigger>
+                            <TabsTrigger value="devices" className="rounded-xl">
+                                Devices
+                            </TabsTrigger>
+                            <TabsTrigger value="specialities" className="rounded-xl">
+                                Specialities
+                            </TabsTrigger>
+                            <TabsTrigger value="equipment" className="rounded-xl">
+                                Equipment
+                            </TabsTrigger>
+                            <TabsTrigger value="surgeries" className="rounded-xl">
+                                Surgery
+                            </TabsTrigger>
                         </TabsList>
 
                         <div className="mt-3 text-xs text-slate-500">
-                            <span className="font-medium text-slate-700">{tabMeta[tab]?.title}</span>
-                            {' — '}
+                            <span className="font-medium text-slate-700">
+                                {tabMeta[tab]?.title}
+                            </span>
+                            {" — "}
                             {tabMeta[tab]?.desc}
+                            <span className="ml-2 text-slate-400">•</span>
+                            <span className="ml-2">
+                                {loading ? "Loading…" : `${rows?.length || 0} items`}
+                            </span>
                         </div>
 
                         <TabsContent value={tab} className="mt-4">
@@ -873,7 +990,7 @@ export default function OtMasters() {
                 <DialogContent className="w-[calc(100vw-1.25rem)] sm:max-w-3xl rounded-2xl max-h-[85vh] overflow-y-auto">
                     <DialogHeader>
                         <DialogTitle className="text-lg">
-                            {mode === 'edit' ? 'Edit' : 'Create'} {tabMeta[tab]?.title}
+                            {mode === "edit" ? "Edit" : "Create"} {tabMeta[tab]?.title}
                         </DialogTitle>
                         <DialogDescription className="text-slate-500">
                             Fill the fields carefully — this master affects OT scheduling & billing workflow.
@@ -887,7 +1004,7 @@ export default function OtMasters() {
                                 <Label>Code</Label>
                                 <Input
                                     className="rounded-xl"
-                                    value={form.code ?? ''}
+                                    value={form.code ?? ""}
                                     onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
                                     placeholder="Ex: OT-001"
                                 />
@@ -897,7 +1014,7 @@ export default function OtMasters() {
                                 <Label>Name</Label>
                                 <Input
                                     className="rounded-xl"
-                                    value={form.name ?? ''}
+                                    value={form.name ?? ""}
                                     onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                                     placeholder="Ex: Lap Chole"
                                 />
@@ -905,18 +1022,16 @@ export default function OtMasters() {
                         </div>
 
                         {/* PROCEDURES */}
-                        {tab === 'procedures' && (
+                        {tab === "procedures" && (
                             <>
                                 <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                     <div className="grid gap-1.5">
                                         <Label>Speciality</Label>
 
-                                        {/* ✅ FIXED: No SelectItem value="" (Radix forbids it).
-                        We use sentinel NONE and convert to "" to clear selection. */}
                                         <Select
-                                            value={form.speciality_id || ''}
+                                            value={form.speciality_id || ""}
                                             onValueChange={(v) => {
-                                                if (v === NONE) setForm((f) => ({ ...f, speciality_id: '' }))
+                                                if (v === NONE) setForm((f) => ({ ...f, speciality_id: "" }))
                                                 else setForm((f) => ({ ...f, speciality_id: v }))
                                             }}
                                         >
@@ -926,7 +1041,7 @@ export default function OtMasters() {
                                             <SelectContent>
                                                 <SelectItem value={NONE}>None</SelectItem>
                                                 {specialities
-                                                    .filter((s) => s?.id) // safety
+                                                    .filter((s) => s?.id)
                                                     .map((s) => (
                                                         <SelectItem key={s.id} value={String(s.id)}>
                                                             {s.name}
@@ -942,8 +1057,10 @@ export default function OtMasters() {
                                             className="rounded-xl"
                                             type="number"
                                             inputMode="numeric"
-                                            value={form.default_duration_min ?? ''}
-                                            onChange={(e) => setForm((f) => ({ ...f, default_duration_min: e.target.value }))}
+                                            value={form.default_duration_min ?? ""}
+                                            onChange={(e) =>
+                                                setForm((f) => ({ ...f, default_duration_min: e.target.value }))
+                                            }
                                             placeholder="Ex: 60"
                                         />
                                     </div>
@@ -954,7 +1071,7 @@ export default function OtMasters() {
                                             className="rounded-xl"
                                             type="number"
                                             inputMode="decimal"
-                                            value={form.rate_per_hour ?? ''}
+                                            value={form.rate_per_hour ?? ""}
                                             onChange={(e) => setForm((f) => ({ ...f, rate_per_hour: e.target.value }))}
                                             placeholder="Ex: 2500"
                                         />
@@ -962,27 +1079,59 @@ export default function OtMasters() {
                                 </div>
 
                                 <div className="rounded-2xl border bg-slate-50 p-3">
-                                    <div className="text-sm font-medium text-slate-800 mb-2">Fixed Cost Split-up</div>
+                                    <div className="text-sm font-medium text-slate-800 mb-2">
+                                        Fixed Cost Split-up
+                                    </div>
                                     <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3">
                                         <div className="grid gap-1.5">
                                             <Label>Base</Label>
-                                            <Input className="rounded-xl" type="number" inputMode="decimal" value={form.base_cost ?? ''} onChange={(e) => setForm((f) => ({ ...f, base_cost: e.target.value }))} />
+                                            <Input
+                                                className="rounded-xl"
+                                                type="number"
+                                                inputMode="decimal"
+                                                value={form.base_cost ?? ""}
+                                                onChange={(e) => setForm((f) => ({ ...f, base_cost: e.target.value }))}
+                                            />
                                         </div>
                                         <div className="grid gap-1.5">
                                             <Label>Anesthesia</Label>
-                                            <Input className="rounded-xl" type="number" inputMode="decimal" value={form.anesthesia_cost ?? ''} onChange={(e) => setForm((f) => ({ ...f, anesthesia_cost: e.target.value }))} />
+                                            <Input
+                                                className="rounded-xl"
+                                                type="number"
+                                                inputMode="decimal"
+                                                value={form.anesthesia_cost ?? ""}
+                                                onChange={(e) => setForm((f) => ({ ...f, anesthesia_cost: e.target.value }))}
+                                            />
                                         </div>
                                         <div className="grid gap-1.5">
                                             <Label>Surgeon</Label>
-                                            <Input className="rounded-xl" type="number" inputMode="decimal" value={form.surgeon_cost ?? ''} onChange={(e) => setForm((f) => ({ ...f, surgeon_cost: e.target.value }))} />
+                                            <Input
+                                                className="rounded-xl"
+                                                type="number"
+                                                inputMode="decimal"
+                                                value={form.surgeon_cost ?? ""}
+                                                onChange={(e) => setForm((f) => ({ ...f, surgeon_cost: e.target.value }))}
+                                            />
                                         </div>
                                         <div className="grid gap-1.5">
                                             <Label>Petitory (opt)</Label>
-                                            <Input className="rounded-xl" type="number" inputMode="decimal" value={form.petitory_cost ?? ''} onChange={(e) => setForm((f) => ({ ...f, petitory_cost: e.target.value }))} />
+                                            <Input
+                                                className="rounded-xl"
+                                                type="number"
+                                                inputMode="decimal"
+                                                value={form.petitory_cost ?? ""}
+                                                onChange={(e) => setForm((f) => ({ ...f, petitory_cost: e.target.value }))}
+                                            />
                                         </div>
                                         <div className="grid gap-1.5">
                                             <Label>Asst (opt)</Label>
-                                            <Input className="rounded-xl" type="number" inputMode="decimal" value={form.asst_doctor_cost ?? ''} onChange={(e) => setForm((f) => ({ ...f, asst_doctor_cost: e.target.value }))} />
+                                            <Input
+                                                className="rounded-xl"
+                                                type="number"
+                                                inputMode="decimal"
+                                                value={form.asst_doctor_cost ?? ""}
+                                                onChange={(e) => setForm((f) => ({ ...f, asst_doctor_cost: e.target.value }))}
+                                            />
                                         </div>
                                     </div>
                                 </div>
@@ -990,7 +1139,7 @@ export default function OtMasters() {
                         )}
 
                         {/* THEATERS */}
-                        {tab === 'theaters' && (
+                        {tab === "theaters" && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <div className="grid gap-1.5">
                                     <Label>Cost per Hour</Label>
@@ -998,7 +1147,7 @@ export default function OtMasters() {
                                         className="rounded-xl"
                                         type="number"
                                         inputMode="decimal"
-                                        value={form.cost_per_hour ?? ''}
+                                        value={form.cost_per_hour ?? ""}
                                         onChange={(e) => setForm((f) => ({ ...f, cost_per_hour: e.target.value }))}
                                         placeholder="Ex: 3000"
                                     />
@@ -1007,7 +1156,7 @@ export default function OtMasters() {
                         )}
 
                         {/* INSTRUMENTS */}
-                        {tab === 'instruments' && (
+                        {tab === "instruments" && (
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                 <div className="grid gap-1.5">
                                     <Label>Available Qty</Label>
@@ -1025,7 +1174,7 @@ export default function OtMasters() {
                                         className="rounded-xl"
                                         type="number"
                                         inputMode="decimal"
-                                        value={form.cost_per_qty ?? ''}
+                                        value={form.cost_per_qty ?? ""}
                                         onChange={(e) => setForm((f) => ({ ...f, cost_per_qty: e.target.value }))}
                                     />
                                 </div>
@@ -1033,7 +1182,7 @@ export default function OtMasters() {
                                     <Label>UOM</Label>
                                     <Input
                                         className="rounded-xl"
-                                        value={form.uom ?? 'Nos'}
+                                        value={form.uom ?? "Nos"}
                                         onChange={(e) => setForm((f) => ({ ...f, uom: e.target.value }))}
                                         placeholder="Nos / Sets / Pcs"
                                     />
@@ -1042,11 +1191,14 @@ export default function OtMasters() {
                         )}
 
                         {/* DEVICES */}
-                        {tab === 'devices' && (
+                        {tab === "devices" && (
                             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                                 <div className="grid gap-1.5">
                                     <Label>Category</Label>
-                                    <Select value={form.category || 'AIRWAY'} onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}>
+                                    <Select
+                                        value={form.category || "AIRWAY"}
+                                        onValueChange={(v) => setForm((f) => ({ ...f, category: v }))}
+                                    >
                                         <SelectTrigger className="rounded-xl">
                                             <SelectValue />
                                         </SelectTrigger>
@@ -1062,7 +1214,7 @@ export default function OtMasters() {
                                         className="rounded-xl"
                                         type="number"
                                         inputMode="decimal"
-                                        value={form.cost ?? ''}
+                                        value={form.cost ?? ""}
                                         onChange={(e) => setForm((f) => ({ ...f, cost: e.target.value }))}
                                     />
                                 </div>
@@ -1070,27 +1222,30 @@ export default function OtMasters() {
                         )}
 
                         {/* EQUIPMENT */}
-                        {tab === 'equipment' && (
+                        {tab === "equipment" && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <div className="grid gap-1.5">
                                     <Label>Category</Label>
                                     <Input
                                         className="rounded-xl"
-                                        value={form.category ?? ''}
+                                        value={form.category ?? ""}
                                         onChange={(e) => setForm((f) => ({ ...f, category: e.target.value }))}
                                         placeholder="Anaesthesia / Monitoring / OT Table…"
                                     />
                                 </div>
 
                                 <div className="flex items-center gap-2 mt-7">
-                                    <Checkbox checked={!!form.is_critical} onCheckedChange={(v) => setForm((f) => ({ ...f, is_critical: !!v }))} />
+                                    <Checkbox
+                                        checked={!!form.is_critical}
+                                        onCheckedChange={(v) => setForm((f) => ({ ...f, is_critical: !!v }))}
+                                    />
                                     <span className="text-sm text-slate-700">Critical Equipment</span>
                                 </div>
                             </div>
                         )}
 
                         {/* SURGERIES */}
-                        {tab === 'surgeries' && (
+                        {tab === "surgeries" && (
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                                 <div className="grid gap-1.5">
                                     <Label>Package Cost</Label>
@@ -1098,7 +1253,7 @@ export default function OtMasters() {
                                         className="rounded-xl"
                                         type="number"
                                         inputMode="decimal"
-                                        value={form.default_cost ?? ''}
+                                        value={form.default_cost ?? ""}
                                         onChange={(e) => setForm((f) => ({ ...f, default_cost: e.target.value }))}
                                     />
                                 </div>
@@ -1108,7 +1263,7 @@ export default function OtMasters() {
                                         className="rounded-xl"
                                         type="number"
                                         inputMode="decimal"
-                                        value={form.hourly_cost ?? ''}
+                                        value={form.hourly_cost ?? ""}
                                         onChange={(e) => setForm((f) => ({ ...f, hourly_cost: e.target.value }))}
                                     />
                                 </div>
@@ -1121,7 +1276,7 @@ export default function OtMasters() {
                                 <Label>Description</Label>
                                 <Textarea
                                     className="rounded-xl min-h-[92px]"
-                                    value={form.description ?? ''}
+                                    value={form.description ?? ""}
                                     onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))}
                                     placeholder="Optional notes…"
                                 />
@@ -1131,15 +1286,17 @@ export default function OtMasters() {
                                 <div className="text-sm font-medium text-slate-800">Status</div>
                                 <div className="mt-2 flex items-center gap-2">
                                     <Checkbox
-                                        checked={tab === 'surgeries' ? !!form.active : !!form.is_active}
+                                        checked={tab === "surgeries" ? !!form.active : !!form.is_active}
                                         onCheckedChange={(v) => {
-                                            if (tab === 'surgeries') setForm((f) => ({ ...f, active: !!v }))
+                                            if (tab === "surgeries") setForm((f) => ({ ...f, active: !!v }))
                                             else setForm((f) => ({ ...f, is_active: !!v }))
                                         }}
                                     />
                                     <span className="text-sm text-slate-700">Active</span>
                                 </div>
-                                <div className="mt-2 text-xs text-slate-500">Inactive items can be hidden from selection lists.</div>
+                                <div className="mt-2 text-xs text-slate-500">
+                                    Inactive items can be hidden from selection lists.
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1149,7 +1306,7 @@ export default function OtMasters() {
                             Cancel
                         </Button>
                         <Button className="rounded-xl" onClick={onSave}>
-                            {mode === 'edit' ? 'Update' : 'Create'}
+                            {mode === "edit" ? "Update" : "Create"}
                         </Button>
                     </DialogFooter>
                 </DialogContent>

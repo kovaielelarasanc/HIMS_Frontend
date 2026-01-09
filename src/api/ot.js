@@ -350,10 +350,34 @@ export function updatePreOpChecklist(caseId, payload) {
     )
 }
 
+export const getPreopChecklistPdf = (caseId, { download = false } = {}) => {
+    const qs = download ? "?download=1" : ""
+    return API.get(`/ot/cases/${caseId}/preop-checklist/pdf${qs}`, {
+        responseType: "blob",
+    }).then((res) => res.data)
+}
+
 /* =========================================================
    CLINICAL: SURGICAL SAFETY CHECKLIST
    ========================================================= */
+const unwrap = (res) => {
+    const payload = res?.data
+    if (payload && typeof payload === 'object' && payload.status === false) {
+        throw new Error(payload?.error?.msg || 'Something went wrong')
+    }
+    return payload?.data ?? payload
+}
+export const fetchSafetyChecklistPdfBlob = (caseId, { download = false } = {}) =>
+    API.get(`/ot/cases/${caseId}/safety-checklist/pdf`, {
+        params: download ? { download: true } : {},
+        responseType: 'blob',
+    }).then((res) => res.data)
 
+export const getSafetyChecklistPdf = (caseId, { download = false } = {}) =>
+    API.get(`/ot/cases/${caseId}/safety-checklist/pdf`, {
+        responseType: "blob",
+        params: download ? { download: true } : {},
+    })
 export async function getSafetyChecklist(caseId) {
     try {
         const res = await API.get(`/ot/cases/${caseId}/safety-checklist`)
@@ -403,6 +427,14 @@ export const createAnaesthesiaDrug = (recordId, data) =>
 export const deleteAnaesthesiaDrug = (drugId) =>
     API.delete(`/ot/anaesthesia-drugs/${drugId}`)
 
+export const getAnaesthesiaRecordPdf = (caseId, { download = false } = {}) =>
+    API.get(`/ot/cases/${caseId}/anaesthesia-record/pdf`, {
+        params: { download: download ? 1 : 0 },
+        responseType: "blob",
+    })
+export function getAnaesthesiaRecordDefaults(caseId) {
+    return API.get(`/ot/cases/${caseId}/anaesthesia-record/defaults`)
+}
 /* =========================================================
    NURSING (keep if backend exists)
    ========================================================= */
@@ -438,7 +470,23 @@ export function createCountsRecord(caseId, data) {
 export function updateCountsRecord(caseId, data) {
     return API.put(`/ot/cases/${caseId}/counts`, data)
 }
+// ---- Counts: Instrument Lines (EXTREME) ----
+export function listOtInstrumentMasters(params = {}) {
+    return API.get("/ot/instrument-masters", { params })
+}
 
+export function listCountsItems(caseId) {
+    return API.get(`/ot/cases/${caseId}/counts/items`)
+}
+
+export function upsertCountsItems(caseId, payload) {
+    // payload: { lines: [...] }
+    return API.put(`/ot/cases/${caseId}/counts/items`, payload)
+}
+
+export function deleteCountsItem(caseId, lineId) {
+    return API.delete(`/ot/cases/${caseId}/counts/items/${lineId}`)
+}
 /* =========================================================
    IMPLANTS (keep if backend exists)
    ========================================================= */
@@ -516,13 +564,16 @@ export function deleteBloodTransfusion(transfusionId) {
 export function getPacuRecord(caseId) {
     return API.get(`/ot/cases/${caseId}/pacu`)
 }
-export function createPacuRecord(caseId, data) {
-    return API.post(`/ot/cases/${caseId}/pacu`, { ...data, case_id: caseId })
+export function createPacuRecord(caseId, payload) {
+    return API.post(`/ot/cases/${caseId}/pacu`, payload)
 }
-export function updatePacuRecord(caseId, data) {
-    return API.put(`/ot/cases/${caseId}/pacu`, data)
+export function updatePacuRecord(caseId, payload) {
+    return API.put(`/ot/cases/${caseId}/pacu`, payload)
 }
-
+// ✅ PDF
+export function getPacuRecordPdf(caseId) {
+    return API.get(`/ot/cases/${caseId}/pacu/pdf`, { responseType: "blob" })
+}
 /* =========================================================
    PDF HELPERS (✅ matches backend)
    ========================================================= */
