@@ -2,31 +2,57 @@
 import API from "@/api/client"
 
 // -----------------------------
-// Helpers
+// Core helpers
 // -----------------------------
 function unwrap(res) {
     const payload = res?.data
-    if (payload?.status === false) {
-        throw new Error(payload?.error?.msg || payload?.error?.message || "Request failed")
+
+    // Our standard API wrapper: { status, data, error }
+    if (payload && typeof payload === "object" && "status" in payload) {
+        if (payload?.status === false) {
+            throw new Error(
+                payload?.error?.msg ||
+                payload?.error?.message ||
+                payload?.message ||
+                "Request failed"
+            )
+        }
+        return payload?.data ?? payload
     }
-    return payload?.data ?? payload
+
+    // Fallback (non-wrapped responses)
+    return payload
 }
 
 export function isCanceledError(e) {
     return (
         e?.code === "ERR_CANCELED" ||
         e?.name === "CanceledError" ||
+        e?.name === "AbortError" ||
         String(e?.message || "").toLowerCase().includes("canceled")
     )
 }
 
-// FastAPI primitive params => send as query params
-function postQ(url, params = {}, config = {}) {
-    return API.post(url, null, { params, ...config })
+function toIntId(value, label = "id") {
+    const v =
+        typeof value === "object" && value !== null ? (value.id ?? value[`${label}_id`]) : value
+    const n = Number(v)
+    if (!Number.isFinite(n) || n <= 0) throw new Error(`${label}: invalid id`)
+    return n
 }
 
-function mergeGetConfig(params = {}, config = {}) {
-    return { params, ...config }
+function cleanParams(obj = {}) {
+    const out = {}
+    for (const [k, v] of Object.entries(obj || {})) {
+        if (v === undefined || v === null) continue
+        out[k] = v
+    }
+    return out
+}
+
+// FastAPI primitive params => send as query params via POST with null body
+function postQ(url, params = {}, config = {}) {
+    return API.post(url, null, { params: cleanParams(params), ...config })
 }
 
 function patchJSON(url, data = {}, config = {}) {
@@ -36,23 +62,25 @@ function patchJSON(url, data = {}, config = {}) {
     })
 }
 
-function deleteReq(url, config = {}) {
-    return API.delete(url, { ...config })
-}
-
 async function getBlob(url, config = {}) {
     const res = await API.get(url, { responseType: "blob", ...config })
     return res?.data
 }
 
-
+// -----------------------------
+// Patient + encounters
+// -----------------------------
 export async function billingSearchPatients(params = {}, config = {}) {
-    const res = await API.get("/billing/patients/search", { params, ...config })
+    const res = await API.get("/billing/patients/search", { params: cleanParams(params), ...config })
     return unwrap(res)
 }
 
 export async function billingListPatientEncounters(patientId, params = {}, config = {}) {
-    const res = await API.get(`/billing/patients/${patientId}/encounters`, { params, ...config })
+    const pid = toIntId(patientId, "patientId")
+    const res = await API.get(`/billing/patients/${pid}/encounters`, {
+        params: cleanParams(params),
+        ...config,
+    })
     return unwrap(res)
 }
 
@@ -60,60 +88,73 @@ export async function billingCreateCaseManual(payload, config = {}) {
     const res = await API.post("/billing/cases/manual", payload, config)
     return unwrap(res)
 }
+
 // -----------------------------
 // Cases
 // -----------------------------
 export async function billingListCases(params = {}, config = {}) {
-    const res = await API.get("/billing/cases", { params, ...config })
+    const res = await API.get("/billing/cases", { params: cleanParams(params), ...config })
     return unwrap(res)
 }
+
 export async function billingGetCase(caseId, config = {}) {
-    const id =
-        typeof caseId === "object" && caseId !== null
-            ? (caseId.id ?? caseId.case_id)
-            : caseId
-
-    const n = Number(id)
-    if (!Number.isFinite(n) || n <= 0) {
-        throw new Error("billingGetCase: invalid caseId")
-    }
-
-    const res = await API.get(`/billing/cases/${n}`, config)
+    const id = toIntId(caseId, "caseId")
+    const res = await API.get(`/billing/cases/${id}`, config)
     return unwrap(res)
 }
 
 export async function billingListInvoices(caseId, params = {}, config = {}) {
-    const n = Number(typeof caseId === "object" && caseId ? (caseId.id ?? caseId.case_id) : caseId)
-    if (!Number.isFinite(n) || n <= 0) throw new Error("billingListInvoices: invalid caseId")
-    const res = await API.get(`/billing/cases/${n}/invoices`, { params, ...config })
+    const id = toIntId(caseId, "caseId")
+    const res = await API.get(`/billing/cases/${id}/invoices`, {
+        params: cleanParams(params),
+        ...config,
+    })
     return unwrap(res)
 }
 
 export async function billingListPayments(caseId, params = {}, config = {}) {
-    const res = await API.get(`/billing/cases/${caseId}/payments`, { params, ...config })
+    const id = toIntId(caseId, "caseId")
+    const res = await API.get(`/billing/cases/${id}/payments`, {
+        params: cleanParams(params),
+        ...config,
+    })
     return unwrap(res)
 }
 
 export async function billingListAdvances(caseId, params = {}, config = {}) {
-    const res = await API.get(`/billing/cases/${caseId}/advances`, { params, ...config })
+    const id = toIntId(caseId, "caseId")
+    const res = await API.get(`/billing/cases/${id}/advances`, {
+        params: cleanParams(params),
+        ...config,
+    })
     return unwrap(res)
 }
 
 export async function billingGetInsurance(caseId, config = {}) {
-    const res = await API.get(`/billing/cases/${caseId}/insurance`, config)
+    const id = toIntId(caseId, "caseId")
+    const res = await API.get(`/billing/cases/${id}/insurance`, config)
     const data = unwrap(res)
     // backend returns { insurance: ... }
     return data?.insurance ?? null
 }
 
+// -----------------------------
+// Invoice create (module is query param in backend)
+// -----------------------------
+export async function billingCreateInvoice(caseId, payload = {}, config = {}) {
+    const id = toIntId(caseId, "caseId")
+    const params = cleanParams({
+        module: payload?.module,
+        invoice_type: payload?.invoice_type,
+        payer_type: payload?.payer_type,
+        payer_id: payload?.payer_id,
+        reset_period: payload?.reset_period,
+        allow_duplicate_draft: payload?.allow_duplicate_draft,
+    })
 
-// -----------------------------
-// Invoice create
-// -----------------------------
-export async function billingCreateInvoice(caseId, payload) {
-    const n = Number(typeof caseId === "object" && caseId ? (caseId.id ?? caseId.case_id) : caseId)
-    if (!Number.isFinite(n) || n <= 0) throw new Error("billingCreateInvoice: invalid caseId")
-    const res = await API.post(`/billing/cases/${n}/invoices`, null, { params: payload })
+    if (!params.module) throw new Error("billingCreateInvoice: module is required")
+
+    const res = await API.post(`/billing/cases/${id}/invoices`, null, { params, ...config })
     return unwrap(res)
 }
 
@@ -121,12 +162,17 @@ export async function billingCreateInvoice(caseId, payload) {
 // Invoice detail / lines
 // -----------------------------
 export async function billingGetInvoice(invoiceId, config = {}) {
-    const res = await API.get(`/billing/invoices/${invoiceId}`, { ...config })
+    const id = toIntId(invoiceId, "invoiceId")
+    const res = await API.get(`/billing/invoices/${id}`, config)
     return unwrap(res)
 }
 
 export async function billingListInvoiceLines(invoiceId, params = {}, config = {}) {
-    const res = await API.get(`/billing/invoices/${invoiceId}/lines`, mergeGetConfig(params, config))
+    const id = toIntId(invoiceId, "invoiceId")
+    const res = await API.get(`/billing/invoices/${id}/lines`, {
+        params: cleanParams(params),
+        ...config,
+    })
     return unwrap(res)
 }
 
@@ -134,95 +180,118 @@ export async function billingListInvoiceLines(invoiceId, params = {}, config = {
 // Invoice lifecycle
 // -----------------------------
 export async function billingApproveInvoice(invoiceId, config = {}) {
-    const res = await postQ(`/billing/invoices/${invoiceId}/approve`, {}, config)
+    const id = toIntId(invoiceId, "invoiceId")
+    const res = await postQ(`/billing/invoices/${id}/approve`, {}, config)
     return unwrap(res)
 }
 
 export async function billingPostInvoice(invoiceId, config = {}) {
-    const res = await postQ(`/billing/invoices/${invoiceId}/post`, {}, config)
+    const id = toIntId(invoiceId, "invoiceId")
+    const res = await postQ(`/billing/invoices/${id}/post`, {}, config)
     return unwrap(res)
 }
 
 export async function billingVoidInvoice(invoiceId, { reason } = {}, config = {}) {
-    const res = await postQ(`/billing/invoices/${invoiceId}/void`, { reason: reason || "Voided" }, config)
+    const id = toIntId(invoiceId, "invoiceId")
+    const res = await postQ(
+        `/billing/invoices/${id}/void`,
+        { reason: reason || "Voided" },
+        config
+    )
     return unwrap(res)
 }
 
 // -----------------------------
-// Lines: manual add
+// Lines: manual add (query params)
 // -----------------------------
 export async function billingAddManualLine(invoiceId, params = {}, config = {}) {
-    const res = await postQ(`/billing/invoices/${invoiceId}/lines/manual`, params, config)
+    const id = toIntId(invoiceId, "invoiceId")
+    const res = await postQ(`/billing/invoices/${id}/lines/manual`, params, config)
     return unwrap(res)
 }
 
 // -----------------------------
-// Lines: update / delete (optional routes)
-// These may not exist in your backend snippet.
-// We try common patterns for compatibility.
+// Lines: update / delete (if your backend supports it)
 // -----------------------------
-export async function billingUpdateLine(invoiceId, lineId, patch = {}, config = {}) {
-    // Try: PATCH /billing/invoices/{invoiceId}/lines/{lineId}
-    try {
-        const res = await patchJSON(`/billing/invoices/${invoiceId}/lines/${lineId}`, patch, config)
-        return unwrap(res)
-    } catch (e1) {
-        // Fallback: PATCH /billing/lines/{lineId}
-        const status = e1?.response?.status
-        if (status === 404 || status === 405) {
-            const res = await patchJSON(`/billing/lines/${lineId}`, patch, config)
-            return unwrap(res)
-        }
-        throw e1
-    }
+export async function billingUpdateLine(invoiceId, lineId, payload = {}, config = {}) {
+    const invId = toIntId(invoiceId, "invoiceId")
+    const lnId = toIntId(lineId, "lineId")
+    const res = await API.put(`/billing/invoices/${invId}/lines/${lnId}`, payload, config)
+    return unwrap(res)
 }
 
-export async function billingDeleteLine(invoiceId, lineId, config = {}) {
-    // Try: DELETE /billing/invoices/{invoiceId}/lines/{lineId}
-    try {
-        const res = await deleteReq(`/billing/invoices/${invoiceId}/lines/${lineId}`, config)
-        return unwrap(res)
-    } catch (e1) {
-        // Fallback: DELETE /billing/lines/{lineId}
-        const status = e1?.response?.status
-        if (status === 404 || status === 405) {
-            const res = await deleteReq(`/billing/lines/${lineId}`, config)
-            return unwrap(res)
-        }
-        throw e1
-    }
+export async function billingDeleteLine(invoiceId, lineId, reason, config = {}) {
+    const invId = toIntId(invoiceId, "invoiceId")
+    const lnId = toIntId(lineId, "lineId")
+    const rsn = String(reason || "Line removed")
+    const res = await API.delete(`/billing/invoices/${invId}/lines/${lnId}`, {
+        params: { reason: rsn },
+        ...config,
+    })
+    return unwrap(res)
 }
 
 // -----------------------------
-// Invoice meta update (optional route)
-// Expecting: PATCH /billing/invoices/{id}
+// Invoice meta update (optional)
+// PATCH /billing/invoices/{id}
 // -----------------------------
 export async function billingUpdateInvoice(invoiceId, payload = {}, config = {}) {
-    const res = await patchJSON(`/billing/invoices/${invoiceId}`, payload, config)
+    const id = toIntId(invoiceId, "invoiceId")
+    const res = await patchJSON(`/billing/invoices/${id}`, payload, config)
     return unwrap(res)
 }
 
 // -----------------------------
-// Invoice PDF (optional route)
-// Expecting: GET /billing/invoices/{id}/pdf
+// Invoice PDF (optional)
+// GET /billing/invoices/{id}/pdf
 // -----------------------------
 export async function billingGetInvoicePdf(invoiceId, config = {}) {
-    return getBlob(`/billing/invoices/${invoiceId}/pdf`, config)
+    const id = toIntId(invoiceId, "invoiceId")
+    return getBlob(`/billing/invoices/${id}/pdf`, config)
 }
 
 // -----------------------------
-// Payments / Advances (FastAPI params => query params)
+// Payments / Advances (query params)
 // -----------------------------
-export async function billingRecordPayment(caseId, payload) {
-    const res = await API.post(`/billing/cases/${caseId}/payments`, null, { params: payload })
+export async function billingRecordPayment(caseId, payload = {}, config = {}) {
+    const id = toIntId(caseId, "caseId")
+    const res = await API.post(`/billing/cases/${id}/payments`, null, {
+        params: cleanParams(payload),
+        ...config,
+    })
     return unwrap(res)
 }
 
-export async function billingRecordAdvance(caseId, payload) {
-    const res = await API.post(`/billing/cases/${caseId}/advances`, null, { params: payload })
+export async function billingRecordAdvance(caseId, payload = {}, config = {}) {
+    const id = toIntId(caseId, "caseId")
+    const res = await API.post(`/billing/cases/${id}/advances`, null, {
+        params: cleanParams(payload),
+        ...config,
+    })
     return unwrap(res)
 }
 
+export async function billingListInvoicePayments(invoiceId, params = {}, config = {}) {
+    const id = toIntId(invoiceId, "invoiceId")
+    const res = await API.get(`/billing/invoices/${id}/payments`, {
+        params: cleanParams(params),
+        ...config,
+    })
+    return unwrap(res)
+}
+
+// ✅ pay() receives query params (NOT JSON body)
+export async function billingPayOnCase(caseId, payload = {}, config = {}) {
+    return billingRecordPayment(caseId, payload, config)
+}
+
+// -----------------------------
+// Meta / Particulars
+// -----------------------------
+export async function billingModulesMeta(config = {}) {
+    const res = await API.get("/billing/meta/modules", config)
+    return unwrap(res)
+}
 
 export async function billingMetaParticulars(config = {}) {
     const res = await API.get(`/billing/meta/particulars`, config)
@@ -230,73 +299,118 @@ export async function billingMetaParticulars(config = {}) {
 }
 
 export async function billingParticularOptions(caseId, code, params = {}, config = {}) {
-    const res = await API.get(`/billing/cases/${caseId}/particulars/${code}/options`, {
+    const id = toIntId(caseId, "caseId")
+    const c = encodeURIComponent(String(code || ""))
+    if (!c) throw new Error("billingParticularOptions: code required")
+    const res = await API.get(`/billing/cases/${id}/particulars/${c}/options`, {
+        params: cleanParams(params),
         ...config,
-        params,
     })
     return unwrap(res)
 }
 
 export async function billingParticularAdd(caseId, code, payload, config = {}) {
-    const res = await API.post(`/billing/cases/${caseId}/particulars/${code}/add`, payload, config)
+    const id = toIntId(caseId, "caseId")
+    const c = encodeURIComponent(String(code || ""))
+    if (!c) throw new Error("billingParticularAdd: code required")
+    const res = await API.post(`/billing/cases/${id}/particulars/${c}/add`, payload, config)
     return unwrap(res)
 }
 
-
-
-
-export async function billingCaseDashboard(caseId, params = {}, opts = {}) {
-  const res = await API.get(`/billing/cases/${caseId}/dashboard`, { params, ...opts })
-  return unwrap(res)
+// -----------------------------
+// Dashboard helpers
+// -----------------------------
+export async function billingCaseDashboard(caseId, params = {}, config = {}) {
+    const id = toIntId(caseId, "caseId")
+    const res = await API.get(`/billing/cases/${id}/dashboard`, {
+        params: cleanParams(params),
+        ...config,
+    })
+    return unwrap(res)
 }
 
-export async function billingCaseInvoiceSummary(caseId, params = {}, opts = {}) {
-  const res = await API.get(`/billing/cases/${caseId}/invoice-summary`, { params, ...opts })
-  return unwrap(res)
+export async function billingCaseInvoiceSummary(caseId, params = {}, config = {}) {
+    const id = toIntId(caseId, "caseId")
+    const res = await API.get(`/billing/cases/${id}/invoice-summary`, {
+        params: cleanParams(params),
+        ...config,
+    })
+    return unwrap(res)
 }
 
-export async function billingMetaPayers(params = {}, opts = {}) {
-  const res = await API.get(`/billing/meta/payers`, { params, ...opts })
-  return unwrap(res)
+export async function billingMetaPayers(params = {}, config = {}) {
+    const res = await API.get(`/billing/meta/payers`, { params: cleanParams(params), ...config })
+    return unwrap(res)
 }
 
-export async function billingMetaReferrers(params = {}, opts = {}) {
-  const res = await API.get(`/billing/meta/referrers`, { params, ...opts })
-  return unwrap(res)
+export async function billingMetaReferrers(params = {}, config = {}) {
+    const res = await API.get(`/billing/meta/referrers`, { params: cleanParams(params), ...config })
+    return unwrap(res)
 }
 
-export async function billingGetCaseSettings(caseId, opts = {}) {
-  const res = await API.get(`/billing/cases/${caseId}/settings`, { ...opts })
-  return unwrap(res)
+export async function billingGetCaseSettings(caseId, config = {}) {
+    const id = toIntId(caseId, "caseId")
+    const res = await API.get(`/billing/cases/${id}/settings`, config)
+    return unwrap(res)
 }
 
-export async function billingUpdateCaseSettings(caseId, payload, opts = {}) {
-  const res = await API.put(`/billing/cases/${caseId}/settings`, payload, { ...opts })
-  return unwrap(res)
-}
-export async function billingModulesMeta(config) {
-  const res = await API.get("/billing/meta/modules", config)
-  return unwrap(res)
+export async function billingUpdateCaseSettings(caseId, payload, config = {}) {
+    const id = toIntId(caseId, "caseId")
+    const res = await API.put(`/billing/cases/${id}/settings`, payload, config)
+    return unwrap(res)
 }
 
-export async function billingListInvoicePayments(invoiceId, params = {}, config = {}) {
-  const res = await API.get(`/billing/invoices/${invoiceId}/payments`, { params, ...config })
-  return unwrap(res)
-}
-
-// ✅ Your backend pay() receives query params (NOT JSON body)
-export async function billingPayOnCase(caseId, payload, config = {}) {
-  const res = await API.post(`/billing/cases/${caseId}/payments`, null, { params: payload, ...config })
-  return unwrap(res)
-}
-
-// These 2 endpoints must be added in backend (below)
+// -----------------------------
+// Edit request workflow
+// -----------------------------
 export async function billingRequestInvoiceEdit(invoiceId, payload, config = {}) {
-  const res = await API.post(`/billing/invoices/${invoiceId}/edit-request`, payload, config)
-  return unwrap(res)
+    const id = toIntId(invoiceId, "invoiceId")
+    const res = await API.post(`/billing/invoices/${id}/edit-requests`, payload, config)
+    return unwrap(res)
+}
+
+export async function billingListEditRequests(params = {}, config = {}) {
+    const res = await API.get(`/billing/edit-requests`, { params: cleanParams(params), ...config })
+    return unwrap(res)
+}
+
+export async function billingApproveEditRequest(requestId, payload, config = {}) {
+    const id = toIntId(requestId, "requestId")
+    const res = await API.post(`/billing/edit-requests/${id}/approve`, payload, config)
+    return unwrap(res)
+}
+
+export async function billingRejectEditRequest(requestId, payload, config = {}) {
+    const id = toIntId(requestId, "requestId")
+    const res = await API.post(`/billing/edit-requests/${id}/reject`, payload, config)
+    return unwrap(res)
+}
+
+export async function billingListInvoiceAuditLogs(invoiceId, params = {}, config = {}) {
+    const id = toIntId(invoiceId, "invoiceId")
+    const res = await API.get(`/billing/invoices/${id}/audit-logs`, {
+        params: cleanParams(params),
+        ...config,
+    })
+    return unwrap(res)
 }
 
 export async function billingReopenInvoice(invoiceId, payload, config = {}) {
-  const res = await API.post(`/billing/invoices/${invoiceId}/reopen`, payload, config)
-  return unwrap(res)
+    const id = toIntId(invoiceId, "invoiceId")
+    const res = await API.post(`/billing/invoices/${id}/reopen`, payload, config)
+    return unwrap(res)
 }
+
+// -----------------------------
+// Charge-item line add (your backend route is under /masters)
+// POST /masters/charge-items/invoices/{invoice_id}/lines/charge-item
+// -----------------------------
+export async function billingAddChargeItemLine(invoiceId, payload = {}, config = {}) {
+    const res = await API.post(
+        `/masters/charge-items/invoices/${invoiceId}/lines/charge-item`,
+        payload,
+        config
+    )
+    return unwrap(res)
+}
+

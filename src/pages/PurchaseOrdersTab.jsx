@@ -144,7 +144,7 @@ export default function PurchaseOrdersTab() {
     async function loadMasters() {
         try {
             const [sRes, lRes] = await Promise.all([listSuppliers(), listLocations()])
-            setSuppliers(sRes.data || [])
+            setSuppliers(sRes || [])
             setLocations(lRes.data || [])
         } catch (e) {
             console.error(e)

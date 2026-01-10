@@ -987,7 +987,7 @@ export default function GrnTab() {
   const loadMasters = useCallback(async () => {
     try {
       const [s, l] = await Promise.all([listSuppliers(), listLocations()])
-      setSuppliers(s.data || [])
+      setSuppliers(s || [])
       setLocations(l.data || [])
     } catch {
       // silent
@@ -1261,7 +1261,7 @@ export default function GrnTab() {
     setSearchingItems(true)
     try {
       const res = await listInventoryItems({ q: text, limit: 20 })
-      const rows = (res.data || []).map(normalizeItem).filter((x) => x.id)
+      const rows = (res || []).map(normalizeItem).filter((x) => x.id)
       setItemResults(rows)
     } catch {
       setItemResults([])
