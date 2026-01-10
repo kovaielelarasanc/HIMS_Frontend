@@ -106,6 +106,8 @@ import InvoiceEditor from "./billing/InvoiceEditor";
 import BillingDashboard from "./billing/BillingDashboard";
 import BillingAddItem from "./billing/BillingAddItem";
 import ChargeMaster from "./billing/ChargeMaster";
+import InventoryCommonStockPage from "./pages/inventory/InventoryCommonStockPage";
+import WardPatientUsagePage from "./pages/inventory/WardPatientUsagePage";
 
 
 export default function App() {
@@ -239,7 +241,10 @@ export default function App() {
             <Route path="/pharmacy/returns" element={<PharmacyReturns />} />
             <Route path="/pharmacy/rx-explorer" element={<PharmacyRxExplorer />} />
             <Route path="/pharmacy/stock/alerts" element={<StockAlertsDashboard />} />
-
+            {/* <Route path="/inventory/indents" element={<InventoryIndentsPage/>} /> */}
+            <Route path="/inventory/indents" element={<InventoryCommonStockPage />} />
+            {/* <Route path="/inventory/indents/issue" element={<InventoryIssuesPage />} /> */}
+            <Route path="/inventory/indents/issue" element={<WardPatientUsagePage />} />
             <Route path="/opd/phramacy" element={<OpdPharmacyOrder />} />
             <Route path="/ipd/phramacy" element={<IpdPharmacyOrder />} />
             <Route path="/counter/phramacy" element={<PharmacyCounterOrder />} />
@@ -250,7 +255,7 @@ export default function App() {
             <Route path="/pharmacy/accounts/supplier-payments" element={<SupplierPaymentAdvanced />} />
             <Route path="/pharmacy/accounts/supplier-statement" element={<SupplierPayments />} />
 
-             {/* <Route path="/billing/dashboard" element={<BillingDashboard />} />
+            {/* <Route path="/billing/dashboard" element={<BillingDashboard />} />
             <Route path="/billing/cases" element={<BillingCasesList />} />
             <Route path="/billing/cases/:caseId" element={<BillingCaseDetail />} />
             <Route path="/billing/cases/:caseId/invoices/:invoiceId" element={<InvoiceDetail />} /> */}

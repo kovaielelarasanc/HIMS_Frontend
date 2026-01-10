@@ -1,33 +1,33 @@
 // FILE: src/pages/PharmacyRx.jsx
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import { toast } from 'sonner'
+import { useEffect, useMemo, useRef, useState } from "react"
+import { motion, AnimatePresence } from "framer-motion"
+import { toast } from "sonner"
 
 import {
   listPharmacyPrescriptions,
   createPharmacyPrescription,
   getPharmacyPrescription,
+} from "../api/pharmacyRx"
 
-} from '../api/pharmacyRx'
-import { listPatients, getPatientById } from '../api/patients'
-import { getBillingMasters } from '../api/billing'
-import { listInventoryItems, searchItemBatches } from '../api/inventory'
+import { listPatients, getPatientById } from "../api/patients"
+import { getDoctorlist } from "../api/billing"
+import { searchItemBatches } from "../api/inventory"
 
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Textarea } from '@/components/ui/textarea'
-import { Badge } from '@/components/ui/badge'
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import {
   Select,
   SelectTrigger,
   SelectValue,
   SelectContent,
   SelectItem,
-} from '@/components/ui/select'
-import { ScrollArea } from '@/components/ui/scroll-area'
+} from "@/components/ui/select"
+import { ScrollArea } from "@/components/ui/scroll-area"
 
 import {
   Pill,
@@ -47,9 +47,9 @@ import {
   BadgeCheck,
   IdCard,
   MapPin,
-} from 'lucide-react'
+} from "lucide-react"
 
-/* ----------------------------- helpers/hooks ----------------------------- */
+/* ----------------------------- helpers ----------------------------- */
 
 function todayDateTimeLocal() {
   const d = new Date()
@@ -59,33 +59,33 @@ function todayDateTimeLocal() {
 }
 
 function fmtDT(x) {
-  if (!x) return '—'
+  if (!x) return "—"
   try {
     const s = String(x)
-    return s.replace('T', ' ').slice(0, 16)
+    return s.replace("T", " ").slice(0, 16)
   } catch {
-    return '—'
+    return "—"
   }
 }
 
 function safeStr(x) {
-  return (x ?? '').toString()
+  return (x ?? "").toString()
 }
 
 function fmtDateShort(x) {
-  if (!x) return '—'
+  if (!x) return "—"
   try {
     const d = new Date(x)
     if (Number.isNaN(d.getTime())) return String(x)
-    return d.toLocaleDateString(undefined, { year: 'numeric', month: 'short' }) // e.g. "Aug 2026"
+    return d.toLocaleDateString(undefined, { year: "numeric", month: "short" })
   } catch {
-    return '—'
+    return "—"
   }
 }
 
 function fmtQty(v) {
   const n = Number(v)
-  if (!Number.isFinite(n)) return safeStr(v) || '0'
+  if (!Number.isFinite(n)) return safeStr(v) || "0"
   return Number.isInteger(n) ? String(n) : n.toFixed(2)
 }
 
@@ -94,64 +94,10 @@ function isExpired(expiry) {
   const d = new Date(expiry)
   if (Number.isNaN(d.getTime())) return false
   const today = new Date()
-  // compare dates only
   d.setHours(0, 0, 0, 0)
   today.setHours(0, 0, 0, 0)
   return d < today
 }
-
-// const EMPTY_LINE = {
-//   item: null,
-//   item_name: '',
-//   strength: '',
-//   route: 'PO',
-//   dose: '',
-//   frequency: '',
-//   duration_days: '',
-//   total_qty: '',
-//   instructions: '',
-//   is_prn: false,
-//   is_stat: false,
-//   requested_qty: '',
-//   _qtyTouched: false,
-
-//   // ✅ batch picker fields
-//   batch_id: null,
-//   batch_no: '',
-//   expiry_date: null,
-//   available_qty: '',
-// }
-
-const EMPTY_LINE = {
-  item: null,
-
-  // ✅ store IDs explicitly (prevents item_id validation error)
-  item_id: null,
-
-  item_name: '',
-  strength: '',
-  route: 'PO',
-
-  // ✅ checkbox schedule model
-  dose_slots: { M: 0, A: 0, E: 0, N: 0 }, // each slot holds dose count 0..9
-  frequency: '',
-
-  duration_days: '',
-  total_qty: '',
-  requested_qty: '',
-
-  dose: '', // optional note like "Tab"
-  instructions: '',
-  is_prn: false,
-  is_stat: false,
-
-  // batch picker (optional)
-  batch_id: null,
-  batch_no: '',
-  expiry_date: null,
-  available_qty: '',
-}
-
 
 function useDebouncedValue(value, delay = 300) {
   const [v, setV] = useState(value)
@@ -170,40 +116,41 @@ function useOnClickOutside(ref, handler) {
       if (el.contains(event.target)) return
       handler?.(event)
     }
-    document.addEventListener('mousedown', listener)
-    document.addEventListener('touchstart', listener)
+    document.addEventListener("mousedown", listener)
+    document.addEventListener("touchstart", listener)
     return () => {
-      document.removeEventListener('mousedown', listener)
-      document.removeEventListener('touchstart', listener)
+      document.removeEventListener("mousedown", listener)
+      document.removeEventListener("touchstart", listener)
     }
   }, [ref, handler])
 }
 
-const normalizeFreq = (v = "") => String(v || "").trim().toUpperCase().replace(/\s+/g, "")
+const normalizeFreq = (v = "") =>
+  String(v || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "")
 
-/** robust getter for inconsistent backend keys */
-function pick(obj, keys, fallback = '') {
+function pick(obj, keys, fallback = "") {
   for (const k of keys) {
     const v = obj?.[k]
-    if (v !== undefined && v !== null && String(v).trim() !== '') return v
+    if (v !== undefined && v !== null && String(v).trim() !== "") return v
   }
   return fallback
 }
 
 const parseFrequencyToPerDay = (freq = "") => {
   const f = normalizeFreq(freq)
-
-  // numeric pattern: 1-1-1 or 0-1-0 or 1-1-1-1 etc
+  // allow 2..4 segments: 1-0-1 or 1-0-1-0
   if (/^\d+(?:-\d+){1,3}$/.test(f)) {
-    return f.split("-").reduce((sum, x) => sum + (Number(x) || 0), 0)
+    return f
+      .split("-")
+      .reduce((sum, x) => sum + (Number(x) || 0), 0)
   }
-
-  // common aliases
   if (["OD", "QD", "ONCE", "HS", "QHS"].includes(f)) return 1
   if (["BD", "BID"].includes(f)) return 2
   if (["TID", "TDS"].includes(f)) return 3
   if (["QID", "QDS"].includes(f)) return 4
-
   return 0
 }
 
@@ -213,78 +160,142 @@ const parseDoseMultiplier = (dose = "") => {
   return Number.isFinite(n) && n > 0 ? n : 1
 }
 
+const SLOT_KEYS = ["M", "A", "E", "N"]
+const SLOT_META = {
+  M: { label: "Morning" },
+  A: { label: "Afternoon" },
+  E: { label: "Evening" },
+  N: { label: "Night" },
+}
+
+function emptySlots() {
+  return { M: 0, A: 0, E: 0, N: 0 }
+}
+
+function clampInt(v, min, max) {
+  const n = Math.trunc(Number(v))
+  if (!Number.isFinite(n)) return min
+  return Math.max(min, Math.min(max, n))
+}
+
+function slotsToFrequency(slots) {
+  const s = slots || emptySlots()
+  return SLOT_KEYS.map((k) => clampInt(s[k] ?? 0, 0, 9)).join("-")
+}
+
+function frequencyToSlots(freq) {
+  const f = safeStr(freq).trim().toUpperCase()
+  const s = emptySlots()
+
+  const preset = {
+    OD: { M: 1, A: 0, E: 0, N: 0 },
+    QD: { M: 1, A: 0, E: 0, N: 0 },
+    ONCE: { M: 1, A: 0, E: 0, N: 0 },
+
+    BD: { M: 1, A: 0, E: 0, N: 1 },
+    BID: { M: 1, A: 0, E: 0, N: 1 },
+
+    TID: { M: 1, A: 1, E: 1, N: 0 },
+    TDS: { M: 1, A: 1, E: 1, N: 0 },
+
+    QID: { M: 1, A: 1, E: 1, N: 1 },
+    QDS: { M: 1, A: 1, E: 1, N: 1 },
+
+    HS: { M: 0, A: 0, E: 0, N: 1 },
+    QHS: { M: 0, A: 0, E: 0, N: 1 },
+  }
+
+  if (preset[f]) return { ...s, ...preset[f] }
+
+  if (f.includes("-")) {
+    const parts = f.split("-").map((x) => clampInt(x || 0, 0, 9))
+    s.M = parts[0] ?? 0
+    s.A = parts[1] ?? 0
+    s.E = parts[2] ?? 0
+    s.N = parts[3] ?? 0
+    return s
+  }
+
+  return s
+}
+
+function perDayFromSlots(slots) {
+  const s = slots || emptySlots()
+  return SLOT_KEYS.reduce((sum, k) => sum + (Number(s[k]) || 0), 0)
+}
+
 const calcAutoQty = (line) => {
   const days = Number(line?.duration_days || 0)
   if (!Number.isFinite(days) || days <= 0) return ""
 
-  // ✅ primary: dose_slots (M/A/E/N)
   const slots = line?.dose_slots
   const perDayFromSlot = slots ? perDayFromSlots(slots) : 0
 
-  // fallback: string frequency (OD/BD/1-0-0-1...)
-  const perDay = perDayFromSlot > 0 ? perDayFromSlot : parseFrequencyToPerDay(line?.frequency || "")
+  const perDay =
+    perDayFromSlot > 0
+      ? perDayFromSlot
+      : parseFrequencyToPerDay(line?.frequency || "")
+
   if (!perDay) return ""
 
   const doseMul = parseDoseMultiplier(line?.dose || "")
   return String(Math.round(perDay * days * doseMul))
 }
 
+function applyAuto(line) {
+  const next = { ...line }
+  next.frequency = slotsToFrequency(next.dose_slots || emptySlots())
+  const qty = calcAutoQty(next)
+  next.total_qty = qty
+  next.requested_qty = qty
+  return next
+}
+
+function toInt(v) {
+  const n = Number(v)
+  return Number.isFinite(n) ? Math.trunc(n) : null
+}
 
 function getPatientDisplay(p) {
-  if (!p) return '—'
-  const name =
-    `${p.first_name || ''} ${p.last_name || ''}`.trim() || p.name || ''
-  const uhid = p.uhid ? `UHID: ${p.uhid}` : ''
-  const phone = p.phone ? `Ph: ${p.phone}` : ''
-  return [name, uhid, phone].filter(Boolean).join(' • ')
+  if (!p) return "—"
+  const name = `${p.first_name || ""} ${p.last_name || ""}`.trim() || p.name || ""
+  const uhid = p.uhid ? `UHID: ${p.uhid}` : ""
+  const phone = p.phone ? `Ph: ${p.phone}` : ""
+  return [name, uhid, phone].filter(Boolean).join(" • ")
 }
 
 function getPatientName(p) {
-  if (!p) return '—'
+  if (!p) return "—"
   return (
-    `${p.first_name || ''} ${p.last_name || ''}`.trim() ||
+    `${p.first_name || ""} ${p.last_name || ""}`.trim() ||
     p.name ||
-    `Patient #${p.id || ''}` ||
-    '—'
+    `Patient #${p.id || ""}` ||
+    "—"
   )
 }
 
 function getPatientAgeGender(p) {
-  if (!p) return ''
-  const a =
-    pick(p, ['age', 'age_years'], '') ||
-    (p.dob ? '' : '') // keep simple
-  const g = pick(p, ['gender', 'sex'], '')
-  return [a ? `${a}y` : '', g].filter(Boolean).join(' • ')
+  if (!p) return ""
+  const a = pick(p, ["age", "age_years"], "")
+  const g = pick(p, ["gender", "sex"], "")
+  return [a ? `${a}y` : "", g].filter(Boolean).join(" • ")
 }
 
-/** normalize Rx line fields (freq missing issue fix) */
-/** normalize Rx line fields (freq/qty keys robust) */
 function normalizeLine(l) {
-  const itemName = pick(l, ['item_name', 'medicine_name', 'name', 'itemName'], '')
-  const strength = pick(l, ['strength', 'item_strength', 'itemStrength'], '')
-  const dose = pick(l, ['dose', 'dosage', 'dose_text', 'doseText'], '')
+  const itemName = pick(l, ["item_name", "medicine_name", "name", "itemName"], "")
+  const strength = pick(l, ["strength", "item_strength", "itemStrength"], "")
+  const dose = pick(l, ["dose", "dosage", "dose_text", "doseText"], "")
 
-  // ✅ FIX: include frequency_code
   const frequency = pick(
     l,
-    [
-      'frequency',
-      'frequency_code',     // ✅ backend key
-      'freq',
-      'dosage_frequency',
-      'frequency_text',
-      'freq_code',          // keep as fallback
-    ],
-    ''
+    ["frequency", "frequency_code", "freq", "dosage_frequency", "frequency_text", "freq_code"],
+    ""
   )
 
-  const duration_days = pick(l, ['duration_days', 'days', 'duration', 'duration_day'], '')
-  const route = pick(l, ['route', 'route_code', 'administration_route'], '')
-  const instructions = pick(l, ['instructions', 'sig', 'remarks', 'instruction'], '')
-
-  // ✅ qty: support requested/total + backend computed remaining/dispensed
-  const qty = pick(l, ['total_qty', 'requested_qty', 'qty', 'quantity'], '')
+  const duration_days = pick(l, ["duration_days", "days", "duration", "duration_day"], "")
+  const route = pick(l, ["route", "route_code", "administration_route"], "")
+  const instructions = pick(l, ["instructions", "sig", "remarks", "instruction"], "")
+  const qty = pick(l, ["total_qty", "requested_qty", "qty", "quantity"], "")
 
   return {
     itemName,
@@ -295,92 +306,94 @@ function normalizeLine(l) {
     route,
     instructions,
     qty,
-    dispensed_qty: pick(l, ['dispensed_qty', 'dispensedQty'], ''),
-    remaining_qty: pick(l, ['remaining_qty', 'remainingQty'], ''),
+    dispensed_qty: pick(l, ["dispensed_qty", "dispensedQty"], ""),
+    remaining_qty: pick(l, ["remaining_qty", "remainingQty"], ""),
   }
 }
-
 
 /* ------------------------------ constants ------------------------------ */
 
 const RX_TYPES = [
-  { value: 'OPD', label: 'OPD' },
-  { value: 'IPD', label: 'IPD' },
-  { value: 'OT', label: 'OT' },
-  { value: 'COUNTER', label: 'Counter' },
+  { value: "OPD", label: "OPD" },
+  { value: "IPD", label: "IPD" },
+  { value: "OT", label: "OT" },
+  { value: "COUNTER", label: "Counter" },
 ]
 
 const PRIORITIES = [
-  { value: 'ROUTINE', label: 'Routine' },
-  { value: 'STAT', label: 'STAT / Urgent' },
-  { value: 'PRN', label: 'PRN / As needed' },
+  { value: "ROUTINE", label: "Routine" },
+  { value: "STAT", label: "STAT / Urgent" },
+  { value: "PRN", label: "PRN / As needed" },
 ]
 
 const FREQ_PRESETS = [
-  { label: 'OD', value: 'OD' },
-  { label: 'BD', value: 'BD' },
-  { label: 'TID', value: 'TID' },
-  { label: 'QID', value: 'QID' },
-
-  // 4-slot explicit (M-A-E-N)
-  { label: '1-0-0-0', value: '1-0-0-0' }, // Morning only
-  { label: '1-0-0-1', value: '1-0-0-1' }, // Morning + Night
-  { label: '1-1-0-1', value: '1-1-0-1' }, // Morning + Afternoon + Night
-  { label: '1-1-1-1', value: '1-1-1-1' }, // QID perfect
-  { label: '0-0-0-1', value: '0-0-0-1' }, // Night only
-  { label: '0-1-0-0', value: '0-1-0-0' }, // Afternoon only
+  { label: "OD", value: "OD" },
+  { label: "BD", value: "BD" },
+  { label: "TID", value: "TID" },
+  { label: "QID", value: "QID" },
+  { label: "1-0-0-0", value: "1-0-0-0" },
+  { label: "1-0-0-1", value: "1-0-0-1" },
+  { label: "1-1-0-1", value: "1-1-0-1" },
+  { label: "1-1-1-1", value: "1-1-1-1" },
+  { label: "0-0-0-1", value: "0-0-0-1" },
+  { label: "0-1-0-0", value: "0-1-0-0" },
 ]
 
+const ROUTE_PRESETS = ["PO", "IV", "IM", "SC", "PR", "INH", "TOP"]
 
-const ROUTE_PRESETS = ['PO', 'IV', 'IM', 'SC', 'PR', 'INH', 'TOP']
-
-const EMPTY_HEADER = {
-  type: 'OPD',
-  priority: 'ROUTINE',
+const makeEmptyHeader = () => ({
+  type: "OPD",
+  priority: "ROUTINE",
   datetime: todayDateTimeLocal(),
   patient: null,
-  doctorId: '',
-  visitNo: '',
-  admissionNo: '',
-  otCaseNo: '',
-  notes: '',
-}
+  doctorId: "",
+  visitNo: "",
+  admissionNo: "",
+  otCaseNo: "",
+  notes: "",
+})
 
-// const EMPTY_LINE = {
-//   item: null,
-//   item_name: '',
-//   strength: '',
-//   route: 'PO',
-//   dose: '',
-//   frequency: '',
-//   duration_days: '',
-//   total_qty: '',
-//   instructions: '',
-//   is_prn: false,
-//   is_stat: false,
-//   requested_qty: '',
-//   _qtyTouched: false,
-// }
+const makeEmptyLine = () => ({
+  item: null,
+  item_id: null,
+  item_name: "",
+  strength: "",
+  route: "PO",
+  dose_slots: { M: 0, A: 0, E: 0, N: 0 },
+  frequency: "",
+  duration_days: "",
+  total_qty: "",
+  requested_qty: "",
+  dose: "",
+  instructions: "",
+  is_prn: false,
+  is_stat: false,
+
+  batch_id: null,
+  batch_no: "",
+  expiry_date: null,
+  available_qty: "",
+})
 
 /* ------------------------------ UI helpers ------------------------------ */
 
-function GlassCard({ className = '', children }) {
+function GlassCard({ className = "", children }) {
   return (
     <Card
       className={[
-        'rounded-3xl border border-slate-500/70',
-        'bg-white/70 backdrop-blur-xl',
-        'shadow-[0_12px_30px_rgba(0,0,0,0.06)]',
-        'ring-1 ring-black/[0.03]',
+        "rounded-3xl border border-slate-500/70",
+        "bg-white/70 backdrop-blur-xl",
+        "shadow-[0_12px_30px_rgba(0,0,0,0.06)]",
+        "ring-1 ring-black/[0.03]",
         className,
-      ].join(' ')}
+      ].join(" ")}
     >
       {children}
     </Card>
   )
 }
 
-function SegmentedTabs({ value }) {
+function SegmentedTabs() {
   return (
     <TabsList className="w-full sm:w-auto rounded-full bg-white/70 backdrop-blur border border-slate-500 p-1 shadow-sm">
       <TabsTrigger
@@ -406,22 +419,22 @@ function SegmentedTabs({ value }) {
 }
 
 function StatusPill({ status }) {
-  const s = (status || '').toUpperCase()
-  let label = s || 'PENDING'
-  let cls = 'bg-white/70 text-slate-700 border border-slate-500'
+  const s = (status || "").toUpperCase()
+  let label = s || "PENDING"
+  let cls = "bg-white/70 text-slate-700 border border-slate-500"
 
-  if (s === 'PENDING' || s === 'NEW') {
-    label = 'Pending'
-    cls = 'bg-amber-50/80 text-amber-700 border border-amber-200'
-  } else if (s === 'PARTIAL') {
-    label = 'Partial'
-    cls = 'bg-blue-50/80 text-blue-700 border border-blue-200'
-  } else if (s === 'DISPENSED' || s === 'COMPLETED') {
-    label = 'Dispensed'
-    cls = 'bg-emerald-50/80 text-emerald-700 border border-emerald-200'
-  } else if (s === 'CANCELLED') {
-    label = 'Cancelled'
-    cls = 'bg-rose-50/80 text-rose-700 border border-rose-200'
+  if (s === "PENDING" || s === "NEW") {
+    label = "Pending"
+    cls = "bg-amber-50/80 text-amber-700 border border-amber-200"
+  } else if (s === "PARTIAL") {
+    label = "Partial"
+    cls = "bg-blue-50/80 text-blue-700 border border-blue-200"
+  } else if (s === "DISPENSED" || s === "COMPLETED") {
+    label = "Dispensed"
+    cls = "bg-emerald-50/80 text-emerald-700 border border-emerald-200"
+  } else if (s === "CANCELLED") {
+    label = "Cancelled"
+    cls = "bg-rose-50/80 text-rose-700 border border-rose-200"
   }
 
   return (
@@ -434,19 +447,17 @@ function StatusPill({ status }) {
 
 function PatientSummaryCard({ patient, loading }) {
   const name = getPatientName(patient)
-  const uhid = pick(patient, ['uhid', 'patient_uhid'], '—')
-  const phone = pick(patient, ['phone', 'mobile', 'contact'], '—')
-  const gender = pick(patient, ['gender', 'sex'], '')
-  const age = pick(patient, ['age', 'age_years'], '')
-  const dob = pick(patient, ['dob', 'date_of_birth'], '')
-  const blood = pick(patient, ['blood_group', 'bloodGroup'], '')
-  const address = pick(patient, ['address', 'current_address', 'full_address'], '')
-  const city = pick(patient, ['city'], '')
-  const state = pick(patient, ['state'], '')
-  const pin = pick(patient, ['pincode', 'pin'], '')
-
-  const addrLine = [address, city, state, pin].filter(Boolean).join(', ')
-
+  const uhid = pick(patient, ["uhid", "patient_uhid"], "—")
+  const phone = pick(patient, ["phone", "mobile", "contact"], "—")
+  const gender = pick(patient, ["gender", "sex"], "")
+  const age = pick(patient, ["age", "age_years"], "")
+  const dob = pick(patient, ["dob", "date_of_birth"], "")
+  const blood = pick(patient, ["blood_group", "bloodGroup"], "")
+  const address = pick(patient, ["address", "current_address", "full_address"], "")
+  const city = pick(patient, ["city"], "")
+  const state = pick(patient, ["state"], "")
+  const pin = pick(patient, ["pincode", "pin"], "")
+  const addrLine = [address, city, state, pin].filter(Boolean).join(", ")
 
   return (
     <div className="rounded-3xl border border-slate-500 bg-white/70 backdrop-blur p-4 shadow-sm">
@@ -458,10 +469,10 @@ function PatientSummaryCard({ patient, loading }) {
             </div>
             <div className="min-w-0">
               <div className="text-sm font-semibold text-slate-900 truncate">
-                {loading ? 'Loading patient...' : name}
+                {loading ? "Loading patient..." : name}
               </div>
               <div className="text-xs text-slate-500 truncate">
-                {loading ? '—' : [age ? `${age}y` : '', gender].filter(Boolean).join(' • ') || '—'}
+                {loading ? "—" : [age ? `${age}y` : "", gender].filter(Boolean).join(" • ") || "—"}
               </div>
             </div>
           </div>
@@ -477,11 +488,11 @@ function PatientSummaryCard({ patient, loading }) {
             </div>
             <div className="flex items-center gap-2 text-slate-600">
               <Calendar className="w-4 h-4 text-slate-400" />
-              <span className="font-medium text-slate-700">DOB:</span> {dob || '—'}
+              <span className="font-medium text-slate-700">DOB:</span> {dob || "—"}
             </div>
             <div className="flex items-center gap-2 text-slate-600">
               <BadgeCheck className="w-4 h-4 text-slate-400" />
-              <span className="font-medium text-slate-700">Blood:</span> {blood || '—'}
+              <span className="font-medium text-slate-700">Blood:</span> {blood || "—"}
             </div>
           </div>
 
@@ -503,114 +514,26 @@ function PatientSummaryCard({ patient, loading }) {
   )
 }
 
-
-function toInt(v) {
-  const n = Number(v)
-  return Number.isFinite(n) ? Math.trunc(n) : null
+// supports payloads like: array OR {items:[]} OR {data:{items:[]}}
+function unwrapList(res) {
+  const d = res?.data?.data ?? res?.data
+  if (!d) return []
+  if (Array.isArray(d)) return d
+  if (Array.isArray(d.items)) return d.items
+  if (Array.isArray(d.rows)) return d.rows
+  if (Array.isArray(d.results)) return d.results
+  return []
 }
 
-function clampInt(v, min, max) {
-  const n = Math.trunc(Number(v))
-  if (!Number.isFinite(n)) return min
-  return Math.max(min, Math.min(max, n))
-}
-
-const SLOT_KEYS = ['M', 'A', 'E', 'N']
-const SLOT_META = {
-  M: { label: 'Morning' },
-  A: { label: 'Afternoon' },
-  E: { label: 'Evening' },
-  N: { label: 'Night' },
-}
-
-function emptySlots() {
-  return { M: 0, A: 0, E: 0, N: 0 }
-}
-
-function slotsToFrequency(slots) {
-  const s = slots || emptySlots()
-  return SLOT_KEYS.map((k) => clampInt(s[k] ?? 0, 0, 9)).join('-') // supports 0..9 tablets each slot
-}
-
-function frequencyToSlots(freq) {
-  const f = safeStr(freq).trim().toUpperCase()
-  const s = emptySlots()
-
-  // ✅ Standard 4-slot mapping (M-A-E-N)
-  const preset = {
-    OD:  { M: 1, A: 0, E: 0, N: 0 }, // 1-0-0-0
-    QD:  { M: 1, A: 0, E: 0, N: 0 },
-    ONCE:{ M: 1, A: 0, E: 0, N: 0 },
-
-    BD:  { M: 1, A: 0, E: 0, N: 1 }, // 1-0-0-1
-    BID: { M: 1, A: 0, E: 0, N: 1 },
-
-    TID: { M: 1, A: 1, E: 1, N: 0 }, // 1-1-1-0
-    TDS: { M: 1, A: 1, E: 1, N: 0 },
-
-    QID: { M: 1, A: 1, E: 1, N: 1 }, // 1-1-1-1
-    QDS: { M: 1, A: 1, E: 1, N: 1 },
-
-    // Optional bedtime aliases
-    HS:  { M: 0, A: 0, E: 0, N: 1 }, // 0-0-0-1
-    QHS: { M: 0, A: 0, E: 0, N: 1 },
-  }
-
-  if (preset[f]) return { ...s, ...preset[f] }
-
-  // numeric pattern: "1-0-0-1" etc
-  if (f.includes("-")) {
-    const parts = f.split("-").map((x) => clampInt(x || 0, 0, 9))
-    s.M = parts[0] ?? 0
-    s.A = parts[1] ?? 0
-    s.E = parts[2] ?? 0
-    s.N = parts[3] ?? 0
-    return s
-  }
-
-  return s
-}
-
-
-function perDayFromSlots(slots) {
-  const s = slots || emptySlots()
-  return SLOT_KEYS.reduce((sum, k) => sum + (Number(s[k]) || 0), 0)
-}
-
-// function calcAutoQty(line) {
-//   const days = Number(line?.duration_days || 0)
-//   if (!Number.isFinite(days) || days <= 0) return ''
-
-//   // primary: checkbox slots
-//   const slots = line?.dose_slots
-//   const perDay = slots ? perDayFromSlots(slots) : parseFrequencyToPerDay(line?.frequency)
-//   if (!perDay) return ''
-
-//   return String(perDay * Math.trunc(days))
-// }
-
-function applyAuto(line) {
-  const next = { ...line }
-
-  // keep frequency always aligned with slots
-  next.frequency = slotsToFrequency(next.dose_slots || emptySlots())
-
-  // auto qty always (no manual typing)
-  const qty = calcAutoQty(next)
-  next.total_qty = qty
-  next.requested_qty = qty
-
-  return next
-}
 /* -------------------------------- component ------------------------------- */
 
 export default function PharmacyRx() {
-  const [tab, setTab] = useState('list') // 'list' | 'new' | 'detail'
+  const [tab, setTab] = useState("list") // 'list' | 'new' | 'detail'
 
   // Queue/List
-  const [rxTypeFilter, setRxTypeFilter] = useState('ALL')
-  const [statusFilter, setStatusFilter] = useState('ALL')
-  const [search, setSearch] = useState('')
+  const [rxTypeFilter, setRxTypeFilter] = useState("ALL")
+  const [statusFilter, setStatusFilter] = useState("ALL")
+  const [search, setSearch] = useState("")
   const debouncedSearch = useDebouncedValue(search, 350)
   const [listLoading, setListLoading] = useState(false)
   const [rxList, setRxList] = useState([])
@@ -618,16 +541,16 @@ export default function PharmacyRx() {
   const [autoRefresh, setAutoRefresh] = useState(true)
 
   // New Rx type picker
-  const [newType, setNewType] = useState('OPD')
+  const [newType, setNewType] = useState("OPD")
 
   // Form
-  const [header, setHeader] = useState(EMPTY_HEADER)
+  const [header, setHeader] = useState(makeEmptyHeader)
   const [lines, setLines] = useState([])
-  const [currentLine, setCurrentLine] = useState(EMPTY_LINE)
+  const [currentLine, setCurrentLine] = useState(makeEmptyLine)
   const [submitting, setSubmitting] = useState(false)
 
   // Patient search
-  const [patientQuery, setPatientQuery] = useState('')
+  const [patientQuery, setPatientQuery] = useState("")
   const debouncedPatientQuery = useDebouncedValue(patientQuery, 250)
   const [patientResults, setPatientResults] = useState([])
   const [patientSearching, setPatientSearching] = useState(false)
@@ -643,7 +566,7 @@ export default function PharmacyRx() {
   const [mastersLoading, setMastersLoading] = useState(false)
 
   // Medicine search
-  const [medQuery, setMedQuery] = useState('')
+  const [medQuery, setMedQuery] = useState("")
   const debouncedMedQuery = useDebouncedValue(medQuery, 220)
   const [medResults, setMedResults] = useState([])
   const [medSearching, setMedSearching] = useState(false)
@@ -655,32 +578,33 @@ export default function PharmacyRx() {
   const medInputRef = useRef(null)
   const listSearchRef = useRef(null)
 
-  // cache for patient details
   const patientCacheRef = useRef(new Map())
+
   const [pharmacyLocationId, setPharmacyLocationId] = useState(() => {
-    const v = Number(localStorage.getItem('pharmacy.locationId') || '')
+    const v = Number(localStorage.getItem("pharmacy.locationId") || "")
     return Number.isFinite(v) && v > 0 ? v : 1
   })
 
   useEffect(() => {
-    if (pharmacyLocationId) localStorage.setItem('pharmacy.locationId', String(pharmacyLocationId))
+    if (pharmacyLocationId)
+      localStorage.setItem("pharmacy.locationId", String(pharmacyLocationId))
   }, [pharmacyLocationId])
+
   useOnClickOutside(patientDropRef, () => setShowPatientDropdown(false))
   useOnClickOutside(medDropRef, () => setShowMedDropdown(false))
 
   async function hydratePatientById(id, { silent = false } = {}) {
     if (!id) return null
     const key = String(id)
-    if (patientCacheRef.current.has(key)) {
-      return patientCacheRef.current.get(key)
-    }
+    if (patientCacheRef.current.has(key)) return patientCacheRef.current.get(key)
+
     try {
       if (!silent) setPatientHydrating(true)
       const res = await getPatientById(id)
-      const full = res?.data || null
+      const full = res?.data?.data ?? res?.data ?? null
       if (full) patientCacheRef.current.set(key, full)
       return full
-    } catch (e) {
+    } catch {
       return null
     } finally {
       if (!silent) setPatientHydrating(false)
@@ -688,21 +612,17 @@ export default function PharmacyRx() {
   }
 
   /* ----------------------------- masters load ----------------------------- */
-
   useEffect(() => {
     ; (async () => {
       try {
         setMastersLoading(true)
-        const res = await getBillingMasters()
-        const docs = res?.data?.doctors || []
-        setDoctors(docs)
+        const res = await getDoctorlist()
+        const d = res?.data?.data ?? res?.data ?? {}
+        const docs = d?.doctors ?? d ?? []
+        setDoctors(Array.isArray(docs) ? docs : [])
 
-        const last = localStorage.getItem('pharmacy.lastDoctorId')
-        if (last) {
-          setHeader((p) => ({ ...p, doctorId: p.doctorId || last }))
-        }
-      } catch (e) {
-        // toast via interceptor
+        const last = localStorage.getItem("pharmacy.lastDoctorId")
+        if (last) setHeader((p) => ({ ...p, doctorId: p.doctorId || last }))
       } finally {
         setMastersLoading(false)
       }
@@ -710,19 +630,15 @@ export default function PharmacyRx() {
   }, [])
 
   /* ----------------------------- list fetching ---------------------------- */
-
   useEffect(() => {
     fetchRxList()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rxTypeFilter, statusFilter, debouncedSearch])
 
   useEffect(() => {
-    if (tab !== 'list') return
+    if (tab !== "list") return
     if (!autoRefresh) return
-
-    const t = setInterval(() => {
-      fetchRxList(true)
-    }, 20000)
+    const t = setInterval(() => fetchRxList(true), 20000)
     return () => clearInterval(t)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [tab, autoRefresh, rxTypeFilter, statusFilter, debouncedSearch])
@@ -731,14 +647,14 @@ export default function PharmacyRx() {
     try {
       if (!silent) setListLoading(true)
       const params = {}
-      if (rxTypeFilter !== 'ALL') params.type = rxTypeFilter
-      if (statusFilter !== 'ALL') params.status = statusFilter
+      if (rxTypeFilter !== "ALL") params.type = rxTypeFilter
+      if (statusFilter !== "ALL") params.status = statusFilter
       if (debouncedSearch?.trim()) params.q = debouncedSearch.trim()
       params.limit = 100
 
       const res = await listPharmacyPrescriptions(params)
-      setRxList(res?.data || [])
-    } catch (e) {
+      setRxList(unwrapList(res))
+    } catch {
       // toast via interceptor
     } finally {
       if (!silent) setListLoading(false)
@@ -746,7 +662,6 @@ export default function PharmacyRx() {
   }
 
   /* ----------------------------- patient search --------------------------- */
-
   useEffect(() => {
     const q = debouncedPatientQuery?.trim()
     if (!q || q.length < 2) {
@@ -767,10 +682,10 @@ export default function PharmacyRx() {
           }
 
           if (cancelled) return
-          setPatientResults(res?.data?.items || res?.data || [])
+          const payload = res?.data?.data ?? res?.data
+          const items = payload?.items ?? payload ?? []
+          setPatientResults(Array.isArray(items) ? items : [])
           setShowPatientDropdown(true)
-        } catch (e) {
-          // toast via interceptor
         } finally {
           if (!cancelled) setPatientSearching(false)
         }
@@ -782,12 +697,10 @@ export default function PharmacyRx() {
   }, [debouncedPatientQuery])
 
   async function handleSelectPatient(p) {
-    // quick set (instant UI)
     setHeader((prev) => ({ ...prev, patient: p }))
     setPatientQuery(getPatientDisplay(p))
     setShowPatientDropdown(false)
 
-    // hydrate full patient details (FIX: missing details)
     const full = await hydratePatientById(p?.id, { silent: false })
     if (full) {
       setHeader((prev) => ({ ...prev, patient: full }))
@@ -797,13 +710,12 @@ export default function PharmacyRx() {
 
   function clearPatient() {
     setHeader((p) => ({ ...p, patient: null }))
-    setPatientQuery('')
+    setPatientQuery("")
     setPatientResults([])
     setShowPatientDropdown(false)
   }
 
   /* ----------------------------- medicine search -------------------------- */
-
   useEffect(() => {
     const q = debouncedMedQuery?.trim()
     if (!q || q.length < 2) {
@@ -819,17 +731,17 @@ export default function PharmacyRx() {
             location_id: pharmacyLocationId,
             q,
             limit: 15,
-            type: 'drug',
+            type: "drug",
             only_in_stock: true,
             exclude_expired: true,
             active_only: true,
           })
+
           if (cancelled) return
-          const rows = res?.data?.items || res?.data || []
-          setMedResults(rows)
+          const payload = res?.data?.data ?? res?.data
+          const rows = payload?.items ?? payload ?? []
+          setMedResults(Array.isArray(rows) ? rows : [])
           setShowMedDropdown(true)
-        } catch (e) {
-          // toast via interceptor
         } finally {
           if (!cancelled) setMedSearching(false)
         }
@@ -838,14 +750,14 @@ export default function PharmacyRx() {
     return () => {
       cancelled = true
     }
-  }, [debouncedMedQuery])
+  }, [debouncedMedQuery, pharmacyLocationId])
 
   function handleSelectMedicine(row) {
-    const itemId = toInt(row?.item_id ?? row?.id) // batch search usually returns item_id
+    const itemId = toInt(row?.item_id ?? row?.id)
     const batchId = toInt(row?.batch_id)
 
     if (!itemId) {
-      toast.error('Invalid item selected (missing item_id).')
+      toast.error("Invalid item selected (missing item_id).")
       return
     }
 
@@ -854,104 +766,88 @@ export default function PharmacyRx() {
         ...prev,
         item: row,
         item_id: itemId,
-
-        item_name: row.name || prev.item_name || '',
-        strength: row.strength || row.form || prev.strength || '',
-        route: prev.route || 'PO',
-
-        // keep batch if returned
+        item_name: row.name || prev.item_name || "",
+        strength: row.strength || row.form || prev.strength || "",
+        route: prev.route || "PO",
         batch_id: batchId || prev.batch_id || null,
-        batch_no: row.batch_no || prev.batch_no || '',
+        batch_no: row.batch_no || prev.batch_no || "",
         expiry_date: row.expiry_date || prev.expiry_date || null,
-        available_qty: row.available_qty ?? prev.available_qty ?? '',
+        available_qty: row.available_qty ?? prev.available_qty ?? "",
       }
 
-      // ✅ friendly defaults:
-      // if user hasn't selected any schedule yet, default to BD (Morning + Night)
       const hasAny = perDayFromSlots(next.dose_slots) > 0
       if (!hasAny) next.dose_slots = { M: 1, A: 0, E: 0, N: 1 }
 
       return applyAuto(next)
     })
 
-    setMedQuery(row.name || '')
+    setMedQuery(row.name || "")
     setShowMedDropdown(false)
   }
 
-
-
   /* ----------------------------- form helpers ----------------------------- */
-
   function resetForm(keepType = true) {
     setHeader((prev) => ({
-      ...EMPTY_HEADER,
-      type: keepType ? prev.type : 'OPD',
+      ...makeEmptyHeader(),
+      type: keepType ? prev.type : "OPD",
       datetime: todayDateTimeLocal(),
-      doctorId: prev.doctorId || '',
+      doctorId: prev.doctorId || "",
     }))
     setLines([])
-    setCurrentLine(EMPTY_LINE)
-    setPatientQuery('')
+    setCurrentLine(makeEmptyLine())
+    setPatientQuery("")
     setPatientResults([])
-    setMedQuery('')
+    setMedQuery("")
     setMedResults([])
     setShowPatientDropdown(false)
     setShowMedDropdown(false)
   }
 
   function startNewRx(initialType) {
-    const t = initialType || newType || 'OPD'
+    const t = initialType || newType || "OPD"
     setHeader((prev) => ({
-      ...EMPTY_HEADER,
+      ...makeEmptyHeader(),
       type: t,
       datetime: todayDateTimeLocal(),
-      doctorId: prev.doctorId || localStorage.getItem('pharmacy.lastDoctorId') || '',
+      doctorId: prev.doctorId || localStorage.getItem("pharmacy.lastDoctorId") || "",
     }))
     setLines([])
-    setCurrentLine(EMPTY_LINE)
-    setPatientQuery('')
+    setCurrentLine(makeEmptyLine())
+    setPatientQuery("")
     setSelectedRx(null)
     setSelectedPatient(null)
-    setTab('new')
+    setTab("new")
 
     setTimeout(() => {
       medInputRef.current?.focus?.()
     }, 50)
   }
 
-  function suggestedQtyForCurrent() {
-    return calcAutoQty(currentLine)
-  }
-
   function handleAddLine() {
-    // must select from dropdown
     const itemId = toInt(currentLine.item_id ?? currentLine.item?.item_id ?? currentLine.item?.id)
     if (!itemId) {
-      toast.error('Please select the medicine from dropdown.')
+      toast.error("Please select the medicine from dropdown.")
       return
     }
 
-    // user must choose schedule + days
     const days = toInt(currentLine.duration_days)
     const perDay = perDayFromSlots(currentLine.dose_slots)
     if (!days || days <= 0) {
-      toast.error('Enter valid Days')
+      toast.error("Enter valid Days")
       return
     }
     if (!perDay || perDay <= 0) {
-      toast.error('Select dosage schedule (checkboxes)')
+      toast.error("Select dosage schedule (checkboxes)")
       return
     }
 
     const computed = applyAuto(currentLine)
     const qty = Number(computed.total_qty || 0)
-
     if (!qty || !Number.isFinite(qty) || qty <= 0) {
-      toast.error('Auto quantity failed. Check Days + Schedule.')
+      toast.error("Auto quantity failed. Check Days + Schedule.")
       return
     }
 
-    // optional stock validation if batch stock exists
     const available = Number(computed.available_qty ?? computed.item?.available_qty ?? 0)
     if (Number.isFinite(available) && available > 0 && qty > available) {
       toast.error(`Qty exceeds available stock for this batch (Available: ${available})`)
@@ -964,14 +860,13 @@ export default function PharmacyRx() {
       duration_days: String(days),
     }
 
-    // merge by item+batch (safe for inventory)
     const batchId = toInt(newLine.batch_id ?? newLine.item?.batch_id)
-    const key = `${itemId}::${batchId || ''}`
+    const key = `${itemId}::${batchId || ""}`
 
     const idx = lines.findIndex((l) => {
       const li = toInt(l.item_id ?? l.item?.item_id ?? l.item?.id)
       const lb = toInt(l.batch_id ?? l.item?.batch_id)
-      return `${li}::${lb || ''}` === key
+      return `${li}::${lb || ""}` === key
     })
 
     if (idx >= 0) {
@@ -998,27 +893,23 @@ export default function PharmacyRx() {
       setLines((prev) => [...prev, newLine])
     }
 
-    // reset line
-    setCurrentLine(EMPTY_LINE)
-    setMedQuery('')
+    setCurrentLine(makeEmptyLine())
+    setMedQuery("")
     setShowMedDropdown(false)
     setTimeout(() => medInputRef.current?.focus?.(), 50)
   }
-
-
 
   function handleRemoveLine(idx) {
     setLines((prev) => prev.filter((_, i) => i !== idx))
   }
 
   async function handleSubmitRx() {
-    const isCounter = header.type === 'COUNTER'
+    const isCounter = header.type === "COUNTER"
 
-    if (!isCounter && !header.patient) return toast.error('Select a patient')
-    if (!isCounter && !header.doctorId) return toast.error('Select a doctor')
-    if (!lines.length) return toast.error('Add at least one medicine')
+    if (!isCounter && !header.patient) return toast.error("Select a patient")
+    if (!isCounter && !header.doctorId) return toast.error("Select a doctor")
+    if (!lines.length) return toast.error("Add at least one medicine")
 
-    // validate
     for (let i = 0; i < lines.length; i++) {
       const l = lines[i]
       const itemId = toInt(l.item_id ?? l.item?.item_id ?? l.item?.id)
@@ -1033,11 +924,10 @@ export default function PharmacyRx() {
       rx_datetime: header.datetime,
       patient_id: toInt(header.patient?.id),
       doctor_user_id: toInt(header.doctorId),
-      visit_id: header.type === 'OPD' ? header.visitNo || null : null,
-      ipd_admission_id: header.type === 'IPD' ? header.admissionNo || null : null,
-      ot_case_id: header.type === 'OT' ? header.otCaseNo || null : null,
-      notes: header.notes || '',
-
+      visit_id: header.type === "OPD" ? header.visitNo || null : null,
+      ipd_admission_id: header.type === "IPD" ? header.admissionNo || null : null,
+      ot_case_id: header.type === "OT" ? header.otCaseNo || null : null,
+      notes: header.notes || "",
       lines: lines.map((l) => {
         const itemId = toInt(l.item_id ?? l.item?.item_id ?? l.item?.id)
         const line = applyAuto(l)
@@ -1045,55 +935,50 @@ export default function PharmacyRx() {
 
         return {
           item_id: itemId,
-          item_name: line.item?.name || line.item_name || '',
+          item_name: line.item?.name || line.item_name || "",
           strength: line.strength || null,
           route: line.route || null,
-
-          // ✅ frequency always a string like "1-0-1-0"
           frequency_code: slotsToFrequency(line.dose_slots),
-
           duration_days: toInt(line.duration_days),
           requested_qty: qty,
           total_qty: qty,
-
-          dose: line.dose || null,
+          dose_text: line.dose || null,
           instructions: line.instructions || null,
           is_prn: !!line.is_prn,
           is_stat: !!line.is_stat,
         }
       }),
     }
-    console.log(payload, "payload");
 
     try {
       setSubmitting(true)
-      if (header.doctorId) localStorage.setItem('pharmacy.lastDoctorId', header.doctorId)
+      if (header.doctorId) localStorage.setItem("pharmacy.lastDoctorId", header.doctorId)
 
       const res = await createPharmacyPrescription(payload)
-      toast.success('Prescription created & sent to Pharmacy')
+      const created = res?.data?.data ?? res?.data
+      toast.success("Prescription created & sent to Pharmacy")
 
       resetForm(true)
-      setTab('list')
+      setTab("list")
       fetchRxList()
-      if (res?.data) setSelectedRx(res.data)
+      if (created) setSelectedRx(created)
     } finally {
       setSubmitting(false)
     }
   }
 
-
   async function handleOpenRx(row) {
     try {
       const res = await getPharmacyPrescription(row.id)
-      const data = res?.data || row
+      const data = res?.data?.data ?? res?.data ?? row
       setSelectedRx(data)
-      setTab('detail')
-    } catch (e) {
+      setTab("detail")
+    } catch {
       // toast via interceptor
     }
   }
 
-  /* -------------------- FIX: hydrate selected patient in detail tab -------------------- */
+  /* hydrate selected patient in detail */
   useEffect(() => {
     let cancelled = false
       ; (async () => {
@@ -1103,13 +988,8 @@ export default function PharmacyRx() {
         }
 
         const embedded = selectedRx.patient
-        const pid =
-          selectedRx.patient_id ||
-          selectedRx.patientId ||
-          embedded?.id ||
-          null
+        const pid = selectedRx.patient_id || selectedRx.patientId || embedded?.id || null
 
-        // if embedded patient already has enough data, use it
         if (embedded && (embedded.uhid || embedded.phone || embedded.gender || embedded.age)) {
           setSelectedPatient(embedded)
           return
@@ -1142,37 +1022,35 @@ export default function PharmacyRx() {
 
   const queueStats = useMemo(() => {
     const total = rxList.length
-    const pending = rxList.filter((r) => ['PENDING', 'NEW'].includes(safeStr(r.status).toUpperCase())).length
-    const partial = rxList.filter((r) => safeStr(r.status).toUpperCase() === 'PARTIAL').length
-    const disp = rxList.filter((r) => ['DISPENSED', 'COMPLETED'].includes(safeStr(r.status).toUpperCase())).length
+    const pending = rxList.filter((r) => ["PENDING", "NEW"].includes(safeStr(r.status).toUpperCase())).length
+    const partial = rxList.filter((r) => safeStr(r.status).toUpperCase() === "PARTIAL").length
+    const disp = rxList.filter((r) => ["DISPENSED", "COMPLETED"].includes(safeStr(r.status).toUpperCase())).length
     return { total, pending, partial, disp }
   }, [rxList])
 
-  /* ---------------------------- top hotkeys UX ---------------------------- */
-
+  /* hotkeys */
   useEffect(() => {
     const onKey = (e) => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
         e.preventDefault()
-        setTab('list')
+        setTab("list")
         setTimeout(() => listSearchRef.current?.focus?.(), 50)
       }
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'n') {
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "n") {
         e.preventDefault()
         startNewRx(newType)
       }
-      if (e.key === 'Escape') {
+      if (e.key === "Escape") {
         setShowPatientDropdown(false)
         setShowMedDropdown(false)
       }
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [newType])
 
   /* --------------------------------- render -------------------------------- */
-
 
   return (
     <div className="relative w-full">
@@ -1185,7 +1063,6 @@ export default function PharmacyRx() {
 
       <div className="relative p-3 sm:p-4 md:p-6">
         <div className="mx-auto w-full max-w-[1440px] space-y-4">
-          {/* Premium Header */}
           <GlassCard className="overflow-hidden">
             <div className="relative">
               <div className="absolute inset-0 bg-gradient-to-r from-white via-white to-slate-50" />
@@ -1198,7 +1075,7 @@ export default function PharmacyRx() {
                     <div className="text-sm text-slate-500 flex flex-wrap items-center gap-2 mt-1">
                       <span>Fast queue + quick Rx entry for daily pharmacy ops.</span>
                       <span className="text-[11px] text-slate-400">
-                        Tips: <span className="font-medium">Ctrl+K</span> search •{' '}
+                        Tips: <span className="font-medium">Ctrl+K</span> search •{" "}
                         <span className="font-medium">Ctrl+N</span> new Rx
                       </span>
                     </div>
@@ -1261,18 +1138,18 @@ export default function PharmacyRx() {
                 <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <Tabs value={tab} onValueChange={setTab} className="w-full">
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <SegmentedTabs value={tab} />
+                      <SegmentedTabs />
 
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
                           onClick={() => setAutoRefresh((v) => !v)}
                           className={[
-                            'px-3 py-2 rounded-full text-xs border backdrop-blur shadow-sm',
+                            "px-3 py-2 rounded-full text-xs border backdrop-blur shadow-sm",
                             autoRefresh
-                              ? 'bg-emerald-50/70 text-emerald-700 border-emerald-200'
-                              : 'bg-white/70 text-slate-700 border-slate-500',
-                          ].join(' ')}
+                              ? "bg-emerald-50/70 text-emerald-700 border-emerald-200"
+                              : "bg-white/70 text-slate-700 border-slate-500",
+                          ].join(" ")}
                           title="Auto-refresh queue"
                         >
                           <CheckCircle2 className="w-3 h-3 inline mr-1" />
@@ -1291,26 +1168,24 @@ export default function PharmacyRx() {
                       </div>
                     </div>
 
-                    {/* ------------------------------ LIST TAB ------------------------------ */}
+                    {/* LIST TAB */}
                     <TabsContent value="list" className="mt-4 space-y-3">
                       <GlassCard>
                         <CardHeader className="pb-3">
                           <div className="flex flex-col gap-3">
                             <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-xs uppercase tracking-wide text-slate-500">
-                                  Type
-                                </span>
+                                <span className="text-xs uppercase tracking-wide text-slate-500">Type</span>
                                 <div className="flex flex-wrap gap-1.5">
                                   <button
                                     type="button"
-                                    onClick={() => setRxTypeFilter('ALL')}
+                                    onClick={() => setRxTypeFilter("ALL")}
                                     className={[
-                                      'px-3 py-1.5 rounded-full text-xs border transition shadow-sm backdrop-blur',
-                                      rxTypeFilter === 'ALL'
-                                        ? 'bg-slate-900 text-white border-slate-900'
-                                        : 'bg-white/70 text-slate-700 border-slate-500',
-                                    ].join(' ')}
+                                      "px-3 py-1.5 rounded-full text-xs border transition shadow-sm backdrop-blur",
+                                      rxTypeFilter === "ALL"
+                                        ? "bg-slate-900 text-white border-slate-900"
+                                        : "bg-white/70 text-slate-700 border-slate-500",
+                                    ].join(" ")}
                                   >
                                     All
                                   </button>
@@ -1320,11 +1195,11 @@ export default function PharmacyRx() {
                                       type="button"
                                       onClick={() => setRxTypeFilter(t.value)}
                                       className={[
-                                        'px-3 py-1.5 rounded-full text-xs border flex items-center gap-1.5 transition shadow-sm backdrop-blur',
+                                        "px-3 py-1.5 rounded-full text-xs border flex items-center gap-1.5 transition shadow-sm backdrop-blur",
                                         rxTypeFilter === t.value
-                                          ? 'bg-slate-900 text-white border-slate-900'
-                                          : 'bg-white/70 text-slate-700 border-slate-500',
-                                      ].join(' ')}
+                                          ? "bg-slate-900 text-white border-slate-900"
+                                          : "bg-white/70 text-slate-700 border-slate-500",
+                                      ].join(" ")}
                                     >
                                       <Pill className="w-3 h-3" />
                                       {t.label}
@@ -1392,7 +1267,7 @@ export default function PharmacyRx() {
                                   <tbody>
                                     {listLoading && (
                                       <tr>
-                                        <td colSpan={7} className="px-3 py-10 text-center text-xs text-slate-500">
+                                        <td colSpan={6} className="px-3 py-10 text-center text-xs text-slate-500">
                                           Loading prescriptions...
                                         </td>
                                       </tr>
@@ -1400,7 +1275,7 @@ export default function PharmacyRx() {
 
                                     {!listLoading && !rxList.length && (
                                       <tr>
-                                        <td colSpan={7} className="px-3 py-12 text-center text-xs text-slate-500">
+                                        <td colSpan={6} className="px-3 py-12 text-center text-xs text-slate-500">
                                           No prescriptions found for the selected filters.
                                         </td>
                                       </tr>
@@ -1408,18 +1283,18 @@ export default function PharmacyRx() {
 
                                     {!listLoading &&
                                       rxList.map((row) => {
-                                        const status = (row.status || '').toUpperCase() || 'PENDING'
-                                        const type = row.type || row.rx_type || 'OPD'
+                                        const status = (row.status || "").toUpperCase() || "PENDING"
+                                        const type = row.type || row.rx_type || "OPD"
                                         const createdStr = fmtDT(row.created_at || row.rx_datetime || row.bill_date)
 
                                         const patientName =
                                           row.patient_name ||
-                                          `${row.patient?.first_name || ''} ${row.patient?.last_name || ''}`.trim() ||
+                                          `${row.patient?.first_name || ""} ${row.patient?.last_name || ""}`.trim() ||
                                           row.patient?.name ||
                                           row.patient_uhid ||
-                                          '—'
+                                          "—"
 
-                                        const doctorName = row.doctor_name || row.doctor || row.doctor_display || ''
+                                        const doctorName = row.doctor_name || row.doctor || row.doctor_display || ""
 
                                         return (
                                           <tr
@@ -1445,9 +1320,7 @@ export default function PharmacyRx() {
                                                   <User className="w-3.5 h-3.5" />
                                                 </div>
                                                 <div>
-                                                  <div className="text-xs text-slate-900 font-medium">
-                                                    {patientName}
-                                                  </div>
+                                                  <div className="text-xs text-slate-900 font-medium">{patientName}</div>
                                                   {(row.patient_uhid || row.uhid) && (
                                                     <div className="text-[11px] text-slate-500">
                                                       {row.patient_uhid || row.uhid}
@@ -1460,10 +1333,7 @@ export default function PharmacyRx() {
                                             <td className="px-3 py-3 align-middle">
                                               <div className="flex flex-col gap-1">
                                                 <div className="flex items-center gap-1.5">
-                                                  <Badge
-                                                    variant="outline"
-                                                    className="border-slate-500 text-[11px] px-2 py-0.5"
-                                                  >
+                                                  <Badge variant="outline" className="border-slate-500 text-[11px] px-2 py-0.5">
                                                     {type}
                                                   </Badge>
                                                   {doctorName && (
@@ -1474,9 +1344,7 @@ export default function PharmacyRx() {
                                                   )}
                                                 </div>
                                                 {row.context_label && (
-                                                  <span className="text-[11px] text-slate-500">
-                                                    {row.context_label}
-                                                  </span>
+                                                  <span className="text-[11px] text-slate-500">{row.context_label}</span>
                                                 )}
                                               </div>
                                             </td>
@@ -1524,16 +1392,16 @@ export default function PharmacyRx() {
                               </div>
                             ) : (
                               rxList.map((row) => {
-                                const status = (row.status || '').toUpperCase() || 'PENDING'
-                                const type = row.type || row.rx_type || 'OPD'
+                                const status = (row.status || "").toUpperCase() || "PENDING"
+                                const type = row.type || row.rx_type || "OPD"
                                 const createdStr = fmtDT(row.created_at || row.rx_datetime || row.bill_date)
-                                const doctorName = row.doctor_name || row.doctor || row.doctor_display || ''
+                                const doctorName = row.doctor_name || row.doctor || row.doctor_display || ""
                                 const patientName =
                                   row.patient_name ||
-                                  `${row.patient?.first_name || ''} ${row.patient?.last_name || ''}`.trim() ||
+                                  `${row.patient?.first_name || ""} ${row.patient?.last_name || ""}`.trim() ||
                                   row.patient?.name ||
                                   row.patient_uhid ||
-                                  '—'
+                                  "—"
 
                                 return (
                                   <button
@@ -1548,7 +1416,8 @@ export default function PharmacyRx() {
                                           {row.rx_number || `RX-${row.id}`}
                                         </div>
                                         <div className="text-xs text-slate-500 truncate">
-                                          {patientName} {(row.patient_uhid || row.uhid) ? `• ${row.patient_uhid || row.uhid}` : ''}
+                                          {patientName}{" "}
+                                          {(row.patient_uhid || row.uhid) ? `• ${row.patient_uhid || row.uhid}` : ""}
                                         </div>
                                       </div>
                                       <StatusPill status={status} />
@@ -1585,7 +1454,7 @@ export default function PharmacyRx() {
                       </GlassCard>
                     </TabsContent>
 
-                    {/* ------------------------------ NEW RX TAB ------------------------------ */}
+                    {/* NEW TAB */}
                     <TabsContent value="new" className="mt-4">
                       <div className="grid gap-4 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1.8fr)]">
                         {/* LEFT */}
@@ -1611,11 +1480,11 @@ export default function PharmacyRx() {
                                       type="button"
                                       onClick={() => setHeader((prev) => ({ ...prev, type: t.value }))}
                                       className={[
-                                        'px-3 py-1.5 rounded-full text-xs border flex items-center gap-1.5 transition shadow-sm',
+                                        "px-3 py-1.5 rounded-full text-xs border flex items-center gap-1.5 transition shadow-sm",
                                         header.type === t.value
-                                          ? 'bg-slate-900 text-white border-slate-900'
-                                          : 'bg-white/70 text-slate-700 border-slate-500 backdrop-blur',
-                                      ].join(' ')}
+                                          ? "bg-slate-900 text-white border-slate-900"
+                                          : "bg-white/70 text-slate-700 border-slate-500 backdrop-blur",
+                                      ].join(" ")}
                                     >
                                       <Pill className="w-3 h-3" />
                                       {t.label}
@@ -1649,12 +1518,7 @@ export default function PharmacyRx() {
                               <Input
                                 type="datetime-local"
                                 value={header.datetime}
-                                onChange={(e) =>
-                                  setHeader((prev) => ({
-                                    ...prev,
-                                    datetime: e.target.value,
-                                  }))
-                                }
+                                onChange={(e) => setHeader((prev) => ({ ...prev, datetime: e.target.value }))}
                                 className="h-10 text-xs bg-white/70 backdrop-blur border-slate-500 rounded-full"
                               />
                             </div>
@@ -1691,7 +1555,7 @@ export default function PharmacyRx() {
                                     setPatientQuery(e.target.value)
                                     setShowPatientDropdown(true)
                                   }}
-                                  placeholder={header.type === 'COUNTER' ? 'Optional for counter sale' : 'Search patient...'}
+                                  placeholder={header.type === "COUNTER" ? "Optional for counter sale" : "Search patient..."}
                                   className="pl-9 h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
                                 />
                               </div>
@@ -1704,9 +1568,7 @@ export default function PharmacyRx() {
                                     exit={{ opacity: 0, y: -6 }}
                                     className="absolute z-30 mt-2 w-full bg-white/80 backdrop-blur border border-slate-500 rounded-2xl shadow-xl max-h-60 overflow-auto text-xs"
                                   >
-                                    {patientSearching && (
-                                      <div className="px-3 py-2 text-slate-500">Searching...</div>
-                                    )}
+                                    {patientSearching && <div className="px-3 py-2 text-slate-500">Searching...</div>}
 
                                     {!patientSearching && !patientResults.length && (
                                       <div className="px-3 py-2 text-slate-500">No patients found</div>
@@ -1721,16 +1583,12 @@ export default function PharmacyRx() {
                                           className="w-full text-left px-3 py-2.5 hover:bg-slate-50 flex flex-col gap-0.5"
                                         >
                                           <div className="flex justify-between items-center gap-2">
-                                            <span className="font-medium text-slate-900">
-                                              {getPatientName(p)}
-                                            </span>
-                                            {p.uhid && (
-                                              <span className="text-[10px] text-slate-500">UHID: {p.uhid}</span>
-                                            )}
+                                            <span className="font-medium text-slate-900">{getPatientName(p)}</span>
+                                            {p.uhid && <span className="text-[10px] text-slate-500">UHID: {p.uhid}</span>}
                                           </div>
                                           <div className="text-[11px] text-slate-500">
-                                            {getPatientAgeGender(p) ? `${getPatientAgeGender(p)} • ` : ''}
-                                            {p.phone || ''}
+                                            {getPatientAgeGender(p) ? `${getPatientAgeGender(p)} • ` : ""}
+                                            {p.phone || ""}
                                           </div>
                                         </button>
                                       ))}
@@ -1739,13 +1597,12 @@ export default function PharmacyRx() {
                               </AnimatePresence>
                             </div>
 
-                            {/* show selected patient summary (NEW tab) */}
-                            {header.patient && header.type !== 'COUNTER' ? (
+                            {header.patient && header.type !== "COUNTER" ? (
                               <PatientSummaryCard patient={header.patient} loading={patientHydrating} />
                             ) : null}
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              {header.type === 'OPD' && (
+                              {header.type === "OPD" && (
                                 <div className="space-y-1.5">
                                   <Label className="text-xs text-slate-600">OPD Visit No (optional)</Label>
                                   <Input
@@ -1757,7 +1614,7 @@ export default function PharmacyRx() {
                                 </div>
                               )}
 
-                              {header.type === 'IPD' && (
+                              {header.type === "IPD" && (
                                 <div className="space-y-1.5">
                                   <Label className="text-xs text-slate-600">Admission No</Label>
                                   <Input
@@ -1769,7 +1626,7 @@ export default function PharmacyRx() {
                                 </div>
                               )}
 
-                              {header.type === 'OT' && (
+                              {header.type === "OT" && (
                                 <div className="space-y-1.5">
                                   <Label className="text-xs text-slate-600">OT Case No</Label>
                                   <Input
@@ -1784,10 +1641,10 @@ export default function PharmacyRx() {
                               <div className="space-y-1.5">
                                 <Label className="text-xs text-slate-600 flex items-center gap-1">
                                   <Stethoscope className="w-3 h-3" />
-                                  Consultant / Prescriber {header.type === 'COUNTER' ? '(optional)' : ''}
+                                  Consultant / Prescriber {header.type === "COUNTER" ? "(optional)" : ""}
                                 </Label>
                                 <Select
-                                  value={header.doctorId || ''}
+                                  value={header.doctorId || ""}
                                   onValueChange={(val) => setHeader((prev) => ({ ...prev, doctorId: val }))}
                                 >
                                   <SelectTrigger className="w-full bg-white/70 backdrop-blur border-slate-500 rounded-full h-10 text-sm">

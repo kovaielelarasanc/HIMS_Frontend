@@ -223,6 +223,28 @@ const GROUPS = [
           "pharmacy.stock.alerts.export",
         ],
       },
+      {
+        key: "inventory_indents",
+        label: "Inventory Indent",
+        to: "/inventory/indents",
+        icon: AlertTriangle,
+        reqAny: [
+          "inventory.indents.view",
+          "inventory.issues.view",
+          "inventory.catalog.view",
+        ],
+      },
+      {
+        key: "inventory_indents_issue",
+        label: "Inventory Indent issue",
+        to: "/inventory/indents/issue",
+        icon: AlertTriangle,
+        reqAny: [
+          "inventory.indents.view",
+          "inventory.issues.view",
+          "inventory.catalog.view",
+        ],
+      },
 
     ],
   },

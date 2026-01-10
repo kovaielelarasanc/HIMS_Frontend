@@ -1,4 +1,3 @@
-// FILE: src/pages/inventoryPharmacy/ItemsTab.jsx
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { motion } from "framer-motion"
 import { toast } from "sonner"
@@ -33,6 +32,16 @@ import { Switch } from "@/components/ui/switch"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { Textarea } from "@/components/ui/textarea"
 
+// ✅ shadcn combobox parts (make sure you have these components)
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover"
+import {
+    Command,
+    CommandInput,
+    CommandEmpty,
+    CommandGroup,
+    CommandItem,
+} from "@/components/ui/command"
+
 import {
     Search,
     Plus,
@@ -46,9 +55,13 @@ import {
     X,
     Pill,
     Bandage,
+    ShieldAlert,
+    Layers,
+    Check,
+    ChevronsUpDown,
 } from "lucide-react"
 
-// ✅ API (updated inventory.js)
+// ✅ API
 import {
     listInventoryItems,
     createInventoryItem,
@@ -56,9 +69,13 @@ import {
     downloadItemsTemplate,
     getDrugSchedulesCatalog,
     bulkUploadItems,
-} from "../../api/inventory"
+    listSuppliers,
+    listLocations,
+} from "@/api/inventory"
 
 // ---------------- helpers ----------------
+const cx = (...a) => a.filter(Boolean).join(" ")
+
 function useDebouncedValue(value, delay = 350) {
     const [debounced, setDebounced] = useState(value)
     useEffect(() => {
@@ -66,20 +83,6 @@ function useDebouncedValue(value, delay = 350) {
         return () => clearTimeout(t)
     }, [value, delay])
     return debounced
-}
-
-function pickList(res) {
-    // supports:
-    // - direct array
-    // - {data:[...]}
-    // - {status:true,data:[...]}
-    const p = res?.data ?? res
-    if (Array.isArray(p)) return p
-    if (p && typeof p === "object") {
-        if (Array.isArray(p.data)) return p.data
-        if (p.status === true && Array.isArray(p.data)) return p.data
-    }
-    return []
 }
 
 function toNumOrNull(v) {
@@ -124,6 +127,19 @@ function isConsumableItem(it) {
     return it?.item_type === "CONSUMABLE" || !!it?.is_consumable
 }
 
+function getErrMsg(err) {
+    const d = err?.response?.data
+    if (typeof d?.detail === "string") return d.detail
+    if (Array.isArray(d?.detail)) return d.detail?.[0]?.message || d.detail?.[0]?.msg || "Validation error"
+    if (d?.status === false) return d?.error?.msg || d?.error?.message || "Request failed"
+    return d?.message || err?.message || "Unknown error"
+}
+
+function fmtQty(v) {
+    const n = Number(v ?? 0)
+    return Number.isFinite(n) ? (Math.round(n * 1000) / 1000).toString() : "0"
+}
+
 function downloadBlob(blob, filename) {
     const url = window.URL.createObjectURL(blob)
     const a = document.createElement("a")
@@ -135,73 +151,140 @@ function downloadBlob(blob, filename) {
     window.URL.revokeObjectURL(url)
 }
 
-function getErrMsg(err) {
-    // axios-ish + fastapi-ish
+// ---------------- filterable dropdown (Combobox) ----------------
+function ComboBox({
+    value,
+    onChange,
+    options,
+    placeholder = "Select...",
+    searchPlaceholder = "Search...",
+    getValue = (x) => String(x?.id ?? ""),
+    getLabel = (x) => String(x?.name ?? x?.code ?? ""),
+    allowClear = true,
+    disabled = false,
+    className = "",
+}) {
+    const [open, setOpen] = useState(false)
+
+    const selected = useMemo(() => {
+        if (!value) return null
+        return (options || []).find((o) => String(getValue(o)) === String(value)) || null
+    }, [value, options, getValue])
+
     return (
-        err?.response?.data?.detail ||
-        err?.response?.data?.message ||
-        err?.message ||
-        "Unknown error"
+        <Popover open={open} onOpenChange={setOpen}>
+            <PopoverTrigger asChild>
+                <Button
+                    type="button"
+                    variant="outline"
+                    disabled={disabled}
+                    className={cx("w-full justify-between rounded-2xl bg-white", className)}
+                >
+                    <span className={cx("truncate text-left", !selected ? "text-slate-500" : "")}>
+                        {selected ? getLabel(selected) : placeholder}
+                    </span>
+                    <ChevronsUpDown className="h-4 w-4 opacity-60" />
+                </Button>
+            </PopoverTrigger>
+
+            <PopoverContent className="w-[--radix-popover-trigger-width] p-2" align="start">
+                <Command>
+                    <CommandInput placeholder={searchPlaceholder} />
+                    <CommandEmpty>No results</CommandEmpty>
+
+                    <CommandGroup className="max-h-72 overflow-auto">
+                        {allowClear ? (
+                            <CommandItem
+                                value="__clear__"
+                                onSelect={() => {
+                                    onChange("")
+                                    setOpen(false)
+                                }}
+                            >
+                                <span className="mr-2 inline-flex h-4 w-4 items-center justify-center">
+                                    {!value ? <Check className="h-4 w-4" /> : null}
+                                </span>
+                                All / None
+                            </CommandItem>
+                        ) : null}
+
+                        {(options || []).map((o) => {
+                            const v = String(getValue(o))
+                            const label = getLabel(o)
+                            const active = String(value || "") === v
+                            return (
+                                <CommandItem
+                                    key={v}
+                                    value={label}
+                                    onSelect={() => {
+                                        onChange(v)
+                                        setOpen(false)
+                                    }}
+                                >
+                                    <span className="mr-2 inline-flex h-4 w-4 items-center justify-center">
+                                        {active ? <Check className="h-4 w-4" /> : null}
+                                    </span>
+                                    <span className="truncate">{label}</span>
+                                </CommandItem>
+                            )
+                        })}
+                    </CommandGroup>
+                </Command>
+            </PopoverContent>
+        </Popover>
     )
 }
 
 // ---------------- form defaults (MATCH BACKEND MODEL) ----------------
 const EMPTY_FORM = {
-    // Core identity
     code: "",
     name: "",
     qr_number: "",
 
-    // Classification
-    item_type: "DRUG", // DRUG | CONSUMABLE
-    is_consumable: false, // compatibility
+    item_type: "DRUG",
+    is_consumable: false,
     lasa_flag: false,
     is_active: true,
 
-    // Stock metadata
+    high_alert_flag: false,
+    requires_double_check: false,
+
     unit: "unit",
     pack_size: "1",
     reorder_level: "",
     max_level: "",
 
-    // Supplier / procurement
     manufacturer: "",
     default_supplier_id: "",
     procurement_date: "",
 
-    // Storage
     storage_condition: "ROOM_TEMP",
 
-    // Defaults
     default_tax_percent: "",
     default_price: "",
     default_mrp: "",
 
-    // Regulatory schedule
-    schedule_system: "IN_DCA", // IN_DCA | US_CSA
+    schedule_system: "IN_DCA",
     schedule_code: "",
     schedule_notes: "",
 
-    // Drug fields
     generic_name: "",
     brand_name: "",
     dosage_form: "",
     strength: "",
-    active_ingredients: "", // UI string
+    active_ingredients: "",
     route: "",
     therapeutic_class: "",
-    prescription_status: "RX", // OTC | RX | SCHEDULED
+    prescription_status: "RX",
     side_effects: "",
     drug_interactions: "",
 
-    // Consumable fields
     material_type: "",
-    sterility_status: "NON_STERILE", // STERILE | NON_STERILE
+    sterility_status: "NON_STERILE",
     size_dimensions: "",
     intended_use: "",
-    reusable_status: "DISPOSABLE", // DISPOSABLE | REUSABLE
+    reusable_status: "DISPOSABLE",
 
-    // Other codes
     atc_code: "",
     hsn_code: "",
 }
@@ -216,12 +299,29 @@ export default function ItemsTab() {
     const [items, setItems] = useState([])
     const [loading, setLoading] = useState(false)
 
+    // masters
+    const [suppliers, setSuppliers] = useState([])
+    const [locations, setLocations] = useState([])
+
     // search + filters
     const [q, setQ] = useState("")
     const qDebounced = useDebouncedValue(q, 350)
+
+    const [showFilters, setShowFilters] = useState(false)
+
     const [typeFilter, setTypeFilter] = useState("ALL") // ALL | DRUG | CONSUMABLE
     const [lasaOnly, setLasaOnly] = useState(false)
     const [activeOnly, setActiveOnly] = useState(true)
+    const [scheduledOnly, setScheduledOnly] = useState(false)
+    const [highAlertOnly, setHighAlertOnly] = useState(false)
+
+    const [supplierIdFilter, setSupplierIdFilter] = useState("") // string id
+    const [locationIdFilter, setLocationIdFilter] = useState("") // string id (qty calc)
+
+    const locationIdNum = useMemo(() => {
+        const n = toNumOrNull(locationIdFilter)
+        return n && n > 0 ? Number(n) : null
+    }, [locationIdFilter])
 
     // dialogs
     const [itemDialogOpen, setItemDialogOpen] = useState(false)
@@ -240,16 +340,39 @@ export default function ItemsTab() {
     // schedules dropdown catalog
     const [scheduleCatalog, setScheduleCatalog] = useState({ IN_DCA: [], US_CSA: [] })
 
+    // ---------------- load masters (supplier + locations) ----------------
+    const loadMasters = useCallback(async () => {
+        try {
+            const [sRes, lRes] = await Promise.all([
+                listSuppliers(),
+                listLocations(),
+            ])
+            console.log(sRes, "csj");
+
+            const sList = Array.isArray(sRes) ? sRes : (sRes?.items || sRes?.data || [])
+            const lList = Array.isArray(lRes) ? lRes : (lRes?.items || lRes?.data || [])
+            setSuppliers(Array.isArray(sList) ? sList : [])
+            setLocations(Array.isArray(lList) ? lList : [])
+        } catch (e) {
+            // silent
+            console.error("masters load failed", e)
+        }
+    }, [])
+
+    useEffect(() => {
+        loadMasters()
+    }, [loadMasters])
+
+    // ---------------- load schedule catalog ----------------
     useEffect(() => {
         let alive = true
             ; (async () => {
                 try {
                     const data = await getDrugSchedulesCatalog()
-                    console.log(data?.data, "check which data");
                     if (!alive) return
                     setScheduleCatalog({
-                        IN_DCA: Array.isArray(data?.data?.IN_DCA) ? data?.data.IN_DCA : [],
-                        US_CSA: Array.isArray(data?.data?.US_CSA) ? data?.data.US_CSA : [],
+                        IN_DCA: Array.isArray(data?.IN_DCA) ? data.IN_DCA : [],
+                        US_CSA: Array.isArray(data?.US_CSA) ? data.US_CSA : [],
                     })
                 } catch (e) {
                     console.error("drug schedules catalog load failed", e)
@@ -269,77 +392,82 @@ export default function ItemsTab() {
     const scheduleMeta = useMemo(() => {
         const code = String(form.schedule_code || "").trim().toUpperCase()
         if (!code) return null
-        return (
-            scheduleOptions.find(
-                (x) => String(x?.code ?? "").trim().toUpperCase() === code
-            ) || null
-        )
+        return scheduleOptions.find((x) => String(x?.code ?? "").trim().toUpperCase() === code) || null
     }, [scheduleOptions, form.schedule_code])
 
     // ---------------- load items ----------------
     const loadItems = useCallback(async () => {
         setLoading(true)
         try {
+            const typeParam =
+                typeFilter === "DRUG" ? "drug" : typeFilter === "CONSUMABLE" ? "consumable" : undefined
+
+            const supplierId = toNumOrNull(supplierIdFilter)
+
             const params = {
                 q: qDebounced || undefined,
                 is_active: activeOnly ? true : undefined,
-
-                // ✅ support both old and new filtering
-                item_type: typeFilter !== "ALL" ? typeFilter : undefined,
-                is_consumable:
-                    typeFilter === "CONSUMABLE"
-                        ? true
-                        : typeFilter === "DRUG"
-                            ? false
-                            : undefined,
-
-                lasa_flag: lasaOnly ? true : undefined,
+                type: typeParam,
+                lasa: lasaOnly ? true : undefined,
+                supplier_id: supplierId || undefined,
+                include_qty: true,
+                location_id: locationIdNum || undefined,
+                limit: 500,
+                offset: 0,
             }
-            const res = await listInventoryItems(params)
-            setItems(pickList(res))
+
+            const list = await listInventoryItems(params)
+            setItems(Array.isArray(list) ? list : (list?.items || list?.data || []))
         } catch (err) {
             console.error(err)
             toast.error("Failed to load items", { description: getErrMsg(err) })
         } finally {
             setLoading(false)
         }
-    }, [qDebounced, activeOnly, typeFilter, lasaOnly])
+    }, [qDebounced, activeOnly, typeFilter, lasaOnly, supplierIdFilter, locationIdNum])
 
     useEffect(() => {
         loadItems()
     }, [loadItems])
 
-    // ---------------- keyboard events from parent ----------------
-    useEffect(() => {
-        const onFocus = () => setTimeout(() => searchRef.current?.focus?.(), 60)
-        const onNew = () => openNewItem()
-        const onBulk = () => setBulkDialogOpen(true)
-        const onBarcode = () => setBarcodeDialogOpen(true)
-
-        window.addEventListener("inventory:focus-items-search", onFocus)
-        window.addEventListener("inventory:new-item", onNew)
-        window.addEventListener("inventory:bulk-upload", onBulk)
-        window.addEventListener("inventory:barcode-lookup", onBarcode)
-        return () => {
-            window.removeEventListener("inventory:focus-items-search", onFocus)
-            window.removeEventListener("inventory:new-item", onNew)
-            window.removeEventListener("inventory:bulk-upload", onBulk)
-            window.removeEventListener("inventory:barcode-lookup", onBarcode)
-        }
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [])
-
-    // ---------------- computed ----------------
+    // ---------------- computed local filters (extra switches) ----------------
     const filteredLocal = useMemo(() => {
         return (items || []).filter((it) => {
             const isConsumable = isConsumableItem(it)
+
             if (typeFilter === "DRUG" && isConsumable) return false
             if (typeFilter === "CONSUMABLE" && !isConsumable) return false
             if (lasaOnly && !it?.lasa_flag) return false
             if (activeOnly && it?.is_active === false) return false
+
+            if (scheduledOnly) {
+                const sc = s(it?.schedule_code)
+                const ps = s(it?.prescription_status).toUpperCase()
+                if (!sc && ps !== "SCHEDULED") return false
+            }
+
+            if (highAlertOnly && !it?.high_alert_flag) return false
+
+            if (supplierIdFilter) {
+                const sid = toNumOrNull(supplierIdFilter)
+                if (sid && Number(it?.default_supplier_id || 0) !== Number(sid)) return false
+            }
+
             return true
         })
-    }, [items, typeFilter, lasaOnly, activeOnly])
+    }, [items, typeFilter, lasaOnly, activeOnly, scheduledOnly, highAlertOnly, supplierIdFilter])
+
+    const activeFilterCount = useMemo(() => {
+        let c = 0
+        if (typeFilter !== "ALL") c++
+        if (lasaOnly) c++
+        if (activeOnly === false) c++
+        if (scheduledOnly) c++
+        if (highAlertOnly) c++
+        if (supplierIdFilter) c++
+        if (locationIdFilter) c++
+        return c
+    }, [typeFilter, lasaOnly, activeOnly, scheduledOnly, highAlertOnly, supplierIdFilter, locationIdFilter])
 
     // ---------------- clipboard ----------------
     const handleCopy = useCallback(async (value, label = "Copied") => {
@@ -360,49 +488,43 @@ export default function ItemsTab() {
     }
 
     function openEditItem(item) {
-        console.log(item, "seletcted edit item");
         const itemType = item?.item_type ?? (item?.is_consumable ? "CONSUMABLE" : "DRUG")
         setEditItem(item)
 
         setForm({
             ...EMPTY_FORM,
 
-            // core
             code: item?.code ?? "",
             qr_number: item?.qr_number ?? "",
             name: item?.name ?? "",
 
-            // classification
             item_type: itemType,
             is_consumable: itemType === "CONSUMABLE",
             lasa_flag: !!item?.lasa_flag,
             is_active: item?.is_active !== false,
 
-            // stock metadata
+            high_alert_flag: !!item?.high_alert_flag,
+            requires_double_check: !!item?.requires_double_check,
+
             unit: item?.unit ?? "unit",
             pack_size: String(item?.pack_size ?? "1"),
             reorder_level: item?.reorder_level ?? "",
             max_level: item?.max_level ?? "",
 
-            // supplier / procurement
             manufacturer: item?.manufacturer ?? "",
             default_supplier_id: item?.default_supplier_id ? String(item.default_supplier_id) : "",
             procurement_date: normalizeDateForInput(item?.procurement_date),
 
-            // storage (support legacy storage_conditions)
             storage_condition: item?.storage_condition ?? item?.storage_conditions ?? "ROOM_TEMP",
 
-            // defaults
             default_tax_percent: item?.default_tax_percent ?? "",
             default_price: item?.default_price ?? "",
             default_mrp: item?.default_mrp ?? "",
 
-            // regulatory schedule
             schedule_system: item?.schedule_system ?? "IN_DCA",
             schedule_code: item?.schedule_code ? String(item.schedule_code) : "",
             schedule_notes: item?.schedule_notes ?? "",
 
-            // drug fields (support legacy names)
             generic_name: item?.generic_name ?? "",
             brand_name: item?.brand_name ?? "",
             dosage_form: item?.dosage_form ?? item?.form ?? "",
@@ -414,14 +536,12 @@ export default function ItemsTab() {
             side_effects: item?.side_effects ?? "",
             drug_interactions: item?.drug_interactions ?? "",
 
-            // consumable fields
             material_type: item?.material_type ?? "",
             sterility_status: item?.sterility_status ?? "NON_STERILE",
             size_dimensions: item?.size_dimensions ?? "",
             intended_use: item?.intended_use ?? "",
             reusable_status: item?.reusable_status ?? item?.reusable_disposable ?? "DISPOSABLE",
 
-            // other codes
             atc_code: item?.atc_code ?? "",
             hsn_code: item?.hsn_code ?? "",
         })
@@ -436,43 +556,50 @@ export default function ItemsTab() {
         const itemType = form.item_type || "DRUG"
         const isDrug = itemType === "DRUG"
 
+        const ps = s(form.prescription_status).toUpperCase()
+        const sc = s(form.schedule_code).toUpperCase()
+        if (isDrug && ps === "SCHEDULED" && !sc) {
+            toast.error("Schedule code required", {
+                description: "If prescription status is SCHEDULED, choose schedule_code.",
+            })
+            return
+        }
+
+        const highAlert = !!form.high_alert_flag
+        const requiresDouble = highAlert ? true : !!form.requires_double_check
+
         const payload = {
-            // core
             code: s(form.code),
             name: s(form.name),
             qr_number: s(form.qr_number) || null,
 
-            // classification
             item_type: itemType,
-            is_consumable: itemType === "CONSUMABLE", // compatibility
+            is_consumable: itemType === "CONSUMABLE",
             lasa_flag: !!form.lasa_flag,
             is_active: !!form.is_active,
 
-            // stock
+            high_alert_flag: highAlert,
+            requires_double_check: requiresDouble,
+
             unit: s(form.unit) || "unit",
             pack_size: s(form.pack_size) || "1",
             reorder_level: toNumOrNull(form.reorder_level) ?? 0,
             max_level: toNumOrNull(form.max_level) ?? 0,
 
-            // supplier / procurement
             manufacturer: s(form.manufacturer),
             default_supplier_id: toNumOrNull(form.default_supplier_id),
             procurement_date: cleanDate(form.procurement_date),
 
-            // storage
             storage_condition: s(form.storage_condition) || "ROOM_TEMP",
 
-            // defaults
             default_tax_percent: toNumOrNull(form.default_tax_percent) ?? 0,
             default_price: toNumOrNull(form.default_price) ?? 0,
             default_mrp: toNumOrNull(form.default_mrp) ?? 0,
 
-            // schedule (only meaningful for drugs, but safe anyway)
             schedule_system: isDrug ? s(form.schedule_system) || "IN_DCA" : "IN_DCA",
             schedule_code: isDrug ? s(form.schedule_code) : "",
             schedule_notes: isDrug ? s(form.schedule_notes) : "",
 
-            // drug fields
             generic_name: isDrug ? s(form.generic_name) : "",
             brand_name: isDrug ? s(form.brand_name) : "",
             dosage_form: isDrug ? s(form.dosage_form) : "",
@@ -484,14 +611,12 @@ export default function ItemsTab() {
             side_effects: isDrug ? s(form.side_effects) : "",
             drug_interactions: isDrug ? s(form.drug_interactions) : "",
 
-            // consumable fields
             material_type: !isDrug ? s(form.material_type) : "",
             sterility_status: !isDrug ? s(form.sterility_status) : "",
             size_dimensions: !isDrug ? s(form.size_dimensions) : "",
             intended_use: !isDrug ? s(form.intended_use) : "",
             reusable_status: !isDrug ? s(form.reusable_status) : "",
 
-            // codes
             atc_code: s(form.atc_code),
             hsn_code: s(form.hsn_code),
         }
@@ -503,7 +628,6 @@ export default function ItemsTab() {
 
         try {
             if (editItem?.id) {
-                console.log(payload, "payload");
                 await updateInventoryItem(editItem.id, payload)
                 toast.success("Item updated")
             } else {
@@ -522,9 +646,8 @@ export default function ItemsTab() {
     // ---------------- template download ----------------
     async function handleDownloadTemplate(format) {
         try {
-            const data = await downloadItemsTemplate(format)
-            const blob = data instanceof Blob ? data : new Blob([data || ""])
-            downloadBlob(blob, format === "xlsx" ? "items_template.xlsx" : "items_template.csv")
+            const { blob, filename } = await downloadItemsTemplate(format)
+            downloadBlob(blob, filename || `items_template.${format}`)
             toast.success(`${format.toUpperCase()} template downloaded`)
         } catch (e) {
             console.error(e)
@@ -548,12 +671,17 @@ export default function ItemsTab() {
         }
 
         try {
-            const res = await listInventoryItems({ q: v, is_active: true })
-            const list = pickList(res)
+            const list = await listInventoryItems({
+                q: v,
+                is_active: true,
+                include_qty: true,
+                location_id: locationIdNum || undefined,
+            })
+            const arr = Array.isArray(list) ? list : (list?.items || list?.data || [])
             const found =
-                list.find((it) => s(it?.qr_number) === v) ||
-                list.find((it) => s(it?.code) === v) ||
-                list[0]
+                arr.find((it) => s(it?.qr_number) === v) ||
+                arr.find((it) => s(it?.code) === v) ||
+                arr[0]
 
             if (!found) {
                 toast.error("Not found", { description: "No item matches this QR/code." })
@@ -569,20 +697,17 @@ export default function ItemsTab() {
         }
     }
 
-    // ---------------- bulk import (NEW API: preview + commit) ----------------
+    // ---------------- bulk import ----------------
     async function handleBulkImport() {
         if (!bulkFile) return toast.error("Choose a file first")
         setBulkUploading(true)
 
         try {
-            const out = await bulkUploadItems(bulkFile, {
+            const commit = await bulkUploadItems(bulkFile, {
                 strict: strictMode,
                 update_blanks: updateBlanks,
+                create_missing_locations: true,
             })
-
-            // tolerate different shapes
-            const preview = out?.preview ?? out?.data?.preview
-            const commit = out?.commit ?? out?.data?.commit ?? out
 
             const created = Number(commit?.created || 0)
             const updated = Number(commit?.updated || 0)
@@ -600,9 +725,6 @@ export default function ItemsTab() {
                 })
             }
 
-            // optional:
-            // console.log("preview:", preview)
-
             setBulkDialogOpen(false)
             setBulkFile(null)
             await loadItems()
@@ -614,6 +736,17 @@ export default function ItemsTab() {
         }
     }
 
+    // ---------------- clear filters ----------------
+    const clearFilters = () => {
+        setTypeFilter("ALL")
+        setLasaOnly(false)
+        setActiveOnly(true)
+        setScheduledOnly(false)
+        setHighAlertOnly(false)
+        setSupplierIdFilter("")
+        setLocationIdFilter("")
+    }
+
     // ---------------- UI ----------------
     return (
         <motion.div
@@ -622,7 +755,6 @@ export default function ItemsTab() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.16 }}
         >
-            {/* Top controls */}
             <Card className="rounded-3xl border border-slate-500/70 bg-white/70 backdrop-blur shadow-sm">
                 <CardHeader className="pb-2 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                     <div className="min-w-0">
@@ -633,7 +765,7 @@ export default function ItemsTab() {
                             </Badge>
                         </CardTitle>
                         <CardDescription className="text-xs">
-                            Medicines & Consumables • Schedule fields • LASA • QR/Barcode
+                            Medicines & Consumables • Supplier • Location Qty • Schedules • LASA • High Alert
                         </CardDescription>
                     </div>
 
@@ -664,7 +796,7 @@ export default function ItemsTab() {
                 </CardHeader>
 
                 <CardContent className="space-y-3">
-                    {/* Search + filters */}
+                    {/* Search row */}
                     <div className="flex flex-col lg:flex-row gap-2 lg:items-center">
                         <div className="relative flex-1">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
@@ -688,36 +820,154 @@ export default function ItemsTab() {
                         </div>
 
                         <div className="flex flex-wrap gap-2 items-center">
-                            <div className="w-full sm:w-48">
-                                <Select value={typeFilter} onValueChange={setTypeFilter}>
-                                    <SelectTrigger className="rounded-2xl bg-white">
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent>
-                                        <SelectItem value="ALL">All</SelectItem>
-                                        <SelectItem value="DRUG">Medicines</SelectItem>
-                                        <SelectItem value="CONSUMABLE">Consumables</SelectItem>
-                                    </SelectContent>
-                                </Select>
-                            </div>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="rounded-2xl bg-white/70"
+                                onClick={() => setShowFilters((v) => !v)}
+                            >
+                                <Filter className="w-4 h-4 mr-2" />
+                                Filters
+                                {activeFilterCount ? (
+                                    <Badge variant="secondary" className="ml-2 text-[10px] rounded-full">
+                                        {activeFilterCount}
+                                    </Badge>
+                                ) : null}
+                            </Button>
 
                             <Button variant="outline" className="rounded-2xl bg-white/70" onClick={loadItems}>
                                 <RefreshCcw className="w-4 h-4 mr-2" />
                                 Refresh
                             </Button>
 
-                            <div className="flex items-center gap-2 rounded-2xl border border-slate-500/70 bg-white/70 px-3 py-2">
-                                <Filter className="w-4 h-4 text-slate-600" />
-                                <span className="text-xs text-slate-700">LASA</span>
-                                <Switch checked={lasaOnly} onCheckedChange={setLasaOnly} />
-                            </div>
-
-                            <div className="flex items-center gap-2 rounded-2xl border border-slate-500/70 bg-white/70 px-3 py-2">
-                                <span className="text-xs text-slate-700">Active only</span>
-                                <Switch checked={activeOnly} onCheckedChange={setActiveOnly} />
-                            </div>
+                            <Button
+                                type="button"
+                                variant="outline"
+                                className="rounded-2xl bg-white/70"
+                                onClick={loadMasters}
+                            >
+                                <RefreshCcw className="w-4 h-4 mr-2" />
+                                Reload Masters
+                            </Button>
                         </div>
                     </div>
+
+                    {/* ✅ Filters panel (shows ALL filters when Filter button clicked) */}
+                    {showFilters ? (
+                        <div className="rounded-2xl border border-slate-500/70 bg-white/60 p-3 space-y-3">
+                            <div className="flex items-center justify-between">
+                                <div className="text-sm font-semibold text-slate-900">All Filters</div>
+                                <div className="flex gap-2">
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        className="rounded-2xl"
+                                        onClick={clearFilters}
+                                    >
+                                        Clear
+                                    </Button>
+                                    <Button
+                                        type="button"
+                                        variant="outline"
+                                        className="rounded-2xl"
+                                        onClick={() => setShowFilters(false)}
+                                    >
+                                        Close
+                                    </Button>
+                                </div>
+                            </div>
+
+                            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                                <div className="space-y-1.5">
+                                    <Label>Type</Label>
+                                    <Select value={typeFilter} onValueChange={setTypeFilter}>
+                                        <SelectTrigger className="rounded-2xl bg-white">
+                                            <SelectValue />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                            <SelectItem value="ALL">All</SelectItem>
+                                            <SelectItem value="DRUG">Medicines</SelectItem>
+                                            <SelectItem value="CONSUMABLE">Consumables</SelectItem>
+                                        </SelectContent>
+                                    </Select>
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <Label>Supplier</Label>
+                                    <ComboBox
+                                        value={supplierIdFilter}
+                                        onChange={setSupplierIdFilter}
+                                        options={suppliers}
+                                        placeholder="All suppliers"
+                                        searchPlaceholder="Search supplier..."
+                                        getValue={(x) => String(x?.id ?? "")}
+                                        getLabel={(x) =>
+                                            [x?.code, x?.name].filter(Boolean).join(" - ") || String(x?.id ?? "")
+                                        }
+                                    />
+                                </div>
+
+                                <div className="space-y-1.5">
+                                    <Label>Location (Qty on hand)</Label>
+                                    <ComboBox
+                                        value={locationIdFilter}
+                                        onChange={setLocationIdFilter}
+                                        options={locations}
+                                        placeholder="All locations"
+                                        searchPlaceholder="Search location..."
+                                        getValue={(x) => String(x?.id ?? "")}
+                                        getLabel={(x) =>
+                                            [x?.code, x?.name].filter(Boolean).join(" - ") || String(x?.id ?? "")
+                                        }
+                                    />
+                                    <p className="text-[11px] text-slate-500">
+                                        If set, qty_on_hand is calculated for that location.
+                                    </p>
+                                </div>
+
+                                <div className="flex items-center justify-between rounded-2xl border border-slate-500/70 bg-white/70 px-3 py-2">
+                                    <div>
+                                        <div className="text-sm font-medium text-slate-900">Active only</div>
+                                        <div className="text-xs text-slate-500">Show only active items</div>
+                                    </div>
+                                    <Switch checked={activeOnly} onCheckedChange={setActiveOnly} />
+                                </div>
+
+                                <div className="flex items-center justify-between rounded-2xl border border-slate-500/70 bg-white/70 px-3 py-2">
+                                    <div>
+                                        <div className="text-sm font-medium text-slate-900">LASA only</div>
+                                        <div className="text-xs text-slate-500">Look-alike sound-alike</div>
+                                    </div>
+                                    <Switch checked={lasaOnly} onCheckedChange={setLasaOnly} />
+                                </div>
+
+                                <div className="flex items-center justify-between rounded-2xl border border-slate-500/70 bg-white/70 px-3 py-2">
+                                    <div>
+                                        <div className="text-sm font-medium text-slate-900">Scheduled only</div>
+                                        <div className="text-xs text-slate-500">Items with schedule_code</div>
+                                    </div>
+                                    <Switch checked={scheduledOnly} onCheckedChange={setScheduledOnly} />
+                                </div>
+
+                                <div className="flex items-center justify-between rounded-2xl border border-slate-500/70 bg-white/70 px-3 py-2">
+                                    <div>
+                                        <div className="text-sm font-medium text-slate-900">High alert only</div>
+                                        <div className="text-xs text-slate-500">high_alert_flag=true</div>
+                                    </div>
+                                    <Switch checked={highAlertOnly} onCheckedChange={setHighAlertOnly} />
+                                </div>
+
+                                <div className="lg:col-span-2 sm:col-span-2 flex items-center gap-2">
+                                    <Button className="rounded-2xl" onClick={loadItems}>
+                                        Apply Filters
+                                    </Button>
+                                    <Button variant="outline" className="rounded-2xl" onClick={clearFilters}>
+                                        Reset
+                                    </Button>
+                                </div>
+                            </div>
+                        </div>
+                    ) : null}
 
                     {/* List */}
                     {loading ? (
@@ -732,36 +982,45 @@ export default function ItemsTab() {
                         <>
                             {/* Desktop table */}
                             <div className="hidden lg:block overflow-hidden rounded-2xl border border-slate-500/70 bg-white/60">
-                                <div className="grid grid-cols-[140px,1.6fr,150px,120px,120px,140px] gap-2 px-4 py-3 text-xs font-semibold text-slate-600 border-b border-slate-500/70">
+                                <div className="grid grid-cols-[140px,1.6fr,160px,110px,110px,120px,170px] gap-2 px-4 py-3 text-xs font-semibold text-slate-600 border-b border-slate-500/70">
                                     <div>Code</div>
                                     <div>Name</div>
                                     <div>Type</div>
+                                    <div className="text-right">On hand</div>
                                     <div>Unit</div>
-                                    <div>Reorder</div>
+                                    <div>Supplier</div>
                                     <div className="text-right">Actions</div>
                                 </div>
 
                                 <div className="divide-y divide-slate-500/70">
                                     {filteredLocal.map((it) => {
                                         const isConsumable = isConsumableItem(it)
-                                        const sch =
-                                            !isConsumable && s(it?.schedule_code) ? ` • Sch: ${s(it.schedule_code)}` : ""
-                                        const storage = s(it?.storage_condition)
-                                            ? ` • ${s(it.storage_condition)}`
-                                            : s(it?.storage_conditions)
-                                                ? ` • ${s(it.storage_conditions)}`
-                                                : ""
+                                        const sch = !isConsumable && s(it?.schedule_code) ? ` • Sch: ${s(it.schedule_code)}` : ""
+                                        const inactive = it?.is_active === false
+
+                                        const sup = suppliers.find((x) => String(x?.id) === String(it?.default_supplier_id || ""))
+                                        const supLabel = sup ? ([sup?.code, sup?.name].filter(Boolean).join(" - ")) : (it?.default_supplier_id ? `#${it.default_supplier_id}` : "—")
 
                                         return (
                                             <div
                                                 key={it.id}
-                                                className="grid grid-cols-[140px,1.6fr,150px,120px,120px,140px] gap-2 px-4 py-3 items-center"
+                                                className="grid grid-cols-[140px,1.6fr,160px,110px,110px,120px,170px] gap-2 px-4 py-3 items-center"
                                             >
                                                 <div className="text-sm font-semibold text-slate-900 flex items-center gap-2">
                                                     {it.code}
+                                                    {inactive ? (
+                                                        <Badge className="text-[10px] rounded-full" variant="secondary">
+                                                            INACTIVE
+                                                        </Badge>
+                                                    ) : null}
                                                     {it.lasa_flag ? (
                                                         <Badge className="text-[10px] rounded-full" variant="destructive">
                                                             LASA
+                                                        </Badge>
+                                                    ) : null}
+                                                    {it.high_alert_flag ? (
+                                                        <Badge className="text-[10px] rounded-full" variant="destructive">
+                                                            HIGH
                                                         </Badge>
                                                     ) : null}
                                                 </div>
@@ -771,7 +1030,6 @@ export default function ItemsTab() {
                                                     <div className="text-xs text-slate-500 truncate">
                                                         {s(it?.generic_name) || s(it?.strength) || s(it?.manufacturer) || "—"}
                                                         {sch}
-                                                        {storage}
                                                     </div>
                                                 </div>
 
@@ -791,8 +1049,12 @@ export default function ItemsTab() {
                                                     </Badge>
                                                 </div>
 
+                                                <div className="text-sm text-slate-900 font-semibold text-right">
+                                                    {fmtQty(it?.qty_on_hand)}
+                                                </div>
+
                                                 <div className="text-sm text-slate-700">{it.unit || "—"}</div>
-                                                <div className="text-sm text-slate-700">{it.reorder_level ?? "—"}</div>
+                                                <div className="text-xs text-slate-700 truncate">{supLabel}</div>
 
                                                 <div className="flex justify-end gap-2">
                                                     <Button
@@ -819,8 +1081,8 @@ export default function ItemsTab() {
                             <div className="lg:hidden space-y-2">
                                 {filteredLocal.map((it) => {
                                     const isConsumable = isConsumableItem(it)
-                                    const sch =
-                                        !isConsumable && s(it?.schedule_code) ? ` • Sch: ${s(it.schedule_code)}` : ""
+                                    const sch = !isConsumable && s(it?.schedule_code) ? ` • Sch: ${s(it.schedule_code)}` : ""
+                                    const inactive = it?.is_active === false
 
                                     return (
                                         <div
@@ -829,11 +1091,21 @@ export default function ItemsTab() {
                                         >
                                             <div className="flex items-start justify-between gap-3">
                                                 <div className="min-w-0">
-                                                    <div className="flex items-center gap-2">
+                                                    <div className="flex items-center gap-2 flex-wrap">
                                                         <div className="text-sm font-semibold text-slate-900 truncate">{it.name}</div>
+                                                        {inactive ? (
+                                                            <Badge className="text-[10px] rounded-full" variant="secondary">
+                                                                INACTIVE
+                                                            </Badge>
+                                                        ) : null}
                                                         {it.lasa_flag ? (
                                                             <Badge className="text-[10px] rounded-full" variant="destructive">
                                                                 LASA
+                                                            </Badge>
+                                                        ) : null}
+                                                        {it.high_alert_flag ? (
+                                                            <Badge className="text-[10px] rounded-full" variant="destructive">
+                                                                HIGH
                                                             </Badge>
                                                         ) : null}
                                                     </div>
@@ -851,12 +1123,20 @@ export default function ItemsTab() {
 
                                             <div className="mt-2 grid grid-cols-2 gap-2 text-xs text-slate-600">
                                                 <div>
-                                                    <span className="text-slate-500">Unit:</span>{" "}
-                                                    <span className="text-slate-900 font-medium">{it.unit || "—"}</span>
+                                                    <span className="text-slate-500">On hand:</span>{" "}
+                                                    <span className="text-slate-900 font-semibold">{fmtQty(it?.qty_on_hand)}</span>
                                                 </div>
                                                 <div>
                                                     <span className="text-slate-500">Reorder:</span>{" "}
                                                     <span className="text-slate-900 font-medium">{it.reorder_level ?? "—"}</span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-slate-500">Unit:</span>{" "}
+                                                    <span className="text-slate-900 font-medium">{it.unit || "—"}</span>
+                                                </div>
+                                                <div>
+                                                    <span className="text-slate-500">MRP:</span>{" "}
+                                                    <span className="text-slate-900 font-medium">{it.default_mrp ?? "—"}</span>
                                                 </div>
                                             </div>
 
@@ -904,23 +1184,19 @@ export default function ItemsTab() {
           "
                 >
                     <div className="flex h-full max-h-[calc(100dvh-1.25rem)] flex-col">
-                        {/* Header */}
                         <div className="border-b bg-white/80 backdrop-blur px-4 py-4 sm:px-6">
                             <DialogHeader className="space-y-1 pr-10">
                                 <DialogTitle className="text-base font-semibold">
                                     {editItem ? "Edit item" : "New item"}
                                 </DialogTitle>
                                 <DialogDescription className="text-xs">
-                                    Matches backend InventoryItem fields (type, storage_condition, schedule,
-                                    supplier/procurement, ATC/HSN).
+                                    Supplier dropdown + full NABH-friendly fields (schedule, high alert, LASA).
                                 </DialogDescription>
                             </DialogHeader>
                         </div>
 
                         <form onSubmit={handleSaveItem} className="flex min-h-0 flex-1 flex-col">
-                            {/* Body */}
                             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 space-y-4">
-                                {/* Core */}
                                 <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                     <div className="space-y-1.5">
                                         <Label>Code *</Label>
@@ -933,7 +1209,7 @@ export default function ItemsTab() {
                                     </div>
 
                                     <div className="space-y-1.5">
-                                        <Label>QR / Barcode (qr_number)</Label>
+                                        <Label>QR / Barcode</Label>
                                         <Input
                                             value={form.qr_number ?? ""}
                                             onChange={(e) => setForm((f) => ({ ...f, qr_number: e.target.value }))}
@@ -962,9 +1238,9 @@ export default function ItemsTab() {
                                                     ...f,
                                                     item_type: val,
                                                     is_consumable: val === "CONSUMABLE",
-                                                    // helpful: reset schedule when switching away from DRUG
                                                     schedule_code: val === "DRUG" ? f.schedule_code : "",
                                                     schedule_notes: val === "DRUG" ? f.schedule_notes : "",
+                                                    prescription_status: val === "DRUG" ? f.prescription_status : "RX",
                                                 }))
                                             }
                                         >
@@ -1009,16 +1285,19 @@ export default function ItemsTab() {
                                         />
                                     </div>
 
+                                    {/* ✅ Supplier dropdown */}
                                     <div className="space-y-1.5">
-                                        <Label>Default supplier ID</Label>
-                                        <Input
-                                            type="number"
-                                            value={form.default_supplier_id ?? ""}
-                                            onChange={(e) => setForm((f) => ({ ...f, default_supplier_id: e.target.value }))}
-                                            className="rounded-2xl"
-                                            placeholder="Optional"
+                                        <Label>Default Supplier</Label>
+                                        <ComboBox
+                                            value={form.default_supplier_id}
+                                            onChange={(v) => setForm((f) => ({ ...f, default_supplier_id: v }))}
+                                            options={suppliers}
+                                            placeholder="Select supplier (optional)"
+                                            searchPlaceholder="Search supplier..."
+                                            getValue={(x) => String(x?.id ?? "")}
+                                            getLabel={(x) => [x?.code, x?.name].filter(Boolean).join(" - ")}
                                         />
-                                        <p className="text-[11px] text-slate-400">Maps to default_supplier_id</p>
+                                        <p className="text-[11px] text-slate-500">Maps to default_supplier_id</p>
                                     </div>
 
                                     <div className="space-y-1.5">
@@ -1104,9 +1383,7 @@ export default function ItemsTab() {
                                             type="number"
                                             step="0.01"
                                             value={form.default_tax_percent ?? ""}
-                                            onChange={(e) =>
-                                                setForm((f) => ({ ...f, default_tax_percent: e.target.value }))
-                                            }
+                                            onChange={(e) => setForm((f) => ({ ...f, default_tax_percent: e.target.value }))}
                                             className="rounded-2xl"
                                         />
                                     </div>
@@ -1138,27 +1415,48 @@ export default function ItemsTab() {
                                             <div className="text-sm font-medium text-slate-900">Active</div>
                                             <div className="text-xs text-slate-500">Hide item if off</div>
                                         </div>
+                                        <Switch checked={!!form.is_active} onCheckedChange={(v) => setForm((f) => ({ ...f, is_active: v }))} />
+                                    </div>
+                                </div>
+
+                                <div className="grid gap-3 sm:grid-cols-2">
+                                    <div className="flex items-center justify-between rounded-2xl border border-slate-500/70 bg-white/70 px-3 py-2">
+                                        <div>
+                                            <div className="text-sm font-medium text-slate-900">LASA flag</div>
+                                            <div className="text-xs text-slate-500">Look-Alike Sound-Alike warning</div>
+                                        </div>
+                                        <Switch checked={!!form.lasa_flag} onCheckedChange={(v) => setForm((f) => ({ ...f, lasa_flag: v }))} />
+                                    </div>
+
+                                    <div className="flex items-center justify-between rounded-2xl border border-slate-500/70 bg-white/70 px-3 py-2">
+                                        <div>
+                                            <div className="text-sm font-medium text-slate-900">High alert</div>
+                                            <div className="text-xs text-slate-500">Requires extra caution</div>
+                                        </div>
                                         <Switch
-                                            checked={!!form.is_active}
-                                            onCheckedChange={(v) => setForm((f) => ({ ...f, is_active: v }))}
+                                            checked={!!form.high_alert_flag}
+                                            onCheckedChange={(v) =>
+                                                setForm((f) => ({
+                                                    ...f,
+                                                    high_alert_flag: v,
+                                                    requires_double_check: v ? true : f.requires_double_check,
+                                                }))
+                                            }
                                         />
                                     </div>
                                 </div>
 
                                 <div className="flex items-center justify-between rounded-2xl border border-slate-500/70 bg-white/70 px-3 py-2">
                                     <div>
-                                        <div className="text-sm font-medium text-slate-900">LASA flag</div>
-                                        <div className="text-xs text-slate-500">Look-Alike Sound-Alike warning</div>
+                                        <div className="text-sm font-medium text-slate-900">Requires double check</div>
+                                        <div className="text-xs text-slate-500">Two-person verification</div>
                                     </div>
-                                    <Switch
-                                        checked={!!form.lasa_flag}
-                                        onCheckedChange={(v) => setForm((f) => ({ ...f, lasa_flag: v }))}
-                                    />
+                                    <Switch checked={!!form.requires_double_check} onCheckedChange={(v) => setForm((f) => ({ ...f, requires_double_check: v }))} />
                                 </div>
 
                                 {/* Tabs */}
                                 <Tabs
-                                    key={form.item_type} // resets when type changes
+                                    key={form.item_type}
                                     defaultValue={form.item_type === "CONSUMABLE" ? "consumable" : "drug"}
                                     className="space-y-3"
                                 >
@@ -1166,15 +1464,11 @@ export default function ItemsTab() {
                                         <TabsTrigger className="shrink-0 rounded-xl px-4 py-2 text-xs" value="drug">
                                             Drug fields
                                         </TabsTrigger>
-                                        <TabsTrigger
-                                            className="shrink-0 rounded-xl px-4 py-2 text-xs"
-                                            value="consumable"
-                                        >
+                                        <TabsTrigger className="shrink-0 rounded-xl px-4 py-2 text-xs" value="consumable">
                                             Consumable fields
                                         </TabsTrigger>
                                     </TabsList>
 
-                                    {/* Drug */}
                                     <TabsContent value="drug" className="space-y-3">
                                         {form.item_type !== "DRUG" ? (
                                             <div className="rounded-2xl border border-slate-500/70 bg-white/60 p-3 text-xs text-slate-600">
@@ -1183,7 +1477,6 @@ export default function ItemsTab() {
                                         ) : null}
 
                                         <div className="rounded-2xl border border-slate-500/70 bg-white/60 p-3 space-y-3">
-                                            {/* Regulatory schedule */}
                                             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                                 <div className="space-y-1.5">
                                                     <Label>Schedule system</Label>
@@ -1194,6 +1487,10 @@ export default function ItemsTab() {
                                                                 ...f,
                                                                 schedule_system: val,
                                                                 schedule_code: "",
+                                                                prescription_status:
+                                                                    (f.prescription_status || "RX").toUpperCase() === "SCHEDULED"
+                                                                        ? "RX"
+                                                                        : f.prescription_status,
                                                             }))
                                                         }
                                                     >
@@ -1212,10 +1509,16 @@ export default function ItemsTab() {
                                                     <Select
                                                         value={form.schedule_code ? String(form.schedule_code) : NONE_VALUE}
                                                         onValueChange={(val) =>
-                                                            setForm((f) => ({
-                                                                ...f,
-                                                                schedule_code: val === NONE_VALUE ? "" : val,
-                                                            }))
+                                                            setForm((f) => {
+                                                                const nextCode = val === NONE_VALUE ? "" : val
+                                                                const nextPs =
+                                                                    nextCode
+                                                                        ? "SCHEDULED"
+                                                                        : (f.prescription_status || "RX").toUpperCase() === "SCHEDULED"
+                                                                            ? "RX"
+                                                                            : f.prescription_status
+                                                                return { ...f, schedule_code: nextCode, prescription_status: nextPs }
+                                                            })
                                                         }
                                                     >
                                                         <SelectTrigger className="rounded-2xl bg-white">
@@ -1243,29 +1546,6 @@ export default function ItemsTab() {
                                                             <div className="text-[11px] text-slate-600 mt-0.5">
                                                                 {scheduleMeta.desc || scheduleMeta.description || "—"}
                                                             </div>
-
-                                                            <div className="mt-2 flex flex-wrap gap-1">
-                                                                {scheduleMeta.requires_prescription ? (
-                                                                    <Badge variant="outline" className="rounded-full text-[10px]">
-                                                                        RX required
-                                                                    </Badge>
-                                                                ) : null}
-                                                                {scheduleMeta.requires_register ? (
-                                                                    <Badge variant="outline" className="rounded-full text-[10px]">
-                                                                        Register
-                                                                    </Badge>
-                                                                ) : null}
-                                                                {scheduleMeta.strict_storage ? (
-                                                                    <Badge variant="outline" className="rounded-full text-[10px]">
-                                                                        Strict storage
-                                                                    </Badge>
-                                                                ) : null}
-                                                                {scheduleMeta.blocks_dispense ? (
-                                                                    <Badge variant="destructive" className="rounded-full text-[10px]">
-                                                                        Blocks dispense
-                                                                    </Badge>
-                                                                ) : null}
-                                                            </div>
                                                         </div>
                                                     ) : null}
                                                 </div>
@@ -1281,7 +1561,6 @@ export default function ItemsTab() {
                                                 </div>
                                             </div>
 
-                                            {/* Drug fields */}
                                             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                                                 <div className="space-y-1.5">
                                                     <Label>Generic name</Label>
@@ -1322,12 +1601,10 @@ export default function ItemsTab() {
                                                 </div>
 
                                                 <div className="space-y-1.5 sm:col-span-2 lg:col-span-2">
-                                                    <Label>Active ingredients (comma / new line)</Label>
+                                                    <Label>Active ingredients</Label>
                                                     <Input
                                                         value={form.active_ingredients ?? ""}
-                                                        onChange={(e) =>
-                                                            setForm((f) => ({ ...f, active_ingredients: e.target.value }))
-                                                        }
+                                                        onChange={(e) => setForm((f) => ({ ...f, active_ingredients: e.target.value }))}
                                                         className="rounded-2xl"
                                                         placeholder="Paracetamol, Caffeine"
                                                     />
@@ -1347,9 +1624,7 @@ export default function ItemsTab() {
                                                     <Label>Therapeutic class</Label>
                                                     <Input
                                                         value={form.therapeutic_class ?? ""}
-                                                        onChange={(e) =>
-                                                            setForm((f) => ({ ...f, therapeutic_class: e.target.value }))
-                                                        }
+                                                        onChange={(e) => setForm((f) => ({ ...f, therapeutic_class: e.target.value }))}
                                                         className="rounded-2xl"
                                                         placeholder="antibiotic / analgesic"
                                                     />
@@ -1360,7 +1635,15 @@ export default function ItemsTab() {
                                                     <Select
                                                         value={form.prescription_status ?? "RX"}
                                                         onValueChange={(val) =>
-                                                            setForm((f) => ({ ...f, prescription_status: val }))
+                                                            setForm((f) => {
+                                                                if (val === "SCHEDULED" && !s(f.schedule_code)) {
+                                                                    return { ...f, prescription_status: "SCHEDULED" }
+                                                                }
+                                                                if ((val === "RX" || val === "OTC") && s(f.schedule_code)) {
+                                                                    return { ...f, prescription_status: val, schedule_code: "" }
+                                                                }
+                                                                return { ...f, prescription_status: val }
+                                                            })
                                                         }
                                                     >
                                                         <SelectTrigger className="rounded-2xl bg-white">
@@ -1372,6 +1655,9 @@ export default function ItemsTab() {
                                                             <SelectItem value="SCHEDULED">SCHEDULED</SelectItem>
                                                         </SelectContent>
                                                     </Select>
+                                                    {s(form.prescription_status).toUpperCase() === "SCHEDULED" && !s(form.schedule_code) ? (
+                                                        <p className="text-[11px] text-rose-600">Schedule code required when status is SCHEDULED.</p>
+                                                    ) : null}
                                                 </div>
 
                                                 <div className="space-y-1.5 sm:col-span-2 lg:col-span-3">
@@ -1388,9 +1674,7 @@ export default function ItemsTab() {
                                                     <Label>Drug interactions</Label>
                                                     <Textarea
                                                         value={form.drug_interactions ?? ""}
-                                                        onChange={(e) =>
-                                                            setForm((f) => ({ ...f, drug_interactions: e.target.value }))
-                                                        }
+                                                        onChange={(e) => setForm((f) => ({ ...f, drug_interactions: e.target.value }))}
                                                         className="rounded-2xl min-h-[80px]"
                                                         placeholder="Optional"
                                                     />
@@ -1399,7 +1683,6 @@ export default function ItemsTab() {
                                         </div>
                                     </TabsContent>
 
-                                    {/* Consumable */}
                                     <TabsContent value="consumable" className="space-y-3">
                                         {form.item_type !== "CONSUMABLE" ? (
                                             <div className="rounded-2xl border border-slate-500/70 bg-white/60 p-3 text-xs text-slate-600">
@@ -1413,9 +1696,7 @@ export default function ItemsTab() {
                                                     <Label>Material type</Label>
                                                     <Input
                                                         value={form.material_type ?? ""}
-                                                        onChange={(e) =>
-                                                            setForm((f) => ({ ...f, material_type: e.target.value }))
-                                                        }
+                                                        onChange={(e) => setForm((f) => ({ ...f, material_type: e.target.value }))}
                                                         className="rounded-2xl"
                                                         placeholder="latex/plastic/cotton"
                                                     />
@@ -1425,9 +1706,7 @@ export default function ItemsTab() {
                                                     <Label>Sterility status</Label>
                                                     <Select
                                                         value={form.sterility_status ?? "NON_STERILE"}
-                                                        onValueChange={(val) =>
-                                                            setForm((f) => ({ ...f, sterility_status: val }))
-                                                        }
+                                                        onValueChange={(val) => setForm((f) => ({ ...f, sterility_status: val }))}
                                                     >
                                                         <SelectTrigger className="rounded-2xl bg-white">
                                                             <SelectValue />
@@ -1443,9 +1722,7 @@ export default function ItemsTab() {
                                                     <Label>Size / dimensions</Label>
                                                     <Input
                                                         value={form.size_dimensions ?? ""}
-                                                        onChange={(e) =>
-                                                            setForm((f) => ({ ...f, size_dimensions: e.target.value }))
-                                                        }
+                                                        onChange={(e) => setForm((f) => ({ ...f, size_dimensions: e.target.value }))}
                                                         className="rounded-2xl"
                                                         placeholder="M / 10ml / 18G / 4x4"
                                                     />
@@ -1455,9 +1732,7 @@ export default function ItemsTab() {
                                                     <Label>Reusable status</Label>
                                                     <Select
                                                         value={form.reusable_status ?? "DISPOSABLE"}
-                                                        onValueChange={(val) =>
-                                                            setForm((f) => ({ ...f, reusable_status: val }))
-                                                        }
+                                                        onValueChange={(val) => setForm((f) => ({ ...f, reusable_status: val }))}
                                                     >
                                                         <SelectTrigger className="rounded-2xl bg-white">
                                                             <SelectValue />
@@ -1484,7 +1759,6 @@ export default function ItemsTab() {
                                 </Tabs>
                             </div>
 
-                            {/* Footer */}
                             <div className="border-t bg-white/80 backdrop-blur px-4 py-3 sm:px-6">
                                 <DialogFooter className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
                                     <Button
@@ -1586,15 +1860,12 @@ export default function ItemsTab() {
                             <Label>Upload file</Label>
                             <Input
                                 type="file"
-                                accept=".xlsx,.csv"
+                                accept=".xlsx,.csv,.xlsm"
                                 className="rounded-2xl bg-white"
                                 onChange={(e) => setBulkFile(e.target.files?.[0] || null)}
                             />
                             <p className="text-[11px] text-slate-500">
-                                Endpoint used:{" "}
-                                <span className="font-mono">
-                                    POST /api/inventory/items/bulk-upload/preview + commit
-                                </span>
+                                Uses: <span className="font-mono">POST /api/inventory/items/bulk-upload/commit</span>
                             </p>
                         </div>
 

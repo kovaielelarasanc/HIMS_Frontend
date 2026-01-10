@@ -135,6 +135,8 @@ function getPatientUhid(obj) {
 
 // ✅ FIX: never return object
 function getDoctorName(obj) {
+  console.log(obj,);
+
   const d = obj?.doctor
   if (typeof obj?.doctor_name === 'string' && obj.doctor_name.trim()) return obj.doctor_name
   if (typeof obj?.doctor_display === 'string' && obj.doctor_display.trim()) return obj.doctor_display
@@ -328,6 +330,8 @@ function LineInstruction({ line }) {
 }
 
 function LineCardMobile({ line, idx, onChangeQty, onChangeBatch, batchOptions }) {
+  console.log(line, "ertyui");
+
   const med = line?.item_name || line?.medicine_name || 'Unnamed medicine'
   const strength = line?.item_strength || line?.strength || ''
   const remaining = num(line?.remaining_calc, 0)
@@ -478,17 +482,17 @@ export default function PharmacyDispense() {
 
   useEffect(() => {
     let mounted = true
-    ;(async () => {
-      try {
-        const res = await listInventoryLocations()
-        const items = unwrapApiData(res) || []
-        if (!mounted) return
-        setLocations(items)
-        if (!queueLocationId) setQueueLocationId(ALL_LOC)
-      } catch {
-        // handled by interceptor
-      }
-    })()
+      ; (async () => {
+        try {
+          const res = await listInventoryLocations()
+          const items = unwrapApiData(res) || []
+          if (!mounted) return
+          setLocations(items)
+          if (!queueLocationId) setQueueLocationId(ALL_LOC)
+        } catch {
+          // handled by interceptor
+        }
+      })()
     return () => { mounted = false }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -652,19 +656,19 @@ export default function PharmacyDispense() {
   // ✅ prefetch batches for selected Rx
   useEffect(() => {
     let alive = true
-    ;(async () => {
-      const locId = Number(dispenseLocationId || 0)
-      if (!selectedRx || !locId) return
+      ; (async () => {
+        const locId = Number(dispenseLocationId || 0)
+        if (!selectedRx || !locId) return
 
-      const lines = dispenseLines || []
-      const uniqueItems = [...new Set(lines.map((l) => Number(l.item_id || 0)).filter(Boolean))].slice(0, 25)
+        const lines = dispenseLines || []
+        const uniqueItems = [...new Set(lines.map((l) => Number(l.item_id || 0)).filter(Boolean))].slice(0, 25)
 
-      for (const itemId of uniqueItems) {
-        // eslint-disable-next-line no-await-in-loop
-        await fetchBatchPicks(locId, itemId)
-        if (!alive) return
-      }
-    })()
+        for (const itemId of uniqueItems) {
+          // eslint-disable-next-line no-await-in-loop
+          await fetchBatchPicks(locId, itemId)
+          if (!alive) return
+        }
+      })()
 
     return () => { alive = false }
   }, [selectedRx, dispenseLocationId, fetchBatchPicks, dispenseLines])

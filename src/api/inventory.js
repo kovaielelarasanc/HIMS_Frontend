@@ -11,7 +11,13 @@ const unwrap = (res) => {
     return payload.data
 }
 
-
+export function isCanceledError(e) {
+  return (
+    e?.code === "ERR_CANCELED" ||
+    e?.name === "CanceledError" ||
+    String(e?.message || "").toLowerCase().includes("canceled")
+  )
+}
 // ---------- Locations ----------
 export function listInventoryLocations() {
     return API.get('/inventory/locations')
@@ -89,7 +95,14 @@ export function getDrugSchedulesCatalog() {
 }
 
 
-
+// -----------------------------
+// Template download (MUST be blob)
+// -----------------------------
+function filenameFromContentDisposition(cd, fallback) {
+  if (!cd) return fallback
+  const m = String(cd).match(/filename="?([^"]+)"?/i)
+  return m?.[1] || fallback
+}
 
 // ✅ NEW: preview (CSV/XLSX/TSV)
 export function previewItemsUpload(file) {
@@ -105,11 +118,13 @@ export function downloadSampleItemsCsv() {
     return API.get("/inventory/items/sample-csv", { responseType: "blob" })
 }
 
-export function downloadItemsTemplate(format = "csv") {
-    return API.get("/inventory/items/bulk-upload/template", {
-        params: { format }, // "csv" | "xlsx"
-        responseType: "blob",
-    })
+export async function downloadItemsTemplate(format = "xlsx") {
+  const res = await API.get(`/inventory/items/bulk-upload/template?format=${format}`, {
+    responseType: "blob",
+  })
+  const blob = new Blob([res.data], { type: res.headers?.["content-type"] || "application/octet-stream" })
+  const filename = filenameFromContentDisposition(res.headers?.["content-disposition"], `items_template.${format}`)
+  return { blob, filename }
 }
 
 // ---------------- Bulk Upload (Preview + Commit) ----------------
@@ -138,17 +153,21 @@ export function commitItemsBulkUpload(file, { strict = true, update_blanks = fal
  * ✅ Convenience helper (optional): preview + commit in one call
  * Returns: { preview, commit }
  */
-export async function bulkUploadItems(file, { strict = true, update_blanks = false } = {}) {
-    const preview = await previewItemsBulkUpload(file)
-    if (strict && Number(preview?.error_rows || 0) > 0) {
-        const first = Array.isArray(preview?.errors) ? preview.errors[0] : null
-        const msg = first?.message ? `Row ${first.row}: ${first.message}` : "File has errors"
-        const err = new Error(msg)
-        err.preview = preview
-        throw err
-    }
-    const commit = await commitItemsBulkUpload(file, { strict, update_blanks })
-    return { preview, commit }
+export async function bulkUploadItems(file, opts = {}) {
+  const strict = opts?.strict ?? true
+  const update_blanks = opts?.update_blanks ?? false
+  const create_missing_locations = opts?.create_missing_locations ?? true
+
+  const fd = new FormData()
+  fd.append("file", file)
+
+  const res = await API.post(
+    `/inventory/items/bulk-upload/commit?strict=${strict}&update_blanks=${update_blanks}&create_missing_locations=${create_missing_locations}`,
+    fd,
+    { headers: { "Content-Type": "multipart/form-data" } }
+  )
+
+  return unwraps(res)
 }
 
 // ✅ NEW: commit (strict by default)

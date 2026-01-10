@@ -120,6 +120,10 @@ export function getBillingMasters() {
     return API.get("/billing/masters");
 }
 
+export function getDoctorlist(params = {}) {
+  return API.get("/users/doctor", { params })
+}
+
 // ---------------- Patient billing summary ----------------
 
 export function getPatientBillingSummary(patientId) {
