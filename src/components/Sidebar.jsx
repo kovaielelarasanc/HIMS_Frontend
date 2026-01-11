@@ -48,7 +48,15 @@ import {
   Database,
   Gauge,
   AlertTriangle,
-  PlugZap
+  PlugZap,
+  QrCode,
+  PackageCheck,
+  BookOpenTextIcon,
+  FileSpreadsheet,
+  Warehouse,
+  ArrowUpRight,
+  ClipboardSignature,
+  BellRing
 } from 'lucide-react'
 
 const defaultPrimary = '#2563eb'
@@ -151,28 +159,29 @@ const GROUPS = [
         key: 'pharmacy-barcode-lookup',
         label: 'Barcode / QR Lookup',
         to: '/pharmacy/inventory/barcode-lookup',
-        icon: Scan,
+        icon: QrCode,
         reqAny: ['pharmacy.inventory.stock.view'],
       },
       {
         key: 'pharmacy-rx',
-        label: 'Pharmacy RX',
+        label: 'Prescriptions',
         to: '/pharmacy/rx',
-        icon: NotebookPen,
+        icon: ClipboardList,
         reqAny: ['pharmacy.inventory.stock.view'],
       },
       {
         key: 'pharmacy-dispense',
-        label: 'Pharmacy Dispense',
+        label: 'Dispense Counter',
         to: '/pharmacy/dispense',
-        icon: ShoppingCart,
+        icon: PackageCheck,
         reqAny: ['pharmacy.inventory.stock.view'],
       },
+
       {
         key: 'pharmacy-supplier-ledger',
         label: 'Supplier Ledger',
         to: '/pharmacy/accounts/supplier-ledger',
-        icon: BookOpenText,
+        icon: BookOpenTextIcon,
         reqAny: [
           'pharmacy.accounts.supplier_ledger.view',
           'pharmacy.accounts.supplier_ledger.manage',
@@ -181,7 +190,7 @@ const GROUPS = [
       },
       {
         key: 'pharmacy-supplier-monthly-summary',
-        label: 'Monthly Summary',
+        label: 'Supplier Summary',
         to: '/pharmacy/accounts/supplier-monthly-summary',
         icon: CalendarDays,
         reqAny: [
@@ -194,7 +203,7 @@ const GROUPS = [
         key: 'pharmacy-supplier-payments',
         label: 'Supplier Payments',
         to: '/pharmacy/accounts/supplier-payments',
-        icon: Wallet,
+        icon: Receipt,
         reqAny: [
           'pharmacy.accounts.supplier_ledger.view',
           'pharmacy.accounts.supplier_ledger.manage',
@@ -203,31 +212,34 @@ const GROUPS = [
       },
       {
         key: 'pharmacy-supplier-statement',
-        label: 'Supplier Statement',
+        label: 'Supplier Statements',
         to: '/pharmacy/accounts/supplier-statement',
-        icon: FileText,
+        icon: FileSpreadsheet,
         reqAny: [
           'pharmacy.accounts.supplier_ledger.view',
           'pharmacy.accounts.supplier_ledger.manage',
           'pharmacy.accounts.supplier_ledger.export',
         ],
       },
+
       {
         key: "pharmacy-stock-alerts",
         label: "Stock Alerts",
         to: "/pharmacy/stock/alerts",
-        icon: AlertTriangle,
+        icon: BellRing,
         reqAny: [
           "pharmacy.stock.alerts.view",
           "pharmacy.stock.alerts.manage",
           "pharmacy.stock.alerts.export",
         ],
       },
+
+      // Inventory (shared)
       {
         key: "inventory_indents",
-        label: "Inventory Indent",
+        label: "Indent Requests",
         to: "/inventory/indents",
-        icon: AlertTriangle,
+        icon: ClipboardSignature,
         reqAny: [
           "inventory.indents.view",
           "inventory.issues.view",
@@ -236,9 +248,9 @@ const GROUPS = [
       },
       {
         key: "inventory_indents_issue",
-        label: "Inventory Indent issue",
+        label: "Issue Items",
         to: "/inventory/indents/issue",
-        icon: AlertTriangle,
+        icon: ArrowUpRight,
         reqAny: [
           "inventory.indents.view",
           "inventory.issues.view",
@@ -247,18 +259,18 @@ const GROUPS = [
       },
       {
         key: "inventory_common_stock",
-        label: "Inventory Common Stock",
+        label: "Common Stock",
         to: "/inventory/common/stock",
-        icon: AlertTriangle,
+        icon: Warehouse,
         reqAny: [
           "inventory.indents.view",
           "inventory.issues.view",
           "inventory.catalog.view",
         ],
       },
-
     ],
   },
+
 
   // User Management
   {

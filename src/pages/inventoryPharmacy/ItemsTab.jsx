@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { motion } from "framer-motion"
 import { toast } from "sonner"
-
+import API from "@/api/client"
+import { ScrollArea } from "@/components/ui/scroll-area"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import {
@@ -59,6 +60,10 @@ import {
     Layers,
     Check,
     ChevronsUpDown,
+    AlertTriangle,
+    CheckCircle2,
+    FileSpreadsheet,
+    ListChecks,
 } from "lucide-react"
 
 // ✅ API
@@ -339,6 +344,214 @@ export default function ItemsTab() {
 
     // schedules dropdown catalog
     const [scheduleCatalog, setScheduleCatalog] = useState({ IN_DCA: [], US_CSA: [] })
+
+    // ---------------- bulk preview/commit UX ----------------
+    const [bulkPreview, setBulkPreview] = useState(null)          // preview response
+    const [bulkPreviewLoading, setBulkPreviewLoading] = useState(false)
+    const [bulkCommitResult, setBulkCommitResult] = useState(null) // commit response
+    const [bulkTab, setBulkTab] = useState("preview")            // preview | errors | result
+    const [bulkErrQuery, setBulkErrQuery] = useState("")
+
+    const bulkErrors = useMemo(() => {
+        const errs = bulkPreview?.errors
+        return Array.isArray(errs) ? errs : []
+    }, [bulkPreview])
+
+    const bulkErrorsByRow = useMemo(() => {
+        const m = new Map()
+        for (const e of bulkErrors) {
+            const r = Number(e?.row || 0)
+            if (!r) continue
+            if (!m.has(r)) m.set(r, [])
+            m.get(r).push(e)
+        }
+        return m
+    }, [bulkErrors])
+
+    const bulkErrorCells = useMemo(() => {
+        const set = new Set()
+        for (const e of bulkErrors) {
+            const r = Number(e?.row || 0)
+            const c = String(e?.column || "")
+            if (r && c) set.add(`${r}|${c}`)
+        }
+        return set
+    }, [bulkErrors])
+
+    const bulkSampleRows = useMemo(() => {
+        const rows = bulkPreview?.sample_rows
+        return Array.isArray(rows) ? rows : []
+    }, [bulkPreview])
+
+    const bulkColumns = useMemo(() => {
+        // prefer required columns first (backend gives REQUIRED_HEADERS)
+        const required = Array.isArray(bulkPreview?.required_columns) ? bulkPreview.required_columns : []
+        const first = bulkSampleRows?.[0] || {}
+        const keys = Object.keys(first || {})
+
+        const preferred = [
+            "code",
+            "name",
+            "qr_number",
+            "item_type",
+            "unit",
+            "pack_size",
+            "default_price",
+            "default_mrp",
+            "default_tax_percent",
+            "manufacturer",
+            "default_supplier_code",
+            "storage_condition",
+        ]
+
+        const out = []
+        const add = (x) => {
+            const v = String(x || "").trim()
+            if (!v) return
+            if (!out.includes(v)) out.push(v)
+        }
+
+        required.forEach(add)
+        preferred.forEach(add)
+        keys.forEach(add)
+
+        return out.slice(0, 14) // keep table readable
+    }, [bulkPreview, bulkSampleRows])
+
+    function resetBulkDialogState() {
+        setBulkFile(null)
+        setStrictMode(true)
+        setUpdateBlanks(false)
+        setBulkUploading(false)
+
+        setBulkPreview(null)
+        setBulkCommitResult(null)
+        setBulkTab("preview")
+        setBulkErrQuery("")
+    }
+
+    function bulkErrorsToCsv(errs = []) {
+        const rows = [["row", "column", "code", "message"]]
+        for (const e of errs) {
+            rows.push([
+                String(e?.row ?? ""),
+                String(e?.column ?? ""),
+                String(e?.code ?? ""),
+                String((e?.message ?? "").replace(/\r?\n/g, " ").trim()),
+            ])
+        }
+        return rows.map((r) => r.map((x) => `"${String(x).replaceAll(`"`, `""`)}"`).join(",")).join("\n")
+    }
+
+    function downloadErrorsCsv(errs, filename = "items_upload_errors.csv") {
+        const csv = bulkErrorsToCsv(errs)
+        const blob = new Blob([csv], { type: "text/csv;charset=utf-8" })
+        downloadBlob(blob, filename)
+    }
+
+    async function handleBulkPreview() {
+        if (!bulkFile) return toast.error("Choose a file first")
+
+        setBulkPreviewLoading(true)
+        setBulkCommitResult(null)
+
+        try {
+            const fd = new FormData()
+            fd.append("file", bulkFile)
+
+            const res = await API.post("/inventory/items/bulk-upload/preview", fd, {
+                headers: { "Content-Type": "multipart/form-data" },
+            })
+
+            const data = res?.data || null
+            setBulkPreview(data)
+            setBulkTab((Array.isArray(data?.errors) && data.errors.length) ? "errors" : "preview")
+
+            toast.success("Preview ready", {
+                description: `Rows: ${data?.total_rows ?? 0} • Errors: ${data?.error_rows ?? 0}`,
+            })
+        } catch (e) {
+            console.error(e)
+            toast.error("Preview failed", { description: getErrMsg(e) })
+        } finally {
+            setBulkPreviewLoading(false)
+        }
+    }
+
+    async function handleBulkCommit() {
+        if (!bulkFile) return toast.error("Choose a file first")
+
+        // if user didn’t preview, do preview first (best UX)
+        if (!bulkPreview) {
+            await handleBulkPreview()
+        }
+
+        // strict mode should block commit if errors exist (instead show errors)
+        if (strictMode && bulkErrors.length) {
+            setBulkTab("errors")
+            return toast.error("Fix errors in Excel (Strict mode ON)", {
+                description: "Open Errors tab → correct the mentioned row/column in Excel → upload again.",
+            })
+        }
+
+        setBulkUploading(true)
+        try {
+            const fd = new FormData()
+            fd.append("file", bulkFile)
+
+            const res = await API.post("/inventory/items/bulk-upload/commit", fd, {
+                params: {
+                    strict: strictMode,
+                    update_blanks: updateBlanks,
+                    create_missing_locations: true,
+                },
+                headers: { "Content-Type": "multipart/form-data" },
+            })
+
+            const data = res?.data || null
+            setBulkCommitResult(data)
+            setBulkTab("result")
+
+            const created = Number(data?.created || 0)
+            const updated = Number(data?.updated || 0)
+            const skipped = Number(data?.skipped || 0)
+            const errs = Array.isArray(data?.errors) ? data.errors : []
+
+            if (errs.length) {
+                toast.warning("Imported with warnings", {
+                    description: `Created ${created}, Updated ${updated}, Skipped ${skipped}, Errors ${errs.length}`,
+                })
+            } else {
+                toast.success("Bulk import completed", {
+                    description: `Created ${created}, Updated ${updated}, Skipped ${skipped}`,
+                })
+            }
+
+            await loadItems()
+        } catch (e) {
+            console.error(e)
+
+            // ✅ strict mode 422 returns: detail: [{row, code, column, message}]
+            const detail = e?.response?.data?.detail
+            if (Array.isArray(detail)) {
+                setBulkPreview((prev) => ({
+                    ...(prev || {}),
+                    errors: detail,
+                    error_rows: new Set(detail.map((x) => x?.row).filter(Boolean)).size,
+                }))
+                setBulkTab("errors")
+                toast.error("Commit blocked (Strict mode)", {
+                    description: "Fix the listed errors in Excel and try again.",
+                })
+                return
+            }
+
+            toast.error("Bulk import failed", { description: getErrMsg(e) })
+        } finally {
+            setBulkUploading(false)
+        }
+    }
+
 
     // ---------------- load masters (supplier + locations) ----------------
     const loadMasters = useCallback(async () => {
@@ -1827,7 +2040,7 @@ export default function ItemsTab() {
             </Dialog>
 
             {/* -------- Bulk import -------- */}
-            <Dialog open={bulkDialogOpen} onOpenChange={setBulkDialogOpen}>
+            {/* <Dialog open={bulkDialogOpen} onOpenChange={setBulkDialogOpen}>
                 <DialogContent className="max-w-xl rounded-3xl">
                     <DialogHeader>
                         <DialogTitle className="text-base font-semibold">Bulk upload items</DialogTitle>
@@ -1908,7 +2121,418 @@ export default function ItemsTab() {
                         </DialogFooter>
                     </div>
                 </DialogContent>
+            </Dialog> */}
+
+            {/* -------- Bulk upload (Preview → Fix → Commit) -------- */}
+            <Dialog
+                open={bulkDialogOpen}
+                onOpenChange={(open) => {
+                    setBulkDialogOpen(open)
+                    if (!open) resetBulkDialogState()
+                }}
+            >
+                <DialogContent className="max-w-5xl rounded-3xl p-0 overflow-hidden">
+                    <div className="border-b bg-white/80 backdrop-blur px-5 py-4">
+                        <DialogHeader className="space-y-1 pr-10">
+                            <DialogTitle className="text-base font-semibold flex items-center gap-2">
+                                <FileSpreadsheet className="h-5 w-5 text-slate-600" />
+                                Bulk upload items
+                            </DialogTitle>
+                            <DialogDescription className="text-xs">
+                                1) Download template → 2) Fill in Excel → 3) Upload → 4) Preview errors → 5) Commit
+                            </DialogDescription>
+                        </DialogHeader>
+
+                        {/* Step chips */}
+                        <div className="mt-3 flex flex-wrap gap-2">
+                            <Badge variant="outline" className="rounded-full">1. Template</Badge>
+                            <Badge variant="outline" className="rounded-full">2. Upload</Badge>
+                            <Badge variant="outline" className="rounded-full">3. Preview</Badge>
+                            <Badge variant="outline" className="rounded-full">4. Fix Excel</Badge>
+                            <Badge variant="outline" className="rounded-full">5. Commit</Badge>
+                        </div>
+                    </div>
+
+                    <div className="p-5 space-y-4">
+                        {/* Template buttons */}
+                        <div className="flex flex-wrap gap-2">
+                            <Button
+                                variant="outline"
+                                className="rounded-2xl bg-white/70"
+                                onClick={() => handleDownloadTemplate("xlsx")}
+                            >
+                                <Download className="w-4 h-4 mr-2" />
+                                XLSX template
+                            </Button>
+                            <Button
+                                variant="outline"
+                                className="rounded-2xl bg-white/70"
+                                onClick={() => handleDownloadTemplate("csv")}
+                            >
+                                <Download className="w-4 h-4 mr-2" />
+                                CSV template
+                            </Button>
+                        </div>
+
+                        {/* File select */}
+                        <div className="grid gap-3 lg:grid-cols-[1.4fr_.6fr] items-end">
+                            <div className="space-y-1.5">
+                                <Label>Upload file</Label>
+                                <Input
+                                    type="file"
+                                    accept=".xlsx,.csv,.xlsm"
+                                    className="rounded-2xl bg-white"
+                                    onChange={(e) => {
+                                        setBulkFile(e.target.files?.[0] || null)
+                                        setBulkPreview(null)
+                                        setBulkCommitResult(null)
+                                        setBulkTab("preview")
+                                        setBulkErrQuery("")
+                                    }}
+                                />
+                                <p className="text-[11px] text-slate-500">
+                                    Preview: <span className="font-mono">POST /api/inventory/items/bulk-upload/preview</span>{" "}
+                                    • Commit: <span className="font-mono">POST /api/inventory/items/bulk-upload/commit</span>
+                                </p>
+                            </div>
+
+                            <div className="flex gap-2">
+                                <Button
+                                    variant="outline"
+                                    className="rounded-2xl flex-1"
+                                    disabled={!bulkFile || bulkPreviewLoading}
+                                    onClick={handleBulkPreview}
+                                >
+                                    {bulkPreviewLoading ? "Previewing..." : "Preview"}
+                                </Button>
+
+                                <Button
+                                    className="rounded-2xl flex-1"
+                                    disabled={!bulkFile || bulkUploading}
+                                    onClick={handleBulkCommit}
+                                >
+                                    {bulkUploading ? "Committing..." : "Commit"}
+                                </Button>
+                            </div>
+                        </div>
+
+                        {/* Preview summary */}
+                        {bulkPreview ? (
+                            <div className="rounded-3xl border border-slate-500/70 bg-white/60 p-4">
+                                <div className="flex flex-wrap items-center justify-between gap-3">
+                                    <div className="flex items-center gap-3">
+                                        {bulkErrors.length ? (
+                                            <div className="inline-flex items-center gap-2 text-rose-700">
+                                                <AlertTriangle className="h-5 w-5" />
+                                                <div className="text-sm font-semibold">Errors found</div>
+                                            </div>
+                                        ) : (
+                                            <div className="inline-flex items-center gap-2 text-emerald-700">
+                                                <CheckCircle2 className="h-5 w-5" />
+                                                <div className="text-sm font-semibold">Ready to commit</div>
+                                            </div>
+                                        )}
+                                        <Badge variant="outline" className="rounded-full text-xs">
+                                            {bulkPreview?.file_type || "FILE"}
+                                        </Badge>
+                                    </div>
+
+                                    <div className="flex flex-wrap gap-2">
+                                        <Badge className="rounded-full" variant="secondary">
+                                            Total: {bulkPreview?.total_rows ?? 0}
+                                        </Badge>
+                                        <Badge className="rounded-full" variant="secondary">
+                                            Valid: {bulkPreview?.valid_rows ?? 0}
+                                        </Badge>
+                                        <Badge className={cx("rounded-full", bulkErrors.length ? "bg-rose-600 text-white" : "bg-emerald-600 text-white")}>
+                                            Errors: {bulkPreview?.error_rows ?? 0}
+                                        </Badge>
+
+                                        {bulkErrors.length ? (
+                                            <Button
+                                                variant="outline"
+                                                className="rounded-2xl bg-white/70"
+                                                onClick={() => downloadErrorsCsv(bulkErrors, "items_preview_errors.csv")}
+                                            >
+                                                <Download className="h-4 w-4 mr-2" />
+                                                Download Errors CSV
+                                            </Button>
+                                        ) : null}
+                                    </div>
+                                </div>
+
+                                <div className="mt-3 grid gap-3 lg:grid-cols-2">
+                                    <div className="rounded-2xl border border-slate-500/60 bg-white/70 p-3">
+                                        <div className="text-xs font-semibold text-slate-700">Required columns</div>
+                                        <div className="mt-2 flex flex-wrap gap-1.5">
+                                            {(bulkPreview?.required_columns || []).map((c) => (
+                                                <Badge key={c} variant="outline" className="rounded-full text-[11px]">
+                                                    {c}
+                                                </Badge>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="rounded-2xl border border-slate-500/60 bg-white/70 p-3">
+                                        <div className="text-xs font-semibold text-slate-700">How to fix</div>
+                                        <div className="mt-1 text-[12px] text-slate-600 leading-relaxed">
+                                            Use the <b>Errors</b> tab. Excel row numbers match exactly:
+                                            <b> Row 1 is header</b>, data starts from <b>Row 2</b>. Fix that row/column and re-upload.
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Tabs */}
+                                <Tabs value={bulkTab} onValueChange={setBulkTab} className="mt-4">
+                                    <TabsList className="w-full justify-start bg-white/70 border border-slate-500/70 rounded-2xl p-1 overflow-x-auto">
+                                        <TabsTrigger className="shrink-0 rounded-xl px-4 py-2 text-xs" value="preview">
+                                            Preview
+                                        </TabsTrigger>
+                                        <TabsTrigger className="shrink-0 rounded-xl px-4 py-2 text-xs" value="errors">
+                                            Errors <Badge variant="secondary" className="ml-2 rounded-full text-[10px]">{bulkErrors.length}</Badge>
+                                        </TabsTrigger>
+                                        <TabsTrigger className="shrink-0 rounded-xl px-4 py-2 text-xs" value="result" disabled={!bulkCommitResult}>
+                                            Result
+                                        </TabsTrigger>
+                                    </TabsList>
+
+                                    {/* PREVIEW TAB */}
+                                    <TabsContent value="preview" className="mt-3">
+                                        <div className="rounded-2xl border border-slate-500/70 bg-white/60 overflow-hidden">
+                                            <div className="px-4 py-3 text-xs font-semibold text-slate-700 border-b border-slate-500/70 flex items-center gap-2">
+                                                <ListChecks className="h-4 w-4" />
+                                                Sample rows (first {bulkSampleRows.length})
+                                            </div>
+
+                                            <ScrollArea className="h-[320px]">
+                                                <div className="min-w-[960px]">
+                                                    <div className="grid gap-2 px-4 py-2 text-[11px] font-semibold text-slate-600 border-b border-slate-500/70"
+                                                        style={{ gridTemplateColumns: `90px ${bulkColumns.map(() => "minmax(140px, 1fr)").join(" ")}` }}>
+                                                        <div>Excel Row</div>
+                                                        {bulkColumns.map((c) => <div key={c} className="truncate">{c}</div>)}
+                                                    </div>
+
+                                                    <div className="divide-y divide-slate-500/50">
+                                                        {bulkSampleRows.map((r, idx) => {
+                                                            const excelRow = idx + 2 // header row=1
+                                                            const rowErrs = bulkErrorsByRow.get(excelRow) || []
+                                                            const bad = rowErrs.length > 0
+
+                                                            return (
+                                                                <div
+                                                                    key={excelRow}
+                                                                    className={cx(
+                                                                        "grid gap-2 px-4 py-2 text-[12px]",
+                                                                        bad ? "bg-rose-50" : "bg-white/50"
+                                                                    )}
+                                                                    style={{ gridTemplateColumns: `90px ${bulkColumns.map(() => "minmax(140px, 1fr)").join(" ")}` }}
+                                                                >
+                                                                    <div className="font-semibold text-slate-800">
+                                                                        {excelRow}
+                                                                        {bad ? (
+                                                                            <Badge className="ml-2 rounded-full text-[10px] bg-rose-600 text-white">
+                                                                                {rowErrs.length} err
+                                                                            </Badge>
+                                                                        ) : null}
+                                                                    </div>
+
+                                                                    {bulkColumns.map((c) => {
+                                                                        const cellBad = bulkErrorCells.has(`${excelRow}|${c}`)
+                                                                        return (
+                                                                            <div
+                                                                                key={c}
+                                                                                className={cx(
+                                                                                    "truncate rounded-lg px-2 py-1",
+                                                                                    cellBad ? "bg-rose-100 text-rose-900" : "bg-transparent"
+                                                                                )}
+                                                                                title={String(r?.[c] ?? "")}
+                                                                            >
+                                                                                {String(r?.[c] ?? "") || "—"}
+                                                                            </div>
+                                                                        )
+                                                                    })}
+                                                                </div>
+                                                            )
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            </ScrollArea>
+                                        </div>
+                                    </TabsContent>
+
+                                    {/* ERRORS TAB */}
+                                    <TabsContent value="errors" className="mt-3">
+                                        {!bulkErrors.length ? (
+                                            <div className="rounded-2xl border border-slate-500/70 bg-white/60 p-4 text-sm text-slate-600">
+                                                No errors found 🎉
+                                            </div>
+                                        ) : (
+                                            <div className="rounded-2xl border border-slate-500/70 bg-white/60 overflow-hidden">
+                                                <div className="px-4 py-3 border-b border-slate-500/70 flex flex-col sm:flex-row gap-2 sm:items-center sm:justify-between">
+                                                    <div className="text-xs font-semibold text-slate-700">
+                                                        Errors list (fix these in Excel)
+                                                    </div>
+                                                    <div className="flex gap-2">
+                                                        <Input
+                                                            value={bulkErrQuery}
+                                                            onChange={(e) => setBulkErrQuery(e.target.value)}
+                                                            className="rounded-2xl bg-white w-full sm:w-[260px]"
+                                                            placeholder="Search row/column/message..."
+                                                        />
+                                                        <Button
+                                                            variant="outline"
+                                                            className="rounded-2xl bg-white/70"
+                                                            onClick={() => downloadErrorsCsv(bulkErrors, "items_preview_errors.csv")}
+                                                        >
+                                                            <Download className="h-4 w-4 mr-2" />
+                                                            CSV
+                                                        </Button>
+                                                    </div>
+                                                </div>
+
+                                                <ScrollArea className="h-[320px]">
+                                                    <div className="divide-y divide-slate-500/50">
+                                                        {bulkErrors
+                                                            .filter((e) => {
+                                                                const q = String(bulkErrQuery || "").trim().toLowerCase()
+                                                                if (!q) return true
+                                                                return (
+                                                                    String(e?.row ?? "").toLowerCase().includes(q) ||
+                                                                    String(e?.column ?? "").toLowerCase().includes(q) ||
+                                                                    String(e?.code ?? "").toLowerCase().includes(q) ||
+                                                                    String(e?.message ?? "").toLowerCase().includes(q)
+                                                                )
+                                                            })
+                                                            .slice(0, 500)
+                                                            .map((e, i) => (
+                                                                <div key={`${e?.row}-${e?.column}-${i}`} className="px-4 py-3">
+                                                                    <div className="flex flex-wrap items-center gap-2">
+                                                                        <Badge className="rounded-full bg-rose-600 text-white">Row {e?.row}</Badge>
+                                                                        {e?.column ? (
+                                                                            <Badge variant="outline" className="rounded-full">{e.column}</Badge>
+                                                                        ) : null}
+                                                                        {e?.code ? (
+                                                                            <Badge variant="secondary" className="rounded-full">{e.code}</Badge>
+                                                                        ) : null}
+                                                                    </div>
+                                                                    <div className="mt-1 text-sm text-slate-800">{e?.message || "Error"}</div>
+                                                                    <div className="mt-2 text-[11px] text-slate-500">
+                                                                        Fix in Excel: Go to row <b>{e?.row}</b>, check column <b>{e?.column || "—"}</b>, then re-upload.
+                                                                    </div>
+                                                                </div>
+                                                            ))}
+                                                    </div>
+                                                </ScrollArea>
+                                            </div>
+                                        )}
+                                    </TabsContent>
+
+                                    {/* RESULT TAB */}
+                                    <TabsContent value="result" className="mt-3">
+                                        {!bulkCommitResult ? (
+                                            <div className="rounded-2xl border border-slate-500/70 bg-white/60 p-4 text-sm text-slate-600">
+                                                Commit not done yet.
+                                            </div>
+                                        ) : (
+                                            <div className="rounded-2xl border border-slate-500/70 bg-white/60 p-4 space-y-3">
+                                                <div className="flex flex-wrap gap-2">
+                                                    <Badge className="rounded-full bg-emerald-600 text-white">
+                                                        Created: {bulkCommitResult?.created ?? 0}
+                                                    </Badge>
+                                                    <Badge className="rounded-full bg-blue-600 text-white">
+                                                        Updated: {bulkCommitResult?.updated ?? 0}
+                                                    </Badge>
+                                                    <Badge className="rounded-full bg-slate-700 text-white">
+                                                        Skipped: {bulkCommitResult?.skipped ?? 0}
+                                                    </Badge>
+                                                    <Badge className="rounded-full bg-rose-600 text-white">
+                                                        Errors: {(bulkCommitResult?.errors || []).length}
+                                                    </Badge>
+
+                                                    {Array.isArray(bulkCommitResult?.errors) && bulkCommitResult.errors.length ? (
+                                                        <Button
+                                                            variant="outline"
+                                                            className="rounded-2xl bg-white/70"
+                                                            onClick={() => downloadErrorsCsv(bulkCommitResult.errors, "items_commit_errors.csv")}
+                                                        >
+                                                            <Download className="h-4 w-4 mr-2" />
+                                                            Download Commit Errors CSV
+                                                        </Button>
+                                                    ) : null}
+                                                </div>
+
+                                                {Array.isArray(bulkCommitResult?.errors) && bulkCommitResult.errors.length ? (
+                                                    <div className="text-sm text-slate-700">
+                                                        Some rows were skipped/failed. Download the CSV and fix Excel rows, then upload again.
+                                                    </div>
+                                                ) : (
+                                                    <div className="text-sm text-slate-700">
+                                                        All good ✅
+                                                    </div>
+                                                )}
+                                            </div>
+                                        )}
+                                    </TabsContent>
+                                </Tabs>
+
+                                {/* Commit options */}
+                                <div className="mt-4 grid gap-3 lg:grid-cols-2">
+                                    <div className="rounded-2xl border border-slate-500/70 bg-white/70 px-3 py-2 flex items-center justify-between">
+                                        <div>
+                                            <div className="text-sm font-medium text-slate-900">Strict mode</div>
+                                            <div className="text-xs text-slate-500">If any row has error, commit is blocked.</div>
+                                        </div>
+                                        <Switch checked={strictMode} onCheckedChange={setStrictMode} />
+                                    </div>
+
+                                    <div className="rounded-2xl border border-slate-500/70 bg-white/70 px-3 py-2 flex items-center justify-between">
+                                        <div>
+                                            <div className="text-sm font-medium text-slate-900">Overwrite blanks</div>
+                                            <div className="text-xs text-slate-500">Blank values overwrite existing values.</div>
+                                        </div>
+                                        <Switch checked={updateBlanks} onCheckedChange={setUpdateBlanks} />
+                                    </div>
+                                </div>
+                            </div>
+                        ) : null}
+                    </div>
+
+                    <div className="border-t bg-white/80 backdrop-blur px-5 py-4">
+                        <DialogFooter className="flex gap-2 sm:justify-between">
+                            <Button
+                                variant="outline"
+                                className="rounded-2xl"
+                                onClick={() => {
+                                    setBulkDialogOpen(false)
+                                    resetBulkDialogState()
+                                }}
+                            >
+                                Close
+                            </Button>
+
+                            <div className="flex gap-2">
+                                <Button
+                                    variant="outline"
+                                    className="rounded-2xl"
+                                    disabled={!bulkFile || bulkPreviewLoading}
+                                    onClick={handleBulkPreview}
+                                >
+                                    {bulkPreviewLoading ? "Previewing..." : "Preview"}
+                                </Button>
+
+                                <Button
+                                    className="rounded-2xl"
+                                    disabled={!bulkFile || bulkUploading}
+                                    onClick={handleBulkCommit}
+                                >
+                                    {bulkUploading ? "Committing..." : "Commit"}
+                                </Button>
+                            </div>
+                        </DialogFooter>
+                    </div>
+                </DialogContent>
             </Dialog>
+
         </motion.div>
     )
 }
