@@ -1,3 +1,4 @@
+// FILE: src/pages/billing/InvoiceEditor.jsx
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { toast } from "sonner"
@@ -52,6 +53,9 @@ import {
     ChevronUp,
     ClipboardCopy,
     Pencil,
+    Stethoscope,
+    Building2,
+    UserRound,
 } from "lucide-react"
 
 const cx = (...a) => a.filter(Boolean).join(" ")
@@ -64,6 +68,36 @@ function num(v, fb = 0) {
 function isPharmacyModule(m) {
     const x = String(m || "").trim().toUpperCase()
     return x === "PHM" || x === "PHC" || x === "PHARMACY"
+}
+
+function isDocModule(m) {
+    return String(m || "").trim().toUpperCase() === "DOC"
+}
+
+function prettyModuleLabel(code, fallback) {
+    const x = String(code || "").trim().toUpperCase()
+    if (x === "DOC") return "Doctor Fees"
+    if (x === "LAB") return "Laboratory"
+    if (x === "SCAN" || x === "XRAY") return "Radiology"
+    if (x === "PHM" || x === "PHC" || x === "PHARMACY") return "Pharmacy"
+    if (x === "ROOM") return "Room / Bed Charges"
+    return fallback || x || "MISC"
+}
+
+function fmtDate(v) {
+    if (!v) return "—"
+    try {
+        // supports "YYYY-MM-DD" and ISO
+        const d = new Date(v)
+        if (Number.isNaN(d.getTime())) {
+            const s = String(v)
+            return s.length >= 10 ? s.slice(0, 10) : s
+        }
+        return d.toISOString().slice(0, 10)
+    } catch {
+        const s = String(v)
+        return s.length >= 10 ? s.slice(0, 10) : s
+    }
 }
 
 /**
@@ -88,6 +122,38 @@ const MODULE_TO_GROUP = {
 }
 
 const PAY_MODES = ["CASH", "CARD", "UPI", "BANK", "WALLET", "CHEQUE"]
+
+/**
+ * ✅ Fallback columns (if backend meta not provided)
+ */
+const FALLBACK_DEFAULT_COLS = [
+    { key: "service_date", label: "Date" },
+    { key: "item_code", label: "Code" },
+    { key: "description", label: "Item Name" },
+    { key: "qty", label: "Qty" },
+    { key: "unit_price", label: "Unit Price" },
+    { key: "discount_amount", label: "Discount" },
+    { key: "gst_rate", label: "GST %" },
+    { key: "tax_amount", label: "Tax" },
+    { key: "net_amount", label: "Total" },
+]
+
+/**
+ * ✅ DOC module columns (Doctor + Department visible)
+ * This works when backend returns doctor_name / department_name on each line.
+ */
+const FALLBACK_DOC_COLS = [
+    { key: "service_date", label: "Service Date" },
+    { key: "department_name", label: "Department" },
+    { key: "doctor_name", label: "Doctor" },
+    { key: "description", label: "Particular" },
+    { key: "qty", label: "Qty" },
+    { key: "unit_price", label: "Amount" },
+    { key: "discount_amount", label: "Discount" },
+    { key: "gst_rate", label: "GST %" },
+    { key: "tax_amount", label: "Tax" },
+    { key: "net_amount", label: "Total" },
+]
 
 export default function InvoiceEditor() {
     const { invoiceId } = useParams()
@@ -131,7 +197,9 @@ export default function InvoiceEditor() {
         billingModulesMeta()
             .then((m) => alive && setModulesMeta(m))
             .catch(() => { })
-        return () => { alive = false }
+        return () => {
+            alive = false
+        }
     }, [])
 
     // -----------------------------
@@ -189,13 +257,17 @@ export default function InvoiceEditor() {
                 await loadAudit()
                 if (!alive) return
             })()
-        return () => { alive = false }
+        return () => {
+            alive = false
+        }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [tab, invoiceId])
 
     const statusUpper = String(invoice?.status || "").trim().toUpperCase()
     const moduleCode = String(invoice?.module || "MISC").trim().toUpperCase()
-    const moduleLabel = invoice?.module_label || moduleCode
+    const moduleLabel = prettyModuleLabel(moduleCode, invoice?.module_label || moduleCode)
+
+    const docMode = isDocModule(moduleCode)
 
     // ✅ STRICT RULE: Editable ONLY in DRAFT
     const canEditLines = statusUpper === "DRAFT"
@@ -212,11 +284,14 @@ export default function InvoiceEditor() {
         return { sub, disc, tax, grand }
     }, [lines])
 
+    // ✅ Columns: prefer backend meta; fallback to DOC/DEFAULT local columns
     const columns = useMemo(() => {
         const colMap = modulesMeta?.columns || {}
+        if (docMode) return colMap.DOC || FALLBACK_DOC_COLS
+
         const key = isPharmacyModule(moduleCode) ? "PHARMACY" : "DEFAULT"
-        return colMap[key] || colMap.DEFAULT || null
-    }, [modulesMeta, moduleCode])
+        return colMap[key] || colMap.DEFAULT || FALLBACK_DEFAULT_COLS
+    }, [modulesMeta, moduleCode, docMode])
 
     const filteredLines = useMemo(() => {
         const q = String(lineQ || "").trim().toLowerCase()
@@ -229,6 +304,8 @@ export default function InvoiceEditor() {
                 r.source_module,
                 r.item_id,
                 r.service_group,
+                r.doctor_name,
+                r.department_name,
             ]
                 .filter(Boolean)
                 .join(" ")
@@ -241,14 +318,7 @@ export default function InvoiceEditor() {
         const q = String(auditQ || "").trim().toLowerCase()
         if (!q) return auditLogs
         return auditLogs.filter((a) => {
-            const s = [
-                a.action,
-                a.reason,
-                a.entity_type,
-                a.entity_id,
-                a.user_label,
-                a.created_at,
-            ]
+            const s = [a.action, a.reason, a.entity_type, a.entity_id, a.user_label, a.created_at]
                 .filter(Boolean)
                 .join(" ")
                 .toLowerCase()
@@ -302,7 +372,9 @@ export default function InvoiceEditor() {
                 return
             }
             w.addEventListener("load", () => {
-                try { w.print() } catch { }
+                try {
+                    w.print()
+                } catch { }
             })
             setTimeout(() => URL.revokeObjectURL(url), 5000)
         } catch (e) {
@@ -326,13 +398,10 @@ export default function InvoiceEditor() {
         return "Draft correction"
     }
 
-    // ✅ UPDATED: allow delete for ALL lines in DRAFT (including auto-linked)
-    // Backend should soft-delete and audit.
     function canDeleteLine(_r) {
         return Boolean(canEditLines)
     }
 
-    // ✅ UPDATED: edit auto lines too (send reason)
     async function updateLineWithReason(lineId, patch, reason) {
         if (!invoice?.id) return
         if (!canEditLines) return toast.error("Invoice locked. Reopen to edit.")
@@ -362,7 +431,6 @@ export default function InvoiceEditor() {
     }
 
     async function commitLinePatch(lineId, patch) {
-        // inline edits use default reason
         await updateLineWithReason(lineId, patch, requireReasonOrDefault())
     }
 
@@ -423,389 +491,438 @@ export default function InvoiceEditor() {
         )
     }
 
+    // ✨ Extreme premium background shell (Apple-ish)
     return (
         <div className="w-full">
-            {/* Premium Header */}
-            <div className="mb-4 rounded-3xl border border-slate-100 bg-white p-4 shadow-sm">
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
-                    <div className="flex items-start gap-3">
-                        <Button variant="outline" onClick={() => nav(-1)}>
-                            <ArrowLeft className="h-4 w-4" /> Back
-                        </Button>
+            <div className="relative overflow-hidden rounded-[32px] border border-slate-100 bg-white shadow-sm">
+                <div className="pointer-events-none absolute inset-0">
+                    <div className="absolute -top-32 -right-24 h-80 w-80 rounded-full bg-slate-200/40 blur-3xl" />
+                    <div className="absolute -bottom-40 -left-20 h-96 w-96 rounded-full bg-slate-100 blur-3xl" />
+                </div>
 
-                        <div>
-                            <div className="flex items-center gap-2">
-                                <div className="text-xl font-extrabold text-slate-900">Invoice</div>
-                                <StatusBadge status={invoice?.status} />
-                                <Badge tone="slate">{moduleLabel}</Badge>
-                            </div>
+                {/* Premium Header */}
+                <div className="relative p-4 sm:p-5">
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="flex items-start gap-3">
+                            <Button variant="outline" onClick={() => nav(-1)}>
+                                <ArrowLeft className="h-4 w-4" /> Back
+                            </Button>
 
-                            <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                                <span className="font-semibold text-slate-800">
-                                    {invoice?.invoice_number || `#${invoice?.id || ""}`}
-                                </span>
-                                <button
-                                    className="inline-flex items-center gap-1 rounded-lg border border-slate-100 bg-slate-50 px-2 py-1 text-xs font-bold text-slate-700 hover:bg-slate-100"
-                                    onClick={() => copyText(invoice?.invoice_number || invoice?.id)}
-                                >
-                                    <ClipboardCopy className="h-3.5 w-3.5" /> Copy
-                                </button>
-                                <span>· Case ID: {invoice?.billing_case_id ?? "—"}</span>
-                                {invoice?.created_at ? <span>· Created: {invoice.created_at}</span> : null}
+                            <div>
+                                <div className="flex items-center gap-2">
+                                    <div className="text-xl font-extrabold text-slate-900">Invoice</div>
+                                    <StatusBadge status={invoice?.status} />
+                                    <Badge tone="slate">{moduleLabel}</Badge>
+
+                                    {docMode ? (
+                                        <span className="inline-flex items-center gap-1 rounded-xl border border-slate-100 bg-white px-2 py-1 text-xs font-extrabold text-slate-700">
+                                            <Stethoscope className="h-3.5 w-3.5" /> DOC
+                                        </span>
+                                    ) : null}
+                                </div>
+
+                                <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
+                                    <span className="font-semibold text-slate-800">
+                                        {invoice?.invoice_number || `#${invoice?.id || ""}`}
+                                    </span>
+                                    <button
+                                        className="inline-flex items-center gap-1 rounded-lg border border-slate-100 bg-slate-50 px-2 py-1 text-xs font-bold text-slate-700 hover:bg-slate-100"
+                                        onClick={() => copyText(invoice?.invoice_number || invoice?.id)}
+                                    >
+                                        <ClipboardCopy className="h-3.5 w-3.5" /> Copy
+                                    </button>
+                                    <span>· Case ID: {invoice?.billing_case_id ?? "—"}</span>
+                                    {invoice?.created_at ? <span>· Created: {invoice.created_at}</span> : null}
+                                </div>
+
+                                {docMode ? (
+                                    <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
+                                        <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
+                                            <div className="text-[11px] font-extrabold text-slate-500">Module</div>
+                                            <div className="mt-1 flex items-center gap-2 text-sm font-extrabold text-slate-900">
+                                                <Stethoscope className="h-4 w-4 text-slate-500" />
+                                                Doctor Fees (Manual Amount)
+                                            </div>
+                                        </div>
+                                        <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
+                                            <div className="text-[11px] font-extrabold text-slate-500">Policy</div>
+                                            <div className="mt-1 text-sm font-bold text-slate-900">
+                                                No Doctor Fee Master · Price is manual
+                                            </div>
+                                        </div>
+                                        <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
+                                            <div className="text-[11px] font-extrabold text-slate-500">Data</div>
+                                            <div className="mt-1 text-sm font-bold text-slate-900">
+                                                Doctor + Department shown per line
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : null}
                             </div>
                         </div>
-                    </div>
 
-                    <div className="flex flex-wrap items-center justify-end gap-2">
-                        <Button variant="outline" onClick={load} disabled={loading}>
-                            <RefreshCcw className={cn("h-4 w-4", loading ? "animate-spin" : "")} />
-                            Refresh
-                        </Button>
+                        <div className="flex flex-wrap items-center justify-end gap-2">
+                            <Button variant="outline" onClick={load} disabled={loading}>
+                                <RefreshCcw className={cn("h-4 w-4", loading ? "animate-spin" : "")} />
+                                Refresh
+                            </Button>
 
-                        <PdfButtons onDownload={onDownload} onPrint={onPrint} />
+                            <PdfButtons onDownload={onDownload} onPrint={onPrint} />
 
-                        <Button
-                            variant="outline"
-                            disabled={!invoice}
-                            onClick={() => nav(`/billing/cases/${invoice?.billing_case_id}`)}
-                        >
-                            Open Case
-                        </Button>
+                            <Button
+                                variant="outline"
+                                disabled={!invoice}
+                                onClick={() => nav(`/billing/cases/${invoice?.billing_case_id}`)}
+                            >
+                                Open Case
+                            </Button>
+                        </div>
                     </div>
                 </div>
-            </div>
 
-            {/* Summary + Tabs */}
-            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
-                <Card className="lg:col-span-2">
-                    <CardHeader title="Invoice Summary" subtitle="Totals & lifecycle actions" />
-                    <CardBody>
-                        {loading ? (
-                            <div className="space-y-2">
-                                <div className="h-10 animate-pulse rounded-xl bg-slate-100" />
-                                <div className="h-10 animate-pulse rounded-xl bg-slate-100" />
-                                <div className="h-10 animate-pulse rounded-xl bg-slate-100" />
-                            </div>
-                        ) : !invoice ? (
-                            <EmptyState title="Invoice not found" desc="Check ID or backend route." />
-                        ) : (
-                            <>
-                                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                                    <MiniStat label="Sub Total" value={`₹ ${money(invoice?.sub_total ?? totals.sub)}`} />
-                                    <MiniStat label="Discount" value={`₹ ${money(invoice?.discount_total ?? totals.disc)}`} />
-                                    <MiniStat label="Tax" value={`₹ ${money(invoice?.tax_total ?? totals.tax)}`} />
-                                    <MiniStat label="Grand Total" value={`₹ ${money(invoice?.grand_total ?? totals.grand)}`} strong />
-                                    <MiniStat label="Paid" value={`₹ ${money(paidTotal)}`} />
-                                    <MiniStat label="Due" value={`₹ ${money(dueTotal)}`} strong />
+                {/* Summary + Tabs */}
+                <div className="relative grid grid-cols-1 gap-4 p-4 sm:p-5 lg:grid-cols-3">
+                    <Card className="lg:col-span-2">
+                        <CardHeader title="Invoice Summary" subtitle="Totals & lifecycle actions" />
+                        <CardBody>
+                            {loading ? (
+                                <div className="space-y-2">
+                                    <div className="h-10 animate-pulse rounded-xl bg-slate-100" />
+                                    <div className="h-10 animate-pulse rounded-xl bg-slate-100" />
+                                    <div className="h-10 animate-pulse rounded-xl bg-slate-100" />
                                 </div>
+                            ) : !invoice ? (
+                                <EmptyState title="Invoice not found" desc="Check ID or backend route." />
+                            ) : (
+                                <>
+                                    <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                        <MiniStat label="Sub Total" value={`₹ ${money(invoice?.sub_total ?? totals.sub)}`} />
+                                        <MiniStat label="Discount" value={`₹ ${money(invoice?.discount_total ?? totals.disc)}`} />
+                                        <MiniStat label="Tax" value={`₹ ${money(invoice?.tax_total ?? totals.tax)}`} />
+                                        <MiniStat label="Grand Total" value={`₹ ${money(invoice?.grand_total ?? totals.grand)}`} strong />
+                                        <MiniStat label="Paid" value={`₹ ${money(paidTotal)}`} />
+                                        <MiniStat label="Due" value={`₹ ${money(dueTotal)}`} strong />
+                                    </div>
 
-                                <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
-                                    <Button variant="outline" disabled={!invoice || statusUpper !== "DRAFT"} onClick={onApprove}>
-                                        <ShieldCheck className="h-4 w-4" /> Approve
-                                    </Button>
+                                    <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
+                                        <Button variant="outline" disabled={!invoice || statusUpper !== "DRAFT"} onClick={onApprove}>
+                                            <ShieldCheck className="h-4 w-4" /> Approve
+                                        </Button>
 
-                                    <Button disabled={!invoice || statusUpper !== "APPROVED"} onClick={onPost}>
-                                        <CheckCircle2 className="h-4 w-4" /> Post
-                                    </Button>
+                                        <Button disabled={!invoice || statusUpper !== "APPROVED"} onClick={onPost}>
+                                            <CheckCircle2 className="h-4 w-4" /> Post
+                                        </Button>
 
-                                    <Button
-                                        variant="danger"
-                                        disabled={!invoice || statusUpper === "POSTED" || statusUpper === "VOID"}
-                                        onClick={() => setVoidOpen(true)}
-                                    >
-                                        <AlertTriangle className="h-4 w-4" /> Void
-                                    </Button>
-                                </div>
+                                        <Button
+                                            variant="danger"
+                                            disabled={!invoice || statusUpper === "POSTED" || statusUpper === "VOID"}
+                                            onClick={() => setVoidOpen(true)}
+                                        >
+                                            <AlertTriangle className="h-4 w-4" /> Void
+                                        </Button>
+                                    </div>
 
-                                {lockedBanner()}
-                            </>
-                        )}
-                    </CardBody>
-                </Card>
+                                    {lockedBanner()}
+                                </>
+                            )}
+                        </CardBody>
+                    </Card>
 
-                <Card>
-                    <CardHeader title="Workspace" subtitle="Switch panels quickly" />
-                    <CardBody>
-                        <div className="flex flex-col gap-2">
-                            <TabBtn active={tab === "LINES"} onClick={() => setTab("LINES")} icon={<LockKeyhole className="h-4 w-4" />}>
-                                Invoice Lines
-                            </TabBtn>
-                            <TabBtn active={tab === "PAYMENTS"} onClick={() => setTab("PAYMENTS")} icon={<CreditCard className="h-4 w-4" />}>
-                                Payments
-                            </TabBtn>
-                            <TabBtn active={tab === "AUDIT"} onClick={() => setTab("AUDIT")} icon={<FileClock className="h-4 w-4" />}>
-                                Audit Logs
-                            </TabBtn>
+                    <Card>
+                        <CardHeader title="Workspace" subtitle="Switch panels quickly" />
+                        <CardBody>
+                            <div className="flex flex-col gap-2">
+                                <TabBtn
+                                    active={tab === "LINES"}
+                                    onClick={() => setTab("LINES")}
+                                    icon={docMode ? <Stethoscope className="h-4 w-4" /> : <LockKeyhole className="h-4 w-4" />}
+                                >
+                                    Invoice Lines
+                                </TabBtn>
+                                <TabBtn active={tab === "PAYMENTS"} onClick={() => setTab("PAYMENTS")} icon={<CreditCard className="h-4 w-4" />}>
+                                    Payments
+                                </TabBtn>
+                                <TabBtn active={tab === "AUDIT"} onClick={() => setTab("AUDIT")} icon={<FileClock className="h-4 w-4" />}>
+                                    Audit Logs
+                                </TabBtn>
 
-                            <div className="mt-3 rounded-2xl bg-slate-50 px-4 py-3 text-xs text-slate-600">
-                                <div className="font-bold text-slate-800">Rules</div>
-                                <ul className="mt-1 list-disc pl-5">
-                                    <li>Lines editable only in DRAFT</li>
-                                    <li>After APPROVE → locked</li>
-                                    <li>Edits after approval require Edit Request / Reopen</li>
-                                    <li>AUTO lines are source-linked; editing changes billing only (not source stock/orders)</li>
-                                </ul>
-                            </div>
-                        </div>
-                    </CardBody>
-                </Card>
-            </div>
-
-            {/* Content */}
-            {tab === "LINES" ? (
-                <Card className="mt-4">
-                    <CardHeader
-                        title="Invoice Lines"
-                        subtitle={`Module: ${moduleLabel} · Edit/Delete works for both MANUAL and AUTO lines in DRAFT`}
-                        right={
-                            <Button onClick={() => setManualOpen(true)} disabled={!invoice || !canEditLines}>
-                                <Plus className="h-4 w-4" /> Add Line
-                            </Button>
-                        }
-                    />
-                    <CardBody>
-                        <div className="mb-3 grid grid-cols-1 gap-3 lg:grid-cols-3">
-                            <div className="lg:col-span-2">
-                                <div className="flex items-center gap-2 rounded-2xl border border-slate-100 bg-white px-3 py-2">
-                                    <Search className="h-4 w-4 text-slate-500" />
-                                    <input
-                                        className="w-full bg-transparent text-sm font-semibold text-slate-900 outline-none"
-                                        placeholder="Search lines by name / code / source / group…"
-                                        value={lineQ}
-                                        onChange={(e) => setLineQ(e.target.value)}
-                                    />
+                                <div className="mt-3 rounded-2xl bg-slate-50 px-4 py-3 text-xs text-slate-600">
+                                    <div className="font-bold text-slate-800">Rules</div>
+                                    <ul className="mt-1 list-disc pl-5">
+                                        <li>Lines editable only in DRAFT</li>
+                                        <li>After APPROVE → locked</li>
+                                        <li>Edits after approval require Edit Request / Reopen</li>
+                                        <li>AUTO lines are source-linked; edits affect billing only</li>
+                                    </ul>
                                 </div>
                             </div>
-                            <div>
-                                <Field label="Default edit reason (audit)">
-                                    <Input
-                                        value={defaultEditReason}
-                                        onChange={(e) => setDefaultEditReason(e.target.value)}
-                                        placeholder="e.g., Qty corrected / Price updated"
-                                        disabled={!canEditLines}
-                                    />
-                                </Field>
-                            </div>
-                        </div>
+                        </CardBody>
+                    </Card>
+                </div>
 
-                        {loading ? (
-                            <div className="space-y-2">
-                                {Array.from({ length: 7 }).map((_, i) => (
-                                    <div key={i} className="h-12 animate-pulse rounded-xl bg-slate-100" />
-                                ))}
-                            </div>
-                        ) : filteredLines.length === 0 ? (
-                            <EmptyState
-                                title={lines.length === 0 ? "No lines" : "No results"}
-                                desc={
-                                    lines.length === 0
-                                        ? (canEditLines ? "Add at least one line before approving." : "Invoice is locked.")
-                                        : "Try different keywords."
+                {/* Content */}
+                <div className="relative px-4 pb-5 sm:px-5">
+                    {tab === "LINES" ? (
+                        <Card className="mt-1">
+                            <CardHeader
+                                title={docMode ? "Doctor Fees Lines" : "Invoice Lines"}
+                                subtitle={
+                                    docMode
+                                        ? "Doctor & Department are stored per line. Amount is manual (No fee master)."
+                                        : `Module: ${moduleLabel} · Edit/Delete works for both MANUAL and AUTO lines in DRAFT`
+                                }
+                                right={
+                                    <Button onClick={() => setManualOpen(true)} disabled={!invoice || !canEditLines}>
+                                        <Plus className="h-4 w-4" /> Add Line
+                                    </Button>
                                 }
                             />
-                        ) : (
-                            <LinesTable
-                                columns={columns}
-                                lines={filteredLines}
-                                canEdit={canEditLines}
-                                onPatch={commitLinePatch}
-                                onAskDelete={(line) => setDeleteTarget({ line })}
-                                onAskEdit={(line) => setEditTarget({ line })}
-                                canDeleteLine={canDeleteLine}
-                                isPharmacy={isPharmacyModule(moduleCode)}
-                            />
-                        )}
-
-                        <div className="mt-4 flex items-center justify-between gap-2">
-                            <Badge tone={canEditLines ? "blue" : "slate"}>{canEditLines ? "Editable (DRAFT)" : "Locked"}</Badge>
-                            {lineQ ? (
-                                <div className="text-xs text-slate-500">
-                                    Showing <b>{filteredLines.length}</b> / {lines.length}
+                            <CardBody>
+                                <div className="mb-3 grid grid-cols-1 gap-3 lg:grid-cols-3">
+                                    <div className="lg:col-span-2">
+                                        <div className="flex items-center gap-2 rounded-2xl border border-slate-100 bg-white px-3 py-2">
+                                            <Search className="h-4 w-4 text-slate-500" />
+                                            <input
+                                                className="w-full bg-transparent text-sm font-semibold text-slate-900 outline-none"
+                                                placeholder={docMode ? "Search doctor / department / particular…" : "Search lines by name / code / source / group…"}
+                                                value={lineQ}
+                                                onChange={(e) => setLineQ(e.target.value)}
+                                            />
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <Field label="Default edit reason (audit)">
+                                            <Input
+                                                value={defaultEditReason}
+                                                onChange={(e) => setDefaultEditReason(e.target.value)}
+                                                placeholder="e.g., Qty corrected / Price updated"
+                                                disabled={!canEditLines}
+                                            />
+                                        </Field>
+                                    </div>
                                 </div>
-                            ) : null}
-                        </div>
-                    </CardBody>
-                </Card>
-            ) : tab === "PAYMENTS" ? (
-                <Card className="mt-4">
-                    <CardHeader title="Payments" subtitle="Record & view payments for this invoice" />
-                    <CardBody>
-                        {!invoice ? (
-                            <EmptyState title="Invoice not loaded" desc="Open an invoice first." />
-                        ) : (
-                            <PaymentsPanel
-                                invoice={invoice}
-                                payments={payments}
-                                paidTotal={paidTotal}
-                                dueTotal={dueTotal}
-                                onPaid={() => load()}
+
+                                {loading ? (
+                                    <div className="space-y-2">
+                                        {Array.from({ length: 7 }).map((_, i) => (
+                                            <div key={i} className="h-12 animate-pulse rounded-xl bg-slate-100" />
+                                        ))}
+                                    </div>
+                                ) : filteredLines.length === 0 ? (
+                                    <EmptyState
+                                        title={lines.length === 0 ? "No lines" : "No results"}
+                                        desc={
+                                            lines.length === 0
+                                                ? canEditLines
+                                                    ? "Add at least one line before approving."
+                                                    : "Invoice is locked."
+                                                : "Try different keywords."
+                                        }
+                                    />
+                                ) : (
+                                    <LinesTable
+                                        columns={columns}
+                                        lines={filteredLines}
+                                        canEdit={canEditLines}
+                                        onPatch={commitLinePatch}
+                                        onAskDelete={(line) => setDeleteTarget({ line })}
+                                        onAskEdit={(line) => setEditTarget({ line })}
+                                        canDeleteLine={canDeleteLine}
+                                        isPharmacy={isPharmacyModule(moduleCode)}
+                                        docMode={docMode}
+                                    />
+                                )}
+
+                                <div className="mt-4 flex items-center justify-between gap-2">
+                                    <Badge tone={canEditLines ? "blue" : "slate"}>{canEditLines ? "Editable (DRAFT)" : "Locked"}</Badge>
+                                    {lineQ ? (
+                                        <div className="text-xs text-slate-500">
+                                            Showing <b>{filteredLines.length}</b> / {lines.length}
+                                        </div>
+                                    ) : null}
+                                </div>
+                            </CardBody>
+                        </Card>
+                    ) : tab === "PAYMENTS" ? (
+                        <Card className="mt-1">
+                            <CardHeader title="Payments" subtitle="Record & view payments for this invoice" />
+                            <CardBody>
+                                {!invoice ? (
+                                    <EmptyState title="Invoice not loaded" desc="Open an invoice first." />
+                                ) : (
+                                    <PaymentsPanel
+                                        invoice={invoice}
+                                        payments={payments}
+                                        paidTotal={paidTotal}
+                                        dueTotal={dueTotal}
+                                        onPaid={() => load()}
+                                    />
+                                )}
+                            </CardBody>
+                        </Card>
+                    ) : (
+                        <Card className="mt-1">
+                            <CardHeader
+                                title="Audit Logs"
+                                subtitle="Every action is traceable (NABH friendly)"
+                                right={
+                                    <Button variant="outline" onClick={loadAudit} disabled={auditLoading}>
+                                        <RefreshCcw className={cn("h-4 w-4", auditLoading ? "animate-spin" : "")} /> Refresh
+                                    </Button>
+                                }
                             />
-                        )}
-                    </CardBody>
-                </Card>
-            ) : (
-                <Card className="mt-4">
-                    <CardHeader
-                        title="Audit Logs"
-                        subtitle="Every action is traceable (NABH friendly)"
-                        right={
-                            <Button variant="outline" onClick={loadAudit} disabled={auditLoading}>
-                                <RefreshCcw className={cn("h-4 w-4", auditLoading ? "animate-spin" : "")} /> Refresh
-                            </Button>
-                        }
+                            <CardBody>
+                                <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+                                    <div className="flex items-center gap-2 rounded-2xl border border-slate-100 bg-white px-3 py-2">
+                                        <Search className="h-4 w-4 text-slate-500" />
+                                        <input
+                                            className="w-full bg-transparent text-sm font-semibold text-slate-900 outline-none"
+                                            placeholder="Search audit by action / user / reason / entity…"
+                                            value={auditQ}
+                                            onChange={(e) => setAuditQ(e.target.value)}
+                                        />
+                                    </div>
+                                    <div className="text-xs text-slate-500">{filteredAudit.length} record(s)</div>
+                                </div>
+
+                                {auditLoading ? (
+                                    <div className="space-y-2">
+                                        {Array.from({ length: 6 }).map((_, i) => (
+                                            <div key={i} className="h-12 animate-pulse rounded-xl bg-slate-100" />
+                                        ))}
+                                    </div>
+                                ) : filteredAudit.length === 0 ? (
+                                    <EmptyState title="No audit logs" desc="Actions will appear here when edits/approvals happen." />
+                                ) : (
+                                    <div className="overflow-x-auto">
+                                        <table className="w-full min-w-[1100px] text-left text-sm">
+                                            <thead className="text-xs font-bold text-slate-600">
+                                                <tr className="border-b border-slate-100">
+                                                    <th className="py-3 pr-4">Time</th>
+                                                    <th className="py-3 pr-4">User</th>
+                                                    <th className="py-3 pr-4">Action</th>
+                                                    <th className="py-3 pr-4">Entity</th>
+                                                    <th className="py-3 pr-0">Reason</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {filteredAudit.map((a) => {
+                                                    const open = expandedAuditId === a.id
+                                                    return (
+                                                        <>
+                                                            <tr key={a.id} className="border-b border-slate-50 hover:bg-slate-50/60">
+                                                                <td className="py-3 pr-4 font-semibold text-slate-800">{a.created_at || "—"}</td>
+                                                                <td className="py-3 pr-4 font-semibold text-slate-800">{a.user_label || "—"}</td>
+                                                                <td className="py-3 pr-4">
+                                                                    <Badge tone="slate">{a.action}</Badge>
+                                                                </td>
+                                                                <td className="py-3 pr-4 text-slate-700">
+                                                                    {a.entity_type} · {a.entity_id}
+                                                                </td>
+                                                                <td className="py-3 pr-0">
+                                                                    <div className="flex items-start justify-between gap-2">
+                                                                        <div className="text-slate-800">{a.reason || "—"}</div>
+                                                                        <button
+                                                                            className="inline-flex items-center gap-1 rounded-xl border border-slate-100 bg-white px-3 py-1 text-xs font-extrabold text-slate-700 hover:bg-slate-50"
+                                                                            onClick={() => setExpandedAuditId(open ? null : a.id)}
+                                                                        >
+                                                                            {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                                                                            Details
+                                                                        </button>
+                                                                    </div>
+                                                                </td>
+                                                            </tr>
+
+                                                            {open ? (
+                                                                <tr className="border-b border-slate-50 bg-slate-50/40">
+                                                                    <td colSpan={5} className="py-3">
+                                                                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                                                                            <div className="rounded-2xl border border-slate-100 bg-white p-3">
+                                                                                <div className="text-xs font-extrabold text-slate-700">Old</div>
+                                                                                <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded-xl bg-slate-50 p-3 text-xs text-slate-800">
+                                                                                    {JSON.stringify(a.old_json ?? {}, null, 2)}
+                                                                                </pre>
+                                                                            </div>
+                                                                            <div className="rounded-2xl border border-slate-100 bg-white p-3">
+                                                                                <div className="text-xs font-extrabold text-slate-700">New</div>
+                                                                                <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded-xl bg-slate-50 p-3 text-xs text-slate-800">
+                                                                                    {JSON.stringify(a.new_json ?? {}, null, 2)}
+                                                                                </pre>
+                                                                            </div>
+                                                                        </div>
+                                                                    </td>
+                                                                </tr>
+                                                            ) : null}
+                                                        </>
+                                                    )
+                                                })}
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                )}
+                            </CardBody>
+                        </Card>
+                    )}
+                </div>
+
+                {/* Dialogs */}
+                {manualOpen && (
+                    <ManualLineDialog
+                        invoice={invoice}
+                        moduleCode={moduleCode}
+                        onClose={() => setManualOpen(false)}
+                        onDone={() => {
+                            setManualOpen(false)
+                            load()
+                        }}
                     />
-                    <CardBody>
-                        <div className="mb-3 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                            <div className="flex items-center gap-2 rounded-2xl border border-slate-100 bg-white px-3 py-2">
-                                <Search className="h-4 w-4 text-slate-500" />
-                                <input
-                                    className="w-full bg-transparent text-sm font-semibold text-slate-900 outline-none"
-                                    placeholder="Search audit by action / user / reason / entity…"
-                                    value={auditQ}
-                                    onChange={(e) => setAuditQ(e.target.value)}
-                                />
-                            </div>
-                            <div className="text-xs text-slate-500">
-                                {filteredAudit.length} record(s)
-                            </div>
-                        </div>
+                )}
 
-                        {auditLoading ? (
-                            <div className="space-y-2">
-                                {Array.from({ length: 6 }).map((_, i) => (
-                                    <div key={i} className="h-12 animate-pulse rounded-xl bg-slate-100" />
-                                ))}
-                            </div>
-                        ) : filteredAudit.length === 0 ? (
-                            <EmptyState title="No audit logs" desc="Actions will appear here when edits/approvals happen." />
-                        ) : (
-                            <div className="overflow-x-auto">
-                                <table className="w-full min-w-[1100px] text-left text-sm">
-                                    <thead className="text-xs font-bold text-slate-600">
-                                        <tr className="border-b border-slate-100">
-                                            <th className="py-3 pr-4">Time</th>
-                                            <th className="py-3 pr-4">User</th>
-                                            <th className="py-3 pr-4">Action</th>
-                                            <th className="py-3 pr-4">Entity</th>
-                                            <th className="py-3 pr-0">Reason</th>
-                                        </tr>
-                                    </thead>
-                                    <tbody>
-                                        {filteredAudit.map((a) => {
-                                            const open = expandedAuditId === a.id
-                                            return (
-                                                <>
-                                                    <tr key={a.id} className="border-b border-slate-50 hover:bg-slate-50/60">
-                                                        <td className="py-3 pr-4 font-semibold text-slate-800">{a.created_at || "—"}</td>
-                                                        <td className="py-3 pr-4 font-semibold text-slate-800">{a.user_label || "—"}</td>
-                                                        <td className="py-3 pr-4">
-                                                            <Badge tone="slate">{a.action}</Badge>
-                                                        </td>
-                                                        <td className="py-3 pr-4 text-slate-700">
-                                                            {a.entity_type} · {a.entity_id}
-                                                        </td>
-                                                        <td className="py-3 pr-0">
-                                                            <div className="flex items-start justify-between gap-2">
-                                                                <div className="text-slate-800">{a.reason || "—"}</div>
-                                                                <button
-                                                                    className="inline-flex items-center gap-1 rounded-xl border border-slate-100 bg-white px-3 py-1 text-xs font-extrabold text-slate-700 hover:bg-slate-50"
-                                                                    onClick={() => setExpandedAuditId(open ? null : a.id)}
-                                                                >
-                                                                    {open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-                                                                    Details
-                                                                </button>
-                                                            </div>
-                                                        </td>
-                                                    </tr>
+                {voidOpen && <VoidDialog onClose={() => setVoidOpen(false)} onConfirm={onVoid} />}
 
-                                                    {open ? (
-                                                        <tr className="border-b border-slate-50 bg-slate-50/40">
-                                                            <td colSpan={5} className="py-3">
-                                                                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                                                                    <div className="rounded-2xl border border-slate-100 bg-white p-3">
-                                                                        <div className="text-xs font-extrabold text-slate-700">Old</div>
-                                                                        <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded-xl bg-slate-50 p-3 text-xs text-slate-800">
-                                                                            {JSON.stringify(a.old_json ?? {}, null, 2)}
-                                                                        </pre>
-                                                                    </div>
-                                                                    <div className="rounded-2xl border border-slate-100 bg-white p-3">
-                                                                        <div className="text-xs font-extrabold text-slate-700">New</div>
-                                                                        <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded-xl bg-slate-50 p-3 text-xs text-slate-800">
-                                                                            {JSON.stringify(a.new_json ?? {}, null, 2)}
-                                                                        </pre>
-                                                                    </div>
-                                                                </div>
-                                                            </td>
-                                                        </tr>
-                                                    ) : null}
-                                                </>
-                                            )
-                                        })}
-                                    </tbody>
-                                </table>
-                            </div>
-                        )}
-                    </CardBody>
-                </Card>
-            )}
+                {editReqOpen && (
+                    <ReasonDialog
+                        title="Request Edit (Admin Approval)"
+                        desc="Send an edit request to admin. Audit is mandatory for any approved invoice edits."
+                        confirmText="Send Request"
+                        onClose={() => setEditReqOpen(false)}
+                        onConfirm={doRequestEdit}
+                    />
+                )}
 
-            {/* Dialogs */}
-            {manualOpen && (
-                <ManualLineDialog
-                    invoice={invoice}
-                    moduleCode={moduleCode}
-                    onClose={() => setManualOpen(false)}
-                    onDone={() => {
-                        setManualOpen(false)
-                        load()
-                    }}
-                />
-            )}
+                {reopenOpen && (
+                    <ReasonDialog
+                        title="Reopen Invoice to DRAFT"
+                        desc="This will move the invoice back to DRAFT so you can edit lines again. Audit is mandatory."
+                        confirmText="Reopen Now"
+                        tone="danger"
+                        onClose={() => setReopenOpen(false)}
+                        onConfirm={doReopen}
+                    />
+                )}
 
-            {voidOpen && <VoidDialog onClose={() => setVoidOpen(false)} onConfirm={onVoid} />}
+                {deleteTarget?.line ? (
+                    <DeleteLineDialog
+                        line={deleteTarget.line}
+                        onClose={() => setDeleteTarget(null)}
+                        onConfirm={(reason) => {
+                            deleteLine(deleteTarget.line.id, reason)
+                            setDeleteTarget(null)
+                        }}
+                    />
+                ) : null}
 
-            {editReqOpen && (
-                <ReasonDialog
-                    title="Request Edit (Admin Approval)"
-                    desc="Send an edit request to admin. Audit is mandatory for any approved invoice edits."
-                    confirmText="Send Request"
-                    onClose={() => setEditReqOpen(false)}
-                    onConfirm={doRequestEdit}
-                />
-            )}
-
-            {reopenOpen && (
-                <ReasonDialog
-                    title="Reopen Invoice to DRAFT"
-                    desc="This will move the invoice back to DRAFT so you can edit lines again. Audit is mandatory."
-                    confirmText="Reopen Now"
-                    tone="danger"
-                    onClose={() => setReopenOpen(false)}
-                    onConfirm={doReopen}
-                />
-            )}
-
-            {deleteTarget?.line ? (
-                <DeleteLineDialog
-                    line={deleteTarget.line}
-                    onClose={() => setDeleteTarget(null)}
-                    onConfirm={(reason) => {
-                        deleteLine(deleteTarget.line.id, reason)
-                        setDeleteTarget(null)
-                    }}
-                />
-            ) : null}
-
-            {editTarget?.line ? (
-                <EditLineDialog
-                    line={editTarget.line}
-                    onClose={() => setEditTarget(null)}
-                    onConfirm={(patch, reason) => {
-                        updateLineWithReason(editTarget.line.id, patch, reason)
-                        setEditTarget(null)
-                    }}
-                />
-            ) : null}
+                {editTarget?.line ? (
+                    <EditLineDialog
+                        line={editTarget.line}
+                        onClose={() => setEditTarget(null)}
+                        onConfirm={(patch, reason) => {
+                            updateLineWithReason(editTarget.line.id, patch, reason)
+                            setEditTarget(null)
+                        }}
+                    />
+                ) : null}
+            </div>
         </div>
     )
 }
@@ -826,6 +943,9 @@ function getNested(obj, path) {
 function fmtCell(key, v) {
     if (v == null) return "—"
     const k = String(key || "")
+
+    if (k === "service_date") return fmtDate(v)
+
     if (k.includes("amount") || k === "unit_price" || k === "line_total" || k === "net_amount") {
         return `₹ ${money(v)}`
     }
@@ -833,18 +953,8 @@ function fmtCell(key, v) {
     return String(v)
 }
 
-function LinesTable({ columns, lines, canEdit, onPatch, onAskDelete, onAskEdit, canDeleteLine, isPharmacy }) {
-    const cols = columns || [
-        { key: "service_date", label: "Date" },
-        { key: "item_code", label: "Code" },
-        { key: "description", label: "Item Name" },
-        { key: "qty", label: "Qty" },
-        { key: "unit_price", label: "Unit Price" },
-        { key: "discount_amount", label: "Discount" },
-        { key: "gst_rate", label: "GST %" },
-        { key: "tax_amount", label: "Tax" },
-        { key: "net_amount", label: "Total" },
-    ]
+function LinesTable({ columns, lines, canEdit, onPatch, onAskDelete, onAskEdit, canDeleteLine, isPharmacy, docMode }) {
+    const cols = columns || (docMode ? FALLBACK_DOC_COLS : FALLBACK_DEFAULT_COLS)
 
     return (
         <div className="overflow-x-auto">
@@ -1109,12 +1219,13 @@ function PaymentsPanel({ invoice, payments, paidTotal, dueTotal, onPaid }) {
 }
 
 /* ----------------------------
-   Manual Line Dialog
+   Manual Line Dialog (DOC enhanced)
 ----------------------------- */
 function ManualLineDialog({ invoice, moduleCode, onClose, onDone }) {
     const [saving, setSaving] = useState(false)
     const lockedGroup = MODULE_TO_GROUP[moduleCode] || "MISC"
     const pharmacy = isPharmacyModule(moduleCode)
+    const docMode = isDocModule(moduleCode)
 
     const [form, setForm] = useState({
         description: "",
@@ -1123,8 +1234,16 @@ function ManualLineDialog({ invoice, moduleCode, onClose, onDone }) {
         gst_rate: 0,
         discount_percent: 0,
         discount_amount: 0,
+
+        // ✅ DOC fields (NO fee master)
+        doctor_name: "",
+        department_name: "",
         doctor_id: "",
+        department_id: "",
+
+        // ✅ optional service date
         service_date: "",
+
         meta_json: pharmacy
             ? {
                 batch_id: "",
@@ -1134,6 +1253,7 @@ function ManualLineDialog({ invoice, moduleCode, onClose, onDone }) {
                 sgst_pct: "",
             }
             : null,
+
         manual_reason: "Manual entry",
         showAdvanced: false,
     })
@@ -1145,6 +1265,11 @@ function ManualLineDialog({ invoice, moduleCode, onClose, onDone }) {
         if (!form.description?.trim()) return toast.error("Enter item name/description")
         if (String(form.manual_reason || "").trim().length < 3) return toast.error("Manual reason is mandatory")
 
+        if (docMode) {
+            if (!String(form.department_name || "").trim()) return toast.error("Department is required for DOC lines")
+            if (!String(form.doctor_name || "").trim()) return toast.error("Doctor is required for DOC lines")
+        }
+
         setSaving(true)
         try {
             const payload = {
@@ -1155,7 +1280,13 @@ function ManualLineDialog({ invoice, moduleCode, onClose, onDone }) {
                 gst_rate: Number(form.gst_rate || 0),
                 discount_percent: Number(form.discount_percent || 0),
                 discount_amount: Number(form.discount_amount || 0),
-                doctor_id: moduleCode === "DOC" && form.doctor_id ? Number(form.doctor_id) : undefined,
+
+                // ✅ no fee master; just store identifiers/names if given
+                doctor_id: docMode && form.doctor_id ? Number(form.doctor_id) : undefined,
+                doctor_name: docMode ? String(form.doctor_name || "").trim() || undefined : undefined,
+                department_id: docMode && form.department_id ? Number(form.department_id) : undefined,
+                department_name: docMode ? String(form.department_name || "").trim() || undefined : undefined,
+
                 manual_reason: form.manual_reason || "Manual entry",
                 service_date: form.service_date ? new Date(form.service_date).toISOString() : undefined,
                 meta_json: pharmacy ? cleanMeta(form.meta_json) : undefined,
@@ -1173,7 +1304,7 @@ function ManualLineDialog({ invoice, moduleCode, onClose, onDone }) {
 
     return (
         <Modal
-            title={`Add Line · ${invoice?.module_label || moduleCode}`}
+            title={`Add Line · ${invoice?.module_label || prettyModuleLabel(moduleCode, moduleCode)}`}
             onClose={onClose}
             right={
                 <Button onClick={submit} disabled={saving}>
@@ -1191,21 +1322,103 @@ function ManualLineDialog({ invoice, moduleCode, onClose, onDone }) {
                 </div>
             </div>
 
+            {docMode ? (
+                <div className="mb-3 rounded-2xl border border-slate-100 bg-white p-4">
+                    <div className="flex items-center gap-2 text-sm font-extrabold text-slate-900">
+                        <Stethoscope className="h-4 w-4 text-slate-500" />
+                        Doctor Fees Details (No Fee Master)
+                    </div>
+                    <div className="mt-1 text-xs text-slate-500">
+                        Enter Doctor & Department manually. Amount is always manual (your choice).
+                    </div>
+
+                    <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+                        <Field label="Department Name">
+                            <div className="relative">
+                                <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                                    <Building2 className="h-4 w-4" />
+                                </div>
+                                <Input
+                                    className="pl-10"
+                                    value={form.department_name}
+                                    onChange={(e) => setForm({ ...form, department_name: e.target.value })}
+                                    placeholder="e.g., Cardiology"
+                                />
+                            </div>
+                        </Field>
+
+                        <Field label="Doctor Name">
+                            <div className="relative">
+                                <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                                    <UserRound className="h-4 w-4" />
+                                </div>
+                                <Input
+                                    className="pl-10"
+                                    value={form.doctor_name}
+                                    onChange={(e) => setForm({ ...form, doctor_name: e.target.value })}
+                                    placeholder="e.g., Dr. Arun Kumar"
+                                />
+                            </div>
+                        </Field>
+
+                        <div className="md:col-span-2">
+                            <Field label="Service Date (optional)">
+                                <Input
+                                    type="date"
+                                    value={form.service_date}
+                                    onChange={(e) => setForm({ ...form, service_date: e.target.value })}
+                                />
+                            </Field>
+                        </div>
+
+                        <div className="md:col-span-2">
+                            <button
+                                type="button"
+                                className="text-xs font-extrabold text-slate-700 underline underline-offset-4 hover:text-slate-900"
+                                onClick={() => setForm((p) => ({ ...p, showAdvanced: !p.showAdvanced }))}
+                            >
+                                {form.showAdvanced ? "Hide advanced IDs" : "Show advanced IDs (optional)"}
+                            </button>
+                        </div>
+
+                        {form.showAdvanced ? (
+                            <>
+                                <Field label="Doctor ID (optional)">
+                                    <Input
+                                        value={form.doctor_id}
+                                        onChange={(e) => setForm({ ...form, doctor_id: e.target.value })}
+                                        placeholder="Numeric doctor_user_id"
+                                    />
+                                </Field>
+
+                                <Field label="Department ID (optional)">
+                                    <Input
+                                        value={form.department_id}
+                                        onChange={(e) => setForm({ ...form, department_id: e.target.value })}
+                                        placeholder="Numeric department_id"
+                                    />
+                                </Field>
+                            </>
+                        ) : null}
+                    </div>
+                </div>
+            ) : null}
+
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <Field label="Qty">
                     <Input value={form.qty} onChange={(e) => setForm({ ...form, qty: e.target.value })} />
                 </Field>
 
-                <Field label="Unit Price (₹)">
+                <Field label={docMode ? "Amount (₹)" : "Unit Price (₹)"}>
                     <Input value={form.unit_price} onChange={(e) => setForm({ ...form, unit_price: e.target.value })} />
                 </Field>
 
                 <div className="md:col-span-2">
-                    <Field label="Description">
+                    <Field label={docMode ? "Particular" : "Description"}>
                         <Input
                             value={form.description}
                             onChange={(e) => setForm({ ...form, description: e.target.value })}
-                            placeholder="e.g., Consultation fee / Room charge / Procedure"
+                            placeholder={docMode ? "e.g., Consultation fee" : "e.g., Room charge / Procedure"}
                         />
                     </Field>
                 </div>
@@ -1226,13 +1439,17 @@ function ManualLineDialog({ invoice, moduleCode, onClose, onDone }) {
                                 <Field label="Batch">
                                     <Input
                                         value={form.meta_json?.batch_id || ""}
-                                        onChange={(e) => setForm({ ...form, meta_json: { ...form.meta_json, batch_id: e.target.value } })}
+                                        onChange={(e) =>
+                                            setForm({ ...form, meta_json: { ...form.meta_json, batch_id: e.target.value } })
+                                        }
                                     />
                                 </Field>
                                 <Field label="Expiry (YYYY-MM-DD)">
                                     <Input
                                         value={form.meta_json?.expiry_date || ""}
-                                        onChange={(e) => setForm({ ...form, meta_json: { ...form.meta_json, expiry_date: e.target.value } })}
+                                        onChange={(e) =>
+                                            setForm({ ...form, meta_json: { ...form.meta_json, expiry_date: e.target.value } })
+                                        }
                                     />
                                 </Field>
                             </div>
@@ -1288,10 +1505,12 @@ function DeleteLineDialog({ line, onClose, onConfirm }) {
                 </Button>
             }
         >
-            <div className={cn(
-                "rounded-2xl px-4 py-3 text-sm",
-                autoLinked ? "border border-amber-100 bg-amber-50 text-amber-900" : "border border-rose-100 bg-rose-50 text-rose-800"
-            )}>
+            <div
+                className={cn(
+                    "rounded-2xl px-4 py-3 text-sm",
+                    autoLinked ? "border border-amber-100 bg-amber-50 text-amber-900" : "border border-rose-100 bg-rose-50 text-rose-800"
+                )}
+            >
                 {autoLinked ? (
                     <>
                         This is an <b>AUTO</b> line linked to <b>{line.source_module}</b>. Removing it will affect <b>billing only</b>.
@@ -1464,9 +1683,7 @@ function Row({ label, value, strong }) {
     return (
         <div className="flex items-center justify-between">
             <div className={cn("text-xs", strong ? "font-bold text-slate-700" : "text-slate-500")}>{label}</div>
-            <div className={cn("text-sm", strong ? "font-extrabold text-slate-900" : "font-bold text-slate-800")}>
-                {value}
-            </div>
+            <div className={cn("text-sm", strong ? "font-extrabold text-slate-900" : "font-bold text-slate-800")}>{value}</div>
         </div>
     )
 }
@@ -1510,12 +1727,14 @@ function ReasonDialog({ title, desc, confirmText, tone, onClose, onConfirm }) {
                 </Button>
             }
         >
-            <div className={cn(
-                "rounded-2xl px-4 py-3 text-sm",
-                tone === "danger"
-                    ? "border border-rose-100 bg-rose-50 text-rose-800"
-                    : "border border-slate-100 bg-slate-50 text-slate-700"
-            )}>
+            <div
+                className={cn(
+                    "rounded-2xl px-4 py-3 text-sm",
+                    tone === "danger"
+                        ? "border border-rose-100 bg-rose-50 text-rose-800"
+                        : "border border-slate-100 bg-slate-50 text-slate-700"
+                )}
+            >
                 {desc}
             </div>
             <div className="mt-3">
