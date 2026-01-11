@@ -108,6 +108,8 @@ import BillingAddItem from "./billing/BillingAddItem";
 import ChargeMaster from "./billing/ChargeMaster";
 import InventoryCommonStockPage from "./pages/inventory/InventoryCommonStockPage";
 import WardPatientUsagePage from "./pages/inventory/WardPatientUsagePage";
+import InventoryIndentsPage from "./pages/inventory/InventoryIndentsPage";
+import InventoryIssuesPage from "./pages/inventory/InventoryIssuesPage";
 
 
 export default function App() {
