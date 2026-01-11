@@ -1,5 +1,5 @@
 // FILE: src/pages/PharmacyRx.jsx
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { toast } from "sonner"
 
@@ -9,9 +9,15 @@ import {
   getPharmacyPrescription,
 } from "../api/pharmacyRx"
 
-import { listPatients, getPatientById } from "../api/patients"
+import { getPatientById } from "../api/patients"
 import { getDoctorlist } from "../api/billing"
 import { searchItemBatches } from "../api/inventory"
+
+// ✅ your new billing patient APIs
+import {
+  billingSearchPatients,
+  billingListPatientEncounters,
+} from "../api/billings"
 
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -47,7 +53,40 @@ import {
   BadgeCheck,
   IdCard,
   MapPin,
+  Barcode,
+  Wand2,
 } from "lucide-react"
+
+/* ----------------------------- constants ----------------------------- */
+
+const MANUAL_TYPES = ["OP", "IP", "OT", "COUNTER"]
+
+const RX_TYPES = [
+  { value: "OP", label: "OPD" },
+  { value: "IP", label: "IPD" },
+  { value: "OT", label: "OT" },
+  { value: "COUNTER", label: "Counter" },
+]
+
+const PRIORITIES = [
+  { value: "ROUTINE", label: "Routine" },
+  { value: "STAT", label: "STAT / Urgent" },
+  { value: "PRN", label: "PRN / As needed" },
+]
+
+// Simple presets (recommended for “quick add”)
+const SIMPLE_FREQ_PRESETS = [
+  { label: "OD", value: "OD" },
+  { label: "BD", value: "BD" },
+  { label: "TID", value: "TID" },
+  { label: "QID", value: "QID" },
+  { label: "HS", value: "HS" },
+  { label: "1-0-1-0", value: "1-0-1-0" },
+  { label: "1-0-1-1", value: "1-0-1-1" },
+  { label: "1-1-1-1", value: "1-1-1-1" },
+]
+
+const ROUTE_PRESETS = ["PO", "IV", "IM", "SC", "PR", "INH", "TOP"]
 
 /* ----------------------------- helpers ----------------------------- */
 
@@ -58,6 +97,10 @@ function todayDateTimeLocal() {
   return local.toISOString().slice(0, 16)
 }
 
+function safeStr(x) {
+  return (x ?? "").toString()
+}
+
 function fmtDT(x) {
   if (!x) return "—"
   try {
@@ -66,10 +109,6 @@ function fmtDT(x) {
   } catch {
     return "—"
   }
-}
-
-function safeStr(x) {
-  return (x ?? "").toString()
 }
 
 function fmtDateShort(x) {
@@ -125,11 +164,10 @@ function useOnClickOutside(ref, handler) {
   }, [ref, handler])
 }
 
-const normalizeFreq = (v = "") =>
-  String(v || "")
-    .trim()
-    .toUpperCase()
-    .replace(/\s+/g, "")
+function toInt(v) {
+  const n = Number(v)
+  return Number.isFinite(n) ? Math.trunc(n) : null
+}
 
 function pick(obj, keys, fallback = "") {
   for (const k of keys) {
@@ -139,13 +177,34 @@ function pick(obj, keys, fallback = "") {
   return fallback
 }
 
+/* -------------------- type normalize (OPD/IPD <-> OP/IP) -------------------- */
+
+function fromBackendType(t) {
+  const x = safeStr(t).toUpperCase()
+  if (x === "OPD") return "OP"
+  if (x === "IPD") return "IP"
+  return x
+}
+
+function toBackendType(t) {
+  const x = safeStr(t).toUpperCase()
+  if (x === "OP") return "OPD"
+  if (x === "IP") return "IPD"
+  return x
+}
+
+/* --------------------------- dosage auto-qty --------------------------- */
+
+const normalizeFreq = (v = "") =>
+  String(v || "")
+    .trim()
+    .toUpperCase()
+    .replace(/\s+/g, "")
+
 const parseFrequencyToPerDay = (freq = "") => {
   const f = normalizeFreq(freq)
-  // allow 2..4 segments: 1-0-1 or 1-0-1-0
   if (/^\d+(?:-\d+){1,3}$/.test(f)) {
-    return f
-      .split("-")
-      .reduce((sum, x) => sum + (Number(x) || 0), 0)
+    return f.split("-").reduce((sum, x) => sum + (Number(x) || 0), 0)
   }
   if (["OD", "QD", "ONCE", "HS", "QHS"].includes(f)) return 1
   if (["BD", "BID"].includes(f)) return 2
@@ -162,10 +221,10 @@ const parseDoseMultiplier = (dose = "") => {
 
 const SLOT_KEYS = ["M", "A", "E", "N"]
 const SLOT_META = {
-  M: { label: "Morning" },
-  A: { label: "Afternoon" },
-  E: { label: "Evening" },
-  N: { label: "Night" },
+  M: { label: "M" },
+  A: { label: "A" },
+  E: { label: "E" },
+  N: { label: "N" },
 }
 
 function emptySlots() {
@@ -189,20 +248,10 @@ function frequencyToSlots(freq) {
 
   const preset = {
     OD: { M: 1, A: 0, E: 0, N: 0 },
-    QD: { M: 1, A: 0, E: 0, N: 0 },
-    ONCE: { M: 1, A: 0, E: 0, N: 0 },
-
     BD: { M: 1, A: 0, E: 0, N: 1 },
-    BID: { M: 1, A: 0, E: 0, N: 1 },
-
     TID: { M: 1, A: 1, E: 1, N: 0 },
-    TDS: { M: 1, A: 1, E: 1, N: 0 },
-
     QID: { M: 1, A: 1, E: 1, N: 1 },
-    QDS: { M: 1, A: 1, E: 1, N: 1 },
-
     HS: { M: 0, A: 0, E: 0, N: 1 },
-    QHS: { M: 0, A: 0, E: 0, N: 1 },
   }
 
   if (preset[f]) return { ...s, ...preset[f] }
@@ -228,14 +277,8 @@ const calcAutoQty = (line) => {
   const days = Number(line?.duration_days || 0)
   if (!Number.isFinite(days) || days <= 0) return ""
 
-  const slots = line?.dose_slots
-  const perDayFromSlot = slots ? perDayFromSlots(slots) : 0
-
-  const perDay =
-    perDayFromSlot > 0
-      ? perDayFromSlot
-      : parseFrequencyToPerDay(line?.frequency || "")
-
+  const perDayFromSlot = line?.dose_slots ? perDayFromSlots(line.dose_slots) : 0
+  const perDay = perDayFromSlot > 0 ? perDayFromSlot : parseFrequencyToPerDay(line?.frequency || "")
   if (!perDay) return ""
 
   const doseMul = parseDoseMultiplier(line?.dose || "")
@@ -251,10 +294,7 @@ function applyAuto(line) {
   return next
 }
 
-function toInt(v) {
-  const n = Number(v)
-  return Number.isFinite(n) ? Math.trunc(n) : null
-}
+/* --------------------------- patient helpers --------------------------- */
 
 function getPatientDisplay(p) {
   if (!p) return "—"
@@ -281,101 +321,66 @@ function getPatientAgeGender(p) {
   return [a ? `${a}y` : "", g].filter(Boolean).join(" • ")
 }
 
-function normalizeLine(l) {
-  const itemName = pick(l, ["item_name", "medicine_name", "name", "itemName"], "")
-  const strength = pick(l, ["strength", "item_strength", "itemStrength"], "")
-  const dose = pick(l, ["dose", "dosage", "dose_text", "doseText"], "")
+/* --------------------------- encounters helpers --------------------------- */
 
-  const frequency = pick(
-    l,
-    ["frequency", "frequency_code", "freq", "dosage_frequency", "frequency_text", "freq_code"],
-    ""
-  )
+function normalizeEncounterItems(data, type) {
+  if (!data) return []
+  if (Array.isArray(data)) return data
 
-  const duration_days = pick(l, ["duration_days", "days", "duration", "duration_day"], "")
-  const route = pick(l, ["route", "route_code", "administration_route"], "")
-  const instructions = pick(l, ["instructions", "sig", "remarks", "instruction"], "")
-  const qty = pick(l, ["total_qty", "requested_qty", "qty", "quantity"], "")
+  if (Array.isArray(data.items)) return data.items
+  if (Array.isArray(data.rows)) return data.rows
+  if (Array.isArray(data.results)) return data.results
+  if (Array.isArray(data.encounters)) return data.encounters
 
-  return {
-    itemName,
-    strength,
-    dose,
-    frequency,
-    duration_days,
-    route,
-    instructions,
-    qty,
-    dispensed_qty: pick(l, ["dispensed_qty", "dispensedQty"], ""),
-    remaining_qty: pick(l, ["remaining_qty", "remainingQty"], ""),
-  }
+  // sometimes keyed by type
+  const t = safeStr(type).toUpperCase()
+  if (t === "OP" && Array.isArray(data.op)) return data.op
+  if (t === "IP" && Array.isArray(data.ip)) return data.ip
+  if (t === "OT" && Array.isArray(data.ot)) return data.ot
+
+  return []
 }
 
-/* ------------------------------ constants ------------------------------ */
+function getEncounterId(e) {
+  return (
+    e?.encounter_id ||
+    e?.id ||
+    e?.visit_id ||
+    e?.admission_id ||
+    e?.ot_case_id ||
+    null
+  )
+}
 
-const RX_TYPES = [
-  { value: "OPD", label: "OPD" },
-  { value: "IPD", label: "IPD" },
-  { value: "OT", label: "OT" },
-  { value: "COUNTER", label: "Counter" },
-]
+function getEncounterLabel(e, type) {
+  const t = safeStr(type).toUpperCase()
+  if (!e) return "—"
 
-const PRIORITIES = [
-  { value: "ROUTINE", label: "Routine" },
-  { value: "STAT", label: "STAT / Urgent" },
-  { value: "PRN", label: "PRN / As needed" },
-]
+  if (t === "OP") {
+    const no = pick(e, ["visit_no", "visitNo", "opd_no", "opdNo"], "")
+    const dt = pick(e, ["visit_date", "date", "created_at", "start_at"], "")
+    const dept = pick(e, ["department_name", "department", "dept"], "")
+    return [no || `Visit #${getEncounterId(e)}`, dt ? fmtDT(dt) : "", dept].filter(Boolean).join(" • ")
+  }
 
-const FREQ_PRESETS = [
-  { label: "OD", value: "OD" },
-  { label: "BD", value: "BD" },
-  { label: "TID", value: "TID" },
-  { label: "QID", value: "QID" },
-  { label: "1-0-0-0", value: "1-0-0-0" },
-  { label: "1-0-0-1", value: "1-0-0-1" },
-  { label: "1-1-0-1", value: "1-1-0-1" },
-  { label: "1-1-1-1", value: "1-1-1-1" },
-  { label: "0-0-0-1", value: "0-0-0-1" },
-  { label: "0-1-0-0", value: "0-1-0-0" },
-]
+  if (t === "IP") {
+    const no = pick(e, ["admission_no", "admissionNo", "ipd_no", "ipdNo"], "")
+    const ward = pick(e, ["ward_name", "ward", "room"], "")
+    const dt = pick(e, ["admitted_at", "date", "created_at", "start_at"], "")
+    return [no || `Admission #${getEncounterId(e)}`, ward, dt ? fmtDT(dt) : ""].filter(Boolean).join(" • ")
+  }
 
-const ROUTE_PRESETS = ["PO", "IV", "IM", "SC", "PR", "INH", "TOP"]
+  if (t === "OT") {
+    const no = pick(e, ["case_no", "caseNo", "ot_case_no", "otCaseNo"], "")
+    const proc = pick(e, ["procedure_name", "procedure", "surgery"], "")
+    const dt = pick(e, ["scheduled_at", "date", "created_at", "start_at"], "")
+    return [no || `OT Case #${getEncounterId(e)}`, proc, dt ? fmtDT(dt) : ""].filter(Boolean).join(" • ")
+  }
 
-const makeEmptyHeader = () => ({
-  type: "OPD",
-  priority: "ROUTINE",
-  datetime: todayDateTimeLocal(),
-  patient: null,
-  doctorId: "",
-  visitNo: "",
-  admissionNo: "",
-  otCaseNo: "",
-  notes: "",
-})
+  return String(getEncounterId(e) || "—")
+}
 
-const makeEmptyLine = () => ({
-  item: null,
-  item_id: null,
-  item_name: "",
-  strength: "",
-  route: "PO",
-  dose_slots: { M: 0, A: 0, E: 0, N: 0 },
-  frequency: "",
-  duration_days: "",
-  total_qty: "",
-  requested_qty: "",
-  dose: "",
-  instructions: "",
-  is_prn: false,
-  is_stat: false,
-
-  batch_id: null,
-  batch_no: "",
-  expiry_date: null,
-  available_qty: "",
-})
-
-/* ------------------------------ UI helpers ------------------------------ */
+/* --------------------------- UI blocks --------------------------- */
 
 function GlassCard({ className = "", children }) {
   return (
@@ -525,7 +530,94 @@ function unwrapList(res) {
   return []
 }
 
+/* --------------------------- barcode scanner hook --------------------------- */
+/**
+ * Barcode scanners usually "type" very fast then press Enter.
+ * This hook collects keys; when Enter happens, it emits the buffer.
+ */
+function useBarcodeScanner({ enabled, onScan }) {
+  const bufRef = useRef("")
+  const lastTsRef = useRef(0)
+  const timerRef = useRef(null)
+
+  useEffect(() => {
+    if (!enabled) return
+
+    const onKeyDown = (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return
+
+      const now = Date.now()
+      const delta = now - (lastTsRef.current || 0)
+      lastTsRef.current = now
+
+      // If gap is large, reset buffer
+      if (delta > 80) bufRef.current = ""
+
+      if (e.key === "Enter") {
+        const code = (bufRef.current || "").trim()
+        bufRef.current = ""
+        if (timerRef.current) clearTimeout(timerRef.current)
+        timerRef.current = null
+
+        if (code.length >= 4) onScan?.(code)
+        return
+      }
+
+      // ignore non-printables
+      if (e.key.length !== 1) return
+
+      bufRef.current += e.key
+
+      if (timerRef.current) clearTimeout(timerRef.current)
+      timerRef.current = setTimeout(() => {
+        bufRef.current = ""
+        timerRef.current = null
+      }, 250)
+    }
+
+    window.addEventListener("keydown", onKeyDown)
+    return () => window.removeEventListener("keydown", onKeyDown)
+  }, [enabled, onScan])
+}
+
 /* -------------------------------- component ------------------------------- */
+
+const makeEmptyHeader = () => ({
+  type: "OP",
+  priority: "ROUTINE",
+  datetime: todayDateTimeLocal(),
+
+  patient: null,
+  doctorId: "",
+
+  // ✅ encounter selection (required except COUNTER)
+  encounterId: "",
+  encounterObj: null,
+
+  notes: "",
+})
+
+const makeEmptyLine = () => ({
+  item: null,
+  item_id: null,
+  item_name: "",
+  strength: "",
+  route: "PO",
+  dose_slots: { M: 0, A: 0, E: 0, N: 0 },
+  frequency: "",
+  duration_days: "",
+  total_qty: "",
+  requested_qty: "",
+  dose: "",
+  instructions: "",
+  is_prn: false,
+  is_stat: false,
+
+  batch_id: null,
+  batch_no: "",
+  expiry_date: null,
+  available_qty: "",
+})
 
 export default function PharmacyRx() {
   const [tab, setTab] = useState("list") // 'list' | 'new' | 'detail'
@@ -541,7 +633,7 @@ export default function PharmacyRx() {
   const [autoRefresh, setAutoRefresh] = useState(true)
 
   // New Rx type picker
-  const [newType, setNewType] = useState("OPD")
+  const [newType, setNewType] = useState("OP")
 
   // Form
   const [header, setHeader] = useState(makeEmptyHeader)
@@ -549,7 +641,11 @@ export default function PharmacyRx() {
   const [currentLine, setCurrentLine] = useState(makeEmptyLine)
   const [submitting, setSubmitting] = useState(false)
 
-  // Patient search
+  // ✅ encounters
+  const [encounters, setEncounters] = useState([])
+  const [encLoading, setEncLoading] = useState(false)
+
+  // Patient search (billing API)
   const [patientQuery, setPatientQuery] = useState("")
   const debouncedPatientQuery = useDebouncedValue(patientQuery, 250)
   const [patientResults, setPatientResults] = useState([])
@@ -572,12 +668,16 @@ export default function PharmacyRx() {
   const [medSearching, setMedSearching] = useState(false)
   const [showMedDropdown, setShowMedDropdown] = useState(false)
 
+  // ✅ quick add UX
+  const [simpleAddMode, setSimpleAddMode] = useState(true)
+  const [scanEnabled, setScanEnabled] = useState(true)
+  const lastScanRef = useRef("")
+
   // Refs
   const patientDropRef = useRef(null)
   const medDropRef = useRef(null)
   const medInputRef = useRef(null)
   const listSearchRef = useRef(null)
-
   const patientCacheRef = useRef(new Map())
 
   const [pharmacyLocationId, setPharmacyLocationId] = useState(() => {
@@ -592,6 +692,18 @@ export default function PharmacyRx() {
 
   useOnClickOutside(patientDropRef, () => setShowPatientDropdown(false))
   useOnClickOutside(medDropRef, () => setShowMedDropdown(false))
+
+  // ✅ barcode scan => auto search medicine
+  useBarcodeScanner({
+    enabled: scanEnabled && tab === "new",
+    onScan: (code) => {
+      lastScanRef.current = code
+      setMedQuery(code)
+      setShowMedDropdown(true)
+      toast.success(`Scanned: ${code}`)
+      setTimeout(() => medInputRef.current?.focus?.(), 50)
+    },
+  })
 
   async function hydratePatientById(id, { silent = false } = {}) {
     if (!id) return null
@@ -647,7 +759,7 @@ export default function PharmacyRx() {
     try {
       if (!silent) setListLoading(true)
       const params = {}
-      if (rxTypeFilter !== "ALL") params.type = rxTypeFilter
+      if (rxTypeFilter !== "ALL") params.type = toBackendType(rxTypeFilter)
       if (statusFilter !== "ALL") params.status = statusFilter
       if (debouncedSearch?.trim()) params.q = debouncedSearch.trim()
       params.limit = 100
@@ -661,7 +773,7 @@ export default function PharmacyRx() {
     }
   }
 
-  /* ----------------------------- patient search --------------------------- */
+  /* ----------------------------- patient search (billing API) --------------------------- */
   useEffect(() => {
     const q = debouncedPatientQuery?.trim()
     if (!q || q.length < 2) {
@@ -674,18 +786,19 @@ export default function PharmacyRx() {
         try {
           setPatientSearching(true)
 
-          let res
-          try {
-            res = await listPatients(q)
-          } catch {
-            res = await listPatients({ q })
-          }
+          const data = await billingSearchPatients({ q, limit: 15 })
+          const items =
+            (Array.isArray(data) ? data : null) ||
+            data?.items ||
+            data?.rows ||
+            data?.results ||
+            []
 
           if (cancelled) return
-          const payload = res?.data?.data ?? res?.data
-          const items = payload?.items ?? payload ?? []
           setPatientResults(Array.isArray(items) ? items : [])
           setShowPatientDropdown(true)
+        } catch (e) {
+          if (!cancelled) setPatientResults([])
         } finally {
           if (!cancelled) setPatientSearching(false)
         }
@@ -697,23 +810,95 @@ export default function PharmacyRx() {
   }, [debouncedPatientQuery])
 
   async function handleSelectPatient(p) {
-    setHeader((prev) => ({ ...prev, patient: p }))
+    setHeader((prev) => ({
+      ...prev,
+      patient: p,
+      encounterId: "",
+      encounterObj: null,
+    }))
     setPatientQuery(getPatientDisplay(p))
     setShowPatientDropdown(false)
 
     const full = await hydratePatientById(p?.id, { silent: false })
     if (full) {
-      setHeader((prev) => ({ ...prev, patient: full }))
+      setHeader((prev) => ({
+        ...prev,
+        patient: full,
+        encounterId: "",
+        encounterObj: null,
+      }))
       setPatientQuery(getPatientDisplay(full))
     }
   }
 
   function clearPatient() {
-    setHeader((p) => ({ ...p, patient: null }))
+    setHeader((p) => ({
+      ...p,
+      patient: null,
+      encounterId: "",
+      encounterObj: null,
+    }))
     setPatientQuery("")
     setPatientResults([])
+    setEncounters([])
     setShowPatientDropdown(false)
   }
+
+  /* ----------------------------- encounters fetch ----------------------------- */
+  useEffect(() => {
+    const type = safeStr(header.type).toUpperCase()
+    const isCounter = type === "COUNTER"
+    const pid = header.patient?.id
+
+    setEncounters([])
+    setHeader((p) => ({ ...p, encounterId: "", encounterObj: null }))
+
+    if (isCounter || !pid) return
+    if (!MANUAL_TYPES.includes(type)) return
+    console.log(type, "type");
+
+    let cancelled = false
+      ; (async () => {
+        try {
+          setEncLoading(true)
+          // ✅ filter by type (OP/IP/OT)
+          const data = await billingListPatientEncounters(pid, { encounter_type: type, limit: 100 })
+          console.log(data.items, "check data");
+
+          const items = normalizeEncounterItems(data, type)
+
+          // try {
+          //             const data = await billingListPatientEncounters(pid, { encounter_type: t, limit: 100 }, { signal: ac.signal })
+          //             setEncounters(data?.items ?? [])
+          //         } catch (e) {
+          //             if (!isCanceledError(e)) toast.error(e?.message || "Failed to load encounters")
+          //         } finally {
+          //             setELoading(false)
+          //         }
+          //     }
+
+          if (cancelled) return
+          setEncounters(items)
+
+          // If only one encounter, auto-select
+          if (items.length === 1) {
+            const e = items[0]
+            const eid = getEncounterId(e)
+            if (eid) {
+              setHeader((p) => ({ ...p, encounterId: String(eid), encounterObj: e }))
+            }
+          }
+        } catch {
+          if (!cancelled) setEncounters([])
+        } finally {
+          if (!cancelled) setEncLoading(false)
+        }
+      })()
+
+    return () => {
+      cancelled = true
+    }
+  }, [header.patient?.id, header.type])
 
   /* ----------------------------- medicine search -------------------------- */
   useEffect(() => {
@@ -740,8 +925,15 @@ export default function PharmacyRx() {
           if (cancelled) return
           const payload = res?.data?.data ?? res?.data
           const rows = payload?.items ?? payload ?? []
-          setMedResults(Array.isArray(rows) ? rows : [])
+          const arr = Array.isArray(rows) ? rows : []
+          setMedResults(arr)
           setShowMedDropdown(true)
+
+          // ✅ if barcode scan produced exactly 1 match => auto select
+          if (lastScanRef.current && lastScanRef.current === q && arr.length === 1) {
+            handleSelectMedicine(arr[0])
+            lastScanRef.current = ""
+          }
         } finally {
           if (!cancelled) setMedSearching(false)
         }
@@ -750,6 +942,7 @@ export default function PharmacyRx() {
     return () => {
       cancelled = true
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedMedQuery, pharmacyLocationId])
 
   function handleSelectMedicine(row) {
@@ -775,8 +968,10 @@ export default function PharmacyRx() {
         available_qty: row.available_qty ?? prev.available_qty ?? "",
       }
 
-      const hasAny = perDayFromSlots(next.dose_slots) > 0
-      if (!hasAny) next.dose_slots = { M: 1, A: 0, E: 0, N: 1 }
+      // default schedule for quick add
+      if (perDayFromSlots(next.dose_slots) <= 0) {
+        next.dose_slots = { M: 1, A: 0, E: 0, N: 1 } // BD style
+      }
 
       return applyAuto(next)
     })
@@ -789,7 +984,7 @@ export default function PharmacyRx() {
   function resetForm(keepType = true) {
     setHeader((prev) => ({
       ...makeEmptyHeader(),
-      type: keepType ? prev.type : "OPD",
+      type: keepType ? prev.type : "OP",
       datetime: todayDateTimeLocal(),
       doctorId: prev.doctorId || "",
     }))
@@ -797,6 +992,7 @@ export default function PharmacyRx() {
     setCurrentLine(makeEmptyLine())
     setPatientQuery("")
     setPatientResults([])
+    setEncounters([])
     setMedQuery("")
     setMedResults([])
     setShowPatientDropdown(false)
@@ -804,7 +1000,7 @@ export default function PharmacyRx() {
   }
 
   function startNewRx(initialType) {
-    const t = initialType || newType || "OPD"
+    const t = initialType || newType || "OP"
     setHeader((prev) => ({
       ...makeEmptyHeader(),
       type: t,
@@ -814,43 +1010,45 @@ export default function PharmacyRx() {
     setLines([])
     setCurrentLine(makeEmptyLine())
     setPatientQuery("")
+    setEncounters([])
     setSelectedRx(null)
     setSelectedPatient(null)
     setTab("new")
 
     setTimeout(() => {
       medInputRef.current?.focus?.()
-    }, 50)
+    }, 60)
   }
 
   function handleAddLine() {
     const itemId = toInt(currentLine.item_id ?? currentLine.item?.item_id ?? currentLine.item?.id)
     if (!itemId) {
-      toast.error("Please select the medicine from dropdown.")
+      toast.error("Please select the medicine from dropdown / scan barcode.")
       return
     }
 
     const days = toInt(currentLine.duration_days)
-    const perDay = perDayFromSlots(currentLine.dose_slots)
     if (!days || days <= 0) {
       toast.error("Enter valid Days")
       return
     }
+
+    const perDay = perDayFromSlots(currentLine.dose_slots)
     if (!perDay || perDay <= 0) {
-      toast.error("Select dosage schedule (checkboxes)")
+      toast.error("Pick a frequency (OD/BD/TID...)")
       return
     }
 
     const computed = applyAuto(currentLine)
     const qty = Number(computed.total_qty || 0)
     if (!qty || !Number.isFinite(qty) || qty <= 0) {
-      toast.error("Auto quantity failed. Check Days + Schedule.")
+      toast.error("Auto quantity failed. Check Days + Frequency.")
       return
     }
 
     const available = Number(computed.available_qty ?? computed.item?.available_qty ?? 0)
     if (Number.isFinite(available) && available > 0 && qty > available) {
-      toast.error(`Qty exceeds available stock for this batch (Available: ${available})`)
+      toast.error(`Qty exceeds available stock (Available: ${available})`)
       return
     }
 
@@ -888,12 +1086,27 @@ export default function PharmacyRx() {
       }
 
       setLines((arr) => arr.map((x, i) => (i === idx ? merged : x)))
-      toast.success(`Merged duplicate batch: ${newLine.item_name} (${prevQty} → ${mergedQty})`)
+      toast.success(`Merged: ${newLine.item_name} (${prevQty} → ${mergedQty})`)
     } else {
       setLines((prev) => [...prev, newLine])
     }
 
-    setCurrentLine(makeEmptyLine())
+    // ✅ smoother UX: keep last schedule + days for next drug (less clicks)
+    const keepSlots = currentLine.dose_slots
+    const keepDays = currentLine.duration_days
+    const keepRoute = currentLine.route
+    const keepDose = currentLine.dose
+    const keepInstr = currentLine.instructions
+
+    setCurrentLine((prev) => applyAuto({
+      ...makeEmptyLine(),
+      dose_slots: keepSlots,
+      duration_days: keepDays,
+      route: keepRoute,
+      dose: keepDose,
+      instructions: keepInstr,
+    }))
+
     setMedQuery("")
     setShowMedDropdown(false)
     setTimeout(() => medInputRef.current?.focus?.(), 50)
@@ -904,10 +1117,19 @@ export default function PharmacyRx() {
   }
 
   async function handleSubmitRx() {
-    const isCounter = header.type === "COUNTER"
+    const type = safeStr(header.type).toUpperCase()
+    const isCounter = type === "COUNTER"
 
     if (!isCounter && !header.patient) return toast.error("Select a patient")
     if (!isCounter && !header.doctorId) return toast.error("Select a doctor")
+
+    // ✅ encounter required for OP/IP/OT (if patient chosen)
+    if (!isCounter) {
+      if (encLoading) return toast.error("Encounters are loading…")
+      if (!encounters.length) return toast.error("No encounters found. Create Visit/Admission/OT case first.")
+      if (!header.encounterId) return toast.error("Select the encounter (Visit/Admission/OT Case)")
+    }
+
     if (!lines.length) return toast.error("Add at least one medicine")
 
     for (let i = 0; i < lines.length; i++) {
@@ -918,16 +1140,27 @@ export default function PharmacyRx() {
       if (!qty || qty <= 0) return toast.error(`Line ${i + 1}: Invalid qty`)
     }
 
+    const encId = toInt(header.encounterId)
+
+    // Map encounter into correct field expected by backend
+    const visit_id = type === "OP" ? encId : null
+    const ipd_admission_id = type === "IP" ? encId : null
+    const ot_case_id = type === "OT" ? encId : null
+
     const payload = {
-      type: header.type,
+      type: toBackendType(type),
       priority: header.priority,
       rx_datetime: header.datetime,
-      patient_id: toInt(header.patient?.id),
-      doctor_user_id: toInt(header.doctorId),
-      visit_id: header.type === "OPD" ? header.visitNo || null : null,
-      ipd_admission_id: header.type === "IPD" ? header.admissionNo || null : null,
-      ot_case_id: header.type === "OT" ? header.otCaseNo || null : null,
+
+      patient_id: isCounter ? null : toInt(header.patient?.id),
+      doctor_user_id: header.doctorId ? toInt(header.doctorId) : null,
+
+      visit_id,
+      ipd_admission_id,
+      ot_case_id,
+
       notes: header.notes || "",
+
       lines: lines.map((l) => {
         const itemId = toInt(l.item_id ?? l.item?.item_id ?? l.item?.id)
         const line = applyAuto(l)
@@ -1073,7 +1306,7 @@ export default function PharmacyRx() {
                       Pharmacy Rx
                     </h1>
                     <div className="text-sm text-slate-500 flex flex-wrap items-center gap-2 mt-1">
-                      <span>Fast queue + quick Rx entry for daily pharmacy ops.</span>
+                      <span>Queue + Quick Rx entry (NABH-friendly).</span>
                       <span className="text-[11px] text-slate-400">
                         Tips: <span className="font-medium">Ctrl+K</span> search •{" "}
                         <span className="font-medium">Ctrl+N</span> new Rx
@@ -1107,12 +1340,6 @@ export default function PharmacyRx() {
                       <Badge variant="outline" className="text-[11px]">
                         {queueStats.total}
                       </Badge>
-                      <span className="text-[11px] text-slate-400">•</span>
-                      <span className="text-[11px] text-amber-700">Pending {queueStats.pending}</span>
-                      <span className="text-[11px] text-slate-400">•</span>
-                      <span className="text-[11px] text-blue-700">Partial {queueStats.partial}</span>
-                      <span className="text-[11px] text-slate-400">•</span>
-                      <span className="text-[11px] text-emerald-700">Done {queueStats.disp}</span>
                     </div>
 
                     <Select value={newType} onValueChange={setNewType}>
@@ -1172,84 +1399,82 @@ export default function PharmacyRx() {
                     <TabsContent value="list" className="mt-4 space-y-3">
                       <GlassCard>
                         <CardHeader className="pb-3">
-                          <div className="flex flex-col gap-3">
-                            <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-xs uppercase tracking-wide text-slate-500">Type</span>
-                                <div className="flex flex-wrap gap-1.5">
+                          <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-2">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="text-xs uppercase tracking-wide text-slate-500">Type</span>
+                              <div className="flex flex-wrap gap-1.5">
+                                <button
+                                  type="button"
+                                  onClick={() => setRxTypeFilter("ALL")}
+                                  className={[
+                                    "px-3 py-1.5 rounded-full text-xs border transition shadow-sm backdrop-blur",
+                                    rxTypeFilter === "ALL"
+                                      ? "bg-slate-900 text-white border-slate-900"
+                                      : "bg-white/70 text-slate-700 border-slate-500",
+                                  ].join(" ")}
+                                >
+                                  All
+                                </button>
+                                {RX_TYPES.map((t) => (
                                   <button
+                                    key={t.value}
                                     type="button"
-                                    onClick={() => setRxTypeFilter("ALL")}
+                                    onClick={() => setRxTypeFilter(t.value)}
                                     className={[
-                                      "px-3 py-1.5 rounded-full text-xs border transition shadow-sm backdrop-blur",
-                                      rxTypeFilter === "ALL"
+                                      "px-3 py-1.5 rounded-full text-xs border flex items-center gap-1.5 transition shadow-sm backdrop-blur",
+                                      rxTypeFilter === t.value
                                         ? "bg-slate-900 text-white border-slate-900"
                                         : "bg-white/70 text-slate-700 border-slate-500",
                                     ].join(" ")}
                                   >
-                                    All
+                                    <Pill className="w-3 h-3" />
+                                    {t.label}
                                   </button>
-                                  {RX_TYPES.map((t) => (
-                                    <button
-                                      key={t.value}
-                                      type="button"
-                                      onClick={() => setRxTypeFilter(t.value)}
-                                      className={[
-                                        "px-3 py-1.5 rounded-full text-xs border flex items-center gap-1.5 transition shadow-sm backdrop-blur",
-                                        rxTypeFilter === t.value
-                                          ? "bg-slate-900 text-white border-slate-900"
-                                          : "bg-white/70 text-slate-700 border-slate-500",
-                                      ].join(" ")}
-                                    >
-                                      <Pill className="w-3 h-3" />
-                                      {t.label}
-                                    </button>
-                                  ))}
-                                </div>
+                                ))}
+                              </div>
+                            </div>
+
+                            <div className="flex items-center gap-2 w-full lg:w-auto">
+                              <div className="relative flex-1 lg:w-[420px]">
+                                <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
+                                <Input
+                                  ref={listSearchRef}
+                                  value={search}
+                                  onChange={(e) => setSearch(e.target.value)}
+                                  placeholder="Search UHID / name / Rx no..."
+                                  className="pl-9 h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
+                                />
                               </div>
 
-                              <div className="flex items-center gap-2 w-full lg:w-auto">
-                                <div className="relative flex-1 lg:w-[420px]">
-                                  <Search className="w-4 h-4 text-slate-400 absolute left-3 top-3" />
-                                  <Input
-                                    ref={listSearchRef}
-                                    value={search}
-                                    onChange={(e) => setSearch(e.target.value)}
-                                    placeholder="Search UHID / name / Rx no..."
-                                    className="pl-9 h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
-                                  />
-                                </div>
+                              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                                <SelectTrigger className="w-[150px] bg-white/70 backdrop-blur border-slate-500 rounded-full text-xs h-10">
+                                  <SelectValue placeholder="Status" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="ALL">All status</SelectItem>
+                                  <SelectItem value="DRAFT">Draft</SelectItem>
+                                  <SelectItem value="PENDING">Pending</SelectItem>
+                                  <SelectItem value="PARTIAL">Partial</SelectItem>
+                                  <SelectItem value="DISPENSED">Dispensed</SelectItem>
+                                  <SelectItem value="CANCELLED">Cancelled</SelectItem>
+                                </SelectContent>
+                              </Select>
 
-                                <Select value={statusFilter} onValueChange={setStatusFilter}>
-                                  <SelectTrigger className="w-[150px] bg-white/70 backdrop-blur border-slate-500 rounded-full text-xs h-10">
-                                    <SelectValue placeholder="Status" />
-                                  </SelectTrigger>
-                                  <SelectContent>
-                                    <SelectItem value="ALL">All status</SelectItem>
-                                    <SelectItem value="DRAFT">Draft</SelectItem>
-                                    <SelectItem value="PENDING">Pending</SelectItem>
-                                    <SelectItem value="PARTIAL">Partial</SelectItem>
-                                    <SelectItem value="DISPENSED">Dispensed</SelectItem>
-                                    <SelectItem value="CANCELLED">Cancelled</SelectItem>
-                                  </SelectContent>
-                                </Select>
-
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  className="rounded-full border-slate-500 bg-white/70 backdrop-blur h-10 w-10"
-                                  onClick={() => fetchRxList()}
-                                  title="Apply filters"
-                                >
-                                  <Filter className="w-4 h-4" />
-                                </Button>
-                              </div>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="rounded-full border-slate-500 bg-white/70 backdrop-blur h-10 w-10"
+                                onClick={() => fetchRxList()}
+                                title="Apply filters"
+                              >
+                                <Filter className="w-4 h-4" />
+                              </Button>
                             </div>
                           </div>
                         </CardHeader>
 
                         <CardContent className="pt-0">
-                          <div className="hidden md:block border border-slate-100 rounded-2xl overflow-hidden bg-white/60 backdrop-blur">
+                          <div className="border border-slate-100 rounded-2xl overflow-hidden bg-white/60 backdrop-blur">
                             <div className="max-h-[560px] overflow-auto">
                               <div className="overflow-x-auto">
                                 <table className="w-full min-w-[980px] text-sm">
@@ -1284,7 +1509,7 @@ export default function PharmacyRx() {
                                     {!listLoading &&
                                       rxList.map((row) => {
                                         const status = (row.status || "").toUpperCase() || "PENDING"
-                                        const type = row.type || row.rx_type || "OPD"
+                                        const type = fromBackendType(row.type || row.rx_type || "OPD")
                                         const createdStr = fmtDT(row.created_at || row.rx_datetime || row.bill_date)
 
                                         const patientName =
@@ -1334,7 +1559,7 @@ export default function PharmacyRx() {
                                               <div className="flex flex-col gap-1">
                                                 <div className="flex items-center gap-1.5">
                                                   <Badge variant="outline" className="border-slate-500 text-[11px] px-2 py-0.5">
-                                                    {type}
+                                                    {RX_TYPES.find((x) => x.value === type)?.label || type}
                                                   </Badge>
                                                   {doctorName && (
                                                     <span className="text-[11px] text-slate-600 flex items-center gap-1">
@@ -1343,9 +1568,6 @@ export default function PharmacyRx() {
                                                     </span>
                                                   )}
                                                 </div>
-                                                {row.context_label && (
-                                                  <span className="text-[11px] text-slate-500">{row.context_label}</span>
-                                                )}
                                               </div>
                                             </td>
 
@@ -1379,77 +1601,6 @@ export default function PharmacyRx() {
                               </div>
                             </div>
                           </div>
-
-                          {/* Mobile list */}
-                          <div className="md:hidden space-y-2">
-                            {listLoading ? (
-                              <div className="rounded-2xl border border-slate-500 bg-white/70 backdrop-blur p-4 text-xs text-slate-500">
-                                Loading prescriptions...
-                              </div>
-                            ) : !rxList.length ? (
-                              <div className="rounded-2xl border border-slate-500 bg-white/70 backdrop-blur p-4 text-xs text-slate-500">
-                                No prescriptions found for the selected filters.
-                              </div>
-                            ) : (
-                              rxList.map((row) => {
-                                const status = (row.status || "").toUpperCase() || "PENDING"
-                                const type = row.type || row.rx_type || "OPD"
-                                const createdStr = fmtDT(row.created_at || row.rx_datetime || row.bill_date)
-                                const doctorName = row.doctor_name || row.doctor || row.doctor_display || ""
-                                const patientName =
-                                  row.patient_name ||
-                                  `${row.patient?.first_name || ""} ${row.patient?.last_name || ""}`.trim() ||
-                                  row.patient?.name ||
-                                  row.patient_uhid ||
-                                  "—"
-
-                                return (
-                                  <button
-                                    key={row.id}
-                                    type="button"
-                                    onClick={() => handleOpenRx(row)}
-                                    className="w-full text-left rounded-3xl border border-slate-500 bg-white/70 backdrop-blur p-4 shadow-sm active:scale-[0.99] transition"
-                                  >
-                                    <div className="flex items-start justify-between gap-3">
-                                      <div className="min-w-0">
-                                        <div className="text-sm font-semibold text-slate-900 truncate">
-                                          {row.rx_number || `RX-${row.id}`}
-                                        </div>
-                                        <div className="text-xs text-slate-500 truncate">
-                                          {patientName}{" "}
-                                          {(row.patient_uhid || row.uhid) ? `• ${row.patient_uhid || row.uhid}` : ""}
-                                        </div>
-                                      </div>
-                                      <StatusPill status={status} />
-                                    </div>
-
-                                    <div className="mt-3 flex flex-wrap items-center gap-2 text-[11px] text-slate-600">
-                                      <Badge variant="outline" className="border-slate-500 text-[11px]">
-                                        {type}
-                                      </Badge>
-                                      {doctorName ? (
-                                        <span className="inline-flex items-center gap-1">
-                                          <Stethoscope className="w-3 h-3 text-slate-400" />
-                                          {doctorName}
-                                        </span>
-                                      ) : null}
-                                      <span className="inline-flex items-center gap-1">
-                                        <Clock3 className="w-3 h-3 text-slate-400" />
-                                        {createdStr}
-                                      </span>
-                                    </div>
-
-                                    <div className="mt-3">
-                                      <div className="inline-flex items-center gap-2 rounded-full bg-slate-900 text-white px-3 py-1.5 text-xs">
-                                        <ClipboardList className="w-4 h-4" />
-                                        Open
-                                      </div>
-                                    </div>
-                                  </button>
-                                )
-                              })
-                            )}
-                          </div>
                         </CardContent>
                       </GlassCard>
                     </TabsContent>
@@ -1464,7 +1615,7 @@ export default function PharmacyRx() {
                               <Pill className="w-4 h-4 text-slate-500" />
                               Prescription Details
                               <Badge variant="outline" className="ml-1 text-[11px]">
-                                {header.type}
+                                {RX_TYPES.find((x) => x.value === header.type)?.label || header.type}
                               </Badge>
                             </CardTitle>
                           </CardHeader>
@@ -1601,75 +1752,97 @@ export default function PharmacyRx() {
                               <PatientSummaryCard patient={header.patient} loading={patientHydrating} />
                             ) : null}
 
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              {header.type === "OPD" && (
-                                <div className="space-y-1.5">
-                                  <Label className="text-xs text-slate-600">OPD Visit No (optional)</Label>
-                                  <Input
-                                    value={header.visitNo}
-                                    onChange={(e) => setHeader((prev) => ({ ...prev, visitNo: e.target.value }))}
-                                    placeholder="e.g., OPD-2025-0001"
-                                    className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
-                                  />
-                                </div>
-                              )}
-
-                              {header.type === "IPD" && (
-                                <div className="space-y-1.5">
-                                  <Label className="text-xs text-slate-600">Admission No</Label>
-                                  <Input
-                                    value={header.admissionNo}
-                                    onChange={(e) => setHeader((prev) => ({ ...prev, admissionNo: e.target.value }))}
-                                    placeholder="IPD admission number"
-                                    className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
-                                  />
-                                </div>
-                              )}
-
-                              {header.type === "OT" && (
-                                <div className="space-y-1.5">
-                                  <Label className="text-xs text-slate-600">OT Case No</Label>
-                                  <Input
-                                    value={header.otCaseNo}
-                                    onChange={(e) => setHeader((prev) => ({ ...prev, otCaseNo: e.target.value }))}
-                                    placeholder="OT / procedure case ID"
-                                    className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
-                                  />
-                                </div>
-                              )}
-
+                            {/* ✅ Encounter select (OP/IP/OT) */}
+                            {header.type !== "COUNTER" && (
                               <div className="space-y-1.5">
-                                <Label className="text-xs text-slate-600 flex items-center gap-1">
-                                  <Stethoscope className="w-3 h-3" />
-                                  Consultant / Prescriber {header.type === "COUNTER" ? "(optional)" : ""}
+                                <Label className="text-xs text-slate-600">
+                                  {header.type === "OP"
+                                    ? "OPD Encounter / Visit"
+                                    : header.type === "IP"
+                                      ? "IPD Admission"
+                                      : "OT Case"}
+                                  <span className="text-[10px] text-slate-400"> (required)</span>
                                 </Label>
+
                                 <Select
-                                  value={header.doctorId || ""}
-                                  onValueChange={(val) => setHeader((prev) => ({ ...prev, doctorId: val }))}
+                                  value={header.encounterId || ""}
+                                  onValueChange={(val) => {
+                                    const e = encounters.find((x) => String(getEncounterId(x)) === String(val)) || null
+                                    setHeader((p) => ({ ...p, encounterId: val, encounterObj: e }))
+                                  }}
+                                  disabled={!header.patient || encLoading}
                                 >
                                   <SelectTrigger className="w-full bg-white/70 backdrop-blur border-slate-500 rounded-full h-10 text-sm">
-                                    <SelectValue placeholder="Select doctor" />
+                                    <SelectValue
+                                      placeholder={
+                                        !header.patient
+                                          ? "Select patient first"
+                                          : encLoading
+                                            ? "Loading encounters..."
+                                            : encounters.length
+                                              ? "Select encounter..."
+                                              : "No encounters found"
+                                      }
+                                    />
                                   </SelectTrigger>
                                   <SelectContent>
-                                    {mastersLoading && (
+                                    {encLoading && (
                                       <SelectItem value="__loading" disabled>
                                         Loading...
                                       </SelectItem>
                                     )}
-                                    {!mastersLoading && (!doctors || !doctors.length) && (
+                                    {!encLoading && !encounters.length && (
                                       <SelectItem value="__none" disabled>
-                                        No doctors configured
+                                        No encounters found (create visit/admission/case first)
                                       </SelectItem>
                                     )}
-                                    {!mastersLoading &&
-                                      doctors?.map((d) => (
-                                        <SelectItem key={d.id} value={String(d.id)}>
-                                          {d.name || d.full_name || d.email}
-                                        </SelectItem>
-                                      ))}
+                                    {!encLoading &&
+                                      encounters.map((e) => {
+                                        console.log(e, "qwertyuiop");
+
+                                        const id = getEncounterId(e)
+                                        return (
+                                          <SelectItem key={id} value={String(id)}>
+                                            {getEncounterLabel(e, header.type)}
+                                          </SelectItem>
+                                        )
+                                      })}
                                   </SelectContent>
                                 </Select>
                               </div>
+                            )}
+
+                            <div className="space-y-1.5">
+                              <Label className="text-xs text-slate-600 flex items-center gap-1">
+                                <Stethoscope className="w-3 h-3" />
+                                Consultant / Prescriber {header.type === "COUNTER" ? "(optional)" : "(required)"}
+                              </Label>
+                              <Select
+                                value={header.doctorId || ""}
+                                onValueChange={(val) => setHeader((prev) => ({ ...prev, doctorId: val }))}
+                              >
+                                <SelectTrigger className="w-full bg-white/70 backdrop-blur border-slate-500 rounded-full h-10 text-sm">
+                                  <SelectValue placeholder="Select doctor" />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  {mastersLoading && (
+                                    <SelectItem value="__loading" disabled>
+                                      Loading...
+                                    </SelectItem>
+                                  )}
+                                  {!mastersLoading && (!doctors || !doctors.length) && (
+                                    <SelectItem value="__none" disabled>
+                                      No doctors configured
+                                    </SelectItem>
+                                  )}
+                                  {!mastersLoading &&
+                                    doctors?.map((d) => (
+                                      <SelectItem key={d.id} value={String(d.id)}>
+                                        {d.name || d.full_name || d.email}
+                                      </SelectItem>
+                                    ))}
+                                </SelectContent>
+                              </Select>
                             </div>
 
                             <div className="space-y-1.5">
@@ -1698,9 +1871,9 @@ export default function PharmacyRx() {
                               <div className="text-[11px] text-slate-500 flex items-center gap-2">
                                 <span className="inline-flex items-center gap-1">
                                   <Sparkles className="w-3 h-3" />
-                                  Automation:
+                                  Flow:
                                 </span>
-                                <span>Debounced search • Auto qty • Merge duplicates</span>
+                                <span>Patient → Encounter → Medicines → Save</span>
                               </div>
                             </div>
                           </CardContent>
@@ -1715,12 +1888,46 @@ export default function PharmacyRx() {
                                 Medicines &amp; Instructions
                               </CardTitle>
                             </div>
-                            <div className="text-[11px] text-slate-500">
-                              {lines.length ? `${lines.length} lines` : 'No lines added yet'}
+
+                            <div className="flex items-center gap-2">
+                              <button
+                                type="button"
+                                className={[
+                                  "px-3 py-2 rounded-full text-xs border backdrop-blur shadow-sm",
+                                  scanEnabled
+                                    ? "bg-emerald-50/70 text-emerald-700 border-emerald-200"
+                                    : "bg-white/70 text-slate-700 border-slate-500",
+                                ].join(" ")}
+                                onClick={() => setScanEnabled((v) => !v)}
+                                title="Barcode scanner mode (type fast + Enter)"
+                              >
+                                <Barcode className="w-3.5 h-3.5 inline mr-1" />
+                                Scan
+                              </button>
+
+                              <button
+                                type="button"
+                                className={[
+                                  "px-3 py-2 rounded-full text-xs border backdrop-blur shadow-sm",
+                                  simpleAddMode
+                                    ? "bg-slate-900 text-white border-slate-900"
+                                    : "bg-white/70 text-slate-700 border-slate-500",
+                                ].join(" ")}
+                                onClick={() => setSimpleAddMode((v) => !v)}
+                                title="Toggle simplified line builder"
+                              >
+                                <Wand2 className="w-3.5 h-3.5 inline mr-1" />
+                                {simpleAddMode ? "Simple" : "Advanced"}
+                              </button>
+
+                              <div className="text-[11px] text-slate-500">
+                                {lines.length ? `${lines.length} lines` : "No lines yet"}
+                              </div>
                             </div>
                           </CardHeader>
 
                           <CardContent className="space-y-3">
+                            {/* Quick Add Builder */}
                             <div className="border border-slate-500/70 rounded-2xl p-3 bg-white/60 backdrop-blur">
                               <div className="grid lg:grid-cols-[minmax(0,2.4fr)_minmax(0,1fr)] gap-3">
                                 <div className="space-y-2">
@@ -1729,16 +1936,12 @@ export default function PharmacyRx() {
                                     <div className="flex items-center justify-between">
                                       <Label className="text-[11px] text-slate-600">
                                         Medicine{" "}
-                                        <span className="text-[10px] text-slate-400">
-                                          (linked to Inventory)
-                                        </span>
+                                        <span className="text-[10px] text-slate-400">(search or scan)</span>
                                       </Label>
 
                                       <span className="text-[10px] text-slate-500">
                                         Auto qty:{" "}
-                                        <span className="font-medium">
-                                          {calcAutoQty(currentLine) || "—"}
-                                        </span>
+                                        <span className="font-medium">{calcAutoQty(currentLine) || "—"}</span>
                                       </span>
                                     </div>
 
@@ -1748,10 +1951,11 @@ export default function PharmacyRx() {
                                         ref={medInputRef}
                                         value={medQuery}
                                         onChange={(e) => {
+                                          lastScanRef.current = ""
                                           setMedQuery(e.target.value)
                                           setShowMedDropdown(true)
                                         }}
-                                        placeholder="Search drug name, brand, generic..."
+                                        placeholder="Drug name / brand / barcode..."
                                         className="pl-9 h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
                                       />
                                     </div>
@@ -1765,15 +1969,11 @@ export default function PharmacyRx() {
                                           className="absolute z-30 mt-2 w-full bg-white/85 backdrop-blur border border-slate-500 rounded-2xl shadow-xl max-h-60 overflow-auto text-xs"
                                         >
                                           {medSearching && (
-                                            <div className="px-3 py-2 text-slate-500">
-                                              Searching medicines...
-                                            </div>
+                                            <div className="px-3 py-2 text-slate-500">Searching medicines...</div>
                                           )}
 
                                           {!medSearching && !medResults.length && (
-                                            <div className="px-3 py-2 text-slate-500">
-                                              No items found
-                                            </div>
+                                            <div className="px-3 py-2 text-slate-500">No items found</div>
                                           )}
 
                                           {!medSearching &&
@@ -1789,9 +1989,7 @@ export default function PharmacyRx() {
                                                     {it.name || it.item_name}
                                                   </span>
                                                   {it.code && (
-                                                    <span className="text-[10px] text-slate-500">
-                                                      {it.code}
-                                                    </span>
+                                                    <span className="text-[10px] text-slate-500">{it.code}</span>
                                                   )}
                                                 </div>
 
@@ -1810,10 +2008,7 @@ export default function PharmacyRx() {
                                                     Exp: {fmtDateShort(it.expiry_date)}
                                                   </Badge>
 
-                                                  <Badge
-                                                    variant="outline"
-                                                    className="text-[10px] border-slate-500"
-                                                  >
+                                                  <Badge variant="outline" className="text-[10px] border-slate-500">
                                                     Batch: {it.batch_no || "—"}
                                                   </Badge>
 
@@ -1836,293 +2031,247 @@ export default function PharmacyRx() {
                                     </AnimatePresence>
                                   </div>
 
-                                  {/* ✅ Super user-friendly dosage planner (checkbox frequency) */}
-                                  <div className="rounded-2xl border border-slate-200 bg-white/70 backdrop-blur p-3 space-y-3">
-                                    {/* Optional Dose (keep minimal) */}
-                                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
-                                      <div className="space-y-1 sm:col-span-1">
-                                        <Label className="text-[11px] text-slate-600">
-                                          Dose <span className="text-[10px] text-slate-400">(optional)</span>
-                                        </Label>
-                                        <Input
-                                          value={currentLine.dose}
-                                          onChange={(e) =>
-                                            setCurrentLine((prev) => ({
-                                              ...prev,
-                                              dose: e.target.value,
-                                            }))
-                                          }
-                                          placeholder="e.g. 1 tab"
-                                          className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
-                                        />
-                                      </div>
-
-                                      <div className="space-y-1 sm:col-span-1">
-                                        <Label className="text-[11px] text-slate-600">
-                                          Days <span className="text-[10px] text-slate-400">(required)</span>
-                                        </Label>
-                                        <Input
-                                          value={currentLine.duration_days}
-                                          onChange={(e) =>
-                                            setCurrentLine((prev) => applyAuto({ ...prev, duration_days: e.target.value, _qtyTouched: false }))
-                                          }
-
-                                          placeholder="e.g. 5"
-                                          className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
-                                        />
-                                      </div>
-
-                                      <div className="space-y-1 sm:col-span-1">
-                                        <Label className="text-[11px] text-slate-600">
-                                          Total Qty <span className="text-[10px] text-slate-400">(auto)</span>
-                                        </Label>
-
-                                        {(() => {
-                                          const autoQty = calcAutoQty(currentLine)
-                                          const perDay = parseFrequencyToPerDay(currentLine.frequency)
-                                          const days = Number(currentLine.duration_days || 0) || 0
-                                          const avail = Number(
-                                            currentLine.available_qty ?? currentLine.item?.available_qty ?? 0
-                                          )
-                                          const exceeds =
-                                            Number(autoQty || 0) > 0 &&
-                                            Number.isFinite(avail) &&
-                                            avail > 0 &&
-                                            Number(autoQty || 0) > avail
-
-                                          return (
-                                            <div
-                                              className={[
-                                                "h-10 rounded-full border px-3 flex items-center justify-between",
-                                                "bg-white/70 backdrop-blur",
-                                                exceeds
-                                                  ? "border-rose-200"
-                                                  : "border-slate-500",
-                                              ].join(" ")}
-                                            >
-                                              <div className="text-sm font-semibold text-slate-900">
-                                                {autoQty || "—"}
-                                              </div>
-                                              <div className="text-[11px] text-slate-500">
-                                                {perDay ? `${perDay}/day` : "Pick frequency"}{" "}
-                                                {days ? `× ${days}d` : ""}
-                                              </div>
-                                            </div>
-                                          )
-                                        })()}
-                                      </div>
-                                    </div>
-
-                                    {/* Frequency selection (checkboxes) */}
-                                    {/* ✅ Dosage schedule (M/A/E/N) — this drives frequency_code correctly */}
-                                    <div className="space-y-1.5">
-                                      <div className="flex items-center justify-between gap-2">
-                                        <Label className="text-[11px] text-slate-600">
-                                          Dosage schedule (M / A / E / N)
-                                        </Label>
-
-                                        <div className="text-[10px] text-slate-500">
-                                          Stored as:{" "}
-                                          <span className="font-medium">
-                                            {slotsToFrequency(currentLine.dose_slots || emptySlots())}
-                                          </span>
-                                        </div>
-                                      </div>
-
-                                      {(() => {
-                                        const slots = currentLine.dose_slots || emptySlots()
-
-                                        const toggleSlot = (key) => {
-                                          setCurrentLine((prev) => {
-                                            const nextSlots = { ...(prev.dose_slots || emptySlots()) }
-                                            nextSlots[key] = nextSlots[key] ? 0 : 1
-                                            return applyAuto({ ...prev, dose_slots: nextSlots, _qtyTouched: false })
-                                          })
-                                        }
-
-                                        const setPreset = (value) => {
-                                          setCurrentLine((prev) => {
-                                            const nextSlots = frequencyToSlots(value) // OD/BD/TID/QID or 1-1-1-1 etc.
-                                            return applyAuto({ ...prev, dose_slots: nextSlots, _qtyTouched: false })
-                                          })
-                                        }
-
-                                        const clearAll = () => {
-                                          setCurrentLine((prev) => {
-                                            const next = { ...prev, dose_slots: emptySlots(), _qtyTouched: false }
-                                            // applyAuto will make qty blank because perDay becomes 0
-                                            const out = applyAuto(next)
-                                            out.total_qty = ""
-                                            out.requested_qty = ""
-                                            return out
-                                          })
-                                        }
-
-                                        return (
-                                          <>
-                                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                              {SLOT_KEYS.map((k) => (
-                                                <label
-                                                  key={k}
-                                                  className={[
-                                                    "h-10 rounded-full border px-3 flex items-center gap-2 cursor-pointer select-none",
-                                                    "bg-white/70 backdrop-blur",
-                                                    slots?.[k] ? "border-slate-900" : "border-slate-500",
-                                                  ].join(" ")}
-                                                >
-                                                  <input
-                                                    type="checkbox"
-                                                    className="h-4 w-4 accent-slate-900"
-                                                    checked={!!slots?.[k]}
-                                                    onChange={() => toggleSlot(k)}
-                                                  />
-                                                  <span className="text-sm text-slate-700">{SLOT_META[k].label}</span>
-                                                </label>
-                                              ))}
-                                            </div>
-
-                                            {/* Quick presets */}
-                                            <div className="flex flex-wrap gap-1.5 pt-1">
-                                              {FREQ_PRESETS.map((f) => (
+                                  {/* ✅ SIMPLE MODE: Presets + Days (minimal clicks) */}
+                                  {simpleAddMode ? (
+                                    <div className="rounded-2xl border border-slate-200 bg-white/70 backdrop-blur p-3 space-y-3">
+                                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                        <div className="space-y-1">
+                                          <Label className="text-[11px] text-slate-600">
+                                            Frequency <span className="text-[10px] text-slate-400">(required)</span>
+                                          </Label>
+                                          <div className="flex flex-wrap gap-1.5">
+                                            {SIMPLE_FREQ_PRESETS.map((f) => {
+                                              const selected =
+                                                slotsToFrequency(currentLine.dose_slots || emptySlots()) ===
+                                                slotsToFrequency(frequencyToSlots(f.value))
+                                              return (
                                                 <button
                                                   key={f.value}
                                                   type="button"
-                                                  onClick={() => setPreset(f.value)}
+                                                  onClick={() => {
+                                                    setCurrentLine((prev) =>
+                                                      applyAuto({
+                                                        ...prev,
+                                                        dose_slots: frequencyToSlots(f.value),
+                                                      })
+                                                    )
+                                                  }}
                                                   className={[
                                                     "px-3 py-1 rounded-full text-[11px] border shadow-sm transition",
-                                                    slotsToFrequency(currentLine.dose_slots || emptySlots()) ===
-                                                      slotsToFrequency(frequencyToSlots(f.value))
+                                                    selected
                                                       ? "bg-slate-900 text-white border-slate-900"
                                                       : "bg-white/70 text-slate-700 border-slate-500 backdrop-blur",
                                                   ].join(" ")}
                                                 >
                                                   {f.label}
                                                 </button>
-                                              ))}
+                                              )
+                                            })}
+                                          </div>
+                                        </div>
 
-                                              <button
-                                                type="button"
-                                                onClick={clearAll}
-                                                className="px-3 py-1 rounded-full text-[11px] border shadow-sm transition bg-white/70 text-slate-600 border-slate-500"
-                                              >
-                                                Clear
-                                              </button>
+                                        <div className="space-y-1">
+                                          <Label className="text-[11px] text-slate-600">
+                                            Days <span className="text-[10px] text-slate-400">(required)</span>
+                                          </Label>
+                                          <div className="flex items-center gap-2">
+                                            <Button
+                                              type="button"
+                                              variant="outline"
+                                              size="sm"
+                                              className="h-10 w-10 rounded-full border-slate-500 bg-white/70"
+                                              onClick={() => {
+                                                const cur = Number(currentLine.duration_days || 0) || 0
+                                                const next = Math.max(0, cur - 1)
+                                                setCurrentLine((p) => applyAuto({ ...p, duration_days: String(next || "") }))
+                                              }}
+                                            >
+                                              −
+                                            </Button>
+                                            <Input
+                                              value={currentLine.duration_days}
+                                              onChange={(e) =>
+                                                setCurrentLine((p) => applyAuto({ ...p, duration_days: e.target.value }))
+                                              }
+                                              placeholder="e.g. 5"
+                                              className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full text-center"
+                                            />
+                                            <Button
+                                              type="button"
+                                              variant="outline"
+                                              size="sm"
+                                              className="h-10 w-10 rounded-full border-slate-500 bg-white/70"
+                                              onClick={() => {
+                                                const cur = Number(currentLine.duration_days || 0) || 0
+                                                const next = cur + 1
+                                                setCurrentLine((p) => applyAuto({ ...p, duration_days: String(next) }))
+                                              }}
+                                            >
+                                              +
+                                            </Button>
+                                          </div>
+                                        </div>
+
+                                        <div className="space-y-1">
+                                          <Label className="text-[11px] text-slate-600">
+                                            Total Qty <span className="text-[10px] text-slate-400">(auto)</span>
+                                          </Label>
+                                          <div className="h-10 rounded-full border border-slate-500 bg-white/70 backdrop-blur px-3 flex items-center justify-between">
+                                            <div className="text-sm font-semibold text-slate-900">
+                                              {calcAutoQty(currentLine) || "—"}
                                             </div>
-                                          </>
+                                            <div className="text-[11px] text-slate-500">
+                                              {parseFrequencyToPerDay(currentLine.frequency) ? `${parseFrequencyToPerDay(currentLine.frequency)}/day` : "Pick freq"}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                        <div className="space-y-1">
+                                          <Label className="text-[11px] text-slate-600">Route</Label>
+                                          <Select
+                                            value={currentLine.route || "PO"}
+                                            onValueChange={(val) => setCurrentLine((p) => ({ ...p, route: val }))}
+                                          >
+                                            <SelectTrigger className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full">
+                                              <SelectValue placeholder="Route" />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                              {ROUTE_PRESETS.map((r) => (
+                                                <SelectItem key={r} value={r}>
+                                                  {r}
+                                                </SelectItem>
+                                              ))}
+                                            </SelectContent>
+                                          </Select>
+                                        </div>
+
+                                        <div className="space-y-1">
+                                          <Label className="text-[11px] text-slate-600">
+                                            Instructions <span className="text-[10px] text-slate-400">(optional)</span>
+                                          </Label>
+                                          <Input
+                                            value={currentLine.instructions}
+                                            onChange={(e) => setCurrentLine((p) => ({ ...p, instructions: e.target.value }))}
+                                            placeholder="After food, morning & night..."
+                                            className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
+                                          />
+                                        </div>
+                                      </div>
+
+                                      {/* Stock hint */}
+                                      {(() => {
+                                        const autoQty = Number(calcAutoQty(currentLine) || 0)
+                                        const avail = Number(currentLine.available_qty ?? currentLine.item?.available_qty ?? 0)
+                                        const hasAvail = Number.isFinite(avail) && avail > 0
+                                        const exceeds = hasAvail && autoQty > avail
+                                        if (!currentLine.batch_id && !currentLine.item?.batch_id) return null
+
+                                        return (
+                                          <div
+                                            className={[
+                                              "rounded-2xl border px-3 py-2 text-[11px]",
+                                              exceeds
+                                                ? "border-rose-200 bg-rose-50/70 text-rose-700"
+                                                : "border-slate-200 bg-slate-50/70 text-slate-600",
+                                            ].join(" ")}
+                                          >
+                                            Batch:{" "}
+                                            <span className="font-medium">
+                                              {currentLine.batch_no || currentLine.item?.batch_no || "—"}
+                                            </span>{" "}
+                                            • Exp:{" "}
+                                            <span className="font-medium">
+                                              {fmtDateShort(currentLine.expiry_date || currentLine.item?.expiry_date)}
+                                            </span>{" "}
+                                            • Available:{" "}
+                                            <span className="font-medium">
+                                              {fmtQty(currentLine.available_qty ?? currentLine.item?.available_qty)}
+                                            </span>
+                                            {exceeds ? <span className="ml-2 font-medium">(Qty exceeds stock)</span> : null}
+                                          </div>
                                         )
                                       })()}
                                     </div>
-
-
-                                    {/* Route + Strength auto */}
-                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                      <div className="space-y-1">
-                                        <Label className="text-[11px] text-slate-600">Route</Label>
-                                        <Select
-                                          value={currentLine.route || "PO"}
-                                          onValueChange={(val) =>
-                                            setCurrentLine((prev) => ({
-                                              ...prev,
-                                              route: val,
-                                            }))
-                                          }
-                                        >
-                                          <SelectTrigger className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full">
-                                            <SelectValue placeholder="Route" />
-                                          </SelectTrigger>
-                                          <SelectContent>
-                                            {ROUTE_PRESETS.map((r) => (
-                                              <SelectItem key={r} value={r}>
-                                                {r}
-                                              </SelectItem>
-                                            ))}
-                                          </SelectContent>
-                                        </Select>
-                                      </div>
-
-                                      <div className="space-y-1">
-                                        <Label className="text-[11px] text-slate-600">
-                                          Strength <span className="text-[10px] text-slate-400">(auto)</span>
-                                        </Label>
-                                        <Input
-                                          value={currentLine.strength}
-                                          onChange={(e) =>
-                                            setCurrentLine((prev) => ({
-                                              ...prev,
-                                              strength: e.target.value,
-                                            }))
-                                          }
-                                          placeholder="Auto-filled if available"
-                                          className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
-                                        />
-                                      </div>
-                                    </div>
-
-                                    <div className="space-y-1">
-                                      <Label className="text-[11px] text-slate-600">
-                                        Instructions to patient <span className="text-[10px] text-slate-400">(optional)</span>
-                                      </Label>
-                                      <Input
-                                        value={currentLine.instructions}
-                                        onChange={(e) =>
-                                          setCurrentLine((prev) => ({
-                                            ...prev,
-                                            instructions: e.target.value,
-                                          }))
-                                        }
-                                        placeholder="After food, morning & night, etc."
-                                        className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
-                                      />
-                                    </div>
-
-                                    {/* Stock hint */}
-                                    {(() => {
-                                      const autoQty = Number(calcAutoQty(currentLine) || 0)
-                                      const avail = Number(
-                                        currentLine.available_qty ?? currentLine.item?.available_qty ?? 0
-                                      )
-                                      const hasAvail = Number.isFinite(avail) && avail > 0
-                                      const exceeds = hasAvail && autoQty > avail
-                                      if (!currentLine.batch_id && !currentLine.item?.batch_id) return null
-
-                                      return (
-                                        <div
-                                          className={[
-                                            "rounded-2xl border px-3 py-2 text-[11px]",
-                                            exceeds
-                                              ? "border-rose-200 bg-rose-50/70 text-rose-700"
-                                              : "border-slate-200 bg-slate-50/70 text-slate-600",
-                                          ].join(" ")}
-                                        >
-                                          Batch:{" "}
-                                          <span className="font-medium">
-                                            {currentLine.batch_no || currentLine.item?.batch_no || "—"}
-                                          </span>{" "}
-                                          • Exp:{" "}
-                                          <span className="font-medium">
-                                            {fmtDateShort(currentLine.expiry_date || currentLine.item?.expiry_date)}
-                                          </span>{" "}
-                                          • Available:{" "}
-                                          <span className="font-medium">
-                                            {fmtQty(currentLine.available_qty ?? currentLine.item?.available_qty)}
-                                          </span>
-                                          {exceeds ? (
-                                            <span className="ml-2 font-medium">
-                                              (Qty exceeds stock)
+                                  ) : (
+                                    // Advanced: M/A/E/N (your old style, still available)
+                                    <div className="rounded-2xl border border-slate-200 bg-white/70 backdrop-blur p-3 space-y-3">
+                                      <div className="space-y-1.5">
+                                        <div className="flex items-center justify-between gap-2">
+                                          <Label className="text-[11px] text-slate-600">Dosage schedule (M/A/E/N)</Label>
+                                          <div className="text-[10px] text-slate-500">
+                                            Stored as:{" "}
+                                            <span className="font-medium">
+                                              {slotsToFrequency(currentLine.dose_slots || emptySlots())}
                                             </span>
-                                          ) : null}
+                                          </div>
                                         </div>
-                                      )
-                                    })()}
-                                  </div>
+
+                                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                          {SLOT_KEYS.map((k) => (
+                                            <label
+                                              key={k}
+                                              className={[
+                                                "h-10 rounded-full border px-3 flex items-center gap-2 cursor-pointer select-none",
+                                                "bg-white/70 backdrop-blur",
+                                                currentLine.dose_slots?.[k] ? "border-slate-900" : "border-slate-500",
+                                              ].join(" ")}
+                                            >
+                                              <input
+                                                type="checkbox"
+                                                className="h-4 w-4 accent-slate-900"
+                                                checked={!!currentLine.dose_slots?.[k]}
+                                                onChange={() => {
+                                                  setCurrentLine((prev) => {
+                                                    const nextSlots = { ...(prev.dose_slots || emptySlots()) }
+                                                    nextSlots[k] = nextSlots[k] ? 0 : 1
+                                                    return applyAuto({ ...prev, dose_slots: nextSlots })
+                                                  })
+                                                }}
+                                              />
+                                              <span className="text-sm text-slate-700">{SLOT_META[k].label}</span>
+                                            </label>
+                                          ))}
+                                        </div>
+                                      </div>
+
+                                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                        <div className="space-y-1">
+                                          <Label className="text-[11px] text-slate-600">Days</Label>
+                                          <Input
+                                            value={currentLine.duration_days}
+                                            onChange={(e) => setCurrentLine((p) => applyAuto({ ...p, duration_days: e.target.value }))}
+                                            className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
+                                          />
+                                        </div>
+                                        <div className="space-y-1">
+                                          <Label className="text-[11px] text-slate-600">Dose (optional)</Label>
+                                          <Input
+                                            value={currentLine.dose}
+                                            onChange={(e) => setCurrentLine((p) => ({ ...p, dose: e.target.value }))}
+                                            className="h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
+                                          />
+                                        </div>
+                                        <div className="space-y-1">
+                                          <Label className="text-[11px] text-slate-600">Auto Qty</Label>
+                                          <div className="h-10 rounded-full border border-slate-500 bg-white/70 backdrop-blur px-3 flex items-center justify-between">
+                                            <div className="text-sm font-semibold text-slate-900">
+                                              {calcAutoQty(currentLine) || "—"}
+                                            </div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
                                 </div>
 
                                 <div className="flex flex-col justify-between gap-2">
                                   <div className="text-[11px] text-slate-500">
                                     <p className="leading-relaxed">
-                                      ✅ User only selects medicine + checks frequency + enters days.
+                                      ✅ Minimal steps: <b>Medicine → Frequency → Days → Add</b>
                                       <br />
-                                      Qty is calculated automatically and validated against available stock.
+                                      Qty is auto-calculated & validated with stock.
                                     </p>
                                   </div>
 
@@ -2137,7 +2286,7 @@ export default function PharmacyRx() {
                                         !currentLine.item
                                           ? "Select a medicine"
                                           : !calcAutoQty(currentLine)
-                                            ? "Select frequency + days"
+                                            ? "Pick frequency + days"
                                             : "Add line"
                                       }
                                     >
@@ -2151,125 +2300,80 @@ export default function PharmacyRx() {
 
                             {/* Lines list */}
                             <div className="border border-slate-100 rounded-2xl overflow-hidden bg-white/60 backdrop-blur">
-                              <div className="hidden md:block">
-                                <ScrollArea className="max-h-[340px]">
-                                  <div className="overflow-x-auto">
-                                    <table className="w-full min-w-[760px] text-[12px]">
-                                      <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur">
-                                        <tr className="text-[11px] text-slate-500">
-                                          <th className="text-left px-3 py-2 font-medium">#</th>
-                                          <th className="text-left px-3 py-2 font-medium">Medicine</th>
-                                          <th className="text-left px-3 py-2 font-medium">Dose / Freq / Days</th>
-                                          <th className="text-left px-3 py-2 font-medium">Route</th>
-                                          <th className="text-right px-3 py-2 font-medium">Qty</th>
-                                          <th className="text-right px-3 py-2 font-medium">Actions</th>
+                              <ScrollArea className="max-h-[340px]">
+                                <div className="overflow-x-auto">
+                                  <table className="w-full min-w-[760px] text-[12px]">
+                                    <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur">
+                                      <tr className="text-[11px] text-slate-500">
+                                        <th className="text-left px-3 py-2 font-medium">#</th>
+                                        <th className="text-left px-3 py-2 font-medium">Medicine</th>
+                                        <th className="text-left px-3 py-2 font-medium">Freq / Days</th>
+                                        <th className="text-left px-3 py-2 font-medium">Route</th>
+                                        <th className="text-right px-3 py-2 font-medium">Qty</th>
+                                        <th className="text-right px-3 py-2 font-medium">Actions</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {!lines.length && (
+                                        <tr>
+                                          <td colSpan={6} className="px-3 py-8 text-center text-[11px] text-slate-500">
+                                            No lines added. Use the panel above to add medicines.
+                                          </td>
                                         </tr>
-                                      </thead>
-                                      <tbody>
-                                        {!lines.length && (
-                                          <tr>
-                                            <td colSpan={6} className="px-3 py-8 text-center text-[11px] text-slate-500">
-                                              No lines added. Use the panel above to add medicines.
-                                            </td>
-                                          </tr>
-                                        )}
+                                      )}
 
-                                        {lines.map((l, idx) => (
-                                          <tr key={`${l.item_id || l.item?.id || idx}-${idx}`} className="border-t border-slate-100">
-                                            <td className="px-3 py-2 align-top text-slate-500">{idx + 1}</td>
-                                            <td className="px-3 py-2 align-top">
-                                              <div className="flex flex-col">
-                                                <span className="text-[12px] font-semibold text-slate-900">
-                                                  {l.item?.name || l.item_name || 'Unnamed medicine'}
+                                      {lines.map((l, idx) => (
+                                        <tr key={`${l.item_id || l.item?.id || idx}-${idx}`} className="border-t border-slate-100">
+                                          <td className="px-3 py-2 align-top text-slate-500">{idx + 1}</td>
+                                          <td className="px-3 py-2 align-top">
+                                            <div className="flex flex-col">
+                                              <span className="text-[12px] font-semibold text-slate-900">
+                                                {l.item?.name || l.item_name || "Unnamed medicine"}
+                                              </span>
+                                              {(l.strength || l.item?.strength) && (
+                                                <span className="text-[11px] text-slate-500">
+                                                  {l.strength || l.item?.strength}
                                                 </span>
-                                                {(l.strength || l.item?.strength) && (
-                                                  <span className="text-[11px] text-slate-500">
-                                                    {l.strength || l.item?.strength}
-                                                  </span>
-                                                )}
-                                              </div>
-                                            </td>
+                                              )}
+                                            </div>
+                                          </td>
 
-                                            <td className="px-3 py-2 align-top text-[12px] text-slate-700">
-                                              <div className="flex flex-col">
-                                                <span>
-                                                  {l.dose || '—'} • {l.frequency || '—'} • {l.duration_days ? `${l.duration_days} days` : '—'}
-                                                </span>
-                                                {l.instructions && (
-                                                  <span className="text-[11px] text-slate-500">{l.instructions}</span>
-                                                )}
-                                              </div>
-                                            </td>
+                                          <td className="px-3 py-2 align-top text-[12px] text-slate-700">
+                                            <div className="flex flex-col">
+                                              <span>
+                                                {l.frequency || slotsToFrequency(l.dose_slots)} •{" "}
+                                                {l.duration_days ? `${l.duration_days} days` : "—"}
+                                              </span>
+                                              {l.instructions && (
+                                                <span className="text-[11px] text-slate-500">{l.instructions}</span>
+                                              )}
+                                            </div>
+                                          </td>
 
-                                            <td className="px-3 py-2 align-top text-[12px] text-slate-700">
-                                              {l.route || '—'}
-                                            </td>
+                                          <td className="px-3 py-2 align-top text-[12px] text-slate-700">
+                                            {l.route || "—"}
+                                          </td>
 
-                                            <td className="px-3 py-2 align-top text-right text-[12px] text-slate-700 font-semibold">
-                                              {l.total_qty || calcAutoQty(l) || '—'}
-                                            </td>
+                                          <td className="px-3 py-2 align-top text-right text-[12px] text-slate-700 font-semibold">
+                                            {l.total_qty || calcAutoQty(l) || "—"}
+                                          </td>
 
-                                            <td className="px-3 py-2 align-top text-right">
-                                              <Button
-                                                variant="ghost"
-                                                size="sm"
-                                                className="h-8 px-2 text-[11px] text-slate-500 hover:text-red-600"
-                                                onClick={() => handleRemoveLine(idx)}
-                                              >
-                                                Remove
-                                              </Button>
-                                            </td>
-                                          </tr>
-                                        ))}
-                                      </tbody>
-                                    </table>
-                                  </div>
-                                </ScrollArea>
-                              </div>
-
-                              <div className="md:hidden p-3 space-y-2">
-                                {!lines.length ? (
-                                  <div className="text-center text-xs text-slate-500 py-6">
-                                    No lines added. Use the panel above to add medicines.
-                                  </div>
-                                ) : (
-                                  lines.map((l, idx) => (
-                                    <div key={`${l.item_id || l.item?.id || idx}-${idx}`} className="rounded-2xl border border-slate-500 bg-white/70 backdrop-blur p-3">
-                                      <div className="flex items-start justify-between gap-3">
-                                        <div className="min-w-0">
-                                          <div className="text-sm font-semibold text-slate-900 truncate">
-                                            {l.item?.name || l.item_name || 'Unnamed medicine'}
-                                          </div>
-                                          <div className="text-xs text-slate-500 truncate">
-                                            {(l.strength || l.item?.strength) ? (l.strength || l.item?.strength) : ''}
-                                          </div>
-                                        </div>
-                                        <div className="text-xs font-semibold text-slate-900">
-                                          Qty {l.total_qty || calcAutoQty(l) || '—'}
-                                        </div>
-                                      </div>
-
-                                      <div className="mt-2 text-xs text-slate-700">
-                                        {l.dose || '—'} • {l.frequency || '—'} • {l.duration_days ? `${l.duration_days} days` : '—'} • {l.route || '—'}
-                                      </div>
-                                      {l.instructions ? (
-                                        <div className="mt-1 text-xs text-slate-500">{l.instructions}</div>
-                                      ) : null}
-
-                                      <div className="mt-3 flex justify-end">
-                                        <Button
-                                          variant="outline"
-                                          size="sm"
-                                          className="h-9 rounded-full border-slate-500 bg-white"
-                                          onClick={() => handleRemoveLine(idx)}
-                                        >
-                                          Remove
-                                        </Button>
-                                      </div>
-                                    </div>
-                                  ))
-                                )}
-                              </div>
+                                          <td className="px-3 py-2 align-top text-right">
+                                            <Button
+                                              variant="ghost"
+                                              size="sm"
+                                              className="h-8 px-2 text-[11px] text-slate-500 hover:text-red-600"
+                                              onClick={() => handleRemoveLine(idx)}
+                                            >
+                                              Remove
+                                            </Button>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </ScrollArea>
                             </div>
 
                             <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 pt-1">
@@ -2280,7 +2384,7 @@ export default function PharmacyRx() {
                                 className="h-9 px-2 text-sm text-slate-500 justify-start"
                                 onClick={() => {
                                   resetForm(true)
-                                  setTab('list')
+                                  setTab("list")
                                 }}
                               >
                                 <ArrowLeft className="w-4 h-4 mr-1" />
@@ -2289,13 +2393,12 @@ export default function PharmacyRx() {
 
                               <div className="flex items-center gap-2 justify-end">
                                 <div className="text-[11px] text-slate-500 hidden md:block">
-                                  Patient:{' '}
+                                  Patient:{" "}
                                   <span className="font-medium text-slate-700">
-                                    {header.patient ? getPatientDisplay(header.patient) : header.type === 'COUNTER' ? 'Counter' : '—'}
+                                    {header.patient ? getPatientDisplay(header.patient) : header.type === "COUNTER" ? "Counter" : "—"}
                                   </span>
                                   <span className="mx-2 text-slate-300">|</span>
-                                  Lines:{' '}
-                                  <span className="font-medium text-slate-700">{lines.length}</span>
+                                  Lines: <span className="font-medium text-slate-700">{lines.length}</span>
                                 </div>
 
                                 <Button
@@ -2306,7 +2409,7 @@ export default function PharmacyRx() {
                                   disabled={submitting}
                                 >
                                   {submitting ? (
-                                    'Saving...'
+                                    "Saving..."
                                   ) : (
                                     <>
                                       <ClipboardList className="w-4 h-4 mr-1" />
@@ -2321,7 +2424,7 @@ export default function PharmacyRx() {
                       </div>
                     </TabsContent>
 
-                    {/* ------------------------------ DETAIL TAB ----------------------------- */}
+                    {/* DETAIL TAB */}
                     <TabsContent value="detail" className="mt-4">
                       {!selectedRx ? (
                         <GlassCard>
@@ -2331,20 +2434,20 @@ export default function PharmacyRx() {
                         </GlassCard>
                       ) : (
                         <div className="grid gap-4 lg:grid-cols-[minmax(0,1.05fr)_minmax(0,1.95fr)]">
-                          {/* LEFT: patient + rx meta */}
                           <GlassCard>
                             <CardHeader className="pb-3">
                               <CardTitle className="text-sm font-semibold flex items-center gap-2">
                                 <ClipboardList className="w-4 h-4 text-slate-500" />
                                 Prescription #{selectedRx.rx_number || selectedRx.id}
-                                <StatusPill status={selectedRx.status || 'PENDING'} />
+                                <StatusPill status={selectedRx.status || "PENDING"} />
                               </CardTitle>
 
                               <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-slate-500">
                                 <span>
-                                  Type:{' '}
+                                  Type:{" "}
                                   <Badge variant="outline" className="px-2 py-0.5">
-                                    {selectedRx.type || selectedRx.rx_type || 'OPD'}
+                                    {RX_TYPES.find((x) => x.value === fromBackendType(selectedRx.type || selectedRx.rx_type))?.label ||
+                                      fromBackendType(selectedRx.type || selectedRx.rx_type)}
                                   </Badge>
                                 </span>
                                 {selectedRx.priority && <span>Priority: {selectedRx.priority}</span>}
@@ -2371,9 +2474,7 @@ export default function PharmacyRx() {
                                 <Button
                                   variant="outline"
                                   className="rounded-full border-slate-500 bg-white/70 backdrop-blur"
-                                  onClick={() => {
-                                    setTab('list')
-                                  }}
+                                  onClick={() => setTab("list")}
                                 >
                                   <ArrowLeft className="w-4 h-4 mr-2" />
                                   Back
@@ -2382,15 +2483,15 @@ export default function PharmacyRx() {
                                 <Button
                                   className="rounded-full"
                                   onClick={() => {
-                                    // quick clone to new
-                                    const t = selectedRx.type || selectedRx.rx_type || 'OPD'
+                                    const t = fromBackendType(selectedRx.type || selectedRx.rx_type || "OPD")
                                     startNewRx(t)
-                                    // try to prefill patient if available
+
                                     const pid =
                                       selectedRx.patient_id ||
                                       selectedRx.patientId ||
                                       selectedRx.patient?.id ||
                                       null
+
                                     if (pid) {
                                       ; (async () => {
                                         const full = await hydratePatientById(pid, { silent: true })
@@ -2409,7 +2510,6 @@ export default function PharmacyRx() {
                             </CardContent>
                           </GlassCard>
 
-                          {/* RIGHT: medicines */}
                           <GlassCard>
                             <CardHeader className="pb-3">
                               <CardTitle className="text-sm font-semibold">
@@ -2422,105 +2522,65 @@ export default function PharmacyRx() {
 
                             <CardContent className="space-y-3">
                               <div className="border border-slate-100 rounded-2xl overflow-hidden bg-white/60 backdrop-blur">
-                                <div className="hidden md:block">
-                                  <ScrollArea className="max-h-[520px]">
-                                    <div className="overflow-x-auto">
-                                      <table className="w-full min-w-[760px] text-[12px]">
-                                        <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur">
-                                          <tr className="text-[11px] text-slate-500">
-                                            <th className="text-left px-3 py-2 font-medium">#</th>
-                                            <th className="text-left px-3 py-2 font-medium">Medicine</th>
-                                            <th className="text-left px-3 py-2 font-medium">Dose / Freq / Days</th>
-                                            <th className="text-left px-3 py-2 font-medium">Route</th>
-                                            <th className="text-right px-3 py-2 font-medium">Qty</th>
-                                          </tr>
-                                        </thead>
+                                <ScrollArea className="max-h-[520px]">
+                                  <div className="overflow-x-auto">
+                                    <table className="w-full min-w-[760px] text-[12px]">
+                                      <thead className="bg-slate-50/80 sticky top-0 z-10 backdrop-blur">
+                                        <tr className="text-[11px] text-slate-500">
+                                          <th className="text-left px-3 py-2 font-medium">#</th>
+                                          <th className="text-left px-3 py-2 font-medium">Medicine</th>
+                                          <th className="text-left px-3 py-2 font-medium">Freq / Days</th>
+                                          <th className="text-left px-3 py-2 font-medium">Route</th>
+                                          <th className="text-right px-3 py-2 font-medium">Qty</th>
+                                        </tr>
+                                      </thead>
 
-                                        <tbody>
-                                          {!selectedRxLines.length && (
-                                            <tr>
-                                              <td colSpan={5} className="px-3 py-8 text-center text-[11px] text-slate-500">
-                                                No lines found for this prescription.
+                                      <tbody>
+                                        {!selectedRxLines.length && (
+                                          <tr>
+                                            <td colSpan={5} className="px-3 py-8 text-center text-[11px] text-slate-500">
+                                              No lines found for this prescription.
+                                            </td>
+                                          </tr>
+                                        )}
+
+                                        {selectedRxLines.map((l, idx) => {
+                                          const itemName = pick(l, ["item_name", "medicine_name", "name"], "")
+                                          const strength = pick(l, ["strength", "item_strength"], "")
+                                          const route = pick(l, ["route", "route_code"], "")
+                                          const freq = pick(l, ["frequency", "frequency_code", "freq"], "")
+                                          const days = pick(l, ["duration_days", "days", "duration"], "")
+                                          const qty = pick(l, ["total_qty", "requested_qty", "qty"], "")
+
+                                          return (
+                                            <tr key={l.id || idx} className="border-t border-slate-100">
+                                              <td className="px-3 py-2 align-top text-slate-500">{idx + 1}</td>
+                                              <td className="px-3 py-2 align-top">
+                                                <div className="flex flex-col">
+                                                  <span className="text-[12px] font-semibold text-slate-900">
+                                                    {itemName || "Unnamed medicine"}
+                                                  </span>
+                                                  {strength ? (
+                                                    <span className="text-[11px] text-slate-500">{strength}</span>
+                                                  ) : null}
+                                                </div>
+                                              </td>
+                                              <td className="px-3 py-2 align-top text-[12px] text-slate-700">
+                                                {freq || "—"} • {days ? `${days} days` : "—"}
+                                              </td>
+                                              <td className="px-3 py-2 align-top text-[12px] text-slate-700">
+                                                {route || "—"}
+                                              </td>
+                                              <td className="px-3 py-2 align-top text-right text-[12px] text-slate-700 font-semibold">
+                                                {qty || "—"}
                                               </td>
                                             </tr>
-                                          )}
-
-                                          {selectedRxLines.map((l, idx) => {
-                                            const n = normalizeLine(l)
-                                            return (
-                                              <tr key={l.id || idx} className="border-t border-slate-100">
-                                                <td className="px-3 py-2 align-top text-slate-500">{idx + 1}</td>
-                                                <td className="px-3 py-2 align-top">
-                                                  <div className="flex flex-col">
-                                                    <span className="text-[12px] font-semibold text-slate-900">
-                                                      {n.itemName || 'Unnamed medicine'}
-                                                    </span>
-                                                    {n.strength ? (
-                                                      <span className="text-[11px] text-slate-500">{n.strength}</span>
-                                                    ) : null}
-                                                  </div>
-                                                </td>
-                                                <td className="px-3 py-2 align-top text-[12px] text-slate-700">
-                                                  <div className="flex flex-col">
-                                                    <span>
-                                                      {n.dose || '—'} • {n.frequency || '—'} •{' '}
-                                                      {n.duration_days ? `${n.duration_days} days` : '—'}
-                                                    </span>
-                                                    {n.instructions ? (
-                                                      <span className="text-[11px] text-slate-500">{n.instructions}</span>
-                                                    ) : null}
-                                                  </div>
-                                                </td>
-                                                <td className="px-3 py-2 align-top text-[12px] text-slate-700">
-                                                  {n.route || '—'}
-                                                </td>
-                                                <td className="px-3 py-2 align-top text-right text-[12px] text-slate-700 font-semibold">
-                                                  {n.qty || calcAutoQty({ frequency: n.frequency, duration_days: n.duration_days }) || '—'}
-                                                </td>
-                                              </tr>
-                                            )
-                                          })}
-                                        </tbody>
-                                      </table>
-                                    </div>
-                                  </ScrollArea>
-                                </div>
-
-                                <div className="md:hidden p-3 space-y-2">
-                                  {!selectedRxLines.length ? (
-                                    <div className="text-center text-xs text-slate-500 py-6">
-                                      No lines found for this prescription.
-                                    </div>
-                                  ) : (
-                                    selectedRxLines.map((l, idx) => {
-                                      const n = normalizeLine(l)
-                                      return (
-                                        <div key={l.id || idx} className="rounded-2xl border border-slate-500 bg-white/70 backdrop-blur p-3">
-                                          <div className="flex items-start justify-between gap-3">
-                                            <div className="min-w-0">
-                                              <div className="text-sm font-semibold text-slate-900 truncate">
-                                                {n.itemName || 'Unnamed medicine'}
-                                              </div>
-                                              <div className="text-xs text-slate-500 truncate">
-                                                {n.strength || ''}
-                                              </div>
-                                            </div>
-                                            <div className="text-xs font-semibold text-slate-900">
-                                              Qty {n.qty || calcAutoQty({ frequency: n.frequency, duration_days: n.duration_days }) || '—'}
-                                            </div>
-                                          </div>
-
-                                          <div className="mt-2 text-xs text-slate-700">
-                                            {n.dose || '—'} • {n.frequency || '—'} • {n.duration_days ? `${n.duration_days} days` : '—'} • {n.route || '—'}
-                                          </div>
-                                          {n.instructions ? (
-                                            <div className="mt-1 text-xs text-slate-500">{n.instructions}</div>
-                                          ) : null}
-                                        </div>
-                                      )
-                                    })
-                                  )}
-                                </div>
+                                          )
+                                        })}
+                                      </tbody>
+                                    </table>
+                                  </div>
+                                </ScrollArea>
                               </div>
                             </CardContent>
                           </GlassCard>
@@ -2536,5 +2596,4 @@ export default function PharmacyRx() {
       </div>
     </div>
   )
-
 }
