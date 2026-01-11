@@ -1,70 +1,74 @@
 // FILE: src/components/QuickOrders.jsx
-import { useEffect, useMemo, useRef, useState, useCallback } from "react"
+import { useCallback, useEffect, useMemo, useState } from "react"
 import { motion } from "framer-motion"
 import {
     FlaskConical,
     Radio,
     Pill,
     ScissorsLineDashed,
+    ClipboardList,
     Activity,
     Clock,
     User,
     BedDouble,
     Hash,
     AlertTriangle,
-    Search,
     Loader2,
     Download,
     Eye,
     Printer,
-    ClipboardCopy,
-    Sparkles,
-    Trash2,
-    FileText,
     RefreshCcw,
     X,
 } from "lucide-react"
+
 import { toast } from "sonner"
 
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Textarea } from "@/components/ui/textarea"
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs"
 import { ScrollArea } from "@/components/ui/scroll-area"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
+import { Button } from "@/components/ui/button"
 
-// ---- Quick Orders helpers ----
+
+import LabScreen from "./quickorders/LabScreen"
+import RisScreen from "./quickorders/RisScreen"
+import RxScreen from "./quickorders/RxScreen"
+import OtScreen from "./quickorders/OtScreen"
+import WardPatientUsageTab from "./quickorders/WardPatientUsagePage"
 import {
-    createPharmacyPrescriptionFromContext,
-    createOtScheduleFromContext,
+    cx,
+    useMediaQuery,
+    safePatientName,
+    safeGenderAge,
+    fmtIST,
+    extractApiError,
+    PremiumButton,
+    StatusChip,
+    openBlobInNewTab,
+    downloadBlob,
+    printBlob,
+} from "@/components/quickorders/_shared"
+
+// ---- Quick Orders APIs ----
+import {
     listLabOrdersForContext,
     listRadiologyOrdersForContext,
     listPharmacyPrescriptionsForContext,
     listOtSchedulesForContext,
-
-    // ✅ Rx full details + PDF
     getRxDetails,
     downloadRxPdf,
-
-    // ✅ Visit summary PDF (keep)
     fetchVisitSummaryPdf,
-} from "../api/quickOrders"
+} from "@/api/quickOrders"
 
-// ---- Core APIs for Lab & Radiology ----
-import { listLabTests, createLisOrder, fetchLisReportPdf } from "../api/lab"
-import { listRisTests, createRisOrder } from "../api/ris"
+// ---- Lab pdf ----
+import { fetchLisReportPdf } from "@/api/lab"
 
-// Pharmacy inventory search
-import { searchPharmacyItems } from "../api/pharmacy"
+// ✅ NEW: Ward summary (optional, to show count + recent usage on home)
+import { invListPatientConsumptions } from "@/api/inventoryConsumption"
 
-// OT procedures master
-import { listOtProcedures } from "../api/ot"
 
-// pickers
-import DoctorPicker from "../opd/components/DoctorPicker"
-import WardRoomBedPicker from "../components/pickers/BedPicker"
+
+
 
 const fadeIn = {
     initial: { opacity: 0, y: 6 },
@@ -72,284 +76,14 @@ const fadeIn = {
     transition: { duration: 0.18 },
 }
 
-const LS_RX_TEMPLATES = "nutryah_rx_templates_v1"
-
-function cx(...a) {
-    return a.filter(Boolean).join(" ")
+function normalizeList(v) {
+    if (Array.isArray(v)) return v
+    if (Array.isArray(v?.data)) return v.data
+    if (Array.isArray(v?.data?.items)) return v.data.items
+    if (Array.isArray(v?.items)) return v.items
+    return []
 }
 
-/* =========================================================
-   Responsive helper
-========================================================= */
-function useMediaQuery(query) {
-    const [matches, setMatches] = useState(() => {
-        if (typeof window === "undefined") return false
-        return window.matchMedia(query).matches
-    })
-
-    useEffect(() => {
-        if (typeof window === "undefined") return
-        const m = window.matchMedia(query)
-        const onChange = () => setMatches(m.matches)
-        onChange()
-        m.addEventListener?.("change", onChange) || m.addListener(onChange)
-        return () => m.removeEventListener?.("change", onChange) || m.removeListener(onChange)
-    }, [query])
-
-    return matches
-}
-
-/* =========================================================
-   Premium UI Tokens (NUTRYAH-ish)
-========================================================= */
-const TONE = {
-    lab: {
-        solid:
-            "bg-gradient-to-b from-sky-500 via-sky-600 to-sky-700 text-white shadow-[0_12px_30px_rgba(2,132,199,0.22)] hover:brightness-[1.06] active:brightness-[0.98]",
-        soft: "bg-sky-50 text-sky-800 border border-sky-200 hover:bg-sky-100/70",
-        ring: "focus-visible:ring-sky-500/35",
-        chip: "bg-sky-50 text-sky-700",
-        icon: "text-sky-600",
-    },
-    ris: {
-        solid:
-            "bg-gradient-to-b from-indigo-500 via-indigo-600 to-indigo-700 text-white shadow-[0_12px_30px_rgba(79,70,229,0.22)] hover:brightness-[1.06] active:brightness-[0.98]",
-        soft: "bg-indigo-50 text-indigo-800 border border-indigo-200 hover:bg-indigo-100/70",
-        ring: "focus-visible:ring-indigo-500/35",
-        chip: "bg-indigo-50 text-indigo-700",
-        icon: "text-indigo-600",
-    },
-    rx: {
-        solid:
-            "bg-gradient-to-b from-emerald-500 via-emerald-600 to-emerald-700 text-white shadow-[0_12px_30px_rgba(16,185,129,0.22)] hover:brightness-[1.06] active:brightness-[0.98]",
-        soft:
-            "bg-emerald-50 text-emerald-800 border border-emerald-200 hover:bg-emerald-100/70",
-        ring: "focus-visible:ring-emerald-500/35",
-        chip: "bg-emerald-50 text-emerald-700",
-        icon: "text-emerald-600",
-    },
-    ot: {
-        solid:
-            "bg-gradient-to-b from-amber-500 via-amber-600 to-amber-700 text-white shadow-[0_12px_30px_rgba(245,158,11,0.22)] hover:brightness-[1.06] active:brightness-[0.98]",
-        soft: "bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100/70",
-        ring: "focus-visible:ring-amber-500/35",
-        chip: "bg-amber-50 text-amber-800",
-        icon: "text-amber-600",
-    },
-    slate: {
-        solid:
-            "bg-gradient-to-b from-slate-800 via-slate-900 to-black text-white shadow-[0_14px_34px_rgba(2,6,23,0.24)] hover:brightness-[1.06] active:brightness-[0.98]",
-        soft: "bg-slate-50 text-slate-800 border border-slate-200 hover:bg-slate-100/70",
-        ring: "focus-visible:ring-slate-500/30",
-        chip: "bg-slate-100 text-slate-700",
-        icon: "text-slate-600",
-    },
-}
-
-function StatusChip({ children, tone = "slate" }) {
-    const t = TONE[tone] || TONE.slate
-    return (
-        <span
-            className={cx(
-                "inline-flex items-center rounded-full px-2.5 py-0.5 text-[11px] font-semibold",
-                t.chip
-            )}
-        >
-            {children}
-        </span>
-    )
-}
-
-function IconPill({ icon: Icon, tone = "slate", title, subtitle }) {
-    const t = TONE[tone] || TONE.slate
-    return (
-        <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/70 px-3 py-2 backdrop-blur">
-            <div
-                className={cx(
-                    "h-9 w-9 rounded-2xl flex items-center justify-center shadow-sm border",
-                    t.soft
-                )}
-            >
-                <Icon className={cx("h-4 w-4", t.icon)} />
-            </div>
-            <div className="min-w-0">
-                <div className="text-[11px] text-slate-500">{title}</div>
-                <div className="text-[12px] font-semibold text-slate-900 truncate">{subtitle}</div>
-            </div>
-        </div>
-    )
-}
-
-function PremiumButton({ tone = "slate", variant = "solid", className = "", ...props }) {
-    const t = TONE[tone] || TONE.slate
-    const base =
-        "rounded-2xl font-semibold transition-all focus-visible:outline-none focus-visible:ring-4 disabled:opacity-60 disabled:pointer-events-none"
-    const v =
-        variant === "solid"
-            ? t.solid
-            : variant === "soft"
-                ? t.soft
-                : "bg-white border border-slate-300 text-slate-800 hover:bg-slate-50"
-    return (
-        <Button
-            {...props}
-            className={cx(base, v, t.ring, className)}
-            variant={variant === "outline" ? "outline" : "default"}
-        />
-    )
-}
-
-/* =========================================================
-   Small helpers
-========================================================= */
-function safePatientName(p) {
-    if (!p) return "Unknown patient"
-    return (
-        p.full_name ||
-        p.name ||
-        `${p.prefix || ""} ${p.first_name || ""} ${p.last_name || ""}`.replace(/\s+/g, " ").trim()
-    )
-}
-
-function safeGenderAge(p) {
-    if (!p) return "—"
-    const gender = p.gender || p.sex || "—"
-    const age = p.age_display || p.age || "—"
-    return `${gender} • ${age}`
-}
-
-function fmtIST(v) {
-    if (!v) return "—"
-    try {
-        const d = new Date(v)
-        if (Number.isNaN(d.getTime())) return String(v)
-        return d.toLocaleString("en-IN", {
-            timeZone: "Asia/Kolkata",
-            year: "numeric",
-            month: "short",
-            day: "2-digit",
-            hour: "2-digit",
-            minute: "2-digit",
-        })
-    } catch {
-        return String(v)
-    }
-}
-
-function extractApiError(err, fallback = "Something went wrong") {
-    const detail = err?.response?.data?.detail
-    if (typeof detail === "string") return detail
-
-    if (detail && !Array.isArray(detail) && typeof detail === "object") {
-        if (detail.msg) return detail.msg
-        try {
-            return JSON.stringify(detail)
-        } catch {
-            return fallback
-        }
-    }
-
-    if (Array.isArray(detail)) {
-        const msgs = detail.map((d) => d?.msg).filter(Boolean)
-        if (msgs.length) return msgs.join(", ")
-        try {
-            return JSON.stringify(detail)
-        } catch {
-            return fallback
-        }
-    }
-
-    if (err?.message) return err.message
-    return fallback
-}
-
-/* =========================================================
-   RX helpers
-========================================================= */
-function freqToSlots(freq) {
-    if (!freq) return { am: 0, af: 0, pm: 0, night: 0 }
-    const f = String(freq).trim().toUpperCase()
-
-    if (f.includes("-")) {
-        const parts = f.split("-").map((x) => parseInt(x || "0", 10) || 0)
-        if (parts.length === 3) return { am: parts[0], af: parts[1], pm: 0, night: parts[2] }
-        if (parts.length >= 4) return { am: parts[0], af: parts[1], pm: parts[2], night: parts[3] }
-    }
-
-    const map = {
-        OD: { am: 1, af: 0, pm: 0, night: 0 },
-        QD: { am: 1, af: 0, pm: 0, night: 0 },
-        BD: { am: 1, af: 0, pm: 0, night: 1 },
-        BID: { am: 1, af: 0, pm: 0, night: 1 },
-        TID: { am: 1, af: 1, pm: 0, night: 1 },
-        TDS: { am: 1, af: 1, pm: 0, night: 1 },
-        QID: { am: 1, af: 1, pm: 1, night: 1 },
-        HS: { am: 0, af: 0, pm: 0, night: 1 },
-        NIGHT: { am: 0, af: 0, pm: 0, night: 1 },
-    }
-    return map[f] || { am: 0, af: 0, pm: 0, night: 0 }
-}
-
-function slotsToFreq(slots) {
-    const a = slots?.am ? 1 : 0
-    const b = slots?.af ? 1 : 0
-    const c = slots?.pm ? 1 : 0
-    const d = slots?.night ? 1 : 0
-    return `${a}-${b}-${c}-${d}`
-}
-
-function openBlobInNewTab(blob) {
-    const url = URL.createObjectURL(blob)
-    window.open(url, "_blank", "noopener,noreferrer")
-    setTimeout(() => URL.revokeObjectURL(url), 60_000)
-}
-
-function downloadBlob(blob, filename) {
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    setTimeout(() => URL.revokeObjectURL(url), 60_000)
-}
-
-function printBlob(blob) {
-    const url = URL.createObjectURL(blob)
-    const w = window.open(url, "_blank", "noopener,noreferrer")
-    if (!w) {
-        toast.error("Popup blocked. Please allow popups to print.")
-        return
-    }
-    const timer = setInterval(() => {
-        try {
-            w.focus()
-            w.print()
-            clearInterval(timer)
-            setTimeout(() => URL.revokeObjectURL(url), 60_000)
-        } catch { }
-    }, 700)
-    setTimeout(() => clearInterval(timer), 8000)
-}
-
-async function labPdfActions(orderId, mode) {
-    if (!orderId) return toast.error("Invalid Lab Order ID")
-    try {
-        const res = await fetchLisReportPdf(orderId)
-        const blob = new Blob([res.data], { type: "application/pdf" })
-        if (mode === "view") openBlobInNewTab(blob)
-        if (mode === "download") downloadBlob(blob, `lab_report_${orderId}.pdf`)
-        if (mode === "print") printBlob(blob)
-    } catch (e) {
-        console.error(e)
-        toast.error(extractApiError(e, "Lab PDF failed"))
-    }
-}
-
-/* =========================================================
-   Component
-========================================================= */
 export default function QuickOrders({
     patient,
     contextType, // 'opd' | 'ipd'
@@ -362,92 +96,14 @@ export default function QuickOrders({
     className = "",
 }) {
     const isMobile = useMediaQuery("(max-width: 640px)")
-    const [activeTab, setActiveTab] = useState("lab")
+
+    // screens: home + lab/ris/rx/ot/ward
+    const [screen, setScreen] = useState("home")
 
     const [loadingSummary, setLoadingSummary] = useState(false)
-    const [summary, setSummary] = useState({ lab: [], ris: [], rx: [], ot: [] })
+    const [summary, setSummary] = useState({ lab: [], ris: [], rx: [], ot: [], ward: [] })
 
-    // ------------- LAB state -------------
-    const [labQuery, setLabQuery] = useState("")
-    const [labOptions, setLabOptions] = useState([])
-    const [labSearching, setLabSearching] = useState(false)
-    const [showLabDropdown, setShowLabDropdown] = useState(false)
-    const labDropRef = useRef(null)
-
-    const [labSelectedTests, setLabSelectedTests] = useState([]) // [{id, code, name}]
-    const [labPriority, setLabPriority] = useState("routine")
-    const [labNote, setLabNote] = useState("")
-    const [labSubmitting, setLabSubmitting] = useState(false)
-
-    const labTestIds = useMemo(() => labSelectedTests.map((t) => t.id), [labSelectedTests])
-
-    // ------------- RIS state -------------
-    const [risQuery, setRisQuery] = useState("")
-    const [risOptions, setRisOptions] = useState([])
-    const [risSearching, setRisSearching] = useState(false)
-    const [showRisDropdown, setShowRisDropdown] = useState(false)
-    const risDropRef = useRef(null)
-
-    const [risSelectedTests, setRisSelectedTests] = useState([]) // [{id, code, name, modality}]
-    const [risPriority, setRisPriority] = useState("routine")
-    const [risNote, setRisNote] = useState("")
-    const [risSubmitting, setRisSubmitting] = useState(false)
-
-    const risTestIds = useMemo(() => risSelectedTests.map((t) => t.id), [risSelectedTests])
-
-    // ------------- Pharmacy state -------------
-    const [rxQuery, setRxQuery] = useState("")
-    const [rxOptions, setRxOptions] = useState([])
-    const [rxSearching, setRxSearching] = useState(false)
-    const [showRxDropdown, setShowRxDropdown] = useState(false)
-    const rxDropRef = useRef(null)
-
-    const [rxSelectedItem, setRxSelectedItem] = useState(null)
-    const [rxLines, setRxLines] = useState([])
-    const [rxDose, setRxDose] = useState("")
-    const [rxDuration, setRxDuration] = useState("5")
-    const [rxQty, setRxQty] = useState("10")
-    const [rxRoute, setRxRoute] = useState("oral")
-    const [rxTiming, setRxTiming] = useState("BF")
-    const [rxNote, setRxNote] = useState("")
-    const [rxSubmitting, setRxSubmitting] = useState(false)
-
-    const [rxSlots, setRxSlots] = useState({ am: true, af: false, pm: false, night: true })
-
-    const [rxTemplates, setRxTemplates] = useState(() => {
-        try {
-            const raw = localStorage.getItem(LS_RX_TEMPLATES)
-            const arr = raw ? JSON.parse(raw) : []
-            return Array.isArray(arr) ? arr : []
-        } catch {
-            return []
-        }
-    })
-    const [rxTemplateId, setRxTemplateId] = useState("")
-    const [lastRx, setLastRx] = useState(null)
-
-    // ------------- OT state -------------
-    const [otDate, setOtDate] = useState("")
-    const [otStart, setOtStart] = useState("")
-    const [otEnd, setOtEnd] = useState("")
-
-    const [otProcedureQuery, setOtProcedureQuery] = useState("")
-    const [otProcedureOptions, setOtProcedureOptions] = useState([])
-    const [otProcedureSearching, setOtProcedureSearching] = useState(false)
-    const [showOtDropdown, setShowOtDropdown] = useState(false)
-    const otDropRef = useRef(null)
-    const [otSelectedProcedure, setOtSelectedProcedure] = useState(null)
-
-    const [otPriority, setOtPriority] = useState("Elective")
-    const [otSide, setOtSide] = useState("")
-    const [otNote, setOtNote] = useState("")
-
-    const [otBedId, setOtBedId] = useState(null)
-    const [otSurgeonId, setOtSurgeonId] = useState(currentUser?.id || null)
-    const [otAnaesthetistId, setOtAnaesthetistId] = useState(null)
-    const [otSubmitting, setOtSubmitting] = useState(false)
-
-    // ------------- Details sheet -------------
+    // Details sheet
     const [detailsOpen, setDetailsOpen] = useState(false)
     const [detailsType, setDetailsType] = useState(null) // 'lab' | 'ris' | 'rx' | 'ot'
     const [detailsItem, setDetailsItem] = useState(null)
@@ -462,9 +118,7 @@ export default function QuickOrders({
         setDetailsLoading(false)
     }
 
-    // ------------------------------------------------------
     // Context
-    // ------------------------------------------------------
     const ctx = useMemo(() => {
         if (!contextType) return null
         const v = String(contextType).toLowerCase()
@@ -484,73 +138,57 @@ export default function QuickOrders({
                 : "OP Number not set"
 
     const bedInfo = ctx === "ipd" && bedLabel ? `Bed: ${bedLabel}` : null
-    const orderingUserId = currentUser?.id || null
     const canUseContext = !!(patient?.id && ctx && contextId)
 
-    // ------------------------------------------------------
-    // Close dropdown on outside click / ESC
-    // ------------------------------------------------------
-    useEffect(() => {
-        const onDown = (e) => {
-            const t = e.target
-            if (labDropRef.current && !labDropRef.current.contains(t)) setShowLabDropdown(false)
-            if (risDropRef.current && !risDropRef.current.contains(t)) setShowRisDropdown(false)
-            if (rxDropRef.current && !rxDropRef.current.contains(t)) setShowRxDropdown(false)
-            if (otDropRef.current && !otDropRef.current.contains(t)) setShowOtDropdown(false)
-        }
-        const onKey = (e) => {
-            if (e.key === "Escape") {
-                setShowLabDropdown(false)
-                setShowRisDropdown(false)
-                setShowRxDropdown(false)
-                setShowOtDropdown(false)
-                if (detailsOpen) closeDetails()
-            }
-        }
-        document.addEventListener("mousedown", onDown)
-        document.addEventListener("keydown", onKey)
-        return () => {
-            document.removeEventListener("mousedown", onDown)
-            document.removeEventListener("keydown", onKey)
-        }
-    }, [detailsOpen])
+    const wardEncounterType = useMemo(() => {
+        if (ctx === "ipd") return "IP"
+        if (ctx === "opd") return "OP"
+        return ctx ? String(ctx).toUpperCase() : ""
+    }, [ctx])
 
-    // ------------------------------------------------------
-    // Load recent orders summary
-    // ------------------------------------------------------
+    // Load summary
     const loadSummary = useCallback(async () => {
         if (!patient?.id || !ctx || !contextId) return
         setLoadingSummary(true)
         try {
-            const [lab, ris, rx, ot] = await Promise.all([
+            const [lab, ris, rx, ot, ward] = await Promise.all([
                 listLabOrdersForContext({ patientId: patient.id, contextType: ctx, contextId, limit: 10 }),
                 listRadiologyOrdersForContext({ patientId: patient.id, contextType: ctx, contextId, limit: 10 }),
                 listPharmacyPrescriptionsForContext({ patientId: patient.id, contextType: ctx, contextId, limit: 10 }),
                 ctx === "ipd"
                     ? listOtSchedulesForContext({ patientId: patient.id, admissionId: contextId, limit: 10 })
                     : Promise.resolve([]),
+                // ✅ Ward usage summary (optional, helps counts + recent list)
+                invListPatientConsumptions({
+                    limit: 10,
+                    offset: 0,
+                    patient_id: Number(patient.id),
+                    encounter_type: wardEncounterType,
+                    encounter_id: Number(contextId),
+                }).catch(() => []),
             ])
+
             setSummary({
-                lab: lab || [],
-                ris: ris || [],
-                rx: rx || [],
-                ot: ot || [],
+                lab: normalizeList(lab),
+                ris: normalizeList(ris),
+                rx: normalizeList(rx),
+                ot: normalizeList(ot),
+                ward: normalizeList(ward),
             })
         } catch (err) {
             console.error("Failed to load quick orders summary", err)
             toast.error("Unable to load recent orders for this patient.")
+            setSummary({ lab: [], ris: [], rx: [], ot: [], ward: [] })
         } finally {
             setLoadingSummary(false)
         }
-    }, [patient?.id, ctx, contextId])
+    }, [patient?.id, ctx, contextId, wardEncounterType])
 
     useEffect(() => {
         loadSummary()
     }, [loadSummary])
 
-    // ------------------------------------------------------
-    // Visit Summary PDF actions (OPD)
-    // ------------------------------------------------------
+    // Visit summary PDF actions (OPD)
     const visitPdfActions = async (mode) => {
         if (ctx !== "opd" || !contextId) return toast.error("Visit context missing")
         try {
@@ -565,278 +203,22 @@ export default function QuickOrders({
         }
     }
 
-    // ------------------------------------------------------
-    // LAB master search (debounced)
-    // ------------------------------------------------------
-    useEffect(() => {
-        if (!labQuery || labQuery.trim().length < 2) {
-            setLabOptions([])
-            return
-        }
-        let cancelled = false
-        const t = setTimeout(async () => {
-            try {
-                setLabSearching(true)
-                const { data } = await listLabTests({ q: labQuery.trim() })
-                if (cancelled) return
-                const items = Array.isArray(data) ? data : data?.items || []
-                setLabOptions(items)
-                setShowLabDropdown(true)
-            } catch (err) {
-                console.error(err)
-                toast.error("Failed to fetch lab tests.")
-            } finally {
-                if (!cancelled) setLabSearching(false)
-            }
-        }, 180)
-        return () => {
-            cancelled = true
-            clearTimeout(t)
-        }
-    }, [labQuery])
-
-    function handleSelectLabTest(t) {
-        if (!t?.id) return
-        setLabSelectedTests((prev) => {
-            if (prev.some((x) => x.id === t.id)) return prev
-            return [
-                ...prev,
-                {
-                    id: t.id,
-                    code: t.code || t.short_code || "",
-                    name: t.name || t.test_name || "",
-                },
-            ]
-        })
-        setLabQuery("")
-        setShowLabDropdown(false)
-    }
-
-    function handleRemoveLabTest(id) {
-        setLabSelectedTests((prev) => prev.filter((t) => t.id !== id))
-    }
-
-    async function handleSubmitLab() {
-        if (!labTestIds.length) return toast.error("Add at least one lab test.")
-        if (!patient?.id) return toast.error("Patient missing for lab order.")
-        if (!ctx || !contextId) return toast.error("Missing context (OPD/IPD) for lab order.")
-
-        setLabSubmitting(true)
+    // Lab PDF actions
+    const labPdfActions = async (orderId, mode) => {
+        if (!orderId) return toast.error("Invalid Lab Order ID")
         try {
-            await createLisOrder({
-                patient_id: patient.id,
-                context_type: ctx,
-                context_id: contextId,
-                priority: labPriority,
-                test_ids: labTestIds,
-                note: labNote || null,
-            })
-            toast.success("Lab order created")
-            setLabSelectedTests([])
-            setLabNote("")
-            setLabQuery("")
-            loadSummary()
-        } catch (err) {
-            console.error(err)
-            toast.error(extractApiError(err, "Failed to create lab order"))
-        } finally {
-            setLabSubmitting(false)
+            const res = await fetchLisReportPdf(orderId)
+            const blob = new Blob([res.data], { type: "application/pdf" })
+            if (mode === "view") openBlobInNewTab(blob)
+            if (mode === "download") downloadBlob(blob, `lab_report_${orderId}.pdf`)
+            if (mode === "print") printBlob(blob)
+        } catch (e) {
+            console.error(e)
+            toast.error(extractApiError(e, "Lab PDF failed"))
         }
     }
 
-    // ------------------------------------------------------
-    // RIS master search (debounced)
-    // ------------------------------------------------------
-    useEffect(() => {
-        if (!risQuery || risQuery.trim().length < 2) {
-            setRisOptions([])
-            return
-        }
-        let cancelled = false
-        const t = setTimeout(async () => {
-            try {
-                setRisSearching(true)
-                const { data } = await listRisTests({ q: risQuery.trim() })
-                if (cancelled) return
-                const items = Array.isArray(data) ? data : data?.items || []
-                setRisOptions(items)
-                setShowRisDropdown(true)
-            } catch (err) {
-                console.error(err)
-                toast.error("Failed to fetch radiology tests.")
-            } finally {
-                if (!cancelled) setRisSearching(false)
-            }
-        }, 180)
-        return () => {
-            cancelled = true
-            clearTimeout(t)
-        }
-    }, [risQuery])
-
-    function handleSelectRisTest(t) {
-        if (!t?.id) return
-        setRisSelectedTests((prev) => {
-            if (prev.some((x) => x.id === t.id)) return prev
-            return [
-                ...prev,
-                {
-                    id: t.id,
-                    code: t.code || "",
-                    name: t.name || t.test_name || "",
-                    modality: t.modality || t.modality_code || "",
-                },
-            ]
-        })
-        setRisQuery("")
-        setShowRisDropdown(false)
-    }
-
-    function handleRemoveRisTest(id) {
-        setRisSelectedTests((prev) => prev.filter((t) => t.id !== id))
-    }
-
-    async function handleSubmitRis() {
-        if (!risTestIds.length) return toast.error("Add at least one radiology test.")
-        if (!patient?.id) return toast.error("Patient missing for radiology order.")
-        if (!ctx || !contextId) return toast.error("Missing context (OPD/IPD) for radiology order.")
-
-        setRisSubmitting(true)
-        try {
-            await Promise.all(
-                risTestIds.map((id) =>
-                    createRisOrder({
-                        patient_id: patient.id,
-                        test_id: Number(id),
-                        context_type: ctx,
-                        context_id: contextId,
-                        ordering_user_id: orderingUserId,
-                        priority: risPriority,
-                        note: risNote || null,
-                    })
-                )
-            )
-            toast.success("Radiology order(s) created")
-            setRisSelectedTests([])
-            setRisNote("")
-            setRisQuery("")
-            loadSummary()
-        } catch (err) {
-            console.error(err)
-            toast.error(extractApiError(err, "Failed to create radiology order(s)"))
-        } finally {
-            setRisSubmitting(false)
-        }
-    }
-
-    // ------------------------------------------------------
-    // Pharmacy inventory search (debounced)
-    // ------------------------------------------------------
-    useEffect(() => {
-        if (!rxQuery || rxQuery.trim().length < 2) {
-            setRxOptions([])
-            return
-        }
-        let cancelled = false
-        const t = setTimeout(async () => {
-            try {
-                setRxSearching(true)
-                const res = await searchPharmacyItems({ q: rxQuery.trim(), type: "drug", limit: 20 })
-                if (cancelled) return
-                const items = Array.isArray(res?.data) ? res.data : []
-                setRxOptions(items)
-                setShowRxDropdown(true)
-            } catch (err) {
-                console.error(err)
-                toast.error("Failed to search medicines from inventory.")
-            } finally {
-                if (!cancelled) setRxSearching(false)
-            }
-        }, 180)
-        return () => {
-            cancelled = true
-            clearTimeout(t)
-        }
-    }, [rxQuery])
-
-    function handleSelectRxItem(it) {
-        setRxSelectedItem(it)
-        setRxQuery(it.name || "")
-        setShowRxDropdown(false)
-    }
-
-    function applyRxMacro(name) {
-        if (name === "OD") setRxSlots({ am: true, af: false, pm: false, night: false })
-        if (name === "BD") setRxSlots({ am: true, af: false, pm: false, night: true })
-        if (name === "TID") setRxSlots({ am: true, af: true, pm: false, night: true })
-        if (name === "QID") setRxSlots({ am: true, af: true, pm: true, night: true })
-        if (name === "NIGHT") setRxSlots({ am: false, af: false, pm: false, night: true })
-    }
-
-    function handleAddRxLine() {
-        if (!rxSelectedItem) return toast.error("Select a medicine from inventory.")
-        const qty = parseFloat(rxQty || "0") || 0
-        const duration = parseInt(rxDuration || "0", 10) || null
-        if (!qty) return toast.error("Enter a valid quantity.")
-
-        const frequency_code = slotsToFreq(rxSlots)
-
-        setRxLines((prev) => [
-            ...prev,
-            {
-                item_id: rxSelectedItem.id,
-                item_name: rxSelectedItem.name,
-                requested_qty: qty,
-                dose_text: rxDose || null,
-                frequency_code,
-                duration_days: duration,
-                route: rxRoute || null,
-                timing: rxTiming || null,
-                instructions: null,
-            },
-        ])
-
-        setRxSelectedItem(null)
-        setRxQuery("")
-        setRxQty("10")
-        setRxDose("")
-    }
-
-    function handleRemoveRxLine(idx) {
-        setRxLines((prev) => prev.filter((_, i) => i !== idx))
-    }
-
-    async function handleSubmitRx() {
-        if (!rxLines.length) return toast.error("Add at least one medicine.")
-        if (!patient?.id || !ctx || !contextId) return toast.error("Missing patient or context for prescription.")
-
-        setRxSubmitting(true)
-        try {
-            const created = await createPharmacyPrescriptionFromContext({
-                patientId: patient.id,
-                contextType: ctx,
-                contextId,
-                doctorUserId: orderingUserId,
-                locationId: defaultLocationId,
-                notes: rxNote,
-                lines: rxLines,
-            })
-
-            toast.success("Prescription created & sent to Pharmacy.")
-            setRxLines([])
-            setRxNote("")
-            setRxQuery("")
-            setRxSelectedItem(null)
-            setLastRx(created && typeof created === "object" ? created : null)
-            loadSummary()
-        } catch (err) {
-            console.error(err)
-            toast.error(extractApiError(err, "Failed to create prescription."))
-        } finally {
-            setRxSubmitting(false)
-        }
-    }
-
+    // Rx PDF actions
     const rxActions = async (rxId, mode) => {
         if (!rxId) return toast.error("Invalid prescription ID")
         try {
@@ -851,162 +233,7 @@ export default function QuickOrders({
         }
     }
 
-    // ------------------------------------------------------
-    // OT procedures master search (debounced)
-    // ------------------------------------------------------
-    useEffect(() => {
-        if (!otProcedureQuery || otProcedureQuery.trim().length < 2) {
-            setOtProcedureOptions([])
-            return
-        }
-        let cancelled = false
-        const t = setTimeout(async () => {
-            try {
-                setOtProcedureSearching(true)
-                const res = await listOtProcedures({ search: otProcedureQuery.trim(), isActive: true, limit: 20 })
-                if (cancelled) return
-                const items = Array.isArray(res?.data?.items)
-                    ? res.data.items
-                    : Array.isArray(res?.data)
-                        ? res.data
-                        : []
-                setOtProcedureOptions(items)
-                setShowOtDropdown(true)
-            } catch (err) {
-                console.error(err)
-                toast.error("Failed to fetch OT procedures.")
-            } finally {
-                if (!cancelled) setOtProcedureSearching(false)
-            }
-        }, 180)
-        return () => {
-            cancelled = true
-            clearTimeout(t)
-        }
-    }, [otProcedureQuery])
-
-    function handleSelectOtProcedure(p) {
-        setOtSelectedProcedure(p)
-        setOtProcedureQuery(p.name || p.procedure_name || "")
-        setShowOtDropdown(false)
-    }
-
-    async function handleSubmitOt() {
-        if (ctx !== "ipd") return toast.warning("OT booking via quick orders is only for IPD.")
-        if (!otDate || !otStart) return toast.warning("Please select OT date and start time.")
-        if (!patient?.id || !contextId) return toast.error("Missing patient or admission for OT schedule.")
-
-        const surgeonId = otSurgeonId || currentUser?.id
-        if (!surgeonId) return toast.error("Please select a surgeon.")
-
-        const procedureName = otSelectedProcedure
-            ? otSelectedProcedure.name || otSelectedProcedure.procedure_name
-            : otProcedureQuery?.trim()
-
-        if (!procedureName) return toast.error("Please enter a procedure name.")
-
-        setOtSubmitting(true)
-        try {
-            await createOtScheduleFromContext({
-                patientId: patient.id,
-                contextType: ctx,
-                admissionId: contextId,
-                bedId: otBedId,
-                surgeonUserId: surgeonId,
-                anaesthetistUserId: otAnaesthetistId,
-                date: otDate,
-                plannedStartTime: otStart,
-                plannedEndTime: otEnd || null,
-                priority: otPriority,
-                side: otSide || null,
-                procedureName,
-                primaryProcedureId: otSelectedProcedure?.id || null,
-                additionalProcedureIds: [],
-                notes: otNote,
-            })
-
-            toast.success("OT schedule created.")
-            setOtDate("")
-            setOtStart("")
-            setOtEnd("")
-            setOtBedId(null)
-            setOtProcedureQuery("")
-            setOtSelectedProcedure(null)
-            setOtSide("")
-            setOtPriority("Elective")
-            setOtAnaesthetistId(null)
-            setOtNote("")
-            loadSummary()
-        } catch (err) {
-            console.error(err)
-            toast.error(extractApiError(err, "Failed to create OT schedule."))
-        } finally {
-            setOtSubmitting(false)
-        }
-    }
-
-    // ------------------------------------------------------
-    // Templates
-    // ------------------------------------------------------
-    const applyTemplate = (tpl) => {
-        if (!tpl) return
-        setRxNote(tpl.note || "")
-        if (tpl.defaults?.route) setRxRoute(tpl.defaults.route)
-        if (tpl.defaults?.timing) setRxTiming(tpl.defaults.timing)
-        if (tpl.defaults?.days) setRxDuration(String(tpl.defaults.days))
-        if (tpl.defaults?.qty) setRxQty(String(tpl.defaults.qty))
-        if (tpl.defaults?.slots) setRxSlots(tpl.defaults.slots)
-        toast.success(`Template applied: ${tpl.name}`)
-    }
-
-    const saveCurrentAsTemplate = () => {
-        const name = window.prompt("Template name? (e.g. OPD Standard)")
-        if (!name) return
-
-        const tpl = {
-            id: `tpl_${Date.now()}`,
-            name: name.trim(),
-            note: rxNote || "",
-            defaults: {
-                route: rxRoute,
-                timing: rxTiming,
-                days: parseInt(rxDuration || "0", 10) || 0,
-                qty: parseFloat(rxQty || "0") || 0,
-                slots: rxSlots,
-            },
-            created_at: new Date().toISOString(),
-        }
-
-        const next = [tpl, ...(rxTemplates || [])].slice(0, 30)
-        setRxTemplates(next)
-        try {
-            localStorage.setItem(LS_RX_TEMPLATES, JSON.stringify(next || []))
-        } catch { }
-        setRxTemplateId(tpl.id)
-        toast.success("Template saved")
-    }
-
-    const deleteTemplate = (id) => {
-        const next = (rxTemplates || []).filter((t) => t.id !== id)
-        setRxTemplates(next)
-        try {
-            localStorage.setItem(LS_RX_TEMPLATES, JSON.stringify(next || []))
-        } catch { }
-        if (rxTemplateId === id) setRxTemplateId("")
-        toast.success("Template deleted")
-    }
-
-    const copyScheduleText = () => {
-        const s = slotsToFreq(rxSlots)
-        navigator.clipboard?.writeText(s).then(
-            () => toast.success(`Copied: ${s}`),
-            () => toast.error("Copy failed")
-        )
-    }
-
-    // ------------------------------------------------------
     // Details open
-    // ------------------------------------------------------
     const openDetails = async (type, item) => {
         setDetailsType(type)
         setDetailsItem(item)
@@ -1016,8 +243,8 @@ export default function QuickOrders({
         try {
             setDetailsLoading(true)
             if (type === "rx" && item?.id) {
-                const full = await getRxDetails(item.id)
-                setDetailsFull(full)
+                const fullRes = await getRxDetails(item.id)
+                setDetailsFull(fullRes?.data ?? fullRes)
                 return
             }
             setDetailsFull(item)
@@ -1030,18 +257,37 @@ export default function QuickOrders({
         }
     }
 
-    const tabPill =
-        "group inline-flex items-center gap-2 whitespace-nowrap rounded-xl px-3 py-2 text-xs sm:text-[13px] font-semibold " +
-        "transition-all outline-none select-none " +
-        "data-[state=inactive]:text-slate-600 data-[state=inactive]:hover:bg-slate-50/80 " +
-        "data-[state=active]:bg-gradient-to-b data-[state=active]:from-slate-900 data-[state=active]:to-black " +
-        "data-[state=active]:text-white data-[state=active]:shadow-[0_12px_28px_rgba(2,6,23,0.35)] " +
-        "focus-visible:ring-4 focus-visible:ring-slate-500/20 " +
-        "min-w-[92px] sm:min-w-0"
+    // Home cards
+    const ModuleCard = ({ tone, icon: Icon, title, subtitle, count, onOpen }) => (
+        <button
+            type="button"
+            onClick={onOpen}
+            className={cx(
+                "group w-full text-left rounded-2xl border border-slate-200 bg-white/70 backdrop-blur",
+                "px-4 py-4 shadow-[0_12px_28px_rgba(15,23,42,0.06)] hover:bg-white transition-all"
+            )}
+        >
+            <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                    <div className={cx("h-11 w-11 rounded-2xl flex items-center justify-center text-white", tone)}>
+                        <Icon className="h-5 w-5" />
+                    </div>
+                    <div className="min-w-0">
+                        <div className="text-sm font-semibold text-slate-900">{title}</div>
+                        <div className="text-[11px] text-slate-500 mt-0.5">{subtitle}</div>
+                    </div>
+                </div>
+                <span className="text-[11px] font-semibold text-slate-700 bg-slate-100 rounded-full px-2.5 py-0.5">
+                    {count}
+                </span>
+            </div>
 
-    // ------------------------------------------------------
-    // UI
-    // ------------------------------------------------------
+            <div className="mt-3 text-[11px] text-slate-600">
+                Tap to open <span className="font-semibold">{title}</span> screen
+            </div>
+        </button>
+    )
+
     return (
         <>
             <motion.div className={cx("w-full", className)} {...fadeIn}>
@@ -1061,15 +307,13 @@ export default function QuickOrders({
                                                 Quick Orders
                                             </CardTitle>
                                             <p className="text-xs text-slate-500 mt-0.5">
-                                                Premium workflow — order Lab / Radiology / Pharmacy / OT from one place.
+                                                Main dashboard + split screens for Lab / Radiology / Pharmacy / OT / Ward Usage.
                                             </p>
                                         </div>
                                     </div>
 
                                     <div className="flex flex-wrap items-center gap-2 text-xs">
-                                        <Badge className="bg-slate-900 text-slate-50 px-3 py-1 rounded-full">
-                                            {contextLabel}
-                                        </Badge>
+                                        <Badge className="bg-slate-900 text-slate-50 px-3 py-1 rounded-full">{contextLabel}</Badge>
 
                                         <Badge
                                             variant="outline"
@@ -1089,7 +333,6 @@ export default function QuickOrders({
                                             </Badge>
                                         )}
 
-                                        {/* OPD Visit summary PDF actions */}
                                         {ctx === "opd" && contextId && (
                                             <div className="flex flex-wrap items-center gap-2">
                                                 <PremiumButton
@@ -1127,10 +370,31 @@ export default function QuickOrders({
                                     </div>
                                 </div>
 
-                                {/* Patient Snapshot */}
+                                {/* Patient snapshot */}
                                 <div className="flex flex-wrap items-center gap-2">
-                                    <IconPill icon={User} tone="slate" title="Patient" subtitle={safePatientName(patient)} />
-                                    <IconPill icon={Clock} tone="slate" title="Demographics" subtitle={safeGenderAge(patient)} />
+                                    <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/70 px-3 py-2 backdrop-blur">
+                                        <div className="h-9 w-9 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center">
+                                            <User className="h-4 w-4 text-slate-600" />
+                                        </div>
+                                        <div className="min-w-0">
+                                            <div className="text-[11px] text-slate-500">Patient</div>
+                                            <div className="text-[12px] font-semibold text-slate-900 truncate">
+                                                {safePatientName(patient)}
+                                            </div>
+                                        </div>
+                                    </div>
+
+                                    <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white/70 px-3 py-2 backdrop-blur">
+                                        <div className="h-9 w-9 rounded-2xl bg-slate-50 border border-slate-200 flex items-center justify-center">
+                                            <Clock className="h-4 w-4 text-slate-600" />
+                                        </div>
+                                        <div className="min-w-0">
+                                            <div className="text-[11px] text-slate-500">Demographics</div>
+                                            <div className="text-[12px] font-semibold text-slate-900 truncate">
+                                                {safeGenderAge(patient)}
+                                            </div>
+                                        </div>
+                                    </div>
 
                                     <PremiumButton
                                         type="button"
@@ -1160,946 +424,86 @@ export default function QuickOrders({
 
                         {/* Body */}
                         <CardContent className="p-3 sm:p-4 md:p-5">
-                            <div className="grid gap-4 lg:grid-cols-[minmax(0,1.22fr)_minmax(0,0.95fr)]">
-                                {/* LEFT: Forms */}
-                                <div className="space-y-3">
-                                    <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-                                        <TabsList className="w-full justify-start gap-1 overflow-x-auto rounded-2xl border border-slate-200 bg-white/70 p-1.5 shadow-[0_12px_30px_rgba(15,23,42,0.06)] backdrop-blur sticky top-0 z-10">
-                                            <TabsTrigger value="lab" className={tabPill}>
-                                                <span className="h-2 w-2 rounded-full bg-sky-500 group-data-[state=active]:bg-white" />
-                                                <FlaskConical className="h-4 w-4 text-sky-600 group-data-[state=active]:text-white" />
-                                                Lab
-                                            </TabsTrigger>
-
-                                            <TabsTrigger value="ris" className={tabPill}>
-                                                <span className="h-2 w-2 rounded-full bg-indigo-500 group-data-[state=active]:bg-white" />
-                                                <Radio className="h-4 w-4 text-indigo-600 group-data-[state=active]:text-white" />
-                                                Radiology
-                                            </TabsTrigger>
-
-                                            <TabsTrigger value="rx" className={tabPill}>
-                                                <span className="h-2 w-2 rounded-full bg-emerald-500 group-data-[state=active]:bg-white" />
-                                                <Pill className="h-4 w-4 text-emerald-600 group-data-[state=active]:text-white" />
-                                                Pharmacy
-                                            </TabsTrigger>
-
-                                            <TabsTrigger value="ot" className={tabPill}>
-                                                <span className="h-2 w-2 rounded-full bg-amber-500 group-data-[state=active]:bg-white" />
-                                                <ScissorsLineDashed className="h-4 w-4 text-amber-600 group-data-[state=active]:text-white" />
-                                                OT
-                                            </TabsTrigger>
-                                        </TabsList>
-
-                                        {/* ---------- LAB TAB ---------- */}
-                                        <TabsContent value="lab" className="mt-3">
-                                            <div className="space-y-3">
-                                                <div className="rounded-2xl border border-slate-200 bg-white/70 backdrop-blur p-4">
-                                                    <div className="flex items-start justify-between gap-3">
-                                                        <div className="min-w-0">
-                                                            <div className="text-xs font-semibold text-slate-900">Lab Order</div>
-                                                            <div className="text-[12px] text-slate-500 mt-1">
-                                                                Select tests → priority → place order.
-                                                            </div>
-                                                        </div>
-                                                        <StatusChip tone="lab">{labSelectedTests.length} selected</StatusChip>
-                                                    </div>
-                                                </div>
-
-                                                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
-                                                    {/* Search */}
-                                                    <div ref={labDropRef} className="space-y-1.5 relative">
-                                                        <label className="text-xs font-medium text-slate-600">Lab test (from Masters)</label>
-                                                        <div className="relative">
-                                                            <Search className="h-3.5 w-3.5 text-slate-400 absolute left-2 top-2.5" />
-                                                            <Input
-                                                                value={labQuery}
-                                                                onChange={(e) => {
-                                                                    setLabQuery(e.target.value)
-                                                                    setShowLabDropdown(true)
-                                                                }}
-                                                                placeholder="Search test code / name…"
-                                                                className="h-10 text-xs pl-7 rounded-2xl"
-                                                            />
-                                                        </div>
-
-                                                        {showLabDropdown && (labOptions.length > 0 || labSearching) && (
-                                                            <div className="absolute z-30 mt-1 w-full rounded-2xl border border-slate-200 bg-white shadow-xl max-h-56 overflow-auto text-xs">
-                                                                {labSearching && (
-                                                                    <div className="px-3 py-2 flex items-center gap-2 text-slate-500">
-                                                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                                                        Searching…
-                                                                    </div>
-                                                                )}
-                                                                {!labSearching && !labOptions.length && (
-                                                                    <div className="px-3 py-2 text-slate-500">No tests found.</div>
-                                                                )}
-                                                                {!labSearching &&
-                                                                    labOptions.map((t) => (
-                                                                        <button
-                                                                            key={t.id}
-                                                                            type="button"
-                                                                            onClick={() => handleSelectLabTest(t)}
-                                                                            className="w-full text-left px-3 py-2 hover:bg-slate-50 flex flex-col gap-0.5"
-                                                                        >
-                                                                            <span className="font-medium text-slate-900">
-                                                                                {t.name || t.test_name}
-                                                                            </span>
-                                                                            <span className="text-[11px] text-slate-500">
-                                                                                {t.code || t.short_code || "—"}
-                                                                            </span>
-                                                                        </button>
-                                                                    ))}
-                                                            </div>
-                                                        )}
-
-                                                        <p className="text-[11px] text-slate-500">Linked to LIS Lab Test Masters.</p>
-                                                    </div>
-
-                                                    {/* Priority (FIXED: wrap-safe, never hides) */}
-                                                    <div className="space-y-1.5">
-                                                        <label className="text-xs font-medium text-slate-600">Priority</label>
-                                                        <div className="flex flex-wrap gap-2">
-                                                            {["routine", "urgent", "stat"].map((p) => {
-                                                                const active = labPriority === p
-                                                                return (
-                                                                    <PremiumButton
-                                                                        key={p}
-                                                                        type="button"
-                                                                        tone="lab"
-                                                                        variant={active ? "solid" : "outline"}
-                                                                        onClick={() => setLabPriority(p)}
-                                                                        className="h-9 px-3 text-[11px] rounded-xl flex-1 min-w-[92px]"
-                                                                    >
-                                                                        {p === "routine" ? "Routine" : p === "urgent" ? "Urgent" : "STAT"}
-                                                                    </PremiumButton>
-                                                                )
-                                                            })}
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                {labSelectedTests.length > 0 && (
-                                                    <ScrollArea className="max-h-40 rounded-2xl border border-slate-200 bg-slate-50/60 p-2">
-                                                        <ul className="space-y-1.5 text-xs">
-                                                            {labSelectedTests.map((t) => (
-                                                                <li
-                                                                    key={t.id}
-                                                                    className="flex items-center justify-between gap-2 rounded-2xl bg-white px-3 py-2 border border-slate-100"
-                                                                >
-                                                                    <div className="flex flex-col min-w-0">
-                                                                        <span className="font-semibold text-slate-900 truncate">{t.name || "Lab test"}</span>
-                                                                        <span className="text-[11px] text-slate-500 truncate">Code: {t.code || "—"}</span>
-                                                                    </div>
-                                                                    <Button
-                                                                        type="button"
-                                                                        size="icon"
-                                                                        variant="ghost"
-                                                                        className="h-9 w-9 text-slate-400 hover:text-rose-600 rounded-2xl"
-                                                                        onClick={() => handleRemoveLabTest(t.id)}
-                                                                        title="Remove"
-                                                                    >
-                                                                        <Trash2 className="h-4 w-4" />
-                                                                    </Button>
-                                                                </li>
-                                                            ))}
-                                                        </ul>
-                                                    </ScrollArea>
-                                                )}
-
-                                                <div className="space-y-1.5">
-                                                    <label className="text-xs font-medium text-slate-600">Note (optional)</label>
-                                                    <Textarea
-                                                        rows={2}
-                                                        value={labNote}
-                                                        onChange={(e) => setLabNote(e.target.value)}
-                                                        placeholder="Special instructions for sample collection / processing."
-                                                        className="resize-none text-xs rounded-2xl"
-                                                    />
-                                                </div>
-
-                                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                                                    <div className="text-[11px] text-slate-500">
-                                                        PDF available after reporting (View/Print/Download from details).
-                                                    </div>
-                                                    <PremiumButton
-                                                        type="button"
-                                                        tone="lab"
-                                                        variant="solid"
-                                                        disabled={labSubmitting || !canUseContext}
-                                                        onClick={handleSubmitLab}
-                                                        className="h-10 px-5 text-xs"
-                                                    >
-                                                        {labSubmitting ? "Placing Lab Order…" : "Place Lab Order"}
-                                                    </PremiumButton>
-                                                </div>
-                                            </div>
-                                        </TabsContent>
-
-                                        {/* ---------- RIS TAB ---------- */}
-                                        <TabsContent value="ris" className="mt-3">
-                                            <div className="space-y-3">
-                                                <div className="rounded-2xl border border-indigo-200 bg-indigo-50/60 px-3 py-2 text-[11px] text-indigo-800 flex items-start gap-2">
-                                                    <AlertTriangle className="h-4 w-4 mt-0.5" />
-                                                    <div>RIS supports order creation here.</div>
-                                                </div>
-
-                                                <div className="grid gap-3 md:grid-cols-[minmax(0,1fr)_minmax(0,300px)]">
-                                                    <div ref={risDropRef} className="space-y-1.5 relative">
-                                                        <label className="text-xs font-medium text-slate-600">
-                                                            Radiology test (from RIS Masters)
-                                                        </label>
-                                                        <div className="relative">
-                                                            <Search className="h-3.5 w-3.5 text-slate-400 absolute left-2 top-2.5" />
-                                                            <Input
-                                                                value={risQuery}
-                                                                onChange={(e) => {
-                                                                    setRisQuery(e.target.value)
-                                                                    setShowRisDropdown(true)
-                                                                }}
-                                                                placeholder="Search X-Ray / CT / MRI / USG…"
-                                                                className="h-10 text-xs pl-7 rounded-2xl"
-                                                            />
-                                                        </div>
-
-                                                        {showRisDropdown && (risOptions.length > 0 || risSearching) && (
-                                                            <div className="absolute z-30 mt-1 w-full rounded-2xl border border-slate-200 bg-white shadow-xl max-h-56 overflow-auto text-xs">
-                                                                {risSearching && (
-                                                                    <div className="px-3 py-2 flex items-center gap-2 text-slate-500">
-                                                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                                                        Searching…
-                                                                    </div>
-                                                                )}
-                                                                {!risSearching && !risOptions.length && (
-                                                                    <div className="px-3 py-2 text-slate-500">No tests found.</div>
-                                                                )}
-                                                                {!risSearching &&
-                                                                    risOptions.map((t) => (
-                                                                        <button
-                                                                            key={t.id}
-                                                                            type="button"
-                                                                            onClick={() => handleSelectRisTest(t)}
-                                                                            className="w-full text-left px-3 py-2 hover:bg-slate-50 flex flex-col gap-0.5"
-                                                                        >
-                                                                            <div className="flex justify-between items-center gap-2">
-                                                                                <span className="font-medium text-slate-900 truncate">
-                                                                                    {t.name || t.test_name}
-                                                                                </span>
-                                                                                <span className="text-[10px] text-slate-500 shrink-0">
-                                                                                    {t.modality || t.modality_code || "—"}
-                                                                                </span>
-                                                                            </div>
-                                                                            <span className="text-[11px] text-slate-500 truncate">{t.code || "—"}</span>
-                                                                        </button>
-                                                                    ))}
-                                                            </div>
-                                                        )}
-
-                                                        <p className="text-[11px] text-slate-500">Linked to Radiology masters.</p>
-                                                    </div>
-
-                                                    {/* Priority (FIXED: wrap-safe, never hides) */}
-                                                    <div className="space-y-1.5">
-                                                        <label className="text-xs font-medium text-slate-600">Priority</label>
-                                                        <div className="flex flex-wrap gap-2">
-                                                            {["routine", "urgent", "stat"].map((p) => {
-                                                                const active = risPriority === p
-                                                                return (
-                                                                    <PremiumButton
-                                                                        key={p}
-                                                                        type="button"
-                                                                        tone="ris"
-                                                                        variant={active ? "solid" : "outline"}
-                                                                        className="h-9 px-3 text-[11px] rounded-xl flex-1 min-w-[92px]"
-                                                                        onClick={() => setRisPriority(p)}
-                                                                    >
-                                                                        {p === "routine" ? "Routine" : p === "urgent" ? "Urgent" : "STAT"}
-                                                                    </PremiumButton>
-                                                                )
-                                                            })}
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                {risSelectedTests.length > 0 && (
-                                                    <ScrollArea className="max-h-40 rounded-2xl border border-slate-200 bg-slate-50/60 p-2">
-                                                        <ul className="space-y-1.5 text-xs">
-                                                            {risSelectedTests.map((t) => (
-                                                                <li
-                                                                    key={t.id}
-                                                                    className="flex items-center justify-between gap-2 rounded-2xl bg-white px-3 py-2 border border-slate-100"
-                                                                >
-                                                                    <div className="flex flex-col min-w-0">
-                                                                        <span className="font-semibold text-slate-900 truncate">
-                                                                            {t.name || "Radiology test"}
-                                                                        </span>
-                                                                        <span className="text-[11px] text-slate-500 truncate">
-                                                                            {t.modality || "RIS"} • Code: {t.code || "—"}
-                                                                        </span>
-                                                                    </div>
-                                                                    <Button
-                                                                        type="button"
-                                                                        size="icon"
-                                                                        variant="ghost"
-                                                                        className="h-9 w-9 text-slate-400 hover:text-rose-600 rounded-2xl"
-                                                                        onClick={() => handleRemoveRisTest(t.id)}
-                                                                        title="Remove"
-                                                                    >
-                                                                        <Trash2 className="h-4 w-4" />
-                                                                    </Button>
-                                                                </li>
-                                                            ))}
-                                                        </ul>
-                                                    </ScrollArea>
-                                                )}
-
-                                                <div className="space-y-1.5">
-                                                    <label className="text-xs font-medium text-slate-600">Note (optional)</label>
-                                                    <Textarea
-                                                        rows={2}
-                                                        value={risNote}
-                                                        onChange={(e) => setRisNote(e.target.value)}
-                                                        placeholder="Side / position / contrast / clinical history etc."
-                                                        className="resize-none text-xs rounded-2xl"
-                                                    />
-                                                </div>
-
-                                                <div className="flex justify-end">
-                                                    <PremiumButton
-                                                        type="button"
-                                                        tone="ris"
-                                                        variant="solid"
-                                                        disabled={risSubmitting || !canUseContext}
-                                                        onClick={handleSubmitRis}
-                                                        className="h-10 px-5 text-xs"
-                                                    >
-                                                        {risSubmitting ? "Placing Radiology Order…" : "Place Radiology Order"}
-                                                    </PremiumButton>
-                                                </div>
-                                            </div>
-                                        </TabsContent>
-
-                                        {/* ---------- PHARMACY TAB ---------- */}
-                                        <TabsContent value="rx" className="mt-3">
-                                            <div className="space-y-3">
-                                                <div className="rounded-2xl border border-slate-200 bg-white/70 backdrop-blur p-4">
-                                                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                                                        <div className="flex items-center gap-2">
-                                                            <Sparkles className="h-4 w-4 text-emerald-600" />
-                                                            <div>
-                                                                <div className="text-xs font-semibold text-slate-900">Macros & Templates</div>
-                                                                <div className="text-[11px] text-slate-500">
-                                                                    Fast Rx creation — schedule macros + reusable templates.
-                                                                </div>
-                                                            </div>
-                                                        </div>
-
-                                                        <div className="flex flex-wrap items-center gap-2">
-                                                            <PremiumButton
-                                                                type="button"
-                                                                tone="rx"
-                                                                variant="outline"
-                                                                className="h-9 text-[11px]"
-                                                                onClick={copyScheduleText}
-                                                            >
-                                                                <ClipboardCopy className="h-4 w-4 mr-2" />
-                                                                Copy schedule
-                                                            </PremiumButton>
-
-                                                            <PremiumButton
-                                                                type="button"
-                                                                tone="rx"
-                                                                variant="outline"
-                                                                className="h-9 text-[11px]"
-                                                                onClick={saveCurrentAsTemplate}
-                                                            >
-                                                                <FileText className="h-4 w-4 mr-2" />
-                                                                Save template
-                                                            </PremiumButton>
-
-                                                            <select
-                                                                className="h-9 rounded-2xl border border-slate-300 bg-white px-3 text-[11px] font-semibold text-slate-800"
-                                                                value={rxTemplateId}
-                                                                onChange={(e) => {
-                                                                    const id = e.target.value
-                                                                    setRxTemplateId(id)
-                                                                    const tpl = (rxTemplates || []).find((t) => t.id === id)
-                                                                    if (tpl) applyTemplate(tpl)
-                                                                }}
-                                                            >
-                                                                <option value="">Select template…</option>
-                                                                {(rxTemplates || []).map((t) => (
-                                                                    <option key={t.id} value={t.id}>
-                                                                        {t.name}
-                                                                    </option>
-                                                                ))}
-                                                            </select>
-
-                                                            {rxTemplateId && (
-                                                                <Button
-                                                                    type="button"
-                                                                    variant="ghost"
-                                                                    className="h-9 rounded-2xl text-[11px] text-rose-600 hover:text-rose-700"
-                                                                    onClick={() => deleteTemplate(rxTemplateId)}
-                                                                    title="Delete selected template"
-                                                                >
-                                                                    <Trash2 className="h-4 w-4 mr-2" />
-                                                                    Delete
-                                                                </Button>
-                                                            )}
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="mt-3 flex flex-wrap gap-2 items-center">
-                                                        {["OD", "BD", "TID", "QID", "NIGHT"].map((m) => (
-                                                            <PremiumButton
-                                                                key={m}
-                                                                type="button"
-                                                                tone="rx"
-                                                                variant="outline"
-                                                                className="h-9 rounded-full text-[11px]"
-                                                                onClick={() => applyRxMacro(m)}
-                                                            >
-                                                                {m}
-                                                            </PremiumButton>
-                                                        ))}
-                                                        <span className="ml-1 text-[11px] text-slate-500 inline-flex items-center">
-                                                            Schedule:{" "}
-                                                            <span className="ml-1 font-semibold text-slate-900">{slotsToFreq(rxSlots)}</span>
-                                                        </span>
-                                                    </div>
-                                                </div>
-
-                                                {/* Medicine search */}
-                                                <div ref={rxDropRef} className="space-y-1.5 relative">
-                                                    <label className="text-xs font-medium text-slate-600">
-                                                        Search medicine (Pharmacy Inventory)
-                                                    </label>
-                                                    <div className="relative">
-                                                        <Search className="h-3.5 w-3.5 text-slate-400 absolute left-2 top-3" />
-                                                        <Input
-                                                            value={rxQuery}
-                                                            onChange={(e) => {
-                                                                setRxQuery(e.target.value)
-                                                                setShowRxDropdown(true)
-                                                            }}
-                                                            placeholder="Search drug name / brand / generic…"
-                                                            className="h-10 text-xs pl-7 rounded-2xl"
-                                                        />
-                                                    </div>
-
-                                                    {showRxDropdown && (rxOptions.length > 0 || rxSearching) && (
-                                                        <div className="absolute z-30 mt-1 w-full rounded-2xl border border-slate-200 bg-white shadow-xl max-h-56 overflow-auto text-xs">
-                                                            {rxSearching && (
-                                                                <div className="px-3 py-2 flex items-center gap-2 text-slate-500">
-                                                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                                                    Searching…
-                                                                </div>
-                                                            )}
-                                                            {!rxSearching && !rxOptions.length && (
-                                                                <div className="px-3 py-2 text-slate-500">No items found.</div>
-                                                            )}
-                                                            {!rxSearching &&
-                                                                rxOptions.map((it) => (
-                                                                    <button
-                                                                        key={it.id}
-                                                                        type="button"
-                                                                        onClick={() => handleSelectRxItem(it)}
-                                                                        className="w-full text-left px-3 py-2 hover:bg-slate-50 flex flex-col gap-0.5"
-                                                                    >
-                                                                        <div className="flex justify-between items-center gap-2">
-                                                                            <span className="font-medium text-slate-900 truncate">{it.name}</span>
-                                                                            {it.code && (
-                                                                                <span className="text-[10px] text-slate-500 shrink-0">{it.code}</span>
-                                                                            )}
-                                                                        </div>
-                                                                        <span className="text-[11px] text-slate-500 truncate">
-                                                                            {it.strength || it.form || ""}
-                                                                        </span>
-                                                                    </button>
-                                                                ))}
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                {/* Dose/Days/Qty + Timing */}
-                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                                                    <div className="space-y-1">
-                                                        <label className="text-[11px] text-slate-600">Dosage</label>
-                                                        <Input
-                                                            value={rxDose}
-                                                            onChange={(e) => setRxDose(e.target.value)}
-                                                            placeholder="e.g. 500mg / 1 tab"
-                                                            className="h-9 text-[11px] rounded-2xl"
-                                                        />
-                                                    </div>
-                                                    <div className="space-y-1">
-                                                        <label className="text-[11px] text-slate-600">Days</label>
-                                                        <Input
-                                                            value={rxDuration}
-                                                            onChange={(e) => setRxDuration(e.target.value)}
-                                                            placeholder="5"
-                                                            className="h-9 text-[11px] rounded-2xl"
-                                                        />
-                                                    </div>
-                                                    <div className="space-y-1">
-                                                        <label className="text-[11px] text-slate-600">Qty</label>
-                                                        <Input
-                                                            value={rxQty}
-                                                            onChange={(e) => setRxQty(e.target.value)}
-                                                            placeholder="10"
-                                                            className="h-9 text-[11px] rounded-2xl"
-                                                        />
-                                                    </div>
-                                                    <div className="space-y-1">
-                                                        <label className="text-[11px] text-slate-600">Timing</label>
-                                                        <select
-                                                            className="h-9 w-full rounded-2xl border border-slate-300 bg-white px-3 text-[11px] font-semibold text-slate-800"
-                                                            value={rxTiming}
-                                                            onChange={(e) => setRxTiming(e.target.value)}
-                                                        >
-                                                            <option value="BF">Before food (BF)</option>
-                                                            <option value="AF">After food (AF)</option>
-                                                            <option value="NA">No timing</option>
-                                                        </select>
-                                                    </div>
-                                                </div>
-
-                                                <div className="grid grid-cols-1 sm:grid-cols-[1fr_1fr_auto] gap-2 items-end">
-                                                    <div className="space-y-1">
-                                                        <label className="text-[11px] text-slate-600">Route</label>
-                                                        <select
-                                                            className="h-9 w-full rounded-2xl border border-slate-300 bg-white px-3 text-[11px] font-semibold text-slate-800"
-                                                            value={rxRoute}
-                                                            onChange={(e) => setRxRoute(e.target.value)}
-                                                        >
-                                                            <option value="oral">Oral</option>
-                                                            <option value="iv">IV</option>
-                                                            <option value="im">IM</option>
-                                                            <option value="topical">Topical</option>
-                                                            <option value="inhalation">Inhalation</option>
-                                                            <option value="other">Other</option>
-                                                        </select>
-                                                    </div>
-
-                                                    <div className="space-y-1">
-                                                        <label className="text-[11px] text-slate-600">
-                                                            Schedule (AM / AF / PM / NIGHT)
-                                                        </label>
-                                                        <div className="flex flex-wrap gap-2">
-                                                            {[
-                                                                ["am", "AM"],
-                                                                ["af", "AF"],
-                                                                ["pm", "PM"],
-                                                                ["night", "NIGHT"],
-                                                            ].map(([k, label]) => {
-                                                                const on = !!rxSlots[k]
-                                                                return (
-                                                                    <button
-                                                                        key={k}
-                                                                        type="button"
-                                                                        onClick={() => setRxSlots((s) => ({ ...s, [k]: !s[k] }))}
-                                                                        className={cx(
-                                                                            "h-9 px-4 rounded-full border text-[11px] font-semibold transition-all",
-                                                                            on
-                                                                                ? TONE.rx.solid
-                                                                                : "bg-white border-slate-300 text-slate-800 hover:bg-slate-50"
-                                                                        )}
-                                                                    >
-                                                                        {label}
-                                                                    </button>
-                                                                )
-                                                            })}
-                                                        </div>
-                                                    </div>
-
-                                                    <PremiumButton
-                                                        type="button"
-                                                        tone="rx"
-                                                        variant="solid"
-                                                        className="h-9 px-4 text-[11px] rounded-full"
-                                                        onClick={handleAddRxLine}
-                                                    >
-                                                        Add line
-                                                    </PremiumButton>
-                                                </div>
-
-                                                {/* Lines preview (MOBILE: cards, DESKTOP: table) */}
-                                                {rxLines.length > 0 && (
-                                                    <div className="border border-slate-200 rounded-2xl bg-slate-50/60 overflow-hidden">
-                                                        {isMobile ? (
-                                                            <ScrollArea className="max-h-72">
-                                                                <div className="p-2 space-y-2">
-                                                                    {rxLines.map((l, idx) => {
-                                                                        const s = freqToSlots(l.frequency_code)
-                                                                        const dosage = [l.dose_text, l.route, l.timing].filter(Boolean).join(" • ")
-                                                                        return (
-                                                                            <div
-                                                                                key={idx}
-                                                                                className="rounded-2xl bg-white border border-slate-200 p-3"
-                                                                            >
-                                                                                <div className="flex items-start justify-between gap-2">
-                                                                                    <div className="min-w-0">
-                                                                                        <div className="text-[12px] font-semibold text-slate-900 truncate">
-                                                                                            {idx + 1}. {l.item_name}
-                                                                                        </div>
-                                                                                        <div className="text-[11px] text-slate-600 mt-0.5 truncate">
-                                                                                            {dosage || "—"}
-                                                                                        </div>
-                                                                                    </div>
-                                                                                    <Button
-                                                                                        type="button"
-                                                                                        size="icon"
-                                                                                        variant="ghost"
-                                                                                        className="h-9 w-9 rounded-2xl text-slate-400 hover:text-rose-600"
-                                                                                        onClick={() => handleRemoveRxLine(idx)}
-                                                                                        title="Remove"
-                                                                                    >
-                                                                                        <Trash2 className="h-4 w-4" />
-                                                                                    </Button>
-                                                                                </div>
-
-                                                                                <div className="mt-2 grid grid-cols-4 gap-2 text-[11px]">
-                                                                                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-2 py-1 text-center">
-                                                                                        AM: <span className="font-semibold">{s.am}</span>
-                                                                                    </div>
-                                                                                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-2 py-1 text-center">
-                                                                                        AF: <span className="font-semibold">{s.af}</span>
-                                                                                    </div>
-                                                                                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-2 py-1 text-center">
-                                                                                        PM: <span className="font-semibold">{s.pm}</span>
-                                                                                    </div>
-                                                                                    <div className="rounded-xl border border-slate-200 bg-slate-50 px-2 py-1 text-center">
-                                                                                        N: <span className="font-semibold">{s.night}</span>
-                                                                                    </div>
-                                                                                </div>
-
-                                                                                <div className="mt-2 flex items-center justify-between text-[11px] text-slate-700">
-                                                                                    <span>
-                                                                                        Days: <span className="font-semibold">{l.duration_days ?? "—"}</span>
-                                                                                    </span>
-                                                                                    <span>
-                                                                                        Qty: <span className="font-semibold">{l.requested_qty}</span>
-                                                                                    </span>
-                                                                                </div>
-                                                                            </div>
-                                                                        )
-                                                                    })}
-                                                                </div>
-                                                            </ScrollArea>
-                                                        ) : (
-                                                            <ScrollArea className="max-h-60">
-                                                                <div className="min-w-[860px]">
-                                                                    <table className="w-full text-[11px]">
-                                                                        <thead className="bg-slate-100 text-slate-700">
-                                                                            <tr>
-                                                                                <th className="px-2 py-2 text-left font-semibold">S.NO</th>
-                                                                                <th className="px-2 py-2 text-left font-semibold">Drug/Medicine</th>
-                                                                                <th className="px-2 py-2 text-left font-semibold">Dosage</th>
-                                                                                <th className="px-2 py-2 text-center font-semibold">AM</th>
-                                                                                <th className="px-2 py-2 text-center font-semibold">AF</th>
-                                                                                <th className="px-2 py-2 text-center font-semibold">PM</th>
-                                                                                <th className="px-2 py-2 text-center font-semibold">NIGHT</th>
-                                                                                <th className="px-2 py-2 text-center font-semibold">DAYS</th>
-                                                                                <th className="px-2 py-2 text-right font-semibold">Qty</th>
-                                                                                <th className="px-2 py-2 text-right font-semibold">Action</th>
-                                                                            </tr>
-                                                                        </thead>
-                                                                        <tbody className="bg-white">
-                                                                            {rxLines.map((l, idx) => {
-                                                                                const s = freqToSlots(l.frequency_code)
-                                                                                const dosage = [l.dose_text, l.route, l.timing].filter(Boolean).join(" • ")
-                                                                                return (
-                                                                                    <tr key={idx} className="border-t border-slate-100">
-                                                                                        <td className="px-2 py-2 text-slate-500">{idx + 1}</td>
-                                                                                        <td className="px-2 py-2 font-medium text-slate-900">{l.item_name}</td>
-                                                                                        <td className="px-2 py-2 text-slate-700">{dosage || "—"}</td>
-                                                                                        <td className="px-2 py-2 text-center font-semibold">{s.am}</td>
-                                                                                        <td className="px-2 py-2 text-center font-semibold">{s.af}</td>
-                                                                                        <td className="px-2 py-2 text-center font-semibold">{s.pm}</td>
-                                                                                        <td className="px-2 py-2 text-center font-semibold">{s.night}</td>
-                                                                                        <td className="px-2 py-2 text-center font-semibold">{l.duration_days ?? "—"}</td>
-                                                                                        <td className="px-2 py-2 text-right font-semibold text-slate-800">{l.requested_qty}</td>
-                                                                                        <td className="px-2 py-2 text-right">
-                                                                                            <Button
-                                                                                                type="button"
-                                                                                                size="icon"
-                                                                                                variant="ghost"
-                                                                                                className="h-8 w-8 text-slate-400 hover:text-rose-600 rounded-2xl"
-                                                                                                onClick={() => handleRemoveRxLine(idx)}
-                                                                                                title="Remove"
-                                                                                            >
-                                                                                                <Trash2 className="h-4 w-4" />
-                                                                                            </Button>
-                                                                                        </td>
-                                                                                    </tr>
-                                                                                )
-                                                                            })}
-                                                                        </tbody>
-                                                                    </table>
-                                                                </div>
-                                                            </ScrollArea>
-                                                        )}
-                                                    </div>
-                                                )}
-
-                                                <div className="space-y-1.5">
-                                                    <label className="text-xs font-medium text-slate-600">
-                                                        Clinical notes / Rx note (optional)
-                                                    </label>
-                                                    <Textarea
-                                                        rows={2}
-                                                        value={rxNote}
-                                                        onChange={(e) => setRxNote(e.target.value)}
-                                                        className="resize-none text-xs rounded-2xl"
-                                                    />
-                                                </div>
-
-                                                <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-                                                    <div className="text-[11px] text-slate-500">
-                                                        Creates patient-ready Prescription PDF (View/Print/Download).
-                                                    </div>
-
-                                                    <div className="flex flex-wrap items-center gap-2 justify-end">
-                                                        {lastRx?.id && (
-                                                            <>
-                                                                <PremiumButton
-                                                                    type="button"
-                                                                    tone="rx"
-                                                                    variant="outline"
-                                                                    className="h-10"
-                                                                    onClick={() => rxActions(lastRx.id, "view")}
-                                                                >
-                                                                    <Eye className="h-4 w-4 mr-2" />
-                                                                    View PDF
-                                                                </PremiumButton>
-                                                                <PremiumButton
-                                                                    type="button"
-                                                                    tone="rx"
-                                                                    variant="outline"
-                                                                    className="h-10"
-                                                                    onClick={() => rxActions(lastRx.id, "print")}
-                                                                >
-                                                                    <Printer className="h-4 w-4 mr-2" />
-                                                                    Print
-                                                                </PremiumButton>
-                                                                <PremiumButton
-                                                                    type="button"
-                                                                    tone="rx"
-                                                                    variant="solid"
-                                                                    className="h-10"
-                                                                    onClick={() => rxActions(lastRx.id, "download")}
-                                                                >
-                                                                    <Download className="h-4 w-4 mr-2" />
-                                                                    Download
-                                                                </PremiumButton>
-                                                            </>
-                                                        )}
-
-                                                        <PremiumButton
-                                                            type="button"
-                                                            tone="rx"
-                                                            variant="solid"
-                                                            disabled={rxSubmitting || !canUseContext}
-                                                            onClick={handleSubmitRx}
-                                                            className="h-10 px-5 text-xs"
-                                                        >
-                                                            {rxSubmitting ? "Saving Rx…" : "Save & Send to Pharmacy"}
-                                                        </PremiumButton>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                        </TabsContent>
-
-                                        {/* ---------- OT TAB ---------- */}
-                                        <TabsContent value="ot" className="mt-3">
-                                            <div className="space-y-3">
-                                                {ctx !== "ipd" && (
-                                                    <div className="rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-[11px] text-amber-800 flex items-start gap-2">
-                                                        <AlertTriangle className="h-4 w-4 mt-0.5" />
-                                                        OT quick booking is only for IPD admission context.
-                                                    </div>
-                                                )}
-
-                                                <div className="grid sm:grid-cols-3 gap-3">
-                                                    <div className="space-y-1.5">
-                                                        <label className="text-xs font-medium text-slate-600">
-                                                            OT Date <span className="text-rose-500">*</span>
-                                                        </label>
-                                                        <Input
-                                                            type="date"
-                                                            value={otDate}
-                                                            onChange={(e) => setOtDate(e.target.value)}
-                                                            className="h-10 text-xs rounded-2xl"
-                                                        />
-                                                    </div>
-                                                    <div className="space-y-1.5">
-                                                        <label className="text-xs font-medium text-slate-600">
-                                                            Start time <span className="text-rose-500">*</span>
-                                                        </label>
-                                                        <Input
-                                                            type="time"
-                                                            value={otStart}
-                                                            onChange={(e) => setOtStart(e.target.value)}
-                                                            className="h-10 text-xs rounded-2xl"
-                                                        />
-                                                    </div>
-                                                    <div className="space-y-1.5">
-                                                        <label className="text-xs font-medium text-slate-600">End time (optional)</label>
-                                                        <Input
-                                                            type="time"
-                                                            value={otEnd}
-                                                            onChange={(e) => setOtEnd(e.target.value)}
-                                                            className="h-10 text-xs rounded-2xl"
-                                                        />
-                                                    </div>
-                                                </div>
-
-                                                <div className="space-y-1.5">
-                                                    <label className="text-xs font-medium text-slate-600">OT Location / Bed</label>
-                                                    <WardRoomBedPicker value={otBedId ? Number(otBedId) : null} onChange={(bedId) => setOtBedId(bedId || null)} />
-                                                </div>
-
-                                                <div ref={otDropRef} className="space-y-1.5 relative">
-                                                    <label className="text-xs font-medium text-slate-600">Procedure (OT Master or free text)</label>
-                                                    <div className="relative">
-                                                        <Search className="h-3.5 w-3.5 text-slate-400 absolute left-2 top-3" />
-                                                        <Input
-                                                            value={otProcedureQuery}
-                                                            onChange={(e) => {
-                                                                setOtProcedureQuery(e.target.value)
-                                                                setShowOtDropdown(true)
-                                                            }}
-                                                            placeholder="Search procedure name / code…"
-                                                            className="h-10 text-xs pl-7 rounded-2xl"
-                                                        />
-                                                    </div>
-
-                                                    {showOtDropdown && (otProcedureOptions.length > 0 || otProcedureSearching) && (
-                                                        <div className="absolute z-30 mt-1 w-full rounded-2xl border border-slate-200 bg-white shadow-xl max-h-56 overflow-auto text-xs">
-                                                            {otProcedureSearching && (
-                                                                <div className="px-3 py-2 flex items-center gap-2 text-slate-500">
-                                                                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                                                                    Searching…
-                                                                </div>
-                                                            )}
-                                                            {!otProcedureSearching && !otProcedureOptions.length && (
-                                                                <div className="px-3 py-2 text-slate-500">No procedures found.</div>
-                                                            )}
-                                                            {!otProcedureSearching &&
-                                                                otProcedureOptions.map((p) => (
-                                                                    <button
-                                                                        key={p.id}
-                                                                        type="button"
-                                                                        onClick={() => handleSelectOtProcedure(p)}
-                                                                        className="w-full text-left px-3 py-2 hover:bg-slate-50 flex flex-col gap-0.5"
-                                                                    >
-                                                                        <span className="font-medium text-slate-900">{p.name || p.procedure_name}</span>
-                                                                        <span className="text-[11px] text-slate-500">{p.code || "—"}</span>
-                                                                    </button>
-                                                                ))}
-                                                        </div>
-                                                    )}
-                                                </div>
-
-                                                <div className="grid sm:grid-cols-2 gap-3">
-                                                    <div className="space-y-1.5">
-                                                        <label className="text-xs font-medium text-slate-600">Side</label>
-                                                        <select
-                                                            className="w-full rounded-2xl border border-slate-300 bg-white px-3 py-2.5 text-xs text-slate-800"
-                                                            value={otSide}
-                                                            onChange={(e) => setOtSide(e.target.value)}
-                                                        >
-                                                            <option value="">Not applicable</option>
-                                                            <option value="Right">Right</option>
-                                                            <option value="Left">Left</option>
-                                                            <option value="Bilateral">Bilateral</option>
-                                                            <option value="Midline">Midline</option>
-                                                        </select>
-                                                    </div>
-
-                                                    <div className="space-y-1.5">
-                                                        <label className="text-xs font-medium text-slate-600">Priority</label>
-                                                        <div className="flex flex-wrap gap-2">
-                                                            {["Elective", "Emergency"].map((p) => {
-                                                                const active = otPriority === p
-                                                                return (
-                                                                    <PremiumButton
-                                                                        key={p}
-                                                                        type="button"
-                                                                        tone="ot"
-                                                                        variant={active ? "solid" : "outline"}
-                                                                        className="h-9 px-3 text-[11px] rounded-xl flex-1 min-w-[120px]"
-                                                                        onClick={() => setOtPriority(p)}
-                                                                    >
-                                                                        {p}
-                                                                    </PremiumButton>
-                                                                )
-                                                            })}
-                                                        </div>
-                                                    </div>
-                                                </div>
-
-                                                <div className="grid sm:grid-cols-2 gap-3">
-                                                    <DoctorPicker label="Surgeon" value={otSurgeonId ? Number(otSurgeonId) : null} onChange={(id) => setOtSurgeonId(id || null)} />
-                                                    <DoctorPicker label="Anaesthetist" value={otAnaesthetistId ? Number(otAnaesthetistId) : null} onChange={(id) => setOtAnaesthetistId(id || null)} />
-                                                </div>
-
-                                                <div className="space-y-1.5">
-                                                    <label className="text-xs font-medium text-slate-600">Notes / anaesthesia plan (optional)</label>
-                                                    <Textarea rows={2} value={otNote} onChange={(e) => setOtNote(e.target.value)} className="resize-none text-xs rounded-2xl" />
-                                                </div>
-
-                                                <div className="flex justify-end">
-                                                    <PremiumButton
-                                                        type="button"
-                                                        tone="ot"
-                                                        variant="solid"
-                                                        disabled={otSubmitting || !canUseContext || ctx !== "ipd"}
-                                                        onClick={handleSubmitOt}
-                                                        className="h-10 px-5 text-xs"
-                                                    >
-                                                        {otSubmitting ? "Creating OT schedule…" : "Create OT schedule"}
-                                                    </PremiumButton>
-                                                </div>
-                                            </div>
-                                        </TabsContent>
-                                    </Tabs>
-                                </div>
-
-                                {/* RIGHT: Summary */}
-                                <div className="space-y-3 lg:sticky lg:top-3 self-start">
-                                    <div className="flex items-center justify-between">
-                                        <h3 className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
-                                            Recent orders (this {String(contextLabel || "").toLowerCase()})
-                                        </h3>
-                                        {loadingSummary && (
-                                            <span className="text-[11px] text-slate-500 flex items-center gap-1">
-                                                <Loader2 className="h-3 w-3 animate-spin" />
-                                                Loading
-                                            </span>
-                                        )}
+                            {screen === "home" ? (
+                                <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(0,0.9fr)]">
+                                    {/* Left: module cards */}
+                                    <div className="grid gap-3 sm:grid-cols-2">
+                                        <ModuleCard
+                                            tone="bg-sky-600"
+                                            icon={FlaskConical}
+                                            title="Lab"
+                                            subtitle="Order tests from LIS masters"
+                                            count={summary.lab?.length || 0}
+                                            onOpen={() => setScreen("lab")}
+                                        />
+                                        <ModuleCard
+                                            tone="bg-indigo-600"
+                                            icon={Radio}
+                                            title="Radiology"
+                                            subtitle="Order investigations from RIS"
+                                            count={summary.ris?.length || 0}
+                                            onOpen={() => setScreen("ris")}
+                                        />
+                                        <ModuleCard
+                                            tone="bg-emerald-600"
+                                            icon={Pill}
+                                            title="Pharmacy"
+                                            subtitle="Create e-Prescription from inventory"
+                                            count={summary.rx?.length || 0}
+                                            onOpen={() => setScreen("rx")}
+                                        />
+                                        <ModuleCard
+                                            tone="bg-amber-600"
+                                            icon={ScissorsLineDashed}
+                                            title="OT"
+                                            subtitle="Schedule OT (IPD only)"
+                                            count={ctx === "ipd" ? summary.ot?.length || 0 : "—"}
+                                            onOpen={() => setScreen("ot")}
+                                        />
+                                        <ModuleCard
+                                            tone="bg-teal-600"
+                                            icon={ClipboardList}
+                                            title="Ward Usage"
+                                            subtitle="Consumables used (billable usage)"
+                                            count={summary.ward?.length || 0}
+                                            onOpen={() => setScreen("ward")}
+                                        />
                                     </div>
 
-                                    {/* LAB SUMMARY */}
-                                    <Card className="border-slate-200 bg-white/70 backdrop-blur rounded-2xl">
-                                        <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                                <FlaskConical className="h-4 w-4 text-sky-600" />
-                                                <CardTitle className="text-xs font-semibold">Lab Orders</CardTitle>
-                                            </div>
-                                            <StatusChip tone="lab">{summary.lab?.length || 0} orders</StatusChip>
-                                        </CardHeader>
-                                        <CardContent className="px-4 pb-4 pt-0">
-                                            <div className="space-y-2 max-h-44 overflow-auto text-[11px]">
-                                                {!summary.lab?.length && !loadingSummary && (
-                                                    <div className="text-slate-500 text-[12px]">No lab orders for this context yet.</div>
-                                                )}
-                                                {summary.lab?.map((o) => (
-                                                    <div key={o.id} className="flex items-stretch gap-2">
+                                    {/* Right: Summary lists */}
+                                    <div className="space-y-3 lg:sticky lg:top-3 self-start">
+                                        <div className="flex items-center justify-between">
+                                            <h3 className="text-xs font-semibold text-slate-700 uppercase tracking-wide">
+                                                Recent orders (this {String(contextLabel || "").toLowerCase()})
+                                            </h3>
+                                            {loadingSummary && (
+                                                <span className="text-[11px] text-slate-500 flex items-center gap-1">
+                                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                                    Loading
+                                                </span>
+                                            )}
+                                        </div>
+
+                                        {/* LAB */}
+                                        <Card className="border-slate-200 bg-white/70 backdrop-blur rounded-2xl">
+                                            <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <FlaskConical className="h-4 w-4 text-sky-600" />
+                                                    <CardTitle className="text-xs font-semibold">Lab Orders</CardTitle>
+                                                </div>
+                                                <StatusChip tone="lab">{summary.lab?.length || 0}</StatusChip>
+                                            </CardHeader>
+                                            <CardContent className="px-4 pb-4 pt-0">
+                                                <div className="space-y-2 max-h-44 overflow-auto text-[11px]">
+                                                    {!summary.lab?.length && !loadingSummary && (
+                                                        <div className="text-slate-500 text-[12px]">No lab orders yet.</div>
+                                                    )}
+                                                    {summary.lab?.map((o) => (
                                                         <button
+                                                            key={o.id}
                                                             type="button"
                                                             onClick={() => openDetails("lab", o)}
-                                                            className="flex-1 text-left flex items-center justify-between gap-2 px-3 py-2 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50"
+                                                            className="w-full text-left flex items-center justify-between gap-2 px-3 py-2 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50"
                                                         >
                                                             <div className="flex flex-col min-w-0">
                                                                 <span className="font-semibold text-slate-900 truncate">
@@ -2113,91 +517,69 @@ export default function QuickOrders({
                                                                 {o.status || "ordered"}
                                                             </span>
                                                         </button>
+                                                    ))}
+                                                </div>
+                                            </CardContent>
+                                        </Card>
 
-                                                        <PremiumButton
-                                                            type="button"
-                                                            tone="lab"
-                                                            variant="outline"
-                                                            size="icon"
-                                                            className="h-10 w-10"
-                                                            title="View PDF"
-                                                            onClick={() => labPdfActions(o.id, "view")}
-                                                        >
-                                                            <Eye className="h-4 w-4" />
-                                                        </PremiumButton>
-                                                        <PremiumButton
-                                                            type="button"
-                                                            tone="lab"
-                                                            variant="outline"
-                                                            size="icon"
-                                                            className="h-10 w-10"
-                                                            title="Download PDF"
-                                                            onClick={() => labPdfActions(o.id, "download")}
-                                                        >
-                                                            <Download className="h-4 w-4" />
-                                                        </PremiumButton>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-
-                                    {/* RIS SUMMARY */}
-                                    <Card className="border-slate-200 bg-white/70 backdrop-blur rounded-2xl">
-                                        <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                                <Radio className="h-4 w-4 text-indigo-600" />
-                                                <CardTitle className="text-xs font-semibold">Radiology Orders</CardTitle>
-                                            </div>
-                                            <StatusChip tone="ris">{summary.ris?.length || 0} orders</StatusChip>
-                                        </CardHeader>
-                                        <CardContent className="px-4 pb-4 pt-0">
-                                            <div className="space-y-2 max-h-44 overflow-auto text-[11px]">
-                                                {!summary.ris?.length && !loadingSummary && (
-                                                    <div className="text-slate-500 text-[12px]">No radiology orders for this context yet.</div>
-                                                )}
-                                                {summary.ris?.map((o) => (
-                                                    <button
-                                                        key={o.id}
-                                                        type="button"
-                                                        onClick={() => openDetails("ris", o)}
-                                                        className="w-full text-left flex items-center justify-between gap-2 px-3 py-2 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50"
-                                                    >
-                                                        <div className="flex flex-col min-w-0">
-                                                            <span className="font-semibold text-slate-900 truncate">
-                                                                {o.order_no || `RIS-${String(o.id).padStart(6, "0")}`}
-                                                            </span>
-                                                            <span className="text-[10px] text-slate-500 truncate">
-                                                                {fmtIST(o.created_at || o.order_datetime)}
-                                                            </span>
-                                                        </div>
-                                                        <span className="text-[10px] text-slate-600 capitalize shrink-0">{o.status || "ordered"}</span>
-                                                    </button>
-                                                ))}
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-
-                                    {/* RX SUMMARY */}
-                                    <Card className="border-slate-200 bg-white/70 backdrop-blur rounded-2xl">
-                                        <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
-                                            <div className="flex items-center gap-2">
-                                                <Pill className="h-4 w-4 text-emerald-600" />
-                                                <CardTitle className="text-xs font-semibold">Pharmacy Rx</CardTitle>
-                                            </div>
-                                            <StatusChip tone="rx">{summary.rx?.length || 0} Rx</StatusChip>
-                                        </CardHeader>
-                                        <CardContent className="px-4 pb-4 pt-0">
-                                            <div className="space-y-2 max-h-44 overflow-auto text-[11px]">
-                                                {!summary.rx?.length && !loadingSummary && (
-                                                    <div className="text-slate-500 text-[12px]">No prescriptions for this context yet.</div>
-                                                )}
-                                                {summary.rx?.map((o) => (
-                                                    <div key={o.id} className="flex items-stretch gap-2">
+                                        {/* RIS */}
+                                        <Card className="border-slate-200 bg-white/70 backdrop-blur rounded-2xl">
+                                            <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <Radio className="h-4 w-4 text-indigo-600" />
+                                                    <CardTitle className="text-xs font-semibold">Radiology Orders</CardTitle>
+                                                </div>
+                                                <StatusChip tone="ris">{summary.ris?.length || 0}</StatusChip>
+                                            </CardHeader>
+                                            <CardContent className="px-4 pb-4 pt-0">
+                                                <div className="space-y-2 max-h-44 overflow-auto text-[11px]">
+                                                    {!summary.ris?.length && !loadingSummary && (
+                                                        <div className="text-slate-500 text-[12px]">No radiology orders yet.</div>
+                                                    )}
+                                                    {summary.ris?.map((o) => (
                                                         <button
+                                                            key={o.id}
+                                                            type="button"
+                                                            onClick={() => openDetails("ris", o)}
+                                                            className="w-full text-left flex items-center justify-between gap-2 px-3 py-2 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50"
+                                                        >
+                                                            <div className="flex flex-col min-w-0">
+                                                                <span className="font-semibold text-slate-900 truncate">
+                                                                    {o.order_no || `RIS-${String(o.id).padStart(6, "0")}`}
+                                                                </span>
+                                                                <span className="text-[10px] text-slate-500 truncate">
+                                                                    {fmtIST(o.created_at || o.order_datetime)}
+                                                                </span>
+                                                            </div>
+                                                            <span className="text-[10px] text-slate-600 capitalize shrink-0">
+                                                                {o.status || "ordered"}
+                                                            </span>
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+
+                                        {/* RX */}
+                                        <Card className="border-slate-200 bg-white/70 backdrop-blur rounded-2xl">
+                                            <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <Pill className="h-4 w-4 text-emerald-600" />
+                                                    <CardTitle className="text-xs font-semibold">Pharmacy Rx</CardTitle>
+                                                </div>
+                                                <StatusChip tone="rx">{summary.rx?.length || 0}</StatusChip>
+                                            </CardHeader>
+                                            <CardContent className="px-4 pb-4 pt-0">
+                                                <div className="space-y-2 max-h-44 overflow-auto text-[11px]">
+                                                    {!summary.rx?.length && !loadingSummary && (
+                                                        <div className="text-slate-500 text-[12px]">No prescriptions yet.</div>
+                                                    )}
+                                                    {summary.rx?.map((o) => (
+                                                        <button
+                                                            key={o.id}
                                                             type="button"
                                                             onClick={() => openDetails("rx", o)}
-                                                            className="flex-1 text-left flex items-center justify-between gap-2 px-3 py-2 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50"
+                                                            className="w-full text-left flex items-center justify-between gap-2 px-3 py-2 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50"
                                                         >
                                                             <div className="flex flex-col min-w-0">
                                                                 <span className="font-semibold text-slate-900 truncate">
@@ -2207,83 +589,188 @@ export default function QuickOrders({
                                                                     {fmtIST(o.rx_datetime || o.created_at)}
                                                                 </span>
                                                             </div>
-                                                            <span className="text-[10px] text-slate-600 capitalize shrink-0">{o.status || "pending"}</span>
-                                                        </button>
-
-                                                        <PremiumButton
-                                                            type="button"
-                                                            tone="rx"
-                                                            variant="outline"
-                                                            size="icon"
-                                                            className="h-10 w-10"
-                                                            title="View PDF"
-                                                            onClick={() => rxActions(o.id, "view")}
-                                                        >
-                                                            <Eye className="h-4 w-4" />
-                                                        </PremiumButton>
-
-                                                        <PremiumButton
-                                                            type="button"
-                                                            tone="rx"
-                                                            variant="outline"
-                                                            size="icon"
-                                                            className="h-10 w-10"
-                                                            title="Download PDF"
-                                                            onClick={() => rxActions(o.id, "download")}
-                                                        >
-                                                            <Download className="h-4 w-4" />
-                                                        </PremiumButton>
-                                                    </div>
-                                                ))}
-                                            </div>
-                                        </CardContent>
-                                    </Card>
-
-                                    {/* OT SUMMARY (IPD only) */}
-                                    {ctx === "ipd" && (
-                                        <Card className="border-slate-200 bg-white/70 backdrop-blur rounded-2xl">
-                                            <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <ScissorsLineDashed className="h-4 w-4 text-amber-600" />
-                                                    <CardTitle className="text-xs font-semibold">OT Schedules</CardTitle>
-                                                </div>
-                                                <StatusChip tone="ot">{summary.ot?.length || 0} cases</StatusChip>
-                                            </CardHeader>
-                                            <CardContent className="px-4 pb-4 pt-0">
-                                                <div className="space-y-2 max-h-44 overflow-auto text-[11px]">
-                                                    {!summary.ot?.length && !loadingSummary && (
-                                                        <div className="text-slate-500 text-[12px]">No OT schedules for this admission yet.</div>
-                                                    )}
-                                                    {summary.ot?.map((o) => (
-                                                        <button
-                                                            key={o.id}
-                                                            type="button"
-                                                            onClick={() => openDetails("ot", o)}
-                                                            className="w-full text-left flex items-center justify-between gap-2 px-3 py-2 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50"
-                                                        >
-                                                            <div className="flex flex-col min-w-0">
-                                                                <span className="font-semibold text-slate-900 truncate">
-                                                                    {o.case_no || `OT-${String(o.id).padStart(6, "0")}`}
-                                                                </span>
-                                                                <span className="text-[10px] text-slate-500 truncate">
-                                                                    {fmtIST(o.created_at || o.scheduled_at)}
-                                                                </span>
-                                                            </div>
-                                                            <span className="text-[10px] text-slate-600 capitalize shrink-0">{o.status || "planned"}</span>
+                                                            <span className="text-[10px] text-slate-600 capitalize shrink-0">
+                                                                {o.status || "pending"}
+                                                            </span>
                                                         </button>
                                                     ))}
                                                 </div>
                                             </CardContent>
                                         </Card>
-                                    )}
+
+                                        {/* OT */}
+                                        {ctx === "ipd" && (
+                                            <Card className="border-slate-200 bg-white/70 backdrop-blur rounded-2xl">
+                                                <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <ScissorsLineDashed className="h-4 w-4 text-amber-600" />
+                                                        <CardTitle className="text-xs font-semibold">OT Schedules</CardTitle>
+                                                    </div>
+                                                    <StatusChip tone="ot">{summary.ot?.length || 0}</StatusChip>
+                                                </CardHeader>
+                                                <CardContent className="px-4 pb-4 pt-0">
+                                                    <div className="space-y-2 max-h-44 overflow-auto text-[11px]">
+                                                        {!summary.ot?.length && !loadingSummary && (
+                                                            <div className="text-slate-500 text-[12px]">No OT schedules yet.</div>
+                                                        )}
+                                                        {summary.ot?.map((o) => (
+                                                            <button
+                                                                key={o.id}
+                                                                type="button"
+                                                                onClick={() => openDetails("ot", o)}
+                                                                className="w-full text-left flex items-center justify-between gap-2 px-3 py-2 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50"
+                                                            >
+                                                                <div className="flex flex-col min-w-0">
+                                                                    <span className="font-semibold text-slate-900 truncate">
+                                                                        {o.case_no || `OT-${String(o.id).padStart(6, "0")}`}
+                                                                    </span>
+                                                                    <span className="text-[10px] text-slate-500 truncate">
+                                                                        {fmtIST(o.created_at || o.scheduled_at)}
+                                                                    </span>
+                                                                </div>
+                                                                <span className="text-[10px] text-slate-600 capitalize shrink-0">
+                                                                    {o.status || "planned"}
+                                                                </span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+                                        )}
+
+                                        {/* WARD USAGE (small summary) */}
+                                        <Card className="border-slate-200 bg-white/70 backdrop-blur rounded-2xl">
+                                            <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
+                                                <div className="flex items-center gap-2">
+                                                    <ClipboardList className="h-4 w-4 text-teal-600" />
+                                                    <CardTitle className="text-xs font-semibold">Ward Usage</CardTitle>
+                                                </div>
+                                                <StatusChip tone="slate">{summary.ward?.length || 0}</StatusChip>
+                                            </CardHeader>
+                                            <CardContent className="px-4 pb-4 pt-0">
+                                                <div className="space-y-2 max-h-44 overflow-auto text-[11px]">
+                                                    {!summary.ward?.length && !loadingSummary && (
+                                                        <div className="text-slate-500 text-[12px]">No usage entries yet.</div>
+                                                    )}
+                                                    {summary.ward?.map((r) => (
+                                                        <button
+                                                            key={r.consumption_id || r.id}
+                                                            type="button"
+                                                            onClick={() => setScreen("ward")}
+                                                            className="w-full text-left flex items-center justify-between gap-2 px-3 py-2 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50"
+                                                        >
+                                                            <div className="flex flex-col min-w-0">
+                                                                <span className="font-semibold text-slate-900 truncate">
+                                                                    {r.consumption_number || `#${r.consumption_id || r.id}`}
+                                                                </span>
+                                                                <span className="text-[10px] text-slate-500 truncate">{fmtIST(r.posted_at || r.created_at)}</span>
+                                                            </div>
+                                                            <span className="text-[10px] text-slate-600 shrink-0">
+                                                                Qty: {r.total_qty ?? "—"}
+                                                            </span>
+                                                        </button>
+                                                    ))}
+                                                </div>
+
+                                                <div className="mt-3">
+                                                    <PremiumButton
+                                                        tone="slate"
+                                                        variant="outline"
+                                                        className="h-9 w-full text-[11px]"
+                                                        onClick={() => setScreen("ward")}
+                                                        type="button"
+                                                    >
+                                                        <ClipboardList className="h-4 w-4 mr-2" />
+                                                        Open Ward Usage
+                                                    </PremiumButton>
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+                                    </div>
                                 </div>
-                            </div>
+                            ) : screen === "lab" ? (
+                                <LabScreen
+                                    patient={patient}
+                                    ctx={ctx}
+                                    contextId={contextId}
+                                    canUseContext={canUseContext}
+                                    onBack={() => setScreen("home")}
+                                    loadSummary={loadSummary}
+                                    loadingSummary={loadingSummary}
+                                    summaryLab={summary.lab}
+                                    openDetails={openDetails}
+                                    labPdfActions={labPdfActions}
+                                />
+                            ) : screen === "ris" ? (
+                                <RisScreen
+                                    patient={patient}
+                                    ctx={ctx}
+                                    contextId={contextId}
+                                    canUseContext={canUseContext}
+                                    onBack={() => setScreen("home")}
+                                    loadSummary={loadSummary}
+                                    loadingSummary={loadingSummary}
+                                    summaryRis={summary.ris}
+                                    openDetails={openDetails}
+                                />
+                            ) : screen === "rx" ? (
+                                <RxScreen
+                                    patient={patient}
+                                    ctx={ctx}
+                                    contextId={contextId}
+                                    canUseContext={canUseContext}
+                                    onBack={() => setScreen("home")}
+                                    loadSummary={loadSummary}
+                                    loadingSummary={loadingSummary}
+                                    summaryRx={summary.rx}
+                                    openDetails={openDetails}
+                                    defaultLocationId={defaultLocationId}
+                                />
+                            ) : screen === "ward" ? (
+                                <div className="space-y-3">
+                                    <div className="flex items-center justify-between">
+                                        <PremiumButton
+                                            tone="slate"
+                                            variant="outline"
+                                            className="h-10"
+                                            type="button"
+                                            onClick={() => setScreen("home")}
+                                        >
+                                            Back to Quick Orders
+                                        </PremiumButton>
+
+                                        <Badge variant="outline" className="rounded-full bg-white/80 border-slate-300">
+                                            Ward Patient Usage
+                                        </Badge>
+                                    </div>
+
+                                    <WardPatientUsageTab
+                                        patient={patient}
+                                        ctx={ctx}
+                                        contextId={contextId}
+                                        defaultLocationId={defaultLocationId}
+                                    />
+                                </div>
+                            ) : (
+                                <OtScreen
+                                    patient={patient}
+                                    ctx={ctx}
+                                    contextId={contextId}
+                                    canUseContext={canUseContext}
+                                    onBack={() => setScreen("home")}
+                                    loadSummary={loadSummary}
+                                    loadingSummary={loadingSummary}
+                                    summaryOt={summary.ot}
+                                    openDetails={openDetails}
+                                    currentUser={currentUser}
+                                />
+                            )}
                         </CardContent>
                     </Card>
                 </div>
             </motion.div>
 
-            {/* Details Sheet (Mobile: bottom sheet, Desktop: right sheet) */}
+            {/* Details Sheet */}
             <Sheet open={detailsOpen} onOpenChange={(v) => (v ? setDetailsOpen(true) : closeDetails())}>
                 <SheetContent
                     side={isMobile ? "bottom" : "right"}
@@ -2321,7 +808,7 @@ export default function QuickOrders({
                             </div>
                         </div>
 
-                        {/* Scroll body */}
+                        {/* Body */}
                         <div className="flex-1 overflow-hidden">
                             <ScrollArea className="h-full">
                                 <div className={cx(isMobile ? "px-4 py-4" : "px-6 py-6", "space-y-3")}>
@@ -2338,21 +825,22 @@ export default function QuickOrders({
                                                 <div className="mt-1 text-slate-600">
                                                     Created:{" "}
                                                     <span className="font-semibold text-slate-800">
-                                                        {fmtIST(detailsItem.created_at || detailsItem.order_datetime)}
+                                                        {fmtIST(detailsItem.created_at || detailsItem.order_datetime || detailsItem.rx_datetime)}
                                                     </span>
                                                 </div>
                                                 <div className="mt-1 text-slate-600">
-                                                    Status:{" "}
-                                                    <span className="font-semibold text-slate-800">{detailsItem.status || "—"}</span>
+                                                    Status: <span className="font-semibold text-slate-800">{detailsItem.status || "—"}</span>
                                                 </div>
                                             </div>
 
-                                            {/* (Optional) show rx full data if loaded */}
                                             {detailsType === "rx" && detailsFull && detailsFull !== detailsItem && (
                                                 <div className="rounded-2xl border border-slate-200 bg-white p-4 text-xs">
                                                     <div className="font-semibold text-slate-900">Rx details</div>
                                                     <div className="mt-1 text-slate-600">
-                                                        Items: <span className="font-semibold text-slate-900">{detailsFull?.lines?.length ?? "—"}</span>
+                                                        Items:{" "}
+                                                        <span className="font-semibold text-slate-900">
+                                                            {detailsFull?.lines?.length ?? detailsFull?.data?.lines?.length ?? "—"}
+                                                        </span>
                                                     </div>
                                                 </div>
                                             )}
@@ -2362,19 +850,34 @@ export default function QuickOrders({
                             </ScrollArea>
                         </div>
 
-                        {/* Footer actions (sticky) */}
+                        {/* Footer actions */}
                         {detailsItem?.id && (
                             <div className={cx("border-t border-slate-200 bg-white/90 backdrop-blur", isMobile ? "p-3" : "p-4")}>
                                 <div className="flex flex-wrap gap-2">
                                     {detailsType === "lab" && (
                                         <>
-                                            <PremiumButton tone="lab" variant="outline" className="rounded-2xl" onClick={() => labPdfActions(detailsItem.id, "view")}>
+                                            <PremiumButton
+                                                tone="lab"
+                                                variant="outline"
+                                                className="rounded-2xl"
+                                                onClick={() => labPdfActions(detailsItem.id, "view")}
+                                            >
                                                 <Eye className="h-4 w-4 mr-2" /> View PDF
                                             </PremiumButton>
-                                            <PremiumButton tone="lab" variant="outline" className="rounded-2xl" onClick={() => labPdfActions(detailsItem.id, "print")}>
+                                            <PremiumButton
+                                                tone="lab"
+                                                variant="outline"
+                                                className="rounded-2xl"
+                                                onClick={() => labPdfActions(detailsItem.id, "print")}
+                                            >
                                                 <Printer className="h-4 w-4 mr-2" /> Print
                                             </PremiumButton>
-                                            <PremiumButton tone="lab" variant="solid" className="rounded-2xl" onClick={() => labPdfActions(detailsItem.id, "download")}>
+                                            <PremiumButton
+                                                tone="lab"
+                                                variant="solid"
+                                                className="rounded-2xl"
+                                                onClick={() => labPdfActions(detailsItem.id, "download")}
+                                            >
                                                 <Download className="h-4 w-4 mr-2" /> Download
                                             </PremiumButton>
                                         </>
@@ -2382,13 +885,28 @@ export default function QuickOrders({
 
                                     {detailsType === "rx" && (
                                         <>
-                                            <PremiumButton tone="rx" variant="outline" className="rounded-2xl" onClick={() => rxActions(detailsItem.id, "view")}>
+                                            <PremiumButton
+                                                tone="rx"
+                                                variant="outline"
+                                                className="rounded-2xl"
+                                                onClick={() => rxActions(detailsItem.id, "view")}
+                                            >
                                                 <Eye className="h-4 w-4 mr-2" /> View PDF
                                             </PremiumButton>
-                                            <PremiumButton tone="rx" variant="outline" className="rounded-2xl" onClick={() => rxActions(detailsItem.id, "print")}>
+                                            <PremiumButton
+                                                tone="rx"
+                                                variant="outline"
+                                                className="rounded-2xl"
+                                                onClick={() => rxActions(detailsItem.id, "print")}
+                                            >
                                                 <Printer className="h-4 w-4 mr-2" /> Print
                                             </PremiumButton>
-                                            <PremiumButton tone="rx" variant="solid" className="rounded-2xl" onClick={() => rxActions(detailsItem.id, "download")}>
+                                            <PremiumButton
+                                                tone="rx"
+                                                variant="solid"
+                                                className="rounded-2xl"
+                                                onClick={() => rxActions(detailsItem.id, "download")}
+                                            >
                                                 <Download className="h-4 w-4 mr-2" /> Download
                                             </PremiumButton>
                                         </>

@@ -326,7 +326,7 @@ export default function InventoryIndentsPage() {
                                         <div className="min-w-0">
                                             <div className="font-semibold truncate">{r.indent_number || `Indent #${r.id}`}</div>
                                             <div className="text-xs text-muted-foreground mt-1">
-                                                Created: {fmtIST(r.created_at)} • Indent Date: {r.indent_date ? fmtIST(r.indent_date) : "-"}
+                                                Created: {fmtIST(r.created_at)} • Indent Date: {r.indent_date ? r.indent_date : "-"}
                                             </div>
                                             <div className="text-xs text-muted-foreground mt-1">
                                                 From: {r.from_location?.name || r.from_location_id} <ArrowRight className="inline w-3 h-3 mx-1" /> To:{" "}

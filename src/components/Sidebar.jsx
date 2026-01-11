@@ -245,6 +245,17 @@ const GROUPS = [
           "inventory.catalog.view",
         ],
       },
+      {
+        key: "inventory_common_stock",
+        label: "Inventory Common Stock",
+        to: "/inventory/common/stock",
+        icon: AlertTriangle,
+        reqAny: [
+          "inventory.indents.view",
+          "inventory.issues.view",
+          "inventory.catalog.view",
+        ],
+      },
 
     ],
   },

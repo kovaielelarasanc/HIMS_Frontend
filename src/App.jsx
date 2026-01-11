@@ -107,7 +107,7 @@ import BillingDashboard from "./billing/BillingDashboard";
 import BillingAddItem from "./billing/BillingAddItem";
 import ChargeMaster from "./billing/ChargeMaster";
 import InventoryCommonStockPage from "./pages/inventory/InventoryCommonStockPage";
-import WardPatientUsagePage from "./pages/inventory/WardPatientUsagePage";
+import WardPatientUsagePage from "./components/quickorders/WardPatientUsagePage";
 import InventoryIndentsPage from "./pages/inventory/InventoryIndentsPage";
 import InventoryIssuesPage from "./pages/inventory/InventoryIssuesPage";
 
@@ -243,10 +243,9 @@ export default function App() {
             <Route path="/pharmacy/returns" element={<PharmacyReturns />} />
             <Route path="/pharmacy/rx-explorer" element={<PharmacyRxExplorer />} />
             <Route path="/pharmacy/stock/alerts" element={<StockAlertsDashboard />} />
-            {/* <Route path="/inventory/indents" element={<InventoryIndentsPage/>} /> */}
-            <Route path="/inventory/indents" element={<InventoryCommonStockPage />} />
-            {/* <Route path="/inventory/indents/issue" element={<InventoryIssuesPage />} /> */}
-            <Route path="/inventory/indents/issue" element={<WardPatientUsagePage />} />
+            <Route path="/inventory/indents" element={<InventoryIndentsPage />} />
+            <Route path="/inventory/indents/issue" element={<InventoryIssuesPage />} />
+            <Route path="/inventory/common/stock" element={<InventoryCommonStockPage />} />
             <Route path="/opd/phramacy" element={<OpdPharmacyOrder />} />
             <Route path="/ipd/phramacy" element={<IpdPharmacyOrder />} />
             <Route path="/counter/phramacy" element={<PharmacyCounterOrder />} />

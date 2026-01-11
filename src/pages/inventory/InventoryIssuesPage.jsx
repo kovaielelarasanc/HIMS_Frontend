@@ -178,7 +178,7 @@ export default function InventoryIssuesPage() {
                                         <div className="min-w-0">
                                             <div className="font-semibold truncate">{r.issue_number || `Issue #${r.id}`}</div>
                                             <div className="text-xs text-muted-foreground mt-1">
-                                                Created: {fmtIST(r.created_at)} • Issue Date: {r.issue_date ? fmtIST(r.issue_date) : "-"}
+                                                Created: {fmtIST(r.created_at)} • Issue Date: {r.issue_date ? r.issue_date : "-"}
                                             </div>
                                             <div className="text-xs text-muted-foreground mt-1">
                                                 From: {r.from_location?.name || r.from_location_id} <ArrowRight className="inline w-3 h-3 mx-1" /> To:{" "}
