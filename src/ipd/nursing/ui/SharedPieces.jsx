@@ -46,7 +46,7 @@ export function AuditRow({ createdAt, createdBy, updatedAt, updatedBy, editReaso
     <div className="mt-3 rounded-xl border bg-zinc-50 p-3 text-xs text-zinc-600">
       <div className="flex flex-wrap items-center gap-3">
         <span className="inline-flex items-center gap-1">
-          <Clock className="h-3.5 w-3.5" /> Created: {fmtIST(createdAt)}
+          <Clock className="h-3.5 w-3.5" /> Created: {(createdAt)}
         </span>
         <span className="inline-flex items-center gap-1">
           <User className="h-3.5 w-3.5" /> By: {createdBy ?? '—'}

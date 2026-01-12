@@ -1484,14 +1484,14 @@ export default function LisMasters() {
 
                                                     <td className="border-b border-slate-100 px-3 py-1.5">
                                                         <div className="flex items-center gap-2">
-                                                            <div className="min-w-0 flex-1">
+                                                            {/* <div className="min-w-0 flex-1">
                                                                 <div
                                                                     className="truncate text-[11px] text-slate-700"
                                                                     title={preview === '-' ? '' : preview}
                                                                 >
                                                                     {preview}
                                                                 </div>
-                                                            </div>
+                                                            </div> */}
 
                                                             {isEditing && canUpdateServices ? (
                                                                 <button

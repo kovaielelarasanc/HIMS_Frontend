@@ -25,6 +25,7 @@ import PermGate from '../components/PermGate'
 import OrderBadge from '../components/OrderBadge'
 import PatientBadge from '../components/PatientBadge'
 import StatusBadge from '../components/StatusBadge'
+import { formatIST } from '@/ipd/components/timeZONE'
 
 /* -------------------- utils (stable) -------------------- */
 // ✅ Force consistent display (NABH-friendly)
@@ -1124,7 +1125,7 @@ export default function Orders() {
                                                 {o.priority || 'routine'}
                                             </span>
                                         </div>
-                                        <div>Created: {fmtDT(o.created_at || o.createdAt)}</div>
+                                        <div>Created: {formatIST(o.created_at || o.createdAt)}</div>
                                     </div>
 
                                     <button
@@ -1186,7 +1187,7 @@ export default function Orders() {
                                             </td>
                                             <td className="px-4 py-3 capitalize">{o.priority || 'routine'}</td>
                                             <td className="px-4 py-3"><StatusBadge status={o.status} /></td>
-                                            <td className="px-4 py-3 text-sm text-slate-700">{fmtDT(o.created_at || o.createdAt)}</td>
+                                            <td className="px-4 py-3 text-sm text-slate-700">{formatIST(o.created_at || o.createdAt)}</td>
                                             <td className="px-4 py-3 text-right">
                                                 <Link
                                                     to={`/lab/orders/${o.id}`}

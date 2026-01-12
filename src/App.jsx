@@ -28,7 +28,7 @@ import BedBoard from "./ipd/Bedboard";
 import LabOrderDetail from "./lab/OrderDetail";
 import LabMasters from "./lab/Masters";
 import OrdersList from "./lab/Orders";
-import LisMasters from "./lab/LisMasters";
+// import LisMasters from "./lab/LisMasters";
 import LabReportPrint from "./lab/LabReportPrint";
 
 import RisOrders from "./ris/Orders";
@@ -110,6 +110,7 @@ import InventoryCommonStockPage from "./pages/inventory/InventoryCommonStockPage
 import WardPatientUsagePage from "./components/quickorders/WardPatientUsagePage";
 import InventoryIndentsPage from "./pages/inventory/InventoryIndentsPage";
 import InventoryIssuesPage from "./pages/inventory/InventoryIssuesPage";
+import LisMasters from "./lab/LisMasters";
 
 
 export default function App() {

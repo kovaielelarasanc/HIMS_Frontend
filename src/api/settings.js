@@ -1,27 +1,26 @@
-// FILE: frontend/src/api/settings.js
 import API from './client'
 
-export function getPublicBranding() {
-  return API.get('/settings/ui-branding/public')
-}
+// ----- GLOBAL -----
+export const getPublicBranding = (context) =>
+  API.get('/settings/ui-branding/public', { params: context ? { context } : {} })
 
-export function getBranding() {
-  return API.get('/settings/ui-branding')
-}
+export const getBranding = () => API.get('/settings/ui-branding')
 
-export function updateBranding(payload) {
-  return API.put('/settings/ui-branding', payload)
-}
+export const updateBranding = (payload) => API.put('/settings/ui-branding', payload)
 
-export function uploadBrandingAssets(formData) {
-  return API.post('/settings/ui-branding/assets', formData, {
+export const uploadBrandingAssets = (formData) =>
+  API.post('/settings/ui-branding/assets', formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
-}
 
-// NEW: upload letterhead (PDF / image / doc)
-export function uploadLetterhead(formData) {
-  return API.post('/settings/ui-branding/letterhead', formData, {
+// ----- CONTEXT (pharmacy etc.) -----
+export const getBrandingContext = (code) =>
+  API.get(`/settings/ui-branding/contexts/${code}`)
+
+export const updateBrandingContext = (code, payload) =>
+  API.put(`/settings/ui-branding/contexts/${code}`, payload)
+
+export const uploadBrandingContextAssets = (code, formData) =>
+  API.post(`/settings/ui-branding/contexts/${code}/assets`, formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
-}

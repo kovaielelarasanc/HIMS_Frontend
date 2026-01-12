@@ -58,6 +58,7 @@ import {
 } from '../../api/ipdNursing'
 
 import TransfusionModule from './TransfusionModule'
+import { formatIST } from '../components/timeZONE'
 
 const draftKey = (admissionId, module) => `nabh:draft:${module}:${admissionId}`
 
@@ -559,7 +560,7 @@ function DressingModule({ admissionId, chips, alerts, canWrite, canEdit }) {
                 onEdit={() => startEdit(r)}
                 audit={
                   <AuditRow
-                    createdAt={r.created_at || r.performed_at}
+                    createdAt={fmtIST(r.created_at) || fmtIST(r.performed_at)}
                     createdBy={userLabel(r.performed_by, r.performed_by_id)}
                     updatedAt={r.updated_at}
                     updatedBy={userLabel(r.updated_by, r.updated_by_id)}
@@ -912,9 +913,9 @@ function IcuModule({ admissionId, chips, alerts, canWrite, canEdit }) {
                   onEdit={() => startEdit(r)}
                   audit={
                     <AuditRow
-                      createdAt={r.created_at || r.recorded_at}
+                      createdAt={r.created_at || formatIST(r.recorded_at)}
                       createdBy={userLabel(r.recorded_by, r.recorded_by_id)}
-                      updatedAt={r.updated_at}
+                      updatedAt={fmtIST(r.updated_at)}
                       updatedBy={userLabel(r.updated_by, r.updated_by_id)}
                       editReason={r.edit_reason}
                     />

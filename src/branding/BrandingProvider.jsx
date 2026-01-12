@@ -1,176 +1,183 @@
-// FILE: frontend/src/branding/BrandingProvider.jsx
-import { createContext, useContext, useEffect, useState } from 'react'
-import { toast } from 'sonner'
-import { getPublicBranding, getBranding } from '../api/settings'
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from "react"
+import { toast } from "sonner"
+import { useLocation } from "react-router-dom"
+import { getPublicBranding } from "../api/settings"
 
 const BrandingContext = createContext({
-  branding: null,
-  setBranding: () => { },
+  get: () => null,
+  set: () => { },
+  ensure: async () => { },
+  refresh: async () => { },
   loading: true,
 })
 
-// const API_BASE from env (e.g. http://localhost:8000/api or https://api.nutryah.com/api)
-// const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000/api'
-const API_BASE = import.meta.env.VITE_API_URL || 'https://api.nutryah.com/api'
-// -> strip trailing "/api" to get backend root (where /media is served)
-const BACKEND_ROOT = API_BASE.replace(/\/api\/?$/, '')
-
 /**
- * Make an absolute URL for media.
- * - If already http(s), return as-is.
- * - If starts with "//", prefix current protocol.
- * - Otherwise treat as path on BACKEND_ROOT (e.g. /media/...).
+ * NO ENV solution:
+ * 1) Prefer same-origin backend: <current-origin>/api
+ * 2) If frontend is Vite dev (:5173), assume backend is :8000
+ * 3) If frontend already served by backend, same-origin will work.
  */
+function resolveApiBase() {
+  const { origin, hostname, protocol, port } = window.location
+
+  // If you are running vite dev server, backend is typically 8000
+  if (port === "5173" || port === "5174" || port === "3000") {
+    return `${protocol}//${hostname}:8000/api`
+  }
+
+  // Otherwise assume backend served from same origin
+  return `${origin}/api`
+}
+
+
+
+
+const API_BASE = resolveApiBase()
+console.log(API_BASE);
+const BACKEND_ROOT = API_BASE.replace(/\/api\/?$/, "")
+
 function makeAbs(urlOrPath) {
   if (!urlOrPath) return undefined
   const v = String(urlOrPath).trim()
   if (!v) return undefined
   if (/^https?:\/\//i.test(v)) return v
-  if (v.startsWith('//')) return `${window.location.protocol}${v}`
-
-  // Ensure leading slash
-  const rel = v.startsWith('/') ? v : `/${v}`
+  if (v.startsWith("//")) return `${window.location.protocol}${v}`
+  const rel = v.startsWith("/") ? v : `/${v}`
   return `${BACKEND_ROOT}${rel}`
 }
 
-/**
- * Normalise raw branding payload from backend into a shape
- * that:
- *  - NEVER has null for color fields
- *  - Always has absolute *_url fields for images.
- */
+function withBust(url, version) {
+  if (!url) return url
+  const v = version ? encodeURIComponent(String(version)) : ""
+  if (!v) return url
+  const sep = url.includes("?") ? "&" : "?"
+  return `${url}${sep}v=${v}`
+}
+
+function ensureMediaAbs(b, keyUrl, keyPath, ver) {
+  // If backend returned *_url use it, else derive from *_path
+  let u = b[keyUrl]
+  if (!u && b[keyPath]) {
+    u = `/media/${String(b[keyPath]).replace(/^\/+/, "")}`
+  }
+  b[keyUrl] = u ? withBust(makeAbs(u), ver) : null
+}
+
 function normalizeBranding(raw) {
   if (!raw) return null
   const b = { ...raw }
 
-  // -------- COLORS: FRONTEND DEFAULTS --------
-  // Primary theme
-  b.primary_color = b.primary_color || '#2563eb'
+  // ---- colors (safe defaults) ----
+  b.primary_color = b.primary_color || "#2563eb"
   b.primary_color_dark = b.primary_color_dark || null
 
-  // Layout backgrounds
-  b.sidebar_bg_color = b.sidebar_bg_color || '#ffffff'
-  b.content_bg_color = b.content_bg_color || '#f9fafb'
-  b.card_bg_color = b.card_bg_color || '#ffffff'
-  b.border_color = b.border_color || '#e5e7eb'
+  b.sidebar_bg_color = b.sidebar_bg_color || "#ffffff"
+  b.content_bg_color = b.content_bg_color || "#f9fafb"
+  b.card_bg_color = b.card_bg_color || "#ffffff"
+  b.border_color = b.border_color || "#e5e7eb"
 
-  // Text colors
-  b.text_color = b.text_color || '#111827'           // main text (sidebar)
-  b.text_muted_color = b.text_muted_color || '#e5e7eb' // topbar text (muted)
+  b.text_color = b.text_color || "#111827"
+  b.text_muted_color = b.text_muted_color || "#6b7280"
 
-  // Icon colors
-  b.icon_color = b.icon_color || b.text_color || '#2563eb'
-  b.icon_bg_color = b.icon_bg_color || 'rgba(37,99,235,0.08)'
+  b.icon_color = b.icon_color || b.text_color
+  b.icon_bg_color = b.icon_bg_color || "rgba(37,99,235,0.08)"
 
-  // -------- LOGOS / ICONS (URLs) --------
+  // ---- cache bust ----
+  const ver = b.asset_version || b.updated_at || ""
 
-  // logo
-  if (b.logo_path && !b.logo_url) {
-    b.logo_url = makeAbs(`/media/${String(b.logo_path).replace(/^\/+/, '')}`)
-  } else if (b.logo_url) {
-    b.logo_url = makeAbs(b.logo_url)
-  }
-
-  // login logo
-  if (b.login_logo_path && !b.login_logo_url) {
-    b.login_logo_url = makeAbs(
-      `/media/${String(b.login_logo_path).replace(/^\/+/, '')}`,
-    )
-  } else if (b.login_logo_url) {
-    b.login_logo_url = makeAbs(b.login_logo_url)
-  }
-
-  // favicon
-  if (b.favicon_path && !b.favicon_url) {
-    b.favicon_url = makeAbs(
-      `/media/${String(b.favicon_path).replace(/^\/+/, '')}`,
-    )
-  } else if (b.favicon_url) {
-    b.favicon_url = makeAbs(b.favicon_url)
-  }
-
-  // pdf header/footer
-  if (b.pdf_header_path && !b.pdf_header_url) {
-    b.pdf_header_url = makeAbs(
-      `/media/${String(b.pdf_header_path).replace(/^\/+/, '')}`,
-    )
-  } else if (b.pdf_header_url) {
-    b.pdf_header_url = makeAbs(b.pdf_header_url)
-  }
-
-  if (b.pdf_footer_path && !b.pdf_footer_url) {
-    b.pdf_footer_url = makeAbs(
-      `/media/${String(b.pdf_footer_path).replace(/^\/+/, '')}`,
-    )
-  } else if (b.pdf_footer_url) {
-    b.pdf_footer_url = makeAbs(b.pdf_footer_url)
-  }
+  // ---- media urls -> absolute + cache bust ----
+  ensureMediaAbs(b, "logo_url", "logo_path", ver)
+  ensureMediaAbs(b, "login_logo_url", "login_logo_path", ver)
+  ensureMediaAbs(b, "favicon_url", "favicon_path", ver)
+  ensureMediaAbs(b, "pdf_header_url", "pdf_header_path", ver)
+  ensureMediaAbs(b, "pdf_footer_url", "pdf_footer_path", ver)
+  ensureMediaAbs(b, "letterhead_url", "letterhead_path", ver)
 
   return b
 }
 
 export function BrandingProvider({ children }) {
-  const [branding, _setBranding] = useState(null)
+  const [cache, setCache] = useState({}) // { default: branding, pharmacy: branding, ... }
   const [loading, setLoading] = useState(true)
+  const inflight = useRef({}) // context -> promise
 
-  // Public setter for other components (always normalized)
-  const setBranding = (valueOrUpdater) => {
-    if (typeof valueOrUpdater === 'function') {
-      _setBranding((prev) => normalizeBranding(valueOrUpdater(prev)))
-    } else {
-      _setBranding(normalizeBranding(valueOrUpdater))
-    }
+  const set = (context, valueOrUpdater) => {
+    const code = context || "default"
+    setCache((prev) => {
+      const current = prev[code] || null
+      const next = typeof valueOrUpdater === "function" ? valueOrUpdater(current) : valueOrUpdater
+      return { ...prev, [code]: normalizeBranding(next) }
+    })
+  }
+
+  const get = (context) => cache[context || "default"] || null
+
+  const ensure = async (context) => {
+    const code = context || "default"
+    if (get(code)) return
+
+    if (inflight.current[code]) return inflight.current[code]
+
+    inflight.current[code] = (async () => {
+      // getPublicBranding should call /settings/ui-branding/public?context=...
+      const res = await getPublicBranding(code === "default" ? undefined : code)
+      set(code, res.data)
+    })().finally(() => {
+      inflight.current[code] = null
+    })
+
+    return inflight.current[code]
+  }
+
+  const refresh = async (context) => {
+    const code = context || "default"
+    const res = await getPublicBranding(code === "default" ? undefined : code)
+    set(code, res.data)
   }
 
   useEffect(() => {
     let alive = true
-
-    const run = async () => {
-      try {
-        // 1) Try public branding (works for ALL users)
-        let data
+      ; (async () => {
         try {
-          const res = await getPublicBranding()
-          data = res.data
+          await ensure("default")
         } catch (err) {
-          // Fallback: old backend or route missing
-          console.warn(
-            'Public branding failed, falling back to /settings/ui-branding',
-            err,
-          )
-          const res = await getBranding()
-          data = res.data
+          console.error("Failed to load branding", err)
+          toast.error("Failed to load branding")
+        } finally {
+          if (alive) setLoading(false)
         }
-
-        if (!alive) return
-
-        console.log('[BrandingProvider] raw branding from API:', data)
-
-        const norm = normalizeBranding(data)
-        console.log('[BrandingProvider] normalized branding:', norm)
-
-        _setBranding(norm)
-      } catch (err) {
-        console.error('Failed to load branding', err)
-        toast.error('Failed to load customization settings')
-      } finally {
-        if (alive) setLoading(false)
-      }
-    }
-
-    run()
+      })()
     return () => {
       alive = false
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  return (
-    <BrandingContext.Provider value={{ branding, setBranding, loading }}>
-      {children}
-    </BrandingContext.Provider>
-  )
+  const value = useMemo(() => ({ get, set, ensure, refresh, loading }), [cache, loading])
+
+  return <BrandingContext.Provider value={value}>{children}</BrandingContext.Provider>
 }
 
-export function useBranding() {
-  return useContext(BrandingContext)
+export function useBranding(contextCode) {
+  const ctx = useContext(BrandingContext)
+  const code = contextCode || "default"
+  const branding = ctx.get(code)
+
+  useEffect(() => {
+    if (!branding) ctx.ensure(code)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [code])
+
+  return {
+    branding,
+    setBranding: (valueOrUpdater) => ctx.set(code, valueOrUpdater),
+    refreshBranding: () => ctx.refresh(code),
+    loading: ctx.loading && !branding,
+  }
+}
+
+export function useRouteBranding() {
+  const { pathname } = useLocation()
+  const context = pathname.startsWith("/pharmacy") ? "pharmacy" : "default"
+  return useBranding(context)
 }

@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { listProgress, addProgress } from '../../api/ipd'
 import PermGate from '../../components/PermGate'
+import { formatIST } from '../components/timeZONE'
 
 export default function ProgressNotes({ admissionId }) {
     const [rows, setRows] = useState([])
@@ -54,7 +55,7 @@ export default function ProgressNotes({ admissionId }) {
                     <tbody>
                         {(rows || []).map(r => (
                             <tr key={r.id} className="border-t">
-                                <td className="px-3 py-2">{new Date(r.created_at).toLocaleString()}</td>
+                                <td className="px-3 py-2">{formatIST(new Date(r.created_at).toLocaleString())}</td>
                                 <td className="px-3 py-2">{r.observation || '—'}</td>
                                 <td className="px-3 py-2">{r.plan || '—'}</td>
                             </tr>

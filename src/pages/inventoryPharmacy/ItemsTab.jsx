@@ -1239,7 +1239,7 @@ export default function ItemsTab() {
                                                 </div>
 
                                                 <div className="min-w-0">
-                                                    <div className="text-sm font-semibold text-slate-900 truncate">{it.name}</div>
+                                                    <div className="text-sm font-semibold text-slate-900 truncate">{it.name.toUpperCase()}</div>
                                                     <div className="text-xs text-slate-500 truncate">
                                                         {s(it?.generic_name) || s(it?.strength) || s(it?.manufacturer) || "—"}
                                                         {sch}
