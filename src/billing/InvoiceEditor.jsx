@@ -1,25 +1,27 @@
 // FILE: src/pages/billing/InvoiceEditor.jsx
-import { useEffect, useMemo, useRef, useState } from "react"
+import { Fragment, useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { toast } from "sonner"
+
 import {
     billingAddManualLine,
     billingApproveInvoice,
     billingDeleteLine,
     billingGetInvoice,
     billingGetInvoicePdf,
+    billingListInvoiceAuditLogs,
     billingListInvoiceLines,
     billingListInvoicePayments,
-    billingListInvoiceAuditLogs,
+    billingModulesMeta,
     billingPayOnCase,
     billingPostInvoice,
-    billingRequestInvoiceEdit,
     billingReopenInvoice,
+    billingRequestInvoiceEdit,
     billingUpdateLine,
-    billingModulesMeta,
     billingVoidInvoice,
     isCanceledError,
 } from "@/api/billings"
+
 import {
     Badge,
     Button,
@@ -35,7 +37,8 @@ import {
     cn,
     downloadBlob,
     money,
-} from "./_ui"
+} from "@/billing/_ui"
+
 import {
     ArrowLeft,
     CheckCircle2,
@@ -56,6 +59,8 @@ import {
     Stethoscope,
     Building2,
     UserRound,
+    FileDown,
+    Printer,
 } from "lucide-react"
 
 const cx = (...a) => a.filter(Boolean).join(" ")
@@ -78,25 +83,32 @@ function prettyModuleLabel(code, fallback) {
     const x = String(code || "").trim().toUpperCase()
     if (x === "DOC") return "Doctor Fees"
     if (x === "LAB") return "Laboratory"
-    if (x === "SCAN" || x === "XRAY") return "Radiology"
+    if (x === "BLOOD") return "Blood Bank"
+    if (x === "SCAN" || x === "XRAY" || x === "RAD") return "Radiology"
     if (x === "PHM" || x === "PHC" || x === "PHARMACY") return "Pharmacy"
     if (x === "ROOM") return "Room / Bed Charges"
+    if (x === "PROC") return "Procedures"
+    if (x === "OT") return "OT"
     return fallback || x || "MISC"
 }
 
-function fmtDate(v) {
-    if (!v) return "—"
+function fmtDateISO(v) {
+    if (!v) return ""
     try {
-        // supports "YYYY-MM-DD" and ISO
         const d = new Date(v)
-        if (Number.isNaN(d.getTime())) {
-            const s = String(v)
-            return s.length >= 10 ? s.slice(0, 10) : s
-        }
+        if (Number.isNaN(d.getTime())) return String(v).slice(0, 10)
         return d.toISOString().slice(0, 10)
     } catch {
-        const s = String(v)
-        return s.length >= 10 ? s.slice(0, 10) : s
+        return String(v).slice(0, 10)
+    }
+}
+
+function fmtDateTime(v) {
+    if (!v) return "—"
+    try {
+        return new Date(v).toLocaleString("en-IN")
+    } catch {
+        return String(v)
     }
 }
 
@@ -110,12 +122,15 @@ const MODULE_TO_GROUP = {
     BLOOD: "LAB",
     SCAN: "RAD",
     XRAY: "RAD",
+    RAD: "RAD",
     PHM: "PHARM",
     PHC: "PHARM",
+    PHARMACY: "PHARM",
     ROOM: "ROOM",
     NURSING: "NURSING",
     PROC: "PROC",
     SURG: "OT",
+    OT: "OT",
     ADM: "MISC",
     DIET: "MISC",
     MISC: "MISC",
@@ -123,9 +138,7 @@ const MODULE_TO_GROUP = {
 
 const PAY_MODES = ["CASH", "CARD", "UPI", "BANK", "WALLET", "CHEQUE"]
 
-/**
- * ✅ Fallback columns (if backend meta not provided)
- */
+// ✅ Fallback columns (if backend meta not provided)
 const FALLBACK_DEFAULT_COLS = [
     { key: "service_date", label: "Date" },
     { key: "item_code", label: "Code" },
@@ -138,10 +151,7 @@ const FALLBACK_DEFAULT_COLS = [
     { key: "net_amount", label: "Total" },
 ]
 
-/**
- * ✅ DOC module columns (Doctor + Department visible)
- * This works when backend returns doctor_name / department_name on each line.
- */
+// ✅ DOC columns (Doctor + Department visible)
 const FALLBACK_DOC_COLS = [
     { key: "service_date", label: "Service Date" },
     { key: "department_name", label: "Department" },
@@ -220,8 +230,8 @@ export default function InvoiceEditor() {
                 billingListInvoicePayments(invoiceId, {}, { signal: ac.signal }),
             ])
 
-            setLines(Array.isArray(l) ? l : l?.items ?? [])
-            setPayments(Array.isArray(p) ? p : p?.items ?? [])
+            setLines(Array.isArray(l) ? l : l?.items ?? l?.results ?? [])
+            setPayments(Array.isArray(p) ? p : p?.items ?? p?.results ?? [])
         } catch (e) {
             if (!isCanceledError(e)) toast.error(e?.message || "Failed to load invoice")
         } finally {
@@ -231,6 +241,7 @@ export default function InvoiceEditor() {
 
     useEffect(() => {
         load()
+        return () => abortRef.current?.abort?.()
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [invoiceId])
 
@@ -242,7 +253,7 @@ export default function InvoiceEditor() {
         setAuditLoading(true)
         try {
             const r = await billingListInvoiceAuditLogs(invoiceId)
-            setAuditLogs(Array.isArray(r) ? r : r?.items ?? [])
+            setAuditLogs(Array.isArray(r) ? r : r?.items ?? r?.results ?? [])
         } catch {
             // ignore soft errors
         } finally {
@@ -251,8 +262,8 @@ export default function InvoiceEditor() {
     }
 
     useEffect(() => {
-        let alive = true
         if (tab !== "AUDIT") return
+        let alive = true
             ; (async () => {
                 await loadAudit()
                 if (!alive) return
@@ -398,10 +409,6 @@ export default function InvoiceEditor() {
         return "Draft correction"
     }
 
-    function canDeleteLine(_r) {
-        return Boolean(canEditLines)
-    }
-
     async function updateLineWithReason(lineId, patch, reason) {
         if (!invoice?.id) return
         if (!canEditLines) return toast.error("Invoice locked. Reopen to edit.")
@@ -466,7 +473,7 @@ export default function InvoiceEditor() {
         }
     }
 
-    function lockedBanner() {
+    function LockedBanner() {
         if (statusUpper !== "APPROVED") return null
         return (
             <div className="mt-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-900">
@@ -491,16 +498,16 @@ export default function InvoiceEditor() {
         )
     }
 
-    // ✨ Extreme premium background shell (Apple-ish)
     return (
         <div className="w-full">
             <div className="relative overflow-hidden rounded-[32px] border border-slate-100 bg-white shadow-sm">
+                {/* soft background */}
                 <div className="pointer-events-none absolute inset-0">
                     <div className="absolute -top-32 -right-24 h-80 w-80 rounded-full bg-slate-200/40 blur-3xl" />
                     <div className="absolute -bottom-40 -left-20 h-96 w-96 rounded-full bg-slate-100 blur-3xl" />
                 </div>
 
-                {/* Premium Header */}
+                {/* Header */}
                 <div className="relative p-4 sm:p-5">
                     <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
                         <div className="flex items-start gap-3">
@@ -509,11 +516,10 @@ export default function InvoiceEditor() {
                             </Button>
 
                             <div>
-                                <div className="flex items-center gap-2">
+                                <div className="flex flex-wrap items-center gap-2">
                                     <div className="text-xl font-extrabold text-slate-900">Invoice</div>
                                     <StatusBadge status={invoice?.status} />
                                     <Badge tone="slate">{moduleLabel}</Badge>
-
                                     {docMode ? (
                                         <span className="inline-flex items-center gap-1 rounded-xl border border-slate-100 bg-white px-2 py-1 text-xs font-extrabold text-slate-700">
                                             <Stethoscope className="h-3.5 w-3.5" /> DOC
@@ -531,31 +537,28 @@ export default function InvoiceEditor() {
                                     >
                                         <ClipboardCopy className="h-3.5 w-3.5" /> Copy
                                     </button>
+
                                     <span>· Case ID: {invoice?.billing_case_id ?? "—"}</span>
-                                    {invoice?.created_at ? <span>· Created: {invoice.created_at}</span> : null}
+                                    {invoice?.created_at ? <span>· Created: {fmtDateTime(invoice.created_at)}</span> : null}
                                 </div>
 
                                 {docMode ? (
                                     <div className="mt-3 grid grid-cols-1 gap-2 sm:grid-cols-3">
-                                        <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
-                                            <div className="text-[11px] font-extrabold text-slate-500">Module</div>
-                                            <div className="mt-1 flex items-center gap-2 text-sm font-extrabold text-slate-900">
-                                                <Stethoscope className="h-4 w-4 text-slate-500" />
-                                                Doctor Fees (Manual Amount)
-                                            </div>
-                                        </div>
-                                        <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
-                                            <div className="text-[11px] font-extrabold text-slate-500">Policy</div>
-                                            <div className="mt-1 text-sm font-bold text-slate-900">
-                                                No Doctor Fee Master · Price is manual
-                                            </div>
-                                        </div>
-                                        <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
-                                            <div className="text-[11px] font-extrabold text-slate-500">Data</div>
-                                            <div className="mt-1 text-sm font-bold text-slate-900">
-                                                Doctor + Department shown per line
-                                            </div>
-                                        </div>
+                                        <InfoTile
+                                            icon={<Stethoscope className="h-4 w-4 text-slate-500" />}
+                                            title="Module"
+                                            value="Doctor Fees (Manual Amount)"
+                                        />
+                                        <InfoTile
+                                            icon={<Building2 className="h-4 w-4 text-slate-500" />}
+                                            title="Policy"
+                                            value="No Doctor Fee Master · Price is manual"
+                                        />
+                                        <InfoTile
+                                            icon={<UserRound className="h-4 w-4 text-slate-500" />}
+                                            title="Data"
+                                            value="Doctor + Department saved per line"
+                                        />
                                     </div>
                                 ) : null}
                             </div>
@@ -567,7 +570,19 @@ export default function InvoiceEditor() {
                                 Refresh
                             </Button>
 
-                            <PdfButtons onDownload={onDownload} onPrint={onPrint} />
+                            {/* If your PdfButtons exists, use it; otherwise fallback buttons below */}
+                            {PdfButtons ? (
+                                <PdfButtons onDownload={onDownload} onPrint={onPrint} />
+                            ) : (
+                                <>
+                                    <Button variant="outline" onClick={onDownload} disabled={!invoice}>
+                                        <FileDown className="h-4 w-4" /> Download
+                                    </Button>
+                                    <Button variant="outline" onClick={onPrint} disabled={!invoice}>
+                                        <Printer className="h-4 w-4" /> Print
+                                    </Button>
+                                </>
+                            )}
 
                             <Button
                                 variant="outline"
@@ -580,7 +595,7 @@ export default function InvoiceEditor() {
                     </div>
                 </div>
 
-                {/* Summary + Tabs */}
+                {/* Summary + right workspace */}
                 <div className="relative grid grid-cols-1 gap-4 p-4 sm:p-5 lg:grid-cols-3">
                     <Card className="lg:col-span-2">
                         <CardHeader title="Invoice Summary" subtitle="Totals & lifecycle actions" />
@@ -592,7 +607,7 @@ export default function InvoiceEditor() {
                                     <div className="h-10 animate-pulse rounded-xl bg-slate-100" />
                                 </div>
                             ) : !invoice ? (
-                                <EmptyState title="Invoice not found" desc="Check ID or backend route." />
+                                <EmptyState title="Invoice not found" desc="Check invoice ID or backend route." />
                             ) : (
                                 <>
                                     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -622,7 +637,7 @@ export default function InvoiceEditor() {
                                         </Button>
                                     </div>
 
-                                    {lockedBanner()}
+                                    <LockedBanner />
                                 </>
                             )}
                         </CardBody>
@@ -639,10 +654,18 @@ export default function InvoiceEditor() {
                                 >
                                     Invoice Lines
                                 </TabBtn>
-                                <TabBtn active={tab === "PAYMENTS"} onClick={() => setTab("PAYMENTS")} icon={<CreditCard className="h-4 w-4" />}>
+                                <TabBtn
+                                    active={tab === "PAYMENTS"}
+                                    onClick={() => setTab("PAYMENTS")}
+                                    icon={<CreditCard className="h-4 w-4" />}
+                                >
                                     Payments
                                 </TabBtn>
-                                <TabBtn active={tab === "AUDIT"} onClick={() => setTab("AUDIT")} icon={<FileClock className="h-4 w-4" />}>
+                                <TabBtn
+                                    active={tab === "AUDIT"}
+                                    onClick={() => setTab("AUDIT")}
+                                    icon={<FileClock className="h-4 w-4" />}
+                                >
                                     Audit Logs
                                 </TabBtn>
 
@@ -652,7 +675,7 @@ export default function InvoiceEditor() {
                                         <li>Lines editable only in DRAFT</li>
                                         <li>After APPROVE → locked</li>
                                         <li>Edits after approval require Edit Request / Reopen</li>
-                                        <li>AUTO lines are source-linked; edits affect billing only</li>
+                                        <li>AUTO lines are source-linked; edit affects billing only</li>
                                     </ul>
                                 </div>
                             </div>
@@ -727,7 +750,6 @@ export default function InvoiceEditor() {
                                         onPatch={commitLinePatch}
                                         onAskDelete={(line) => setDeleteTarget({ line })}
                                         onAskEdit={(line) => setEditTarget({ line })}
-                                        canDeleteLine={canDeleteLine}
                                         isPharmacy={isPharmacyModule(moduleCode)}
                                         docMode={docMode}
                                     />
@@ -750,13 +772,7 @@ export default function InvoiceEditor() {
                                 {!invoice ? (
                                     <EmptyState title="Invoice not loaded" desc="Open an invoice first." />
                                 ) : (
-                                    <PaymentsPanel
-                                        invoice={invoice}
-                                        payments={payments}
-                                        paidTotal={paidTotal}
-                                        dueTotal={dueTotal}
-                                        onPaid={() => load()}
-                                    />
+                                    <PaymentsPanel invoice={invoice} payments={payments} paidTotal={paidTotal} dueTotal={dueTotal} onPaid={() => load()} />
                                 )}
                             </CardBody>
                         </Card>
@@ -809,15 +825,15 @@ export default function InvoiceEditor() {
                                                 {filteredAudit.map((a) => {
                                                     const open = expandedAuditId === a.id
                                                     return (
-                                                        <>
-                                                            <tr key={a.id} className="border-b border-slate-50 hover:bg-slate-50/60">
-                                                                <td className="py-3 pr-4 font-semibold text-slate-800">{a.created_at || "—"}</td>
-                                                                <td className="py-3 pr-4 font-semibold text-slate-800">{a.user_label || "—"}</td>
+                                                        <Fragment key={a.id}>
+                                                            <tr className="border-b border-slate-50 hover:bg-slate-50/60">
+                                                                <td className="py-3 pr-4 font-semibold text-slate-800">{fmtDateTime(a.created_at || a.at)}</td>
+                                                                <td className="py-3 pr-4 font-semibold text-slate-800">{a.user_label || a.user_name || "—"}</td>
                                                                 <td className="py-3 pr-4">
-                                                                    <Badge tone="slate">{a.action}</Badge>
+                                                                    <Badge tone="slate">{a.action || "—"}</Badge>
                                                                 </td>
                                                                 <td className="py-3 pr-4 text-slate-700">
-                                                                    {a.entity_type} · {a.entity_id}
+                                                                    {a.entity_type || "—"} · {a.entity_id ?? "—"}
                                                                 </td>
                                                                 <td className="py-3 pr-0">
                                                                     <div className="flex items-start justify-between gap-2">
@@ -840,20 +856,20 @@ export default function InvoiceEditor() {
                                                                             <div className="rounded-2xl border border-slate-100 bg-white p-3">
                                                                                 <div className="text-xs font-extrabold text-slate-700">Old</div>
                                                                                 <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded-xl bg-slate-50 p-3 text-xs text-slate-800">
-                                                                                    {JSON.stringify(a.old_json ?? {}, null, 2)}
+                                                                                    {JSON.stringify(a.old_json ?? a.old ?? {}, null, 2)}
                                                                                 </pre>
                                                                             </div>
                                                                             <div className="rounded-2xl border border-slate-100 bg-white p-3">
                                                                                 <div className="text-xs font-extrabold text-slate-700">New</div>
                                                                                 <pre className="mt-2 max-h-72 overflow-auto whitespace-pre-wrap rounded-xl bg-slate-50 p-3 text-xs text-slate-800">
-                                                                                    {JSON.stringify(a.new_json ?? {}, null, 2)}
+                                                                                    {JSON.stringify(a.new_json ?? a.new ?? {}, null, 2)}
                                                                                 </pre>
                                                                             </div>
                                                                         </div>
                                                                     </td>
                                                                 </tr>
                                                             ) : null}
-                                                        </>
+                                                        </Fragment>
                                                     )
                                                 })}
                                             </tbody>
@@ -915,6 +931,8 @@ export default function InvoiceEditor() {
                 {editTarget?.line ? (
                     <EditLineDialog
                         line={editTarget.line}
+                        docMode={docMode}
+                        isPharmacy={isPharmacyModule(moduleCode)}
                         onClose={() => setEditTarget(null)}
                         onConfirm={(patch, reason) => {
                             updateLineWithReason(editTarget.line.id, patch, reason)
@@ -927,9 +945,59 @@ export default function InvoiceEditor() {
     )
 }
 
-/* ----------------------------
+/* ---------------------------------
+   Small UI blocks
+---------------------------------- */
+
+function TabBtn({ active, onClick, icon, children }) {
+    return (
+        <button
+            onClick={onClick}
+            className={cn(
+                "flex w-full items-center justify-between rounded-2xl border px-4 py-3 text-left transition",
+                active ? "border-slate-900 bg-slate-900 text-white" : "border-slate-100 bg-white text-slate-800 hover:bg-slate-50"
+            )}
+        >
+            <div className="flex items-center gap-2">
+                <span className={cn("inline-flex h-8 w-8 items-center justify-center rounded-xl", active ? "bg-white/10" : "bg-slate-50")}>
+                    {icon}
+                </span>
+                <div className="text-sm font-extrabold">{children}</div>
+            </div>
+            <span className={cn("text-xs font-bold", active ? "text-white/70" : "text-slate-500")}>
+                {active ? "Active" : "Open"}
+            </span>
+        </button>
+    )
+}
+
+function MiniStat({ label, value, strong }) {
+    return (
+        <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3">
+            <div className="text-xs font-semibold text-slate-600">{label}</div>
+            <div className={cn("mt-1 text-sm font-extrabold text-slate-900", strong ? "text-base" : "")}>
+                {value}
+            </div>
+        </div>
+    )
+}
+
+function InfoTile({ icon, title, value }) {
+    return (
+        <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
+            <div className="text-[11px] font-extrabold text-slate-500">{title}</div>
+            <div className="mt-1 flex items-center gap-2 text-sm font-extrabold text-slate-900">
+                {icon}
+                {value}
+            </div>
+        </div>
+    )
+}
+
+/* ---------------------------------
    Lines Table
------------------------------ */
+---------------------------------- */
+
 function getNested(obj, path) {
     const parts = String(path || "").split(".")
     let cur = obj
@@ -941,19 +1009,19 @@ function getNested(obj, path) {
 }
 
 function fmtCell(key, v) {
-    if (v == null) return "—"
+    if (v == null || v === "") return "—"
     const k = String(key || "")
 
-    if (k === "service_date") return fmtDate(v)
-
+    if (k === "service_date") {
+        return fmtDateISO(v) || "—"
+    }
     if (k.includes("amount") || k === "unit_price" || k === "line_total" || k === "net_amount") {
         return `₹ ${money(v)}`
     }
-    if (k === "qty") return String(v)
     return String(v)
 }
 
-function LinesTable({ columns, lines, canEdit, onPatch, onAskDelete, onAskEdit, canDeleteLine, isPharmacy, docMode }) {
+function LinesTable({ columns, lines, canEdit, onPatch, onAskDelete, onAskEdit, isPharmacy, docMode }) {
     const cols = columns || (docMode ? FALLBACK_DOC_COLS : FALLBACK_DEFAULT_COLS)
 
     return (
@@ -971,22 +1039,19 @@ function LinesTable({ columns, lines, canEdit, onPatch, onAskDelete, onAskEdit, 
                 </thead>
                 <tbody>
                     {lines.map((r) => {
-                        const canRowEdit = Boolean(canEdit)
-                        const canRemove = Boolean(canDeleteLine?.(r))
                         const autoLinked = !r?.is_manual && String(r?.source_module || "").trim()
-
                         return (
                             <tr key={r.id} className="border-b border-slate-50 hover:bg-slate-50/60">
                                 {cols.map((c) => {
                                     const key = c.key
                                     const raw = getNested(r, key)
 
-                                    // inline edit for qty + unit_price + discount_amount (draft only)
+                                    // inline edit: qty, unit_price, discount_amount (draft only)
                                     if (key === "qty") {
                                         return (
                                             <td key={key} className="py-3 pr-4">
                                                 <LineNumberInput
-                                                    disabled={!canRowEdit}
+                                                    disabled={!canEdit}
                                                     value={raw ?? r.qty ?? 1}
                                                     onCommit={(v) => onPatch(r.id, { qty: Number(v || 0) })}
                                                     className="w-24"
@@ -998,7 +1063,7 @@ function LinesTable({ columns, lines, canEdit, onPatch, onAskDelete, onAskEdit, 
                                         return (
                                             <td key={key} className="py-3 pr-4">
                                                 <LineNumberInput
-                                                    disabled={!canRowEdit}
+                                                    disabled={!canEdit}
                                                     value={raw ?? r.unit_price ?? 0}
                                                     onCommit={(v) => onPatch(r.id, { unit_price: Number(v || 0) })}
                                                     className="w-28"
@@ -1010,7 +1075,7 @@ function LinesTable({ columns, lines, canEdit, onPatch, onAskDelete, onAskEdit, 
                                         return (
                                             <td key={key} className="py-3 pr-4">
                                                 <LineNumberInput
-                                                    disabled={!canRowEdit}
+                                                    disabled={!canEdit}
                                                     value={raw ?? r.discount_amount ?? 0}
                                                     onCommit={(v) => onPatch(r.id, { discount_amount: Number(v || 0) })}
                                                     className="w-28"
@@ -1041,21 +1106,11 @@ function LinesTable({ columns, lines, canEdit, onPatch, onAskDelete, onAskEdit, 
 
                                 <td className="py-3 pr-0 text-right">
                                     <div className="flex justify-end gap-2">
-                                        <Button
-                                            variant="outline"
-                                            disabled={!canRowEdit}
-                                            onClick={() => onAskEdit(r)}
-                                            title={!canRowEdit ? "Invoice locked" : "Edit line"}
-                                        >
+                                        <Button variant="outline" disabled={!canEdit} onClick={() => onAskEdit(r)}>
                                             <Pencil className="h-4 w-4" /> Edit
                                         </Button>
 
-                                        <Button
-                                            variant="outline"
-                                            disabled={!canRemove}
-                                            onClick={() => onAskDelete(r)}
-                                            title={!canRemove ? "Invoice locked" : "Remove line"}
-                                        >
+                                        <Button variant="outline" disabled={!canEdit} onClick={() => onAskDelete(r)}>
                                             <Trash2 className="h-4 w-4" /> Remove
                                         </Button>
                                     </div>
@@ -1073,9 +1128,54 @@ function LinesTable({ columns, lines, canEdit, onPatch, onAskDelete, onAskEdit, 
     )
 }
 
-/* ----------------------------
+/* ---------------------------------
+   Inline number input
+---------------------------------- */
+
+function LineNumberInput({ value, onCommit, disabled, className }) {
+    const [v, setV] = useState(value ?? "")
+    useEffect(() => setV(value ?? ""), [value])
+
+    function commit() {
+        if (disabled) return
+        const x = String(v ?? "").trim()
+        if (x === "") return
+        onCommit?.(x)
+    }
+
+    return (
+        <input
+            className={cn(
+                "h-9 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 outline-none focus:border-slate-400",
+                disabled ? "bg-slate-50 text-slate-500" : "",
+                className
+            )}
+            value={v}
+            onChange={(e) => setV(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+                if (e.key === "Enter") commit()
+                if (e.key === "Escape") setV(value ?? "")
+            }}
+            disabled={disabled}
+            inputMode="decimal"
+        />
+    )
+}
+
+/* ---------------------------------
    Payments Panel
------------------------------ */
+---------------------------------- */
+
+function Row({ label, value, strong }) {
+    return (
+        <div className="flex items-center justify-between">
+            <div className="text-xs font-semibold text-slate-600">{label}</div>
+            <div className={cn("text-sm font-extrabold text-slate-900", strong ? "text-base" : "")}>{value}</div>
+        </div>
+    )
+}
+
 function PaymentsPanel({ invoice, payments, paidTotal, dueTotal, onPaid }) {
     const [saving, setSaving] = useState(false)
     const [form, setForm] = useState({
@@ -1133,7 +1233,7 @@ function PaymentsPanel({ invoice, payments, paidTotal, dueTotal, onPaid }) {
                                 <tbody>
                                     {payments.map((p) => (
                                         <tr key={p.id} className="border-b border-slate-50 hover:bg-slate-50/60">
-                                            <td className="py-3 pr-4 font-semibold text-slate-800">{p.received_at || "—"}</td>
+                                            <td className="py-3 pr-4 font-semibold text-slate-800">{fmtDateTime(p.received_at || p.paid_at || p.created_at)}</td>
                                             <td className="py-3 pr-4">
                                                 <Badge tone="slate">{p.mode || "—"}</Badge>
                                             </td>
@@ -1218,9 +1318,267 @@ function PaymentsPanel({ invoice, payments, paidTotal, dueTotal, onPaid }) {
     )
 }
 
-/* ----------------------------
-   Manual Line Dialog (DOC enhanced)
------------------------------ */
+/* ---------------------------------
+   Modal + dialogs
+---------------------------------- */
+
+function Modal({ title, children, onClose, right }) {
+    return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3">
+            <div className="w-full max-w-2xl rounded-2xl bg-white shadow-xl">
+                <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
+                    <div className="text-base font-extrabold text-slate-900">{title}</div>
+                    <div className="flex items-center gap-2">
+                        {right}
+                        <button
+                            onClick={onClose}
+                            className="rounded-xl px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100"
+                        >
+                            Close
+                        </button>
+                    </div>
+                </div>
+                <div className="px-5 py-4">{children}</div>
+            </div>
+        </div>
+    )
+}
+
+function ReasonDialog({ title, desc, confirmText, onClose, onConfirm, tone }) {
+    const [reason, setReason] = useState("")
+    const danger = tone === "danger"
+    return (
+        <Modal
+            title={title}
+            onClose={onClose}
+            right={
+                <Button
+                    variant={danger ? "danger" : "default"}
+                    onClick={() => {
+                        const r = String(reason || "").trim()
+                        if (r.length < 3) return toast.error("Reason is mandatory (min 3 chars)")
+                        onConfirm?.(r)
+                    }}
+                >
+                    {confirmText || "Confirm"}
+                </Button>
+            }
+        >
+            <div className="text-sm text-slate-600">{desc}</div>
+            <div className="mt-4">
+                <Field label="Reason (required)">
+                    <Textarea
+                        value={reason}
+                        onChange={(e) => setReason(e.target.value)}
+                        placeholder="Type reason..."
+                    />
+                </Field>
+            </div>
+            <div className="mt-3 text-xs text-slate-500">Audit rule: reason is mandatory for compliance.</div>
+        </Modal>
+    )
+}
+
+function VoidDialog({ onClose, onConfirm }) {
+    return (
+        <ReasonDialog
+            title="Void Invoice"
+            desc="Voiding invoice will cancel it for billing. This action is audited."
+            confirmText="Void Now"
+            tone="danger"
+            onClose={onClose}
+            onConfirm={onConfirm}
+        />
+    )
+}
+
+function DeleteLineDialog({ line, onClose, onConfirm }) {
+    const [reason, setReason] = useState("")
+    return (
+        <Modal
+            title="Remove Line"
+            onClose={onClose}
+            right={
+                <Button
+                    variant="danger"
+                    onClick={() => {
+                        const r = String(reason || "").trim()
+                        if (r.length < 3) return toast.error("Reason is mandatory (min 3 chars)")
+                        onConfirm?.(r)
+                    }}
+                >
+                    Remove
+                </Button>
+            }
+        >
+            <div className="rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3 text-sm">
+                <div className="font-extrabold text-slate-900">{line?.description || "—"}</div>
+                <div className="mt-0.5 text-xs text-slate-600">
+                    Qty: {line?.qty ?? "—"} · Unit: ₹ {money(line?.unit_price)} · Total: ₹ {money(line?.net_amount)}
+                </div>
+            </div>
+
+            <div className="mt-4">
+                <Field label="Reason (required)">
+                    <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why removing this line?" />
+                </Field>
+            </div>
+        </Modal>
+    )
+}
+
+function cleanMeta(meta) {
+    if (!meta || typeof meta !== "object") return undefined
+    const out = {}
+    for (const [k, v] of Object.entries(meta)) {
+        if (v === "" || v == null) continue
+        out[k] = v
+    }
+    return Object.keys(out).length ? out : undefined
+}
+
+function EditLineDialog({ line, docMode, isPharmacy, onClose, onConfirm }) {
+    const [reason, setReason] = useState("Correction")
+    const [form, setForm] = useState({
+        service_date: fmtDateISO(line?.service_date),
+        description: line?.description || "",
+        qty: String(line?.qty ?? 1),
+        unit_price: String(line?.unit_price ?? 0),
+        discount_amount: String(line?.discount_amount ?? 0),
+        gst_rate: String(line?.gst_rate ?? 0),
+        doctor_name: line?.doctor_name || "",
+        department_name: line?.department_name || "",
+        meta_json: isPharmacy ? JSON.stringify(line?.meta ?? line?.meta_json ?? {}, null, 2) : "",
+    })
+
+    function buildPatch() {
+        const patch = {
+            service_date: form.service_date ? new Date(form.service_date).toISOString() : null,
+            description: String(form.description || "").trim() || null,
+            qty: Number(form.qty || 0),
+            unit_price: Number(form.unit_price || 0),
+            discount_amount: Number(form.discount_amount || 0),
+            gst_rate: Number(form.gst_rate || 0),
+        }
+
+        if (docMode) {
+            patch.doctor_name = String(form.doctor_name || "").trim() || null
+            patch.department_name = String(form.department_name || "").trim() || null
+        }
+
+        if (isPharmacy) {
+            try {
+                const obj = form.meta_json?.trim() ? JSON.parse(form.meta_json) : {}
+                patch.meta_json = cleanMeta(obj) || null
+            } catch {
+                throw new Error("Meta JSON invalid (pharmacy)")
+            }
+        }
+
+        // Remove nulls so backend doesn't overwrite unintentionally (if your API expects absent instead of null)
+        const out = {}
+        for (const [k, v] of Object.entries(patch)) {
+            if (v === undefined) continue
+            if (v === null) continue
+            out[k] = v
+        }
+        return out
+    }
+
+    return (
+        <Modal
+            title="Edit Line"
+            onClose={onClose}
+            right={
+                <Button
+                    onClick={() => {
+                        const r = String(reason || "").trim()
+                        if (r.length < 3) return toast.error("Reason is mandatory (min 3 chars)")
+                        let patch
+                        try {
+                            patch = buildPatch()
+                        } catch (e) {
+                            return toast.error(e?.message || "Invalid input")
+                        }
+                        if (!patch || Object.keys(patch).length === 0) return toast.error("Nothing to update")
+                        onConfirm?.(patch, r)
+                    }}
+                >
+                    Save Changes
+                </Button>
+            }
+        >
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <Field label="Service Date">
+                    <Input type="date" value={form.service_date} onChange={(e) => setForm({ ...form, service_date: e.target.value })} />
+                </Field>
+
+                <Field label="GST %">
+                    <Input value={form.gst_rate} onChange={(e) => setForm({ ...form, gst_rate: e.target.value })} inputMode="decimal" />
+                </Field>
+
+                <div className="md:col-span-2">
+                    <Field label="Description">
+                        <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
+                    </Field>
+                </div>
+
+                {docMode ? (
+                    <>
+                        <Field label="Department">
+                            <Input value={form.department_name} onChange={(e) => setForm({ ...form, department_name: e.target.value })} />
+                        </Field>
+                        <Field label="Doctor">
+                            <Input value={form.doctor_name} onChange={(e) => setForm({ ...form, doctor_name: e.target.value })} />
+                        </Field>
+                    </>
+                ) : null}
+
+                <Field label="Qty">
+                    <Input value={form.qty} onChange={(e) => setForm({ ...form, qty: e.target.value })} inputMode="decimal" />
+                </Field>
+
+                <Field label="Unit Price">
+                    <Input value={form.unit_price} onChange={(e) => setForm({ ...form, unit_price: e.target.value })} inputMode="decimal" />
+                </Field>
+
+                <Field label="Discount Amount">
+                    <Input
+                        value={form.discount_amount}
+                        onChange={(e) => setForm({ ...form, discount_amount: e.target.value })}
+                        inputMode="decimal"
+                    />
+                </Field>
+
+                <div className="md:col-span-2">
+                    <Field label="Reason (required)">
+                        <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Why editing this line?" />
+                    </Field>
+                </div>
+
+                {isPharmacy ? (
+                    <div className="md:col-span-2">
+                        <Field label="Meta JSON (optional)">
+                            <Textarea
+                                value={form.meta_json}
+                                onChange={(e) => setForm({ ...form, meta_json: e.target.value })}
+                                placeholder='{"batch_id":123,"expiry_date":"2026-12-31"}'
+                            />
+                        </Field>
+                        <div className="mt-2 text-xs text-slate-500">
+                            Pharmacy tip: store batch_id / expiry_date / HSN/SAC if available.
+                        </div>
+                    </div>
+                ) : null}
+            </div>
+        </Modal>
+    )
+}
+
+/* ---------------------------------
+   Manual line (DOC enhanced)
+---------------------------------- */
+
 function ManualLineDialog({ invoice, moduleCode, onClose, onDone }) {
     const [saving, setSaving] = useState(false)
     const lockedGroup = MODULE_TO_GROUP[moduleCode] || "MISC"
@@ -1232,37 +1590,25 @@ function ManualLineDialog({ invoice, moduleCode, onClose, onDone }) {
         qty: 1,
         unit_price: 0,
         gst_rate: 0,
-        discount_percent: 0,
         discount_amount: 0,
-
-        // ✅ DOC fields (NO fee master)
-        doctor_name: "",
-        department_name: "",
-        doctor_id: "",
-        department_id: "",
-
-        // ✅ optional service date
         service_date: "",
 
-        meta_json: pharmacy
-            ? {
-                batch_id: "",
-                expiry_date: "",
-                hsn_sac: "",
-                cgst_pct: "",
-                sgst_pct: "",
-            }
-            : null,
+        // DOC-only (no fee master)
+        doctor_name: "",
+        department_name: "",
+
+        // meta
+        meta_json: pharmacy ? { batch_id: "", expiry_date: "", hsn_sac: "" } : null,
 
         manual_reason: "Manual entry",
-        showAdvanced: false,
     })
 
     async function submit() {
         if (!invoice?.id) return toast.error("Invoice not loaded")
         const statusUpper = String(invoice?.status || "").toUpperCase()
         if (statusUpper !== "DRAFT") return toast.error("Invoice locked. Reopen to edit.")
-        if (!form.description?.trim()) return toast.error("Enter item name/description")
+
+        if (!String(form.description || "").trim()) return toast.error("Enter item name/description")
         if (String(form.manual_reason || "").trim().length < 3) return toast.error("Manual reason is mandatory")
 
         if (docMode) {
@@ -1274,21 +1620,18 @@ function ManualLineDialog({ invoice, moduleCode, onClose, onDone }) {
         try {
             const payload = {
                 service_group: lockedGroup,
-                description: form.description.trim(),
+                description: String(form.description || "").trim(),
                 qty: Number(form.qty || 1),
                 unit_price: Number(form.unit_price || 0),
                 gst_rate: Number(form.gst_rate || 0),
-                discount_percent: Number(form.discount_percent || 0),
                 discount_amount: Number(form.discount_amount || 0),
+                manual_reason: String(form.manual_reason || "Manual entry"),
 
-                // ✅ no fee master; just store identifiers/names if given
-                doctor_id: docMode && form.doctor_id ? Number(form.doctor_id) : undefined,
-                doctor_name: docMode ? String(form.doctor_name || "").trim() || undefined : undefined,
-                department_id: docMode && form.department_id ? Number(form.department_id) : undefined,
-                department_name: docMode ? String(form.department_name || "").trim() || undefined : undefined,
-
-                manual_reason: form.manual_reason || "Manual entry",
                 service_date: form.service_date ? new Date(form.service_date).toISOString() : undefined,
+
+                doctor_name: docMode ? String(form.doctor_name || "").trim() : undefined,
+                department_name: docMode ? String(form.department_name || "").trim() : undefined,
+
                 meta_json: pharmacy ? cleanMeta(form.meta_json) : undefined,
             }
 
@@ -1322,456 +1665,96 @@ function ManualLineDialog({ invoice, moduleCode, onClose, onDone }) {
                 </div>
             </div>
 
-            {docMode ? (
-                <div className="mb-3 rounded-2xl border border-slate-100 bg-white p-4">
-                    <div className="flex items-center gap-2 text-sm font-extrabold text-slate-900">
-                        <Stethoscope className="h-4 w-4 text-slate-500" />
-                        Doctor Fees Details (No Fee Master)
-                    </div>
-                    <div className="mt-1 text-xs text-slate-500">
-                        Enter Doctor & Department manually. Amount is always manual (your choice).
-                    </div>
-
-                    <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-                        <Field label="Department Name">
-                            <div className="relative">
-                                <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-                                    <Building2 className="h-4 w-4" />
-                                </div>
-                                <Input
-                                    className="pl-10"
-                                    value={form.department_name}
-                                    onChange={(e) => setForm({ ...form, department_name: e.target.value })}
-                                    placeholder="e.g., Cardiology"
-                                />
-                            </div>
-                        </Field>
-
-                        <Field label="Doctor Name">
-                            <div className="relative">
-                                <div className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
-                                    <UserRound className="h-4 w-4" />
-                                </div>
-                                <Input
-                                    className="pl-10"
-                                    value={form.doctor_name}
-                                    onChange={(e) => setForm({ ...form, doctor_name: e.target.value })}
-                                    placeholder="e.g., Dr. Arun Kumar"
-                                />
-                            </div>
-                        </Field>
-
-                        <div className="md:col-span-2">
-                            <Field label="Service Date (optional)">
-                                <Input
-                                    type="date"
-                                    value={form.service_date}
-                                    onChange={(e) => setForm({ ...form, service_date: e.target.value })}
-                                />
-                            </Field>
-                        </div>
-
-                        <div className="md:col-span-2">
-                            <button
-                                type="button"
-                                className="text-xs font-extrabold text-slate-700 underline underline-offset-4 hover:text-slate-900"
-                                onClick={() => setForm((p) => ({ ...p, showAdvanced: !p.showAdvanced }))}
-                            >
-                                {form.showAdvanced ? "Hide advanced IDs" : "Show advanced IDs (optional)"}
-                            </button>
-                        </div>
-
-                        {form.showAdvanced ? (
-                            <>
-                                <Field label="Doctor ID (optional)">
-                                    <Input
-                                        value={form.doctor_id}
-                                        onChange={(e) => setForm({ ...form, doctor_id: e.target.value })}
-                                        placeholder="Numeric doctor_user_id"
-                                    />
-                                </Field>
-
-                                <Field label="Department ID (optional)">
-                                    <Input
-                                        value={form.department_id}
-                                        onChange={(e) => setForm({ ...form, department_id: e.target.value })}
-                                        placeholder="Numeric department_id"
-                                    />
-                                </Field>
-                            </>
-                        ) : null}
-                    </div>
-                </div>
-            ) : null}
-
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <Field label="Qty">
-                    <Input value={form.qty} onChange={(e) => setForm({ ...form, qty: e.target.value })} />
+                <Field label="Service Date (optional)">
+                    <Input
+                        type="date"
+                        value={form.service_date}
+                        onChange={(e) => setForm({ ...form, service_date: e.target.value })}
+                    />
                 </Field>
-
-                <Field label={docMode ? "Amount (₹)" : "Unit Price (₹)"}>
-                    <Input value={form.unit_price} onChange={(e) => setForm({ ...form, unit_price: e.target.value })} />
-                </Field>
-
-                <div className="md:col-span-2">
-                    <Field label={docMode ? "Particular" : "Description"}>
-                        <Input
-                            value={form.description}
-                            onChange={(e) => setForm({ ...form, description: e.target.value })}
-                            placeholder={docMode ? "e.g., Consultation fee" : "e.g., Room charge / Procedure"}
-                        />
-                    </Field>
-                </div>
 
                 <Field label="GST %">
-                    <Input value={form.gst_rate} onChange={(e) => setForm({ ...form, gst_rate: e.target.value })} />
+                    <Input
+                        value={form.gst_rate}
+                        onChange={(e) => setForm({ ...form, gst_rate: e.target.value })}
+                        inputMode="decimal"
+                    />
                 </Field>
 
-                <Field label="Discount Amount (₹)">
-                    <Input value={form.discount_amount} onChange={(e) => setForm({ ...form, discount_amount: e.target.value })} />
-                </Field>
-
-                {pharmacy ? (
-                    <div className="md:col-span-2">
-                        <div className="rounded-2xl border border-slate-100 bg-white p-4">
-                            <div className="font-extrabold text-slate-900">Pharmacy Meta (optional)</div>
-                            <div className="mt-3 grid grid-cols-1 gap-3 md:grid-cols-2">
-                                <Field label="Batch">
-                                    <Input
-                                        value={form.meta_json?.batch_id || ""}
-                                        onChange={(e) =>
-                                            setForm({ ...form, meta_json: { ...form.meta_json, batch_id: e.target.value } })
-                                        }
-                                    />
-                                </Field>
-                                <Field label="Expiry (YYYY-MM-DD)">
-                                    <Input
-                                        value={form.meta_json?.expiry_date || ""}
-                                        onChange={(e) =>
-                                            setForm({ ...form, meta_json: { ...form.meta_json, expiry_date: e.target.value } })
-                                        }
-                                    />
-                                </Field>
-                            </div>
-                        </div>
-                    </div>
-                ) : null}
-
-                <div className="md:col-span-2">
-                    <Field label="Manual Reason (Audit mandatory)">
-                        <Textarea
-                            value={form.manual_reason}
-                            onChange={(e) => setForm({ ...form, manual_reason: e.target.value })}
-                            placeholder="Reason is mandatory for audit"
-                        />
-                    </Field>
-                </div>
-            </div>
-        </Modal>
-    )
-}
-
-function cleanMeta(m) {
-    if (!m) return undefined
-    const out = {}
-    for (const k of Object.keys(m)) {
-        const v = String(m[k] ?? "").trim()
-        if (v) out[k] = v
-    }
-    return out
-}
-
-/* ----------------------------
-   Edit/Delete dialogs for ALL lines (auto + manual)
------------------------------ */
-function DeleteLineDialog({ line, onClose, onConfirm }) {
-    const [reason, setReason] = useState("")
-    const autoLinked = !line?.is_manual && String(line?.source_module || "").trim()
-
-    return (
-        <Modal
-            title="Remove Line"
-            onClose={onClose}
-            right={
-                <Button
-                    variant="danger"
-                    onClick={() => {
-                        const r = String(reason || "").trim()
-                        if (r.length < 3) return toast.error("Reason is mandatory (min 3 chars)")
-                        onConfirm(r)
-                    }}
-                >
-                    Remove
-                </Button>
-            }
-        >
-            <div
-                className={cn(
-                    "rounded-2xl px-4 py-3 text-sm",
-                    autoLinked ? "border border-amber-100 bg-amber-50 text-amber-900" : "border border-rose-100 bg-rose-50 text-rose-800"
-                )}
-            >
-                {autoLinked ? (
-                    <>
-                        This is an <b>AUTO</b> line linked to <b>{line.source_module}</b>. Removing it will affect <b>billing only</b>.
-                        It should <b>not</b> cancel/modify the source transaction (stock/orders).
-                    </>
-                ) : (
-                    <>This line will be removed from the invoice totals.</>
-                )}
-            </div>
-
-            <div className="mt-3">
-                <Field label="Reason (mandatory for audit)">
-                    <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Enter reason..." />
-                </Field>
-            </div>
-        </Modal>
-    )
-}
-
-function EditLineDialog({ line, onClose, onConfirm }) {
-    const autoLinked = !line?.is_manual && String(line?.source_module || "").trim()
-
-    const [form, setForm] = useState({
-        description: line?.description ?? "",
-        qty: line?.qty ?? 1,
-        unit_price: line?.unit_price ?? 0,
-        gst_rate: line?.gst_rate ?? 0,
-        discount_amount: line?.discount_amount ?? 0,
-        service_date: (line?.service_date || "").slice(0, 10),
-        reason: "",
-    })
-
-    function buildPatch() {
-        return {
-            description: String(form.description || "").trim(),
-            qty: Number(form.qty || 0),
-            unit_price: Number(form.unit_price || 0),
-            gst_rate: Number(form.gst_rate || 0),
-            discount_amount: Number(form.discount_amount || 0),
-            service_date: form.service_date ? new Date(form.service_date).toISOString() : undefined,
-        }
-    }
-
-    return (
-        <Modal
-            title="Edit Line"
-            onClose={onClose}
-            right={
-                <Button
-                    onClick={() => {
-                        const r = String(form.reason || "").trim()
-                        if (r.length < 3) return toast.error("Reason is mandatory (min 3 chars)")
-                        const patch = buildPatch()
-                        if (!patch.description) return toast.error("Description required")
-                        if (!Number.isFinite(patch.qty) || patch.qty <= 0) return toast.error("Qty must be > 0")
-                        onConfirm(patch, r)
-                    }}
-                >
-                    Save
-                </Button>
-            }
-        >
-            {autoLinked ? (
-                <div className="mb-3 rounded-2xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-900">
-                    This is an <b>AUTO</b> line from <b>{line.source_module}</b>. Your change affects <b>billing only</b>.
-                    Source module transaction should not be modified here.
-                </div>
-            ) : null}
-
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <div className="md:col-span-2">
                     <Field label="Description">
                         <Input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} />
                     </Field>
                 </div>
 
+                {docMode ? (
+                    <>
+                        <Field label="Department">
+                            <Input
+                                value={form.department_name}
+                                onChange={(e) => setForm({ ...form, department_name: e.target.value })}
+                                placeholder="Ex: Cardiology"
+                            />
+                        </Field>
+                        <Field label="Doctor">
+                            <Input
+                                value={form.doctor_name}
+                                onChange={(e) => setForm({ ...form, doctor_name: e.target.value })}
+                                placeholder="Ex: Dr. Kumar"
+                            />
+                        </Field>
+                    </>
+                ) : null}
+
                 <Field label="Qty">
-                    <Input value={form.qty} onChange={(e) => setForm({ ...form, qty: e.target.value })} />
+                    <Input value={form.qty} onChange={(e) => setForm({ ...form, qty: e.target.value })} inputMode="decimal" />
                 </Field>
 
-                <Field label="Unit Price (₹)">
-                    <Input value={form.unit_price} onChange={(e) => setForm({ ...form, unit_price: e.target.value })} />
+                <Field label="Unit Price">
+                    <Input
+                        value={form.unit_price}
+                        onChange={(e) => setForm({ ...form, unit_price: e.target.value })}
+                        inputMode="decimal"
+                    />
                 </Field>
 
-                <Field label="GST %">
-                    <Input value={form.gst_rate} onChange={(e) => setForm({ ...form, gst_rate: e.target.value })} />
-                </Field>
-
-                <Field label="Discount Amount (₹)">
-                    <Input value={form.discount_amount} onChange={(e) => setForm({ ...form, discount_amount: e.target.value })} />
+                <Field label="Discount Amount">
+                    <Input
+                        value={form.discount_amount}
+                        onChange={(e) => setForm({ ...form, discount_amount: e.target.value })}
+                        inputMode="decimal"
+                    />
                 </Field>
 
                 <div className="md:col-span-2">
-                    <Field label="Service Date (optional)">
-                        <Input type="date" value={form.service_date} onChange={(e) => setForm({ ...form, service_date: e.target.value })} />
+                    <Field label="Manual Reason (required)">
+                        <Textarea
+                            value={form.manual_reason}
+                            onChange={(e) => setForm({ ...form, manual_reason: e.target.value })}
+                            placeholder="Why manual entry?"
+                        />
                     </Field>
                 </div>
 
-                <div className="md:col-span-2">
-                    <Field label="Reason (mandatory for audit)">
-                        <Textarea value={form.reason} onChange={(e) => setForm({ ...form, reason: e.target.value })} placeholder="Enter reason..." />
-                    </Field>
-                </div>
-            </div>
-        </Modal>
-    )
-}
-
-/* ----------------------------
-   Small UI helpers
------------------------------ */
-function LineNumberInput({ value, onCommit, disabled, className }) {
-    const [v, setV] = useState(String(value ?? ""))
-
-    useEffect(() => {
-        setV(String(value ?? ""))
-    }, [value])
-
-    function commit() {
-        if (disabled) return
-        const next = String(v ?? "").trim()
-        const prev = String(value ?? "").trim()
-        if (next !== prev) onCommit(next)
-    }
-
-    return (
-        <Input
-            className={className}
-            disabled={disabled}
-            value={v}
-            onChange={(e) => setV(e.target.value)}
-            onBlur={commit}
-            onKeyDown={(e) => {
-                if (e.key === "Enter") {
-                    e.preventDefault()
-                    commit()
-                }
-            }}
-        />
-    )
-}
-
-function MiniStat({ label, value, strong }) {
-    return (
-        <div className="rounded-2xl border border-slate-100 bg-white px-4 py-3">
-            <div className="text-xs font-bold text-slate-500">{label}</div>
-            <div className={cn("mt-1 text-sm", strong ? "font-extrabold text-slate-900" : "font-bold text-slate-800")}>
-                {value}
-            </div>
-        </div>
-    )
-}
-
-function TabBtn({ active, onClick, icon, children }) {
-    return (
-        <button
-            onClick={onClick}
-            className={cn(
-                "flex w-full items-center gap-2 rounded-2xl border px-4 py-3 text-left text-sm font-extrabold",
-                active ? "border-slate-300 bg-white text-slate-900" : "border-slate-100 bg-slate-50 text-slate-700 hover:bg-slate-100"
-            )}
-        >
-            {icon}
-            {children}
-        </button>
-    )
-}
-
-function Row({ label, value, strong }) {
-    return (
-        <div className="flex items-center justify-between">
-            <div className={cn("text-xs", strong ? "font-bold text-slate-700" : "text-slate-500")}>{label}</div>
-            <div className={cn("text-sm", strong ? "font-extrabold text-slate-900" : "font-bold text-slate-800")}>{value}</div>
-        </div>
-    )
-}
-
-/* ---------------- Dialogs ---------------- */
-function Modal({ title, children, onClose, right }) {
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-3">
-            <div className="w-full max-w-xl rounded-2xl bg-white shadow-xl">
-                <div className="flex items-center justify-between border-b border-slate-100 px-5 py-4">
-                    <div className="text-base font-extrabold text-slate-900">{title}</div>
-                    <div className="flex items-center gap-2">
-                        {right}
-                        <button onClick={onClose} className="rounded-xl px-3 py-2 text-sm font-bold text-slate-700 hover:bg-slate-100">
-                            Close
-                        </button>
+                {pharmacy ? (
+                    <div className="md:col-span-2">
+                        <Field label="Meta (optional)">
+                            <Textarea
+                                value={JSON.stringify(form.meta_json || {}, null, 2)}
+                                onChange={(e) => {
+                                    try {
+                                        const obj = e.target.value?.trim() ? JSON.parse(e.target.value) : {}
+                                        setForm({ ...form, meta_json: obj })
+                                    } catch {
+                                        // keep raw by not updating; but show toast only on submit
+                                    }
+                                }}
+                                placeholder='{"batch_id":"123","expiry_date":"2026-12-31","hsn_sac":"3004"}'
+                            />
+                        </Field>
                     </div>
-                </div>
-                <div className="px-5 py-4">{children}</div>
-            </div>
-        </div>
-    )
-}
-
-function ReasonDialog({ title, desc, confirmText, tone, onClose, onConfirm }) {
-    const [reason, setReason] = useState("")
-    return (
-        <Modal
-            title={title}
-            onClose={onClose}
-            right={
-                <Button
-                    variant={tone === "danger" ? "danger" : "default"}
-                    onClick={() => {
-                        const r = String(reason || "").trim()
-                        if (r.length < 3) return toast.error("Reason is mandatory (min 3 chars)")
-                        onConfirm(r)
-                    }}
-                >
-                    {confirmText}
-                </Button>
-            }
-        >
-            <div
-                className={cn(
-                    "rounded-2xl px-4 py-3 text-sm",
-                    tone === "danger"
-                        ? "border border-rose-100 bg-rose-50 text-rose-800"
-                        : "border border-slate-100 bg-slate-50 text-slate-700"
-                )}
-            >
-                {desc}
-            </div>
-            <div className="mt-3">
-                <Field label="Reason (mandatory for audit)">
-                    <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Enter reason..." />
-                </Field>
-            </div>
-        </Modal>
-    )
-}
-
-function VoidDialog({ onClose, onConfirm }) {
-    const [reason, setReason] = useState("")
-    return (
-        <Modal
-            title="Void Invoice"
-            onClose={onClose}
-            right={
-                <Button
-                    variant="danger"
-                    onClick={() => {
-                        const r = String(reason || "").trim()
-                        if (r.length < 3) return toast.error("Reason is mandatory (min 3 chars)")
-                        onConfirm(r)
-                    }}
-                >
-                    Void Now
-                </Button>
-            }
-        >
-            <div className="rounded-2xl border border-rose-100 bg-rose-50 px-4 py-3 text-sm text-rose-800">
-                Voiding marks the invoice as VOID (cannot be posted). For posted invoices, use credit note flow.
-            </div>
-            <div className="mt-3">
-                <Field label="Reason (mandatory)">
-                    <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Enter reason..." />
-                </Field>
+                ) : null}
             </div>
         </Modal>
     )
