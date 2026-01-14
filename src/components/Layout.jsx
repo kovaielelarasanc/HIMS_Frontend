@@ -41,10 +41,10 @@ export default function Layout() {
                         className={[
                             'sticky top-0 z-40 shrink-0 border-b',
                             // ✅ premium glass feel but stable on all devices
-                            'bg-white/80 supports-[backdrop-filter]:bg-white/55 backdrop-blur-xl',
+                            'bg-black supports-[backdrop-filter]:bg-white/55 backdrop-blur-xl',
                         ].join(' ')}
                     >
-                        <div className="px-2 py-2 sm:px-3">
+                        <div className="p-2 sm:px-3">
                             <Topbar />
                         </div>
                     </header>

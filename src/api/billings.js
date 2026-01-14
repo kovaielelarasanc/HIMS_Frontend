@@ -62,6 +62,81 @@ async function getBlob(url, config = {}) {
     return res?.data
 }
 
+/* =========================================================
+   ✅ Payment allocation normalization (Invoice payments)
+   - Frontend must use allocations to compute paid/due
+========================================================= */
+function upper(v) {
+    return String(v || "").trim().toUpperCase()
+}
+function num(v, fb = 0) {
+    const n = Number(v)
+    return Number.isFinite(n) ? n : fb
+}
+
+function computeAllocatedToInvoice(payment, invoiceId) {
+    const invId = Number(invoiceId)
+    if (!Number.isFinite(invId) || invId <= 0) return 0
+
+    // ignore VOID
+    if (upper(payment?.status) === "VOID") return 0
+
+    // if direction present: only IN reduces due
+    if (payment?.direction && upper(payment.direction) !== "IN") return 0
+
+    // if kind present: only RECEIPT/ADVANCE_ADJUSTMENT reduces due
+    const k = upper(payment?.kind || "")
+    if (k && !["RECEIPT", "ADVANCE_ADJUSTMENT"].includes(k)) return 0
+
+    // ✅ best: backend already gives allocated amount for this invoice
+    const direct =
+        payment?.allocated_amount ??
+        payment?.amount_allocated ??
+        payment?.invoice_amount ??
+        payment?.invoice_allocated_amount
+
+    if (direct != null) return Math.max(0, num(direct, 0))
+
+    // ✅ next: allocations array
+    if (Array.isArray(payment?.allocations) && payment.allocations.length) {
+        const sum = payment.allocations.reduce((s, a) => {
+            if (upper(a?.status) === "VOID") return s
+            if (Number(a?.invoice_id) !== invId) return s
+            return s + num(a?.amount, 0)
+        }, 0)
+        return Math.max(0, sum)
+    }
+
+    // ⚠️ fallback: only if payment explicitly tied to this invoice
+    if (Number(payment?.invoice_id) === invId) return Math.max(0, num(payment?.amount, 0))
+
+    return 0
+}
+
+function normalizeInvoicePaymentsList(list, invoiceId) {
+    const invId = Number(invoiceId)
+    return (Array.isArray(list) ? list : []).map((p) => {
+        const allocated = computeAllocatedToInvoice(p, invId)
+        return { ...p, allocated_amount: allocated }
+    })
+}
+
+function normalizeInvoicePaymentsResponse(data, invoiceId) {
+    if (Array.isArray(data)) {
+        return normalizeInvoicePaymentsList(data, invoiceId)
+    }
+    if (data && typeof data === "object") {
+        // common wrappers
+        if (Array.isArray(data.items)) {
+            return { ...data, items: normalizeInvoicePaymentsList(data.items, invoiceId) }
+        }
+        if (Array.isArray(data.results)) {
+            return { ...data, results: normalizeInvoicePaymentsList(data.results, invoiceId) }
+        }
+    }
+    return data
+}
+
 // =========================================================
 // META
 // =========================================================
@@ -211,6 +286,22 @@ export async function billingGetCaseStatementPdf(caseId, config = {}) {
 // =========================================================
 // CASE SUB-RESOURCES: invoices / payments / advances / refunds
 // =========================================================
+
+export async function billingListInvoiceOutstanding(caseId, params = {}) {
+    const r = await API.get(`/billing/cases/${caseId}/invoices/outstanding`, { params })
+    return r.data
+}
+
+export async function billingApplyAdvanceSelected(caseId, payload) {
+    const r = await API.post(`/billing/cases/${caseId}/advances/apply-selected`, payload)
+    return r.data
+}
+
+export async function billingListAdvanceApplications(caseId) {
+    const r = await API.get(`/billing/cases/${caseId}/advances/applications`)
+    return r.data
+}
+
 export async function billingListInvoices(caseId, params = {}, config = {}) {
     const id = toIntId(caseId, "caseId")
     const res = await API.get(`/billing/cases/${id}/invoices`, {
@@ -261,13 +352,6 @@ export async function billingPayOnCase(caseId, payload = {}, config = {}) {
 export async function billingRecordAdvance(caseId, payload = {}, config = {}) {
     const id = toIntId(caseId, "caseId")
     const res = await postQ(`/billing/cases/${id}/advances`, payload, config)
-    return unwrap(res)
-}
-
-// Apply advances (optional)
-export async function billingApplyAdvancesToCase(caseId, payload = {}, config = {}) {
-    const id = toIntId(caseId, "caseId")
-    const res = await postQ(`/billing/cases/${id}/advances/apply`, payload, config)
     return unwrap(res)
 }
 
@@ -349,9 +433,6 @@ export async function billingListInvoiceLines(invoiceId, params = {}, config = {
  * Manual line add
  * - Legacy: POST /billing/invoices/{id}/lines/manual (query params)
  * - New:    POST /billing/invoices/{id}/lines (JSON body)
- *
- * To keep your current UI working, billingAddManualLine uses the LEGACY route.
- * Use billingAddManualLineV2 for the new body route.
  */
 export async function billingAddManualLine(invoiceId, params = {}, config = {}) {
     const id = toIntId(invoiceId, "invoiceId")
@@ -378,16 +459,64 @@ export async function billingAddFromRisOrder(invoiceId, orderId, config = {}) {
     return unwrap(res)
 }
 
-// Update/Delete lines (two common patterns supported)
-export async function billingUpdateLine(lineId, payload = {}, config = {}) {
-    const lnId = toIntId(lineId, "lineId")
-    const res = await API.put(`/billing/lines/${lnId}`, payload, config)
-    return unwrap(res)
+function unwrapApiError(e) {
+    const d = e?.response?.data
+    if (!d) return e?.message || "Request failed"
+    if (typeof d === "string") return d
+    if (d.detail) {
+        if (Array.isArray(d.detail)) return d.detail.map((x) => x?.msg).filter(Boolean).join(", ")
+        return String(d.detail)
+    }
+    return e?.message || "Request failed"
 }
-export async function billingDeleteLine(lineId, reason, config = {}) {
-    const lnId = toIntId(lineId, "lineId")
-    const res = await deleteQ(`/billing/lines/${lnId}`, { reason: reason || "Line removed" }, config)
-    return unwrap(res)
+
+// Update/Delete lines (two common patterns supported)
+export async function billingUpdateLine(a, b, c, opts = {}) {
+    const lineId = c != null ? b : a
+    const body = c != null ? c : b
+
+    const reason = String(body?.reason || "").trim()
+    if (reason.length < 3) {
+        const err = new Error("Reason is mandatory (min 3 chars)")
+        err._ui = true
+        throw err
+    }
+
+    try {
+        const res = await API.put(`/billing/lines/${lineId}`, body, {
+            signal: opts.signal,
+            headers: { "Content-Type": "application/json" },
+        })
+        return res?.data?.line ?? res?.data
+    } catch (e) {
+        const err = new Error(unwrapApiError(e))
+        err._raw = e
+        throw err
+    }
+}
+
+export async function billingDeleteLine(a, b, c, opts = {}) {
+    const lineId = c != null ? b : a
+    const reason = c != null ? c : b
+
+    const rsn = String(reason || "").trim()
+    if (rsn.length < 3) {
+        const err = new Error("Reason is mandatory (min 3 chars)")
+        err._ui = true
+        throw err
+    }
+
+    try {
+        const res = await API.delete(`/billing/lines/${lineId}`, {
+            params: { reason: rsn },
+            signal: opts.signal,
+        })
+        return res?.data
+    } catch (e) {
+        const err = new Error(unwrapApiError(e))
+        err._raw = e
+        throw err
+    }
 }
 
 // Legacy pattern (invoice scoped) — keep if your backend uses it
@@ -424,11 +553,7 @@ export async function billingPostInvoice(invoiceId, config = {}) {
 
 export async function billingVoidInvoice(invoiceId, { reason } = {}, config = {}) {
     const id = toIntId(invoiceId, "invoiceId")
-    const res = await postQ(
-        `/billing/invoices/${id}/void`,
-        { reason: reason || "Voided" },
-        config
-    )
+    const res = await postQ(`/billing/invoices/${id}/void`, { reason: reason || "Voided" }, config)
     return unwrap(res)
 }
 
@@ -441,13 +566,11 @@ export async function billingReopenInvoice(invoiceId, payload = {}, config = {})
 // Edit request workflow (support both endpoint styles)
 export async function billingRequestInvoiceEdit(invoiceId, payload = {}, config = {}) {
     const id = toIntId(invoiceId, "invoiceId")
-    // newer endpoint (recommended)
     const res = await API.post(`/billing/invoices/${id}/edit-request`, payload, config)
     return unwrap(res)
 }
 export async function billingRequestInvoiceEditLegacy(invoiceId, payload = {}, config = {}) {
     const id = toIntId(invoiceId, "invoiceId")
-    // older endpoint (if your backend has centralized edit-requests)
     const res = await API.post(`/billing/invoices/${id}/edit-requests`, payload, config)
     return unwrap(res)
 }
@@ -479,11 +602,6 @@ export async function billingListInvoiceAuditLogs(invoiceId, params = {}, config
 // =========================================================
 // CHARGE ITEMS (two common backend patterns)
 // =========================================================
-
-/**
- * ✅ Recommended (case routed): POST /billing/cases/{case_id}/charge-items/add
- * Backend decides which module invoice to attach or creates draft if needed.
- */
 export async function billingAddChargeItemLineToCase(caseId, payload = {}, params = {}, config = {}) {
     const id = toIntId(caseId, "caseId")
     const res = await API.post(`/billing/cases/${id}/charge-items/add`, payload, {
@@ -493,10 +611,6 @@ export async function billingAddChargeItemLineToCase(caseId, payload = {}, param
     return unwrap(res)
 }
 
-/**
- * Legacy (invoice scoped): POST /masters/charge-items/invoices/{invoice_id}/lines/charge-item
- * Keep this export name because your existing UI calls billingAddChargeItemLine(invoiceId,...)
- */
 export async function billingAddChargeItemLine(invoiceId, payload = {}, config = {}) {
     const id = toIntId(invoiceId, "invoiceId")
     const res = await API.post(`/masters/charge-items/invoices/${id}/lines/charge-item`, payload, config)
@@ -504,7 +618,7 @@ export async function billingAddChargeItemLine(invoiceId, payload = {}, config =
 }
 
 // =========================================================
-// PARTICULARS (dynamic “add item” UI)
+// PARTICULARS
 // =========================================================
 export async function billingParticularOptions(caseId, code, params = {}, config = {}) {
     const id = toIntId(caseId, "caseId")
@@ -536,7 +650,8 @@ export async function billingListInvoicePayments(invoiceId, params = {}, config 
         params: cleanParams(params),
         ...config,
     })
-    return unwrap(res)
+    const data = unwrap(res)
+    return normalizeInvoicePaymentsResponse(data, id)
 }
 
 // Receipt print/void (optional)
@@ -555,7 +670,6 @@ export async function billingVoidReceipt(paymentId, payload = {}, config = {}) {
 // =========================================================
 export async function billingGetInvoicePdf(invoiceId, config = {}) {
     const id = toIntId(invoiceId, "invoiceId")
-    // Your backend might be /print or /pdf; keep both helpers if needed.
     return getBlob(`/billing/invoices/${id}/print`, config)
 }
 export async function billingExportInvoiceCsv(invoiceId, config = {}) {

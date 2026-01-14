@@ -13,7 +13,7 @@ import {
     billingListRefunds,
     billingRecordAdvance,
     billingRecordPayment,
-    billingApplyAdvancesToCase,
+    // billingApplyAdvancesToCase,
     billingRefundDeposit,
     billingCaseDashboard,
     billingCaseInvoiceSummary,
@@ -39,6 +39,10 @@ import {
     billingSetClaimUnderQuery,
     billingCloseClaim,
     isCanceledError,
+    billingCaseFinance,
+    billingListInvoiceOutstanding,
+    billingApplyAdvanceSelected,
+    billingListAdvanceApplications,
 } from "@/api/billings"
 
 import {
@@ -77,6 +81,8 @@ import {
     Send,
     FileText,
     AlertTriangle,
+    History,
+    X
 } from "lucide-react"
 
 const TABS = [
@@ -111,14 +117,14 @@ function fmtDate(v) {
     }
 }
 
-function upper(v) {
-    return String(v || "").toUpperCase()
-}
+// function upper(v) {
+//     return String(v || "").toUpperCase()
+// }
 
-function toNum(v, d = 0) {
-    const n = Number(v)
-    return Number.isFinite(n) ? n : d
-}
+// function toNum(v, d = 0) {
+//     const n = Number(v)
+//     return Number.isFinite(n) ? n : d
+// }
 
 function pickLatestPayableInvoice(invoices = []) {
     const rows = (invoices || [])
@@ -1319,12 +1325,8 @@ function AdvancesTab({ caseId, advances, refunds, due, onDone }) {
                 {applyOpen && (
                     <ApplyAdvanceDialog
                         caseId={caseId}
-                        due={toNum(due)}
                         onClose={() => setApplyOpen(false)}
-                        onDone={() => {
-                            setApplyOpen(false)
-                            onDone()
-                        }}
+                        onDone={() => { setApplyOpen(false); onDone() }}
                     />
                 )}
             </CardBody>
@@ -1918,29 +1920,147 @@ function AdvanceDialog({ caseId, entryType = "ADVANCE", onClose, onDone }) {
     )
 }
 
-function ApplyAdvanceDialog({ caseId, due, onClose, onDone }) {
+
+
+function toNum(v, d = 0) {
+    const n = Number(v)
+    return Number.isFinite(n) ? n : d
+}
+function upper(v) {
+    return String(v || "").toUpperCase()
+}
+
+export function ApplyAdvanceDialog({ caseId, onClose, onDone }) {
+    const [loading, setLoading] = useState(true)
     const [saving, setSaving] = useState(false)
-    const [form, setForm] = useState({
-        max_amount: due ? String(due) : "",
-        strategy: "FIFO",
-        notes: "",
-    })
+
+    const [balance, setBalance] = useState(0)
+    const [rows, setRows] = useState([])
+
+    const [q, setQ] = useState("")
+    const [module, setModule] = useState("ALL")
+    const [status, setStatus] = useState("ALL")
+
+    const [selected, setSelected] = useState(() => new Set())
+    const [applyAmount, setApplyAmount] = useState("")
+    const [notes, setNotes] = useState("")
+
+    const [histOpen, setHistOpen] = useState(false)
+
+    async function load() {
+        setLoading(true)
+        try {
+            const f = await billingCaseFinance(caseId)
+            const advBal = toNum(f?.finance?.advances?.advance_balance)
+            setBalance(advBal)
+
+            const o = await billingListInvoiceOutstanding(caseId, { statuses: "APPROVED,POSTED" })
+            setRows(o?.items || [])
+        } catch (e) {
+            toast.error(e?.message || "Failed to load invoices / advance balance")
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    useEffect(() => { load() }, [caseId])
+
+    const modules = useMemo(() => {
+        const set = new Set(["ALL"])
+        for (const r of rows) set.add(upper(r.module || "GENERAL"))
+        return Array.from(set)
+    }, [rows])
+
+    const filtered = useMemo(() => {
+        const qq = q.trim().toLowerCase()
+        return (rows || []).filter((r) => {
+            if (module !== "ALL" && upper(r.module || "GENERAL") !== module) return false
+            if (status !== "ALL" && upper(r.status) !== status) return false
+            if (qq) {
+                const hay = `${r.invoice_number || ""} ${r.invoice_id || ""} ${r.module || ""}`.toLowerCase()
+                if (!hay.includes(qq)) return false
+            }
+            return true
+        })
+    }, [rows, q, module, status])
+
+    const selectedRows = useMemo(() => {
+        const ids = selected
+        return filtered.filter((r) => ids.has(Number(r.invoice_id)))
+    }, [filtered, selected])
+
+    const selectedDue = useMemo(() => {
+        return selectedRows.reduce((s, r) => s + toNum(r.patient_outstanding), 0)
+    }, [selectedRows])
+
+    const maxCanApply = useMemo(() => Math.max(0, Math.min(balance, selectedDue)), [balance, selectedDue])
+
+    // auto-fill applyAmount smartly
+    useEffect(() => {
+        if (!selected.size) {
+            setApplyAmount("")
+            return
+        }
+        // keep user typed value if valid, else suggest
+        const cur = applyAmount === "" ? NaN : toNum(applyAmount)
+        if (!Number.isFinite(cur) || cur <= 0 || cur > maxCanApply) {
+            setApplyAmount(maxCanApply > 0 ? String(maxCanApply) : "")
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [selectedDue, balance])
+
+    function toggle(id) {
+        const s = new Set(selected)
+        const k = Number(id)
+        if (s.has(k)) s.delete(k)
+        else s.add(k)
+        setSelected(s)
+    }
+
+    function selectAllVisible() {
+        const s = new Set(selected)
+        for (const r of filtered) {
+            if (toNum(r.patient_outstanding) > 0) s.add(Number(r.invoice_id))
+        }
+        setSelected(s)
+    }
+
+    function clearAll() {
+        setSelected(new Set())
+    }
+
+    const applyAmtNum = applyAmount === "" ? 0 : toNum(applyAmount)
+    const invalid =
+        selected.size === 0 ||
+        selectedDue <= 0 ||
+        balance <= 0 ||
+        applyAmtNum <= 0 ||
+        applyAmtNum > balance ||
+        applyAmtNum > selectedDue
 
     async function submit() {
-        const maxAmt = form.max_amount ? toNum(form.max_amount) : undefined
-        if (maxAmt !== undefined && maxAmt <= 0) return toast.error("Enter valid amount")
+        if (invalid) {
+            if (!selected.size) return toast.error("Select at least one invoice")
+            if (balance <= 0) return toast.error("No advance balance available")
+            if (selectedDue <= 0) return toast.error("Selected invoices have no due")
+            if (applyAmtNum <= 0) return toast.error("Enter valid apply amount")
+            if (applyAmtNum > balance) return toast.error("Apply amount exceeds advance balance")
+            if (applyAmtNum > selectedDue) return toast.error("Apply amount exceeds selected due")
+            return
+        }
 
         setSaving(true)
         try {
-            await billingApplyAdvancesToCase(caseId, {
-                max_amount: maxAmt,
-                strategy: form.strategy,
-                notes: form.notes || undefined,
+            const invoiceIds = Array.from(selected).map(Number)
+            const res = await billingApplyAdvanceSelected(caseId, {
+                invoice_ids: invoiceIds,
+                apply_amount: applyAmtNum,
+                notes: notes || undefined,
             })
-            toast.success("Deposit applied")
+            toast.success(`Advance applied: ₹ ${money(res?.applied_amount || applyAmtNum)}`)
             onDone()
         } catch (e) {
-            toast.error(e?.message || "Failed to apply deposit")
+            toast.error(e?.response?.data?.detail?.message || e?.message || "Failed to apply advance")
         } finally {
             setSaving(false)
         }
@@ -1948,47 +2068,223 @@ function ApplyAdvanceDialog({ caseId, due, onClose, onDone }) {
 
     return (
         <Modal
-            title="Apply Deposit to Due"
+            title="Apply Advance (Select Invoices)"
             onClose={onClose}
+            wide
             right={
-                <Button onClick={submit} disabled={saving}>
-                    {saving ? "Applying..." : "Apply"}
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button variant="outline" onClick={() => setHistOpen(true)} className="gap-2">
+                        <History className="h-4 w-4" /> History
+                    </Button>
+                    <Button onClick={submit} disabled={saving || invalid} className="gap-2">
+                        <CheckCircle2 className="h-4 w-4" />
+                        {saving ? "Applying..." : "Apply"}
+                    </Button>
+                </div>
             }
         >
-            <div className="mb-3 rounded-2xl border border-slate-100 bg-slate-50 p-3 text-sm text-slate-700">
-                Current due: <span className="font-extrabold text-slate-900">₹ {money(due || 0)}</span>
-            </div>
+            {loading ? (
+                <div className="h-56 animate-pulse rounded-2xl bg-slate-100" />
+            ) : (
+                <>
+                    <div className="mb-3 grid grid-cols-1 gap-3 md:grid-cols-3">
+                        <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+                            <div className="text-xs text-slate-500">Advance Balance</div>
+                            <div className="text-lg font-extrabold text-slate-900">₹ {money(balance)}</div>
+                        </div>
+                        <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+                            <div className="text-xs text-slate-500">Selected Due</div>
+                            <div className="text-lg font-extrabold text-slate-900">₹ {money(selectedDue)}</div>
+                        </div>
+                        <div className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+                            <div className="text-xs text-slate-500">Max Can Apply</div>
+                            <div className="text-lg font-extrabold text-slate-900">₹ {money(maxCanApply)}</div>
+                        </div>
+                    </div>
 
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                <Field label="Max Amount (₹)">
-                    <Input
-                        inputMode="decimal"
-                        placeholder="Leave blank = apply all possible"
-                        value={form.max_amount}
-                        onChange={(e) => setForm({ ...form, max_amount: e.target.value })}
-                    />
-                </Field>
+                    <div className="mb-4 grid grid-cols-1 gap-3 md:grid-cols-4">
+                        <Field label="Search">
+                            <div className="relative">
+                                <Search className="pointer-events-none absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                                <Input className="pl-9" placeholder="Invoice no / module" value={q} onChange={(e) => setQ(e.target.value)} />
+                            </div>
+                        </Field>
 
-                <Field label="Allocation Strategy">
-                    <Select value={form.strategy} onChange={(e) => setForm({ ...form, strategy: e.target.value })}>
-                        <option value="FIFO">FIFO (oldest first)</option>
-                        <option value="LIFO">LIFO (latest first)</option>
-                        <option value="HIGHEST_FIRST">Highest invoice first</option>
-                        <option value="LOWEST_FIRST">Lowest invoice first</option>
-                    </Select>
-                </Field>
+                        <Field label="Module">
+                            <Select value={module} onChange={(e) => setModule(e.target.value)}>
+                                {modules.map((m) => (
+                                    <option key={m} value={m}>{m}</option>
+                                ))}
+                            </Select>
+                        </Field>
 
-                <div className="md:col-span-2">
-                    <Field label="Notes (optional)">
-                        <Textarea value={form.notes} onChange={(e) => setForm({ ...form, notes: e.target.value })} />
-                    </Field>
+                        <Field label="Status">
+                            <Select value={status} onChange={(e) => setStatus(e.target.value)}>
+                                {["ALL", "APPROVED", "POSTED"].map((s) => (
+                                    <option key={s} value={s}>{s}</option>
+                                ))}
+                            </Select>
+                        </Field>
+
+                        <Field label="Apply Amount (₹)">
+                            <Input
+                                inputMode="decimal"
+                                placeholder={`Max ${money(maxCanApply)}`}
+                                value={applyAmount}
+                                onChange={(e) => setApplyAmount(e.target.value)}
+                            />
+                            <div className="mt-1 text-xs text-slate-500">
+                                Must be ≤ advance balance and ≤ selected due.
+                            </div>
+                        </Field>
+
+                        <div className="md:col-span-4">
+                            <Field label="Notes (optional)">
+                                <Textarea value={notes} onChange={(e) => setNotes(e.target.value)} />
+                            </Field>
+                        </div>
+                    </div>
+
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                            <Badge tone="slate">{filtered.length} invoices</Badge>
+                            <Badge tone="blue">{selected.size} selected</Badge>
+                        </div>
+                        <div className="flex items-center gap-2">
+                            <Button variant="outline" onClick={selectAllVisible}>Select All Visible</Button>
+                            <Button variant="outline" onClick={clearAll} className="gap-2">
+                                <X className="h-4 w-4" /> Clear
+                            </Button>
+                        </div>
+                    </div>
+
+                    <div className="overflow-x-auto rounded-2xl border border-slate-100">
+                        <table className="w-full min-w-[980px] text-left text-sm">
+                            <thead className="text-xs font-bold text-slate-600">
+                                <tr className="border-b border-slate-100">
+                                    <th className="py-3 px-4">Select</th>
+                                    <th className="py-3 pr-4">Invoice</th>
+                                    <th className="py-3 pr-4">Module</th>
+                                    <th className="py-3 pr-4">Status</th>
+                                    <th className="py-3 pr-4 text-right">Outstanding</th>
+                                    <th className="py-3 pr-4 text-right">Total</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {filtered.map((r) => {
+                                    const id = Number(r.invoice_id)
+                                    const out = toNum(r.patient_outstanding)
+                                    const checked = selected.has(id)
+                                    const disabled = out <= 0
+                                    return (
+                                        <tr key={id} className={cn("border-b border-slate-50 hover:bg-slate-50/60", disabled && "opacity-60")}>
+                                            <td className="py-3 px-4">
+                                                <input
+                                                    type="checkbox"
+                                                    checked={checked}
+                                                    disabled={disabled}
+                                                    onChange={() => toggle(id)}
+                                                    className="h-4 w-4"
+                                                />
+                                            </td>
+                                            <td className="py-3 pr-4">
+                                                <div className="font-extrabold text-slate-900">{r.invoice_number || `#${id}`}</div>
+                                                <div className="text-xs text-slate-500">ID: {id}</div>
+                                            </td>
+                                            <td className="py-3 pr-4">
+                                                <Badge tone="slate">{upper(r.module || "GENERAL")}</Badge>
+                                            </td>
+                                            <td className="py-3 pr-4">
+                                                <Badge tone={upper(r.status) === "POSTED" ? "green" : "amber"}>{upper(r.status)}</Badge>
+                                            </td>
+                                            <td className="py-3 pr-4 text-right font-extrabold text-slate-900">₹ {money(out)}</td>
+                                            <td className="py-3 pr-4 text-right text-slate-700">₹ {money(r.grand_total)}</td>
+                                        </tr>
+                                    )
+                                })}
+                            </tbody>
+                        </table>
+                    </div>
+
+                    {histOpen && (
+                        <AdvanceApplyHistoryDialog
+                            caseId={caseId}
+                            onClose={() => setHistOpen(false)}
+                        />
+                    )}
+                </>
+            )}
+        </Modal>
+    )
+}
+
+function AdvanceApplyHistoryDialog({ caseId, onClose }) {
+    const [loading, setLoading] = useState(true)
+    const [items, setItems] = useState([])
+
+    useEffect(() => {
+        ; (async () => {
+            setLoading(true)
+            try {
+                const r = await billingListAdvanceApplications(caseId)
+                setItems(r?.items || [])
+            } catch (e) {
+                toast.error(e?.message || "Failed to load apply history")
+            } finally {
+                setLoading(false)
+            }
+        })()
+    }, [caseId])
+
+    return (
+        <Modal title="Advance Apply History" onClose={onClose} wide>
+            {loading ? (
+                <div className="h-40 animate-pulse rounded-2xl bg-slate-100" />
+            ) : items.length === 0 ? (
+                <div className="rounded-2xl border border-slate-100 bg-slate-50 p-4 text-sm text-slate-700">
+                    No apply history yet.
                 </div>
+            ) : (
+                <div className="space-y-3">
+                    {items.map((x, idx) => (
+                        <div key={idx} className="rounded-2xl border border-slate-100 bg-white">
+                            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3">
+                                <div className="flex flex-wrap items-center gap-2">
+                                    <Badge tone="slate">Receipt: {x?.payment?.receipt_number || "—"}</Badge>
+                                    <Badge tone="blue">₹ {money(x?.payment?.amount || 0)}</Badge>
+                                </div>
+                                <div className="text-xs text-slate-500">
+                                    {x?.payment?.received_at ? new Date(x.payment.received_at).toLocaleString("en-IN") : "—"}
+                                </div>
+                            </div>
 
-                <div className="md:col-span-2 rounded-2xl border border-slate-100 bg-slate-50 p-3 text-xs text-slate-600">
-                    Backend decides exact allocation rules (invoice priority, status checks, rounding). This UI just sends your intent.
+                            <div className="p-4">
+                                <div className="text-xs font-bold text-slate-600 mb-2">Invoice Allocations</div>
+                                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                                    {(x.allocations || []).map((a, i) => (
+                                        <div key={i} className="rounded-2xl border border-slate-100 bg-slate-50 p-3">
+                                            <div className="font-extrabold text-slate-900">{a.invoice_number || `#${a.invoice_id}`}</div>
+                                            <div className="text-xs text-slate-600">{upper(a.module)} · {upper(a.status)}</div>
+                                            <div className="mt-1 text-sm font-extrabold text-slate-900">₹ {money(a.amount)}</div>
+                                        </div>
+                                    ))}
+                                </div>
+
+                                <div className="mt-4 text-xs font-bold text-slate-600 mb-2">Consumed Advances</div>
+                                <div className="grid grid-cols-1 gap-2 md:grid-cols-2">
+                                    {(x.consumed_advances || []).map((c, i) => (
+                                        <div key={i} className="rounded-2xl border border-slate-100 bg-white p-3">
+                                            <div className="text-xs text-slate-500">Advance #{c.advance_id}</div>
+                                            <div className="text-sm font-extrabold text-slate-900">₹ {money(c.amount)}</div>
+                                            <div className="text-xs text-slate-500">{c.mode || "—"} · {c.txn_ref || "—"}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                            </div>
+                        </div>
+                    ))}
                 </div>
-            </div>
+            )}
         </Modal>
     )
 }

@@ -63,3 +63,20 @@ export function getLisReportData(orderId) {
 
 export const fetchLisReportPdf = (orderId) =>
     API.get(`/lab/orders/${orderId}/report-pdf`, { responseType: 'blob' })
+
+
+
+function toIntId(v, name = 'id') {
+  const n = Number(v)
+  if (!Number.isFinite(n) || n <= 0) throw new Error(`Invalid ${name}`)
+  return n
+}
+
+export function listPatientEncounters(patientId, params = {}, config = {}) {
+  const pid = toIntId(patientId, 'patientId')
+  // NOTE: baseURL probably already "/api"
+  return API.get(`/billing/patients/${pid}/encounters`, {
+    params,
+    ...config,
+  })
+}

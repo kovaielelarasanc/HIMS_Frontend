@@ -5,6 +5,7 @@ import { toast } from "sonner"
 
 import {
     billingAddManualLine,
+    billingAddManualLineV2,
     billingApproveInvoice,
     billingDeleteLine,
     billingGetInvoice,
@@ -69,6 +70,9 @@ function num(v, fb = 0) {
     const n = Number(v)
     return Number.isFinite(n) ? n : fb
 }
+function upper(v) {
+    return String(v || "").trim().toUpperCase()
+}
 
 function isPharmacyModule(m) {
     const x = String(m || "").trim().toUpperCase()
@@ -112,6 +116,48 @@ function fmtDateTime(v) {
     }
 }
 
+/* =========================================================
+   ✅ Allocation-based paid calculation (invoice)
+========================================================= */
+function paymentAllocatedToThisInvoice(p, invoiceId) {
+    const invId = Number(invoiceId)
+    if (!Number.isFinite(invId) || invId <= 0) return 0
+
+    // ignore VOID
+    if (upper(p?.status) === "VOID") return 0
+
+    // if direction present: only IN
+    if (p?.direction && upper(p.direction) !== "IN") return 0
+
+    // if kind present: only RECEIPT/ADVANCE_ADJUSTMENT
+    const k = upper(p?.kind || "")
+    if (k && !["RECEIPT", "ADVANCE_ADJUSTMENT"].includes(k)) return 0
+
+    // best: already present
+    const direct =
+        p?.allocated_amount ??
+        p?.amount_allocated ??
+        p?.invoice_amount ??
+        p?.invoice_allocated_amount
+
+    if (direct != null) return Math.max(0, num(direct, 0))
+
+    // allocations array
+    if (Array.isArray(p?.allocations) && p.allocations.length) {
+        const sum = p.allocations.reduce((s, a) => {
+            if (upper(a?.status) === "VOID") return s
+            if (Number(a?.invoice_id) !== invId) return s
+            return s + num(a?.amount, 0)
+        }, 0)
+        return Math.max(0, sum)
+    }
+
+    // fallback only if payment tied to invoice
+    if (Number(p?.invoice_id) === invId) return Math.max(0, num(p?.amount, 0))
+
+    return 0
+}
+
 /**
  * Module -> ServiceGroup lock mapping
  * (must match your ServiceGroup enum names)
@@ -136,7 +182,8 @@ const MODULE_TO_GROUP = {
     MISC: "MISC",
 }
 
-const PAY_MODES = ["CASH", "CARD", "UPI", "BANK", "WALLET", "CHEQUE"]
+// ✅ backend PayMode enum: CASH, CARD, UPI, BANK, WALLET
+const PAY_MODES = ["CASH", "CARD", "UPI", "BANK", "WALLET"]
 
 // ✅ Fallback columns (if backend meta not provided)
 const FALLBACK_DEFAULT_COLS = [
@@ -283,9 +330,21 @@ export default function InvoiceEditor() {
     // ✅ STRICT RULE: Editable ONLY in DRAFT
     const canEditLines = statusUpper === "DRAFT"
 
-    const paidTotal = useMemo(() => payments.reduce((s, r) => s + num(r.amount), 0), [payments])
+    // ✅ Paid/Due computed from allocations (or invoice computed fields if present)
     const grandTotal = num(invoice?.grand_total ?? 0)
-    const dueTotal = Math.max(0, grandTotal - paidTotal)
+
+    const paidTotal = useMemo(() => {
+        const fromInv = invoice?.paid_total ?? invoice?.paid_amount ?? invoice?.paid ?? null
+        if (fromInv != null && Number.isFinite(Number(fromInv))) return Math.max(0, num(fromInv, 0))
+        return payments.reduce((s, p) => s + paymentAllocatedToThisInvoice(p, invoice?.id), 0)
+    }, [payments, invoice?.id, invoice?.paid_total, invoice?.paid_amount, invoice?.paid])
+
+    const dueTotal = useMemo(() => {
+        const fromInv =
+            invoice?.due_total ?? invoice?.outstanding_total ?? invoice?.balance_due ?? null
+        if (fromInv != null && Number.isFinite(Number(fromInv))) return Math.max(0, num(fromInv, 0))
+        return Math.max(0, grandTotal - paidTotal)
+    }, [invoice?.due_total, invoice?.outstanding_total, invoice?.balance_due, grandTotal, paidTotal])
 
     const totals = useMemo(() => {
         const sub = lines.reduce((s, r) => s + num(r.line_total ?? num(r.qty) * num(r.unit_price)), 0)
@@ -419,7 +478,7 @@ export default function InvoiceEditor() {
             toast.success("Line updated")
             load()
         } catch (e) {
-            toast.error(e?.message || "Update failed")
+            toast.error(e?.message || e?.response?.data?.detail || "Update failed")
         }
     }
 
@@ -570,7 +629,6 @@ export default function InvoiceEditor() {
                                 Refresh
                             </Button>
 
-                            {/* If your PdfButtons exists, use it; otherwise fallback buttons below */}
                             {PdfButtons ? (
                                 <PdfButtons onDownload={onDownload} onPrint={onPrint} />
                             ) : (
@@ -615,7 +673,7 @@ export default function InvoiceEditor() {
                                         <MiniStat label="Discount" value={`₹ ${money(invoice?.discount_total ?? totals.disc)}`} />
                                         <MiniStat label="Tax" value={`₹ ${money(invoice?.tax_total ?? totals.tax)}`} />
                                         <MiniStat label="Grand Total" value={`₹ ${money(invoice?.grand_total ?? totals.grand)}`} strong />
-                                        <MiniStat label="Paid" value={`₹ ${money(paidTotal)}`} />
+                                        <MiniStat label="Paid (Allocated)" value={`₹ ${money(paidTotal)}`} />
                                         <MiniStat label="Due" value={`₹ ${money(dueTotal)}`} strong />
                                     </div>
 
@@ -772,7 +830,13 @@ export default function InvoiceEditor() {
                                 {!invoice ? (
                                     <EmptyState title="Invoice not loaded" desc="Open an invoice first." />
                                 ) : (
-                                    <PaymentsPanel invoice={invoice} payments={payments} paidTotal={paidTotal} dueTotal={dueTotal} onPaid={() => load()} />
+                                    <PaymentsPanel
+                                        invoice={invoice}
+                                        payments={payments}
+                                        paidTotal={paidTotal}
+                                        dueTotal={dueTotal}
+                                        onPaid={() => load()}
+                                    />
                                 )}
                             </CardBody>
                         </Card>
@@ -1046,7 +1110,6 @@ function LinesTable({ columns, lines, canEdit, onPatch, onAskDelete, onAskEdit, 
                                     const key = c.key
                                     const raw = getNested(r, key)
 
-                                    // inline edit: qty, unit_price, discount_amount (draft only)
                                     if (key === "qty") {
                                         return (
                                             <td key={key} className="py-3 pr-4">
@@ -1060,12 +1123,16 @@ function LinesTable({ columns, lines, canEdit, onPatch, onAskDelete, onAskEdit, 
                                         )
                                     }
                                     if (key === "unit_price") {
+                                        function toDecStr(v) {
+                                            const s = String(v ?? "").replace(/[₹,\s]/g, "").trim()
+                                            return s === "" ? "0" : s
+                                        }
                                         return (
                                             <td key={key} className="py-3 pr-4">
                                                 <LineNumberInput
                                                     disabled={!canEdit}
                                                     value={raw ?? r.unit_price ?? 0}
-                                                    onCommit={(v) => onPatch(r.id, { unit_price: Number(v || 0) })}
+                                                    onCommit={(v) => onPatch(r.id, { unit_price: toDecStr(v) })}
                                                     className="w-28"
                                                 />
                                             </td>
@@ -1216,32 +1283,40 @@ function PaymentsPanel({ invoice, payments, paidTotal, dueTotal, onPaid }) {
     return (
         <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
             <Card className="lg:col-span-2">
-                <CardHeader title="Payment History" subtitle="Payments linked to this invoice" />
+                <CardHeader title="Payment History" subtitle="Allocated amount affects Due" />
                 <CardBody>
                     {payments?.length ? (
                         <div className="overflow-x-auto">
-                            <table className="w-full min-w-[800px] text-left text-sm">
+                            <table className="w-full min-w-[900px] text-left text-sm">
                                 <thead className="text-xs font-bold text-slate-600">
                                     <tr className="border-b border-slate-100">
                                         <th className="py-3 pr-4">Date</th>
                                         <th className="py-3 pr-4">Mode</th>
                                         <th className="py-3 pr-4">Txn Ref</th>
                                         <th className="py-3 pr-4">Notes</th>
-                                        <th className="py-3 pr-0 text-right">Amount</th>
+                                        <th className="py-3 pr-0 text-right">Allocated</th>
                                     </tr>
                                 </thead>
                                 <tbody>
-                                    {payments.map((p) => (
-                                        <tr key={p.id} className="border-b border-slate-50 hover:bg-slate-50/60">
-                                            <td className="py-3 pr-4 font-semibold text-slate-800">{fmtDateTime(p.received_at || p.paid_at || p.created_at)}</td>
-                                            <td className="py-3 pr-4">
-                                                <Badge tone="slate">{p.mode || "—"}</Badge>
-                                            </td>
-                                            <td className="py-3 pr-4 font-semibold text-slate-800">{p.txn_ref || "—"}</td>
-                                            <td className="py-3 pr-4 text-slate-700">{p.notes || "—"}</td>
-                                            <td className="py-3 pr-0 text-right font-extrabold text-slate-900">₹ {money(p.amount)}</td>
-                                        </tr>
-                                    ))}
+                                    {payments.map((p) => {
+                                        const allocated = paymentAllocatedToThisInvoice(p, invoice?.id)
+                                        return (
+                                            <tr key={p.id} className="border-b border-slate-50 hover:bg-slate-50/60">
+                                                <td className="py-3 pr-4 font-semibold text-slate-800">{fmtDateTime(p.received_at || p.paid_at || p.created_at)}</td>
+                                                <td className="py-3 pr-4">
+                                                    <Badge tone="slate">{p.mode || "—"}</Badge>
+                                                </td>
+                                                <td className="py-3 pr-4 font-semibold text-slate-800">{p.txn_ref || "—"}</td>
+                                                <td className="py-3 pr-4 text-slate-700">{p.notes || "—"}</td>
+                                                <td className="py-3 pr-0 text-right font-extrabold text-slate-900">
+                                                    ₹ {money(allocated)}
+                                                    <div className="text-[11px] font-semibold text-slate-500">
+                                                        Receipt: ₹ {money(p.amount)}
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        )
+                                    })}
                                 </tbody>
                             </table>
                         </div>
@@ -1256,7 +1331,7 @@ function PaymentsPanel({ invoice, payments, paidTotal, dueTotal, onPaid }) {
                 <CardBody>
                     <div className="space-y-3">
                         <div className="rounded-2xl bg-slate-50 px-4 py-3">
-                            <Row label="Paid" value={`₹ ${money(paidTotal)}`} />
+                            <Row label="Paid (Allocated)" value={`₹ ${money(paidTotal)}`} />
                             <Row label="Due" value={`₹ ${money(dueTotal)}`} strong />
                         </div>
 
@@ -1367,11 +1442,7 @@ function ReasonDialog({ title, desc, confirmText, onClose, onConfirm, tone }) {
             <div className="text-sm text-slate-600">{desc}</div>
             <div className="mt-4">
                 <Field label="Reason (required)">
-                    <Textarea
-                        value={reason}
-                        onChange={(e) => setReason(e.target.value)}
-                        placeholder="Type reason..."
-                    />
+                    <Textarea value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Type reason..." />
                 </Field>
             </div>
             <div className="mt-3 text-xs text-slate-500">Audit rule: reason is mandatory for compliance.</div>
@@ -1475,7 +1546,6 @@ function EditLineDialog({ line, docMode, isPharmacy, onClose, onConfirm }) {
             }
         }
 
-        // Remove nulls so backend doesn't overwrite unintentionally (if your API expects absent instead of null)
         const out = {}
         for (const [k, v] of Object.entries(patch)) {
             if (v === undefined) continue
@@ -1543,11 +1613,7 @@ function EditLineDialog({ line, docMode, isPharmacy, onClose, onConfirm }) {
                 </Field>
 
                 <Field label="Discount Amount">
-                    <Input
-                        value={form.discount_amount}
-                        onChange={(e) => setForm({ ...form, discount_amount: e.target.value })}
-                        inputMode="decimal"
-                    />
+                    <Input value={form.discount_amount} onChange={(e) => setForm({ ...form, discount_amount: e.target.value })} inputMode="decimal" />
                 </Field>
 
                 <div className="md:col-span-2">
@@ -1593,11 +1659,9 @@ function ManualLineDialog({ invoice, moduleCode, onClose, onDone }) {
         discount_amount: 0,
         service_date: "",
 
-        // DOC-only (no fee master)
         doctor_name: "",
         department_name: "",
 
-        // meta
         meta_json: pharmacy ? { batch_id: "", expiry_date: "", hsn_sac: "" } : null,
 
         manual_reason: "Manual entry",
@@ -1626,16 +1690,20 @@ function ManualLineDialog({ invoice, moduleCode, onClose, onDone }) {
                 gst_rate: Number(form.gst_rate || 0),
                 discount_amount: Number(form.discount_amount || 0),
                 manual_reason: String(form.manual_reason || "Manual entry"),
-
                 service_date: form.service_date ? new Date(form.service_date).toISOString() : undefined,
-
                 doctor_name: docMode ? String(form.doctor_name || "").trim() : undefined,
                 department_name: docMode ? String(form.department_name || "").trim() : undefined,
-
                 meta_json: pharmacy ? cleanMeta(form.meta_json) : undefined,
             }
 
-            await billingAddManualLine(invoice.id, payload)
+            // ✅ Use V2 JSON body (supports meta_json / doc fields). Fallback to legacy if needed.
+            try {
+                await billingAddManualLineV2(invoice.id, payload)
+            } catch (e) {
+                // legacy fallback (may not support meta_json well)
+                await billingAddManualLine(invoice.id, payload)
+            }
+
             toast.success("Line added")
             onDone?.()
         } catch (e) {
@@ -1667,19 +1735,11 @@ function ManualLineDialog({ invoice, moduleCode, onClose, onDone }) {
 
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                 <Field label="Service Date (optional)">
-                    <Input
-                        type="date"
-                        value={form.service_date}
-                        onChange={(e) => setForm({ ...form, service_date: e.target.value })}
-                    />
+                    <Input type="date" value={form.service_date} onChange={(e) => setForm({ ...form, service_date: e.target.value })} />
                 </Field>
 
                 <Field label="GST %">
-                    <Input
-                        value={form.gst_rate}
-                        onChange={(e) => setForm({ ...form, gst_rate: e.target.value })}
-                        inputMode="decimal"
-                    />
+                    <Input value={form.gst_rate} onChange={(e) => setForm({ ...form, gst_rate: e.target.value })} inputMode="decimal" />
                 </Field>
 
                 <div className="md:col-span-2">
@@ -1691,18 +1751,10 @@ function ManualLineDialog({ invoice, moduleCode, onClose, onDone }) {
                 {docMode ? (
                     <>
                         <Field label="Department">
-                            <Input
-                                value={form.department_name}
-                                onChange={(e) => setForm({ ...form, department_name: e.target.value })}
-                                placeholder="Ex: Cardiology"
-                            />
+                            <Input value={form.department_name} onChange={(e) => setForm({ ...form, department_name: e.target.value })} placeholder="Ex: Cardiology" />
                         </Field>
                         <Field label="Doctor">
-                            <Input
-                                value={form.doctor_name}
-                                onChange={(e) => setForm({ ...form, doctor_name: e.target.value })}
-                                placeholder="Ex: Dr. Kumar"
-                            />
+                            <Input value={form.doctor_name} onChange={(e) => setForm({ ...form, doctor_name: e.target.value })} placeholder="Ex: Dr. Kumar" />
                         </Field>
                     </>
                 ) : null}
@@ -1712,28 +1764,16 @@ function ManualLineDialog({ invoice, moduleCode, onClose, onDone }) {
                 </Field>
 
                 <Field label="Unit Price">
-                    <Input
-                        value={form.unit_price}
-                        onChange={(e) => setForm({ ...form, unit_price: e.target.value })}
-                        inputMode="decimal"
-                    />
+                    <Input value={form.unit_price} onChange={(e) => setForm({ ...form, unit_price: e.target.value })} inputMode="decimal" />
                 </Field>
 
                 <Field label="Discount Amount">
-                    <Input
-                        value={form.discount_amount}
-                        onChange={(e) => setForm({ ...form, discount_amount: e.target.value })}
-                        inputMode="decimal"
-                    />
+                    <Input value={form.discount_amount} onChange={(e) => setForm({ ...form, discount_amount: e.target.value })} inputMode="decimal" />
                 </Field>
 
                 <div className="md:col-span-2">
                     <Field label="Manual Reason (required)">
-                        <Textarea
-                            value={form.manual_reason}
-                            onChange={(e) => setForm({ ...form, manual_reason: e.target.value })}
-                            placeholder="Why manual entry?"
-                        />
+                        <Textarea value={form.manual_reason} onChange={(e) => setForm({ ...form, manual_reason: e.target.value })} placeholder="Why manual entry?" />
                     </Field>
                 </div>
 
@@ -1747,7 +1787,7 @@ function ManualLineDialog({ invoice, moduleCode, onClose, onDone }) {
                                         const obj = e.target.value?.trim() ? JSON.parse(e.target.value) : {}
                                         setForm({ ...form, meta_json: obj })
                                     } catch {
-                                        // keep raw by not updating; but show toast only on submit
+                                        // ignore parse errors live
                                     }
                                 }}
                                 placeholder='{"batch_id":"123","expiry_date":"2026-12-31","hsn_sac":"3004"}'

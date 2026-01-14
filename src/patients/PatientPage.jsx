@@ -84,6 +84,17 @@ function extractAgeYears(p) {
     return m ? Number(m[1]) : null
 }
 
+/* ------------------------- Fetch All (server-paged) ------------------------- */
+const SERVER_PAGE_LIMIT = 500
+const MAX_PAGES_GUARD = 1000 // safety: 1000 * 500 = 500k rows max (won't happen normally)
+
+function buildServerParams(search, patientType) {
+    const params = {}
+    if (search) params.q = search
+    if (patientType) params.patient_type = patientType
+    return params
+}
+
 /* ------------------------- UI bits ------------------------- */
 function StatPill({ label, value, tone = 'slate' }) {
     const toneMap = {
@@ -166,7 +177,7 @@ function RowActions({ onView, onEdit, onDeactivate }) {
     )
 }
 
-/** iOS-ish segmented control (now mobile-safe: horizontal scroll) */
+/** iOS-ish segmented control (mobile-safe: horizontal scroll) */
 function SegmentedControl({ value, onChange, primary = '#2563eb', options = [], moreOptions = [] }) {
     const activeStyle = { borderColor: alphaHex(primary, '22') || '#bfdbfe' }
 
@@ -272,10 +283,12 @@ function CommandPalette({ open, onClose, primary, patientTypeFilter, onPickPatie
             setLoading(true)
             setErr('')
             try {
-                const params = { q: query }
+                const params = { q: query, limit: 50, offset: 0 }
                 if (patientTypeFilter) params.patient_type = patientTypeFilter
+
                 const res = await listPatients(params)
                 if (seqRef.current !== mySeq) return
+
                 setRows(res.data || [])
                 setIdx(0)
             } catch (e) {
@@ -475,6 +488,7 @@ function FilterChip({ label, onRemove }) {
             {label}
             <button
                 type="button"
+                classjk
                 className="h-5 w-5 rounded-full hover:bg-black/[0.05] grid place-items-center"
                 onClick={onRemove}
                 title="Remove"
@@ -485,10 +499,10 @@ function FilterChip({ label, onRemove }) {
     )
 }
 
+/* ✅ FIXED: removed the stray "s" attribute that breaks JSX */
 function NativeSelect({ value, onChange, children }) {
     return (
         <select
-            s
             value={value}
             onChange={(e) => onChange(e.target.value)}
             className="h-10 w-full rounded-2xl border border-black/10 bg-white px-3 text-[13px] text-slate-900 outline-none focus-visible:ring-black/10"
@@ -542,7 +556,6 @@ function FiltersDialog({ open, onOpenChange, filters, setFilters, primary }) {
                     </div>
                 </DialogHeader>
 
-                {/* scrollable body (mobile-safe) */}
                 <div className="max-h-[78vh] overflow-auto">
                     <div className="p-5 grid gap-4">
                         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
@@ -773,7 +786,6 @@ function PaginationBar({ total, page, setPage, pageSize, setPageSize }) {
     }, [total, pageSize])
 
     useEffect(() => {
-        // clamp
         setPage((p) => Math.min(Math.max(1, p), pages))
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [pages])
@@ -841,6 +853,9 @@ export default function PatientPage() {
 
     const [patients, setPatients] = useState([])
     const [loading, setLoading] = useState(false)
+    const [loadingMore, setLoadingMore] = useState(false)
+    const [loadedCount, setLoadedCount] = useState(0)
+
     const [q, setQ] = useState('')
     const [error, setError] = useState('')
 
@@ -884,7 +899,7 @@ export default function PatientPage() {
     })
 
     // Pagination
-    const [pageSize, setPageSize] = useState(20)
+    const [pageSize, setPageSize] = useState(100)
     const [page, setPage] = useState(1)
 
     const patientTypeOptions = useMemo(() => lookups.patientTypes || [], [lookups.patientTypes])
@@ -901,22 +916,60 @@ export default function PatientPage() {
         return hit?.name || hit?.code || patientTypeFilter
     }, [patientTypeFilter, patientTypeOptions])
 
+    const loadSeqRef = useRef(0)
+
     const loadPatients = useCallback(
         async (search = q, patientType = patientTypeFilter) => {
-            setLoading(true)
+            const seq = ++loadSeqRef.current
             setError('')
+            setLoadedCount(0)
+
+            const baseParams = buildServerParams(search, patientType)
+
+            // start fresh
+            setLoading(true)
+            setLoadingMore(false)
+            setPatients([])
+
             try {
-                const params = {}
-                if (search) params.q = search
-                if (patientType) params.patient_type = patientType
-                const res = await listPatients(params)
-                setPatients(res.data || [])
+                let offset = 0
+                let totalLoaded = 0
+                let pageNo = 0
+
+                while (pageNo < MAX_PAGES_GUARD) {
+                    pageNo += 1
+                    const res = await listPatients({ ...baseParams, limit: SERVER_PAGE_LIMIT, offset })
+                    if (loadSeqRef.current !== seq) return // stale request, stop
+
+                    const batch = res?.data || []
+                    totalLoaded += batch.length
+                    setLoadedCount(totalLoaded)
+
+                    // progressive update: first page ends "loading", remaining pages as "loadingMore"
+                    if (offset === 0) {
+                        setPatients(batch)
+                        setLoading(false)
+                    } else {
+                        setPatients((prev) => prev.concat(batch))
+                    }
+
+                    if (batch.length < SERVER_PAGE_LIMIT) break // last page
+                    offset += SERVER_PAGE_LIMIT
+
+                    // if more pages exist, show "loading more"
+                    setLoadingMore(true)
+                }
+
+                // finished
+                setLoading(false)
+                setLoadingMore(false)
             } catch (err) {
+                if (loadSeqRef.current !== seq) return
                 const msg = err?.response?.data?.detail || err?.message || 'Failed to load patients'
                 setError(msg)
                 toast.error('Failed to load patients', { description: msg })
-            } finally {
                 setLoading(false)
+                setLoadingMore(false)
             }
         },
         [q, patientTypeFilter]
@@ -1054,7 +1107,6 @@ export default function PatientPage() {
         }
     }
 
-    // segmented options
     const segmented = useMemo(() => {
         const all = [{ value: '', label: 'All' }]
         const mapped = patientTypeOptions.map((x) => ({
@@ -1075,7 +1127,6 @@ export default function PatientPage() {
         color: primary,
     }
 
-    // local filter flags
     const hasAnyLocalFilter = useMemo(() => {
         const f = filters
         return (
@@ -1094,7 +1145,6 @@ export default function PatientPage() {
         )
     }, [filters])
 
-    // apply local filters
     const filteredPatients = useMemo(() => {
         const f = filters
         const bgNeed = String(f.blood_group || '').trim().toLowerCase()
@@ -1169,7 +1219,6 @@ export default function PatientPage() {
         return rows
     }, [patients, filters])
 
-    // reset page on list changes / filters changes
     useEffect(() => {
         setPage(1)
     }, [q, patientTypeFilter, filters])
@@ -1248,7 +1297,6 @@ export default function PatientPage() {
         toast.success('View deleted.')
     }
 
-    // pagination slice
     const pagedPatients = useMemo(() => {
         if (pageSize === 'All') return filteredPatients
         const size = Number(pageSize || 20)
@@ -1258,10 +1306,8 @@ export default function PatientPage() {
 
     return (
         <div className="h-full min-h-0 w-full bg-slate-50 flex flex-col overflow-hidden">
-            {/* main scroll container (fix: always scrollable on ALL layouts) */}
             <div className="flex-1 min-h-0 overflow-y-auto">
                 <div className="mx-auto w-full max-w-[1680px] px-3 sm:px-5 lg:px-6 py-4 flex flex-col gap-4">
-                    {/* Header */}
                     <Card className="rounded-3xl border-black/10 bg-white/90 backdrop-blur shadow-[0_1px_2px_rgba(0,0,0,0.05)] overflow-hidden">
                         <CardHeader className="pb-3">
                             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -1279,7 +1325,7 @@ export default function PatientPage() {
                                         UHID search, responsive filters, saved views, export, and quick profile actions.
                                     </p>
 
-                                    <div className="mt-3 flex flex-wrap gap-2">
+                                    <div className="mt-3 flex flex-wrap gap-2 items-center">
                                         <StatPill label="Showing" value={`${shownStats.total}/${baseStats.total}`} tone="sky" />
                                         <StatPill label="Active" value={shownStats.active} tone="emerald" />
                                         {shownStats.inactive > 0 && <StatPill label="Inactive" value={shownStats.inactive} tone="rose" />}
@@ -1287,10 +1333,16 @@ export default function PatientPage() {
                                             <Tag className="h-4 w-4 opacity-70" />
                                             Type: {activeTypeLabel}
                                         </div>
+
+                                        {(loadingMore || (loading && loadedCount > 0)) && (
+                                            <div className="inline-flex items-center gap-2 rounded-full border border-black/10 bg-white px-3 py-1 text-[12px] font-semibold text-slate-700">
+                                                <RefreshCcw className="h-4 w-4 animate-spin" />
+                                                Loading more… ({loadedCount})
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
-                                {/* Actions: extreme responsive layout */}
                                 <div className="w-full lg:w-auto">
                                     <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:justify-end">
                                         <ViewsMenu primary={primary} onSave={saveView} views={views} onApply={applyView} onDelete={deleteView} />
@@ -1310,8 +1362,9 @@ export default function PatientPage() {
                                             className="rounded-2xl border-black/10 bg-white hover:bg-black/[0.03]"
                                             onClick={() => loadPatients(q, patientTypeFilter)}
                                             title="Reload"
+                                            disabled={loading || loadingMore}
                                         >
-                                            <RefreshCcw className="h-4 w-4 mr-2" />
+                                            <RefreshCcw className={cx('h-4 w-4 mr-2', (loading || loadingMore) && 'animate-spin')} />
                                             Reload
                                         </Button>
 
@@ -1330,7 +1383,6 @@ export default function PatientPage() {
 
                         <CardContent className="pt-0">
                             <div className="grid gap-3">
-                                {/* Search bar */}
                                 <div className="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
                                     <form onSubmit={handleSearchSubmit} className="w-full lg:max-w-xl">
                                         <div className="relative">
@@ -1392,7 +1444,6 @@ export default function PatientPage() {
                                     </div>
                                 </div>
 
-                                {/* Patient Type segmented (server) */}
                                 <div className="flex flex-col sm:flex-row sm:items-center gap-2">
                                     <div className="text-[12px] font-semibold text-slate-600 shrink-0">Patient Type</div>
                                     <SegmentedControl
@@ -1404,7 +1455,6 @@ export default function PatientPage() {
                                     />
                                 </div>
 
-                                {/* Active filter chips */}
                                 {hasAnyLocalFilter && (
                                     <div className="flex flex-wrap gap-2">
                                         {chips.map((c) => (
@@ -1420,7 +1470,6 @@ export default function PatientPage() {
                                     </div>
                                 )}
 
-                                {/* Export */}
                                 <div className="rounded-3xl border border-black/10 bg-black/[0.02] p-3">
                                     <div className="flex flex-col gap-3 lg:flex-row lg:items-end lg:justify-between">
                                         <div className="flex items-center gap-2 text-[12px] font-semibold text-slate-700">
@@ -1480,7 +1529,6 @@ export default function PatientPage() {
                         {/* Desktop table */}
                         <div className="hidden md:block">
                             <Card className="rounded-3xl border-black/10 bg-white/90 backdrop-blur shadow-[0_1px_2px_rgba(0,0,0,0.05)] overflow-hidden">
-                                {/* FIX: explicit max-height so table always scrolls even if parent layout height is weird */}
                                 <div className="max-h-[calc(100vh-320px)] overflow-auto">
                                     <table className="min-w-full text-sm">
                                         <thead className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-black/10">
@@ -1652,7 +1700,6 @@ export default function PatientPage() {
                         {/* Mobile cards */}
                         <div className="md:hidden">
                             <Card className="rounded-3xl border-black/10 bg-white/90 shadow-[0_1px_2px_rgba(0,0,0,0.05)] overflow-hidden">
-                                {/* FIX: explicit max-height so cards always scroll */}
                                 <div className="max-h-[calc(100vh-280px)] overflow-auto p-3">
                                     <div className="grid gap-3">
                                         {loading && (

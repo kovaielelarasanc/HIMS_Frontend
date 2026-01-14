@@ -32,8 +32,8 @@ function resolveApiBase() {
 
 
 
-// const API_BASE = resolveApiBase()
-const API_BASE = import.meta.env.VITE_API_URL || 'https://api.nutryah.com/api'
+const API_BASE = resolveApiBase()
+// const API_BASE = import.meta.env.VITE_API_URL || 'https://api.nutryah.com/api'
 console.log(API_BASE);
 const BACKEND_ROOT = API_BASE.replace(/\/api\/?$/, "")
 

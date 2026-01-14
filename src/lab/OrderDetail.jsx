@@ -19,12 +19,68 @@ import {
     Loader2,
     PlayCircle,
     Save,
+    Search,
 } from 'lucide-react'
 import PermGate from '../components/PermGate'
 import PatientBadge from '../components/PatientBadge'
 
-const fmtDT = (v) => (v ? new Date(v).toLocaleString() : '—')
+/* -------------------- Date utils (IST safe) -------------------- */
+const APP_LOCALE = 'en-IN'
+const APP_TZ = 'Asia/Kolkata'
+const IST_OFFSET_MIN = 330
+const BACKEND_NAIVE_TZ = 'APP' // 'APP'(IST) or 'UTC'
 
+function parseBackendDate(v) {
+    if (!v) return null
+    if (v instanceof Date) return isNaN(v) ? null : v
+    if (typeof v === 'number') return new Date(v)
+
+    const s = String(v).trim()
+    if (!s) return null
+
+    if (s.endsWith('Z') || /[+-]\d{2}:\d{2}$/.test(s)) {
+        const d = new Date(s)
+        return isNaN(d) ? null : d
+    }
+
+    const m = s.match(
+        /^(\d{4})-(\d{2})-(\d{2})[ T](\d{2}):(\d{2})(?::(\d{2}))?(?:\.(\d{1,3}))?$/
+    )
+    if (m) {
+        const Y = Number(m[1])
+        const M = Number(m[2]) - 1
+        const D = Number(m[3])
+        const h = Number(m[4])
+        const mi = Number(m[5])
+        const sec = Number(m[6] || 0)
+        const ms = Number((m[7] || '0').padEnd(3, '0'))
+
+        if (BACKEND_NAIVE_TZ === 'UTC') return new Date(Date.UTC(Y, M, D, h, mi, sec, ms))
+        const utcMs = Date.UTC(Y, M, D, h, mi, sec, ms) - IST_OFFSET_MIN * 60 * 1000
+        return new Date(utcMs)
+    }
+
+    const d = new Date(s)
+    return isNaN(d) ? null : d
+}
+
+const DTF = new Intl.DateTimeFormat(APP_LOCALE, {
+    timeZone: APP_TZ,
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+})
+
+const fmtDT = (v) => {
+    const d = parseBackendDate(v)
+    return d ? DTF.format(d) : '—'
+}
+
+/* -------------------- helpers -------------------- */
 const formatOrderNo = (id) => {
     if (!id) return '—'
     const s = String(id)
@@ -35,23 +91,19 @@ function cx(...a) {
     return a.filter(Boolean).join(' ')
 }
 
-// ✅ “same format” normal range viewer: preserves line breaks, also supports ";" separated strings
+/* ✅ “same format” normal range viewer (for Result Entry only) */
 function normalizeNormalRange(text) {
     const t = (text ?? '').toString().replace(/\r\n/g, '\n').trim()
     if (!t || t === '-') return { raw: '-', lines: ['—'] }
 
-    // If already multiline, keep it
     if (t.includes('\n')) {
         const lines = t.split('\n').map((x) => x.trim()).filter(Boolean)
         return { raw: t, lines: lines.length ? lines : ['—'] }
     }
-
-    // If semicolon separated (older style), show each part on new line
     if (t.includes(';')) {
         const lines = t.split(';').map((x) => x.trim()).filter(Boolean)
         return { raw: t, lines: lines.length ? lines : ['—'] }
     }
-
     return { raw: t, lines: [t] }
 }
 
@@ -111,6 +163,32 @@ function FlagPill({ flag }) {
     )
 }
 
+/* ✅ Order items (selected tests) */
+const getOrderItems = (o) => {
+    if (!o) return []
+    if (Array.isArray(o.items)) return o.items
+    if (Array.isArray(o.order_items)) return o.order_items
+    if (Array.isArray(o.orderItems)) return o.orderItems
+    return []
+}
+
+const itemLabel = (it) => {
+    const code = it?.test_code || it?.testCode || it?.code
+    const name = it?.test_name || it?.testName || it?.name
+    if (code && name) return `${code} — ${name}`
+    return name || code || 'Test'
+}
+
+const contextLabel = (o) => {
+    const t = (o?.context_type || o?.contextType || '').toString().toUpperCase()
+    const id = o?.context_id ?? o?.contextId
+    if (!t && !id) return null
+    if (t && id) return `${t} • #${id}`
+    if (t) return t
+    if (id) return `#${id}`
+    return null
+}
+
 export default function OrderDetail() {
     const { id } = useParams()
     const navigate = useNavigate()
@@ -118,7 +196,7 @@ export default function OrderDetail() {
     const [loading, setLoading] = useState(false)
     const [order, setOrder] = useState(null)
 
-    // Department / Sub-department masters
+    // Department masters
     const [allDepartments, setAllDepartments] = useState([])
 
     // Selected panels (dept + optional sub-dept)
@@ -132,6 +210,10 @@ export default function OrderDetail() {
     // UI states
     const [expandedRangeKey, setExpandedRangeKey] = useState(null) // `${sectionKey}::${service_id}`
     const [collapsedSections, setCollapsedSections] = useState({}) // sectionKey -> bool
+
+    // ✅ Premium: ordered tests search + collapse
+    const [testQ, setTestQ] = useState('')
+    const [testsCollapsed, setTestsCollapsed] = useState(false)
 
     const friendlyOrderNo = useMemo(() => (order ? formatOrderNo(order.id) : '—'), [order])
 
@@ -164,7 +246,42 @@ export default function OrderDetail() {
         fetchDepartments()
     }, [fetchOrder, fetchDepartments])
 
-    // Build department → children tree for checklist
+    // ✅ Order Items (Ordered Tests)
+    const orderItems = useMemo(() => getOrderItems(order), [order])
+
+    const filteredItems = useMemo(() => {
+        const q = (testQ || '').trim().toLowerCase()
+        if (!q) return orderItems
+
+        return orderItems.filter((it) => {
+            const hay = [itemLabel(it), it?.test_code || it?.testCode || it?.code, it?.test_name || it?.testName || it?.name]
+                .filter(Boolean)
+                .join(' ')
+                .toLowerCase()
+            return hay.includes(q)
+        })
+    }, [orderItems, testQ])
+
+    const canFinalize = useMemo(() => {
+        if (!order) return false
+        return (order.status || '').toLowerCase() !== 'reported'
+    }, [order])
+
+    const onFinalize = async () => {
+        try {
+            await finalizeLisReport(id)
+            toast.success('Report finalized')
+            fetchOrder()
+        } catch (e) {
+            console.error(e)
+            toast.error(e?.response?.data?.detail || 'Finalize failed')
+        }
+    }
+
+    const onOpenPrintView = () => navigate(`/lab/orders/${id}/print`)
+
+    // ---------------- PANEL CHECKLIST HELPERS ----------------
+
     const departmentTree = useMemo(() => {
         const list = Array.isArray(allDepartments) ? allDepartments : []
         const parents = list.filter((d) => !d.parent_id)
@@ -191,27 +308,6 @@ export default function OrderDetail() {
                 children: (childrenByParent[p.id] || []).slice().sort(sortBy),
             }))
     }, [allDepartments])
-
-    // Finalize enable/disable
-    const canFinalize = useMemo(() => {
-        if (!order) return false
-        return (order.status || '').toLowerCase() !== 'reported'
-    }, [order])
-
-    const onFinalize = async () => {
-        try {
-            await finalizeLisReport(id)
-            toast.success('Report finalized')
-            fetchOrder()
-        } catch (e) {
-            console.error(e)
-            toast.error(e?.response?.data?.detail || 'Finalize failed')
-        }
-    }
-
-    const onOpenPrintView = () => navigate(`/lab/orders/${id}/print`)
-
-    // ---------------- PANEL CHECKLIST HELPERS ----------------
 
     const isPanelSelected = (deptId, subDeptId = null) => {
         const key = `${deptId}::${subDeptId || 'root'}`
@@ -277,7 +373,6 @@ export default function OrderDetail() {
             }))
 
             setPanelSections(sections)
-            // Expand all by default
             const collapsed = {}
             sections.forEach((s) => (collapsed[s.key] = false))
             setCollapsedSections(collapsed)
@@ -342,18 +437,20 @@ export default function OrderDetail() {
         setCollapsedSections((prev) => ({ ...prev, [sectionKey]: !prev[sectionKey] }))
     }
 
-    // ----------------------------------------------------------------------
-
     if (loading && !order) return <div className="p-6 text-sm text-slate-600">Loading…</div>
     if (!order) return <div className="p-6 text-sm text-slate-600">Order not found</div>
 
     const status = (order.status || 'ORDERED').toString()
     const priority = (order.priority || 'routine').toString()
     const createdAt = order.created_at || order.createdAt
+    const ctx = contextLabel(order)
 
     return (
-        <div className="p-3 md:p-6 space-y-4">
-            {/* NUTRYAH-style top header */}
+        <div className="relative mx-auto w-full max-w-[1400px] p-3 md:p-6 space-y-4">
+            {/* subtle premium background */}
+            <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(1200px_circle_at_20%_-10%,rgba(15,23,42,0.10),transparent_55%),radial-gradient(900px_circle_at_90%_0%,rgba(2,132,199,0.10),transparent_55%)]" />
+
+            {/* Top header */}
             <div className="rounded-3xl border border-slate-200/70 bg-white shadow-sm overflow-hidden">
                 <div className="p-4 md:p-5 bg-[radial-gradient(60%_120%_at_30%_0%,rgba(15,23,42,0.06),transparent_60%)]">
                     <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
@@ -370,9 +467,7 @@ export default function OrderDetail() {
 
                                 <div className="min-w-0">
                                     <div className="text-[11px] text-slate-500">Lab Order</div>
-                                    <h1 className="text-lg md:text-xl font-semibold text-slate-900 truncate">
-                                        {friendlyOrderNo}
-                                    </h1>
+                                    <h1 className="text-lg md:text-xl font-semibold text-slate-900 truncate">{friendlyOrderNo}</h1>
                                 </div>
                             </div>
 
@@ -387,12 +482,22 @@ export default function OrderDetail() {
                                     Created: <span className="ml-1 font-semibold">{fmtDT(createdAt)}</span>
                                 </span>
 
+                                {ctx ? (
+                                    <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] text-slate-700">
+                                        Context: <span className="ml-1 font-semibold">{ctx}</span>
+                                    </span>
+                                ) : null}
+
                                 <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] text-slate-700">
                                     Priority: <span className="ml-1 font-semibold capitalize">{priority}</span>
                                 </span>
 
                                 <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] text-slate-700">
                                     Status: <span className="ml-1 font-semibold uppercase">{status}</span>
+                                </span>
+
+                                <span className="inline-flex items-center rounded-full border border-slate-200 bg-white px-2.5 py-1 text-[11px] text-slate-700">
+                                    Tests: <span className="ml-1 font-semibold">{orderItems.length}</span>
                                 </span>
                             </div>
                         </div>
@@ -426,6 +531,97 @@ export default function OrderDetail() {
                 </div>
             </div>
 
+            {/* ✅ PREMIUM: ORDERED TESTS (clean chips, removed status/barcode/result/unit/range) */}
+            <section className="rounded-3xl border border-slate-200/70 bg-white shadow-sm overflow-hidden">
+                <div className="flex flex-col gap-3 border-b border-slate-100 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                    <div className="min-w-0">
+                        <div className="text-sm font-semibold text-slate-900">Ordered Tests</div>
+                        <div className="mt-0.5 text-[11px] text-slate-500">Clean list (only test code & name)</div>
+                    </div>
+
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-end">
+                        <div className="relative w-full sm:w-[360px]">
+                            <Search className="absolute left-3 top-2.5 h-4 w-4 text-slate-400" />
+                            <input
+                                className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-9 pr-9 text-sm text-slate-900 shadow-sm outline-none placeholder:text-slate-400 focus:border-slate-300 focus:ring-4 focus:ring-slate-200/60"
+                                placeholder="Search test / code / name…"
+                                value={testQ}
+                                onChange={(e) => setTestQ(e.target.value)}
+                            />
+                            {testQ ? (
+                                <button
+                                    type="button"
+                                    onClick={() => setTestQ('')}
+                                    className="absolute right-2 top-2 inline-flex h-6 w-6 items-center justify-center rounded-xl hover:bg-slate-100"
+                                    aria-label="Clear"
+                                >
+                                    <ChevronDown className="h-4 w-4 rotate-180 text-slate-600" />
+                                </button>
+                            ) : null}
+                        </div>
+
+                        <button
+                            type="button"
+                            onClick={() => setTestsCollapsed((v) => !v)}
+                            className="inline-flex items-center justify-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50"
+                        >
+                            {testsCollapsed ? (
+                                <>
+                                    <ChevronDown className="h-4 w-4" />
+                                    Expand
+                                </>
+                            ) : (
+                                <>
+                                    <ChevronUp className="h-4 w-4" />
+                                    Collapse
+                                </>
+                            )}
+                        </button>
+                    </div>
+                </div>
+
+                {!testsCollapsed && (
+                    <div className="p-4">
+                        {filteredItems.length === 0 ? (
+                            <div className="rounded-3xl border border-slate-200 bg-white p-8 text-center text-xs text-slate-500">
+                                No tests match your search.
+                            </div>
+                        ) : (
+                            <>
+                                <div className="flex items-center justify-between gap-3 mb-3">
+                                    <div className="text-[11px] text-slate-500">
+                                        Showing <span className="font-semibold text-slate-700">{filteredItems.length}</span> of{' '}
+                                        <span className="font-semibold text-slate-700">{orderItems.length}</span>
+                                    </div>
+                                </div>
+
+                                <div className="rounded-3xl border border-slate-200 bg-slate-50/60 p-3">
+                                    <div className="flex flex-wrap gap-2">
+                                        {filteredItems.map((it, idx) => {
+                                            const key = String(it?.id || it?.test_id || it?.testId || it?.test_code || `${idx}`)
+                                            return (
+                                                <span
+                                                    key={key}
+                                                    title={itemLabel(it)}
+                                                    className={cx(
+                                                        'inline-flex max-w-full items-center rounded-full',
+                                                        'border border-slate-200 bg-white',
+                                                        'px-3 py-1 text-[11px] font-semibold text-slate-700',
+                                                        'shadow-[0_1px_0_rgba(15,23,42,0.02)] hover:bg-slate-50'
+                                                    )}
+                                                >
+                                                    <span className="max-w-[520px] truncate">{itemLabel(it)}</span>
+                                                </span>
+                                            )
+                                        })}
+                                    </div>
+                                </div>
+                            </>
+                        )}
+                    </div>
+                )}
+            </section>
+
             {/* MAIN WORKFLOW */}
             <section className="rounded-3xl border border-slate-200/70 bg-white shadow-sm overflow-hidden">
                 {/* Section header */}
@@ -437,7 +633,7 @@ export default function OrderDetail() {
                         <div>
                             <h2 className="text-sm font-semibold text-slate-900">Result Entry</h2>
                             <p className="text-[11px] text-slate-500">
-                                Select panels, enter values, save, then finalize. Normal ranges show in the same multi-line report style.
+                                Select panels, enter values, save, then finalize.
                             </p>
                         </div>
                     </div>
@@ -465,9 +661,7 @@ export default function OrderDetail() {
                                 disabled={saving || !panelSections.length}
                                 className={cx(
                                     'inline-flex items-center gap-2 rounded-2xl px-3 py-2 text-xs font-semibold text-white shadow-sm',
-                                    saving || !panelSections.length
-                                        ? 'bg-emerald-300 cursor-not-allowed'
-                                        : 'bg-emerald-600 hover:bg-emerald-700'
+                                    saving || !panelSections.length ? 'bg-emerald-300 cursor-not-allowed' : 'bg-emerald-600 hover:bg-emerald-700'
                                 )}
                             >
                                 {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
@@ -489,9 +683,7 @@ export default function OrderDetail() {
                 <div className="border-b border-slate-100 bg-slate-50/60 px-4 py-4">
                     <div className="flex flex-col gap-1">
                         <h3 className="text-sm font-semibold text-slate-800">Select Departments & Panels</h3>
-                        <p className="text-[11px] text-slate-500">
-                            Tick one or more Departments / Sub-Departments. Selected tests will load below grouped by heading.
-                        </p>
+                        <p className="text-[11px] text-slate-500">Tick one or more Departments / Sub-Departments.</p>
                     </div>
 
                     <div className="mt-3 max-h-64 overflow-y-auto rounded-3xl border border-slate-200 bg-white p-3">
@@ -559,7 +751,6 @@ export default function OrderDetail() {
 
                         return (
                             <div key={section.key} className="border-t border-slate-100">
-                                {/* Section header */}
                                 <button
                                     type="button"
                                     onClick={() => toggleSectionCollapse(section.key)}
@@ -567,9 +758,7 @@ export default function OrderDetail() {
                                 >
                                     <div className="min-w-0">
                                         <div className="text-xs font-semibold text-slate-800 truncate">{title}</div>
-                                        <div className="text-[11px] text-slate-500">
-                                            {section.rows?.length || 0} test(s)
-                                        </div>
+                                        <div className="text-[11px] text-slate-500">{section.rows?.length || 0} test(s)</div>
                                     </div>
                                     <div className="inline-flex h-9 w-9 items-center justify-center rounded-2xl border border-slate-200 bg-white text-slate-700">
                                         {isCollapsed ? <ChevronDown className="h-4 w-4" /> : <ChevronUp className="h-4 w-4" />}
@@ -578,11 +767,9 @@ export default function OrderDetail() {
 
                                 {!isCollapsed && (
                                     <>
-                                        {/* Mobile: cards */}
+                                        {/* Mobile cards */}
                                         <div className="md:hidden p-4 space-y-2">
-                                            {section.rows.length === 0 && (
-                                                <div className="text-xs text-slate-400">No services configured for this panel.</div>
-                                            )}
+                                            {section.rows.length === 0 && <div className="text-xs text-slate-400">No services configured for this panel.</div>}
 
                                             {section.rows.map((row, idx) => {
                                                 const expKey = `${section.key}::${row.service_id}`
@@ -650,7 +837,7 @@ export default function OrderDetail() {
                                             })}
                                         </div>
 
-                                        {/* Desktop: table */}
+                                        {/* Desktop table */}
                                         <div className="hidden md:block overflow-x-auto">
                                             <table className="min-w-full border-separate border-spacing-0">
                                                 <thead className="sticky top-0 z-10 bg-white">
