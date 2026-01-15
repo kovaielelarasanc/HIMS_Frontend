@@ -49,6 +49,7 @@ import {
     CommandItem,
     CommandList,
 } from "@/components/ui/command"
+import { useCanAny } from "@/hooks/useCan"
 
 import {
     getStockAlertsSummary,
@@ -493,8 +494,55 @@ function SupplierCombobox({ value, onChange }) {
     )
 }
 
+const VIEW_PERMS = ["pharmacy.stock.view", "pharmacy.inventory.view", "pharmacy.view"]
+
+function NoAccess({ required = [] }) {
+    return (
+        <div className="w-full p-4 md:p-6">
+            <Card className="mx-auto max-w-xl rounded-2xl border-slate-200 shadow-sm">
+                <CardHeader className="pb-2">
+                    <div className="flex items-center gap-2">
+                        <div className="rounded-2xl border border-slate-200 bg-white p-2">
+                            <ShieldAlert className="h-5 w-5 text-slate-800" />
+                        </div>
+                        <CardTitle className="text-base">Access denied</CardTitle>
+                    </div>
+                </CardHeader>
+
+                <CardContent className="space-y-3">
+                    <div className="text-sm text-slate-600">
+                        You don’t have permission to view <span className="font-medium text-slate-900">Pharmacy Stock & Alerts</span>.
+                        Please contact the admin.
+                    </div>
+
+                    {required?.length ? (
+                        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
+                            <div className="text-xs font-medium text-slate-700">Required (any one):</div>
+                            <ul className="mt-2 space-y-1 text-xs text-slate-600">
+                                {required.map((c) => (
+                                    <li key={c} className="font-mono">{c}</li>
+                                ))}
+                            </ul>
+                        </div>
+                    ) : null}
+
+                    <Button
+                        variant="outline"
+                        className="rounded-xl"
+                        onClick={() => window.history.back()}
+                    >
+                        Go back
+                    </Button>
+                </CardContent>
+            </Card>
+        </div>
+    )
+}
+
+
 // ---------- page ----------
-export default function StockAlertsDashboard() {
+function StockAlertsDashboardInner() {
+
     // ✅ Applied filters (used for API)
     const [filters, setFilters] = useState({
         locationId: ALL,
@@ -2037,4 +2085,12 @@ export default function StockAlertsDashboard() {
             </Dialog>
         </div>
     )
+}
+
+export default function StockAlertsDashboard() {
+    const canView = useCanAny(VIEW_PERMS)
+
+    if (!canView) return <NoAccess required={VIEW_PERMS} />
+
+    return <StockAlertsDashboardInner />
 }

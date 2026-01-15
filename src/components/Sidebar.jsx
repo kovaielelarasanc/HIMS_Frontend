@@ -167,7 +167,7 @@ const GROUPS = [
         label: 'Prescriptions',
         to: '/pharmacy/rx',
         icon: ClipboardList,
-        reqAny: ['pharmacy.inventory.stock.view'],
+        reqAny: ['pharmacy.rx.view'],
       },
       {
         key: 'pharmacy-dispense',
@@ -228,9 +228,9 @@ const GROUPS = [
         to: "/pharmacy/stock/alerts",
         icon: BellRing,
         reqAny: [
-          "pharmacy.stock.alerts.view",
-          "pharmacy.stock.alerts.manage",
-          "pharmacy.stock.alerts.export",
+          "pharmacy.stock.view",
+          "pharmacy.inventory.view",
+          "pharmacy.view",
         ],
       },
 
@@ -241,9 +241,15 @@ const GROUPS = [
         to: "/inventory/indents",
         icon: ClipboardSignature,
         reqAny: [
+          // Indents view (new + old)
           "inventory.indents.view",
-          "inventory.issues.view",
+          "inventory.indent.view",
+          "inv.indents.view",
+          "inv.indent.view",
+
+          // Catalog (new + old)
           "inventory.catalog.view",
+          "inv.catalog.view",
         ],
       },
       {
@@ -252,9 +258,27 @@ const GROUPS = [
         to: "/inventory/indents/issue",
         icon: ArrowUpRight,
         reqAny: [
-          "inventory.indents.view",
+          // Issue screen should allow anyone who can view/create/manage issues (new + old)
           "inventory.issues.view",
+          "inventory.issue.view",
+          "inventory.issues.create",
+          "inventory.issues.manage",
+          "inventory.issues.post",
+          "inv.issues.view",
+          "inv.issue.view",
+          "inv.issues.create",
+          "inv.issues.manage",
+          "inv.issues.post",
+
+          // Also allow indent viewers (common workflow)
+          "inventory.indents.view",
+          "inventory.indent.view",
+          "inv.indents.view",
+          "inv.indent.view",
+
+          // Catalog (new + old)
           "inventory.catalog.view",
+          "inv.catalog.view",
         ],
       },
       {
