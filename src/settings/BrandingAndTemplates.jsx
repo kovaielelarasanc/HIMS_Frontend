@@ -21,6 +21,8 @@ import { Input } from '@/components/ui/input'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
+import API from '@/api/client'
+import { formatIST } from '@/ipd/components/timeZONE'
 
 function ColorField({ label, name, value, onChange }) {
   return (
@@ -172,6 +174,8 @@ function buildGlobalFormFromApi(b) {
 }
 
 function buildPharmacyFormFromApi(ctx) {
+  console.log(ctx, "phar");
+
   return {
     org_name: ctx?.org_name || '',
     org_tagline: ctx?.org_tagline || '',
@@ -201,6 +205,7 @@ export default function BrandingAndTemplates() {
   const [globalAdmin, setGlobalAdmin] = useState(null)
   const [pharmacyAdmin, setPharmacyAdmin] = useState(null)
   const [pharmacyEffective, setPharmacyEffective] = useState(null)
+  console.log(pharmacyEffective?.asset_version, "chhhhh");
 
   // forms
   const [globalForm, setGlobalForm] = useState({})
@@ -384,6 +389,7 @@ export default function BrandingAndTemplates() {
 
   const globalVer = globalAdmin?.asset_version || globalAdmin?.updated_at
   const pharmacyVer = pharmacyAdmin?.asset_version || pharmacyAdmin?.updated_at
+  console.log(formatIST(pharmacyVer), "pharmacyVer");
 
   if (loading) {
     return (
@@ -393,6 +399,22 @@ export default function BrandingAndTemplates() {
       </div>
     )
   }
+
+  function resolveMediaUrl(path) {
+    if (!path) return ""
+    if (/^https?:\/\//i.test(path)) return path
+    const base = (API?.defaults?.baseURL || "").toString()
+    const origin = base.replace(/\/api\/?$/, "").replace(/\/$/, "")
+    return origin + path
+  }
+
+  function withVersion(url, v) {
+    if (!url) return ""
+    if (!v) return url
+    return url.includes("?") ? `${url}&v=${encodeURIComponent(v)}` : `${url}?v=${encodeURIComponent(v)}`
+  }
+
+  console.log(withVersion(resolveMediaUrl(pharmacyEffective?.logo_url), pharmacyEffective?.asset_version), "check url");
 
   return (
     <motion.div
@@ -567,7 +589,7 @@ export default function BrandingAndTemplates() {
                   <AssetPicker
                     title="App Logo"
                     accept="image/*"
-                    currentUrl={globalAdmin?.logo_url}
+                    currentUrl={resolveMediaUrl(globalAdmin?.logo_url)}
                     pickedFile={gLogo}
                     setPickedFile={setGLogo}
                     hint="PNG / JPG"
@@ -575,7 +597,7 @@ export default function BrandingAndTemplates() {
                   <AssetPicker
                     title="Login Logo"
                     accept="image/*"
-                    currentUrl={globalAdmin?.login_logo_url}
+                    currentUrl={resolveMediaUrl(globalAdmin?.login_logo_url)}
                     pickedFile={gLoginLogo}
                     setPickedFile={setGLoginLogo}
                     hint="Optional"
@@ -583,7 +605,7 @@ export default function BrandingAndTemplates() {
                   <AssetPicker
                     title="Favicon"
                     accept="image/*,.ico"
-                    currentUrl={globalAdmin?.favicon_url}
+                    currentUrl={resolveMediaUrl(globalAdmin?.favicon_url)}
                     pickedFile={gFavicon}
                     setPickedFile={setGFavicon}
                     hint="PNG / ICO"
@@ -594,7 +616,7 @@ export default function BrandingAndTemplates() {
                   <AssetPicker
                     title="PDF Header Image"
                     accept="image/*"
-                    currentUrl={globalAdmin?.pdf_header_url}
+                    currentUrl={resolveMediaUrl(globalAdmin?.pdf_header_url)}
                     pickedFile={gHeader}
                     setPickedFile={setGHeader}
                     hint="Used in all PDFs"
@@ -602,7 +624,7 @@ export default function BrandingAndTemplates() {
                   <AssetPicker
                     title="PDF Footer Image"
                     accept="image/*"
-                    currentUrl={globalAdmin?.pdf_footer_url}
+                    currentUrl={resolveMediaUrl(globalAdmin?.pdf_footer_url)}
                     pickedFile={gFooter}
                     setPickedFile={setGFooter}
                     hint="Used in all PDFs"
@@ -613,7 +635,7 @@ export default function BrandingAndTemplates() {
                   <AssetPicker
                     title="Letterhead (PDF/Image)"
                     accept="application/pdf,image/*"
-                    currentUrl={globalAdmin?.letterhead_url}
+                    currentUrl={resolveMediaUrl(globalAdmin?.letterhead_url)}
                     pickedFile={gLetterhead}
                     setPickedFile={setGLetterhead}
                     hint="PDF preferred for full-page letterhead"
@@ -733,7 +755,7 @@ export default function BrandingAndTemplates() {
                       <AssetPicker
                         title="Pharmacy Logo"
                         accept="image/*"
-                        currentUrl={pharmacyAdmin?.logo_url}
+                        currentUrl={resolveMediaUrl(pharmacyAdmin?.logo_url)}
                         pickedFile={pLogo}
                         setPickedFile={setPLogo}
                         hint="Used in pharmacy screens/PDFs"
@@ -741,7 +763,7 @@ export default function BrandingAndTemplates() {
                       <AssetPicker
                         title="Pharmacy Letterhead (PDF/Image)"
                         accept="application/pdf,image/*"
-                        currentUrl={pharmacyAdmin?.letterhead_url}
+                        currentUrl={resolveMediaUrl(pharmacyAdmin?.letterhead_url)}
                         pickedFile={pLetterhead}
                         setPickedFile={setPLetterhead}
                         hint="Overrides global letterhead for pharmacy PDFs"
@@ -752,14 +774,14 @@ export default function BrandingAndTemplates() {
                       <AssetPicker
                         title="Pharmacy PDF Header"
                         accept="image/*"
-                        currentUrl={pharmacyAdmin?.pdf_header_url}
+                        currentUrl={resolveMediaUrl(pharmacyAdmin?.pdf_header_url)}
                         pickedFile={pHeader}
                         setPickedFile={setPHeader}
                       />
                       <AssetPicker
                         title="Pharmacy PDF Footer"
                         accept="image/*"
-                        currentUrl={pharmacyAdmin?.pdf_footer_url}
+                        currentUrl={resolveMediaUrl(pharmacyAdmin?.pdf_footer_url)}
                         pickedFile={pFooter}
                         setPickedFile={setPFooter}
                       />
@@ -777,13 +799,19 @@ export default function BrandingAndTemplates() {
                 <div className="rounded-2xl border border-slate-200 bg-slate-50 p-4 space-y-3">
                   <div className="flex items-center justify-between">
                     <p className="text-xs font-semibold text-slate-800">Effective Pharmacy Preview</p>
-                    <p className="text-[11px] text-slate-500 font-mono">{String(pharmacyEffective?.asset_version || pharmacyVer || '-')}</p>
+                    <p className="text-[11px] text-slate-500 font-mono">{String(formatIST(pharmacyEffective?.asset_version) || formatIST(pharmacyVer) || '-')}</p>
                   </div>
 
                   <div className="rounded-xl border bg-white p-3">
                     <div className="flex items-center gap-3">
                       {pharmacyEffective?.logo_url ? (
-                        <img src={pharmacyEffective.logo_url} alt="pharmacy logo" className="h-10 w-auto rounded border" />
+                        <img src={resolveMediaUrl(pharmacyEffective?.logo_url)} alt="pharmacy logo" className="h-10 w-auto rounded border"
+                          onError={(e) => {
+                            // show fallback box if request fails
+                            e.currentTarget.style.display = "none"
+                            console.log(e, "check logo error");
+
+                          }} />
                       ) : (
                         <div className="h-10 w-10 rounded border bg-slate-100" />
                       )}
