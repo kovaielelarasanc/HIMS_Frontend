@@ -43,6 +43,7 @@ import {
     billingListInvoiceOutstanding,
     billingApplyAdvanceSelected,
     billingListAdvanceApplications,
+    billingExportCasePdf
 } from "@/api/billings"
 
 import {
@@ -59,8 +60,8 @@ import {
     cn,
     money,
     Textarea,
-} from "./_ui"
 
+} from "./_ui"
 import {
     ArrowLeft,
     FilePlus2,
@@ -68,7 +69,6 @@ import {
     RefreshCcw,
     Wallet,
     Shield,
-    CreditCard,
     Layers,
     Filter,
     Search,
@@ -82,15 +82,18 @@ import {
     FileText,
     AlertTriangle,
     History,
-    X
+    X,
+    Printer, Download
 } from "lucide-react"
+
+import BillingPrintDownload from "@/billing/print/BillingPrintDownload"
 
 const TABS = [
     { key: "OVERVIEW", label: "Overview", icon: Layers },
     { key: "INVOICE_SUMMARY", label: "Invoice Summary", icon: ListChecks },
     { key: "ADD_ITEM", label: "Add Item Line", icon: FilePlus2 },
     { key: "INVOICES", label: "Invoices", icon: Layers },
-    { key: "PAYMENTS", label: "Payments", icon: CreditCard },
+    { key: "PAYMENTS", label: "Payments", icon: CheckCircle2 },
     { key: "ADVANCES", label: "Advances", icon: Wallet },
     { key: "INSURANCE", label: "Insurance / Claims", icon: Shield },
     { key: "SETTINGS", label: "Bill Type & Referral", icon: Settings },
@@ -136,10 +139,10 @@ function pickLatestPayableInvoice(invoices = []) {
 export default function BillingCaseDetail() {
     const { caseId } = useParams()
     const nav = useNavigate()
-
+    const [exportOpen, setExportOpen] = useState(false)
     const [tab, setTab] = useState("OVERVIEW")
     const [loading, setLoading] = useState(true)
-
+    const [finance, setFinance] = useState(null)
     const [caseRow, setCaseRow] = useState(null)
     const [invoices, setInvoices] = useState([])
     const [payments, setPayments] = useState([])
@@ -187,18 +190,21 @@ export default function BillingCaseDetail() {
             const c = await billingGetCase(caseId, { signal: ac.signal })
             setCaseRow(c)
 
-            const [inv, pay, adv, ref] = await Promise.all([
+            const [inv, pay, adv, ref, fin] = await Promise.all([
                 billingListInvoices(caseId, {}, { signal: ac.signal }),
                 billingListPayments(caseId, {}, { signal: ac.signal }),
                 billingListAdvances(caseId, {}, { signal: ac.signal }),
-                // refunds may not exist in every backend – keep safe
                 billingListRefunds?.(caseId, {}, { signal: ac.signal }).catch(() => []),
+
+                // ✅ finance (available advance)
+                billingCaseFinance(caseId).catch(() => null),
             ])
 
             setInvoices(normItems(inv))
             setPayments(normItems(pay))
             setAdvances(normItems(adv))
             setRefunds(normItems(ref))
+            setFinance(fin)
 
             try {
                 const ins = await billingGetInsurance(caseId, { signal: ac.signal })
@@ -307,9 +313,25 @@ export default function BillingCaseDetail() {
     const totals = useMemo(() => {
         const safeInvoices = (invoices || []).filter((i) => upper(i.status) !== "VOID")
         const totalBilled = safeInvoices.reduce((s, i) => s + toNum(i.grand_total), 0)
-        const totalPaid = (payments || []).reduce((s, p) => s + toNum(p.amount), 0)
 
-        const advanceBalance = (advances || []).reduce((s, a) => {
+        // ✅ Paid = actual payments received (do NOT subtract available advance)
+        const totalPaid = (payments || []).reduce((s, p) => {
+            if (upper(p?.status) === "VOID") return s
+            const k = upper(p?.kind || "")
+            // ignore non-reducing kinds if they exist in your backend
+            if (["REFUND", "REVERSAL", "CHARGEBACK"].includes(k)) return s
+            return s + toNum(p.amount)
+        }, 0)
+
+        // ✅ Total advance deposited (only ADVANCE entries)
+        const totalAdvance = (advances || []).reduce((s, a) => {
+            const t = upper(a.entry_type || "ADVANCE")
+            const amt = toNum(a.amount)
+            return t === "ADVANCE" ? s + amt : s
+        }, 0)
+
+        // local available advance from advances list (ADVANCE - REFUND - ADJUSTMENT)
+        const advanceBalanceLocal = (advances || []).reduce((s, a) => {
             const t = upper(a.entry_type || "ADVANCE")
             const amt = toNum(a.amount)
             if (t === "REFUND") return s - amt
@@ -317,11 +339,28 @@ export default function BillingCaseDetail() {
             return s + amt
         }, 0)
 
-        const net = totalBilled - totalPaid - Math.max(0, advanceBalance)
-        const due = Math.max(0, net)
-        const credit = Math.max(0, -net)
-        return { totalBilled, totalPaid, advanceBalance, due, credit }
-    }, [invoices, payments, advances])
+        // ✅ Available advance (best = finance endpoint)
+        const availableAdvance = toNum(
+            finance?.finance?.advances?.advance_balance ??
+            finance?.advances?.advance_balance ??
+            finance?.advance_balance ??
+            advanceBalanceLocal
+        )
+
+        // ✅ Correct Due (case level): Total Bill - Paid
+        const due = Math.max(0, totalBilled - totalPaid)
+
+        return {
+            totalBilled,
+            totalPaid,
+            totalAdvance,
+            availableAdvance,
+            advanceBalanceLocal, // optional debug
+            due,
+        }
+    }, [invoices, payments, advances, finance])
+
+
 
     const payableInvoices = useMemo(() => {
         return (invoices || [])
@@ -366,6 +405,12 @@ export default function BillingCaseDetail() {
                         <RefreshCcw className={cn("h-4 w-4", loading ? "animate-spin" : "")} />
                         Refresh
                     </Button>
+                    <BillingPrintDownload
+                        caseId={Number(caseId)}
+                        caseNumber={caseRow?.case_number}
+                        patientName={caseRow?.patient_name}
+                        uhid={caseRow?.uhid}
+                    />
 
                     <Button onClick={() => nav(`/billing/cases/${caseId}/add-item`)} className="gap-2">
                         <FilePlus2 size={16} />
@@ -377,8 +422,22 @@ export default function BillingCaseDetail() {
             {/* Summary cards */}
             <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
                 <StatCard title="Billed" value={`₹ ${money(totals.totalBilled)}`} icon={IndianRupee} />
-                <StatCard title="Paid" value={`₹ ${money(totals.totalPaid)}`} icon={CreditCard} />
-                <StatCard title="Advance Balance" value={`₹ ${money(totals.advanceBalance)}`} icon={Wallet} />
+                <StatCard title="Paid" value={`₹ ${money(totals.totalPaid)}`} icon={CheckCircle2} />
+
+
+                <StatCard title="Total Advance" value={`₹ ${money(totals.totalAdvance)}`} icon={Wallet} />
+
+                <StatCard
+                    title="Available Advance"
+                    value={`₹ ${money(totals.availableAdvance)}`}
+                    icon={Wallet}
+                    right={
+                        <Badge tone={totals.availableAdvance > 0 ? "green" : "slate"}>
+                            {totals.availableAdvance > 0 ? "Usable" : "—"}
+                        </Badge>
+                    }
+                />
+
                 <StatCard
                     title="Due"
                     value={`₹ ${money(totals.due)}`}
@@ -388,16 +447,9 @@ export default function BillingCaseDetail() {
                         </Badge>
                     }
                 />
-                <StatCard
-                    title="Credit"
-                    value={`₹ ${money(totals.credit)}`}
-                    right={
-                        <Badge tone={totals.credit > 0 ? "blue" : "slate"}>
-                            {totals.credit > 0 ? "Available" : "—"}
-                        </Badge>
-                    }
-                />
             </div>
+
+
 
             {/* Tabs */}
             <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -535,9 +587,102 @@ export default function BillingCaseDetail() {
                     )}
                 </>
             )}
+            {exportOpen && (
+                <BillingCaseExportDialog
+                    caseId={caseId}
+                    caseRow={caseRow}
+                    invoices={invoices}
+                    onClose={() => setExportOpen(false)}
+                />
+            )}
+
         </div>
     )
 }
+function BillingCaseExportDialog({ caseId, caseRow, invoices, onClose }) {
+    const caseNo = caseRow?.case_number || `CASE-${String(caseId).padStart(6, "0")}`
+
+    async function openPrint(kind) {
+        try {
+            const blob = await billingExportCasePdf(caseId, { kind, download: false })
+            const url = URL.createObjectURL(blob)
+
+            // open in new tab for print
+            window.open(url, "_blank", "noopener,noreferrer")
+
+            // revoke later (don’t revoke immediately or tab may lose it)
+            setTimeout(() => URL.revokeObjectURL(url), 60_000)
+        } catch (e) {
+            toast.error(e?.message || "Failed to open PDF")
+        }
+    }
+
+    async function downloadPdf(kind) {
+        try {
+            const blob = await billingExportCasePdf(caseId, { kind, download: true })
+            const url = URL.createObjectURL(blob)
+
+            const a = document.createElement("a")
+            a.href = url
+            a.download = `${caseNo}-${kind}.pdf`
+            document.body.appendChild(a)
+            a.click()
+            a.remove()
+
+            setTimeout(() => URL.revokeObjectURL(url), 1500)
+        } catch (e) {
+            toast.error(e?.message || "Failed to download PDF")
+        }
+    }
+
+    return (
+        <Modal title="Print / Download" onClose={onClose} wide>
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <Card className="border border-slate-100">
+                    <CardHeader
+                        title="Full Case (Recommended)"
+                        subtitle="Invoices + Payments + Advances + Insurance + Final Summary"
+                    />
+                    <CardBody className="flex flex-wrap gap-2">
+                        <Button variant="outline" onClick={() => openPrint("FULL_CASE")} className="gap-2">
+                            <Printer className="h-4 w-4" /> Print
+                        </Button>
+                        <Button onClick={() => downloadPdf("FULL_CASE")} className="gap-2">
+                            <Download className="h-4 w-4" /> Download PDF
+                        </Button>
+                    </CardBody>
+                </Card>
+
+                <Card className="border border-slate-100">
+                    <CardHeader
+                        title="More exports (next)"
+                        subtitle="We can add: Final Bill / Payments Only / Insurance Pack / Invoice PDF"
+                    />
+                    <CardBody className="text-sm text-slate-600">
+                        Currently enabled: <span className="font-extrabold text-slate-900">Full Case PDF</span>
+                        <div className="mt-2 text-xs text-slate-500">
+                            Format will match your sample exactly (header/table/footer/totals).
+                        </div>
+                    </CardBody>
+                </Card>
+            </div>
+
+            <div className="mt-4 rounded-2xl border border-slate-100 bg-slate-50 p-4 text-xs text-slate-600">
+                <div className="font-extrabold text-slate-900">No raw IDs rule ✅</div>
+                PDF uses Case No / Invoice No / Receipt No. If any number is missing, the PDF uses formatted fallback like
+                <span className="font-extrabold"> INV-000123</span>.
+            </div>
+
+            <div className="mt-4">
+                <div className="text-sm font-extrabold text-slate-900 mb-2">
+                    Invoices loaded: {invoices?.length || 0}
+                </div>
+                <div className="text-xs text-slate-500">(Later) We’ll add “Print Invoice” per invoice from the same dialog.</div>
+            </div>
+        </Modal>
+    )
+}
+
 
 /* -------------------- Small UI blocks -------------------- */
 

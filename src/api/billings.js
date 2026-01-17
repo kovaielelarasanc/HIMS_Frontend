@@ -779,3 +779,17 @@ export async function billingCloseClaim(claimId, payload = {}, config = {}) {
     const res = await API.post(`/billing/claims/${id}/close`, payload, config)
     return unwrap(res)
 }
+
+// =========================================================
+// CASE EXPORTS (PDF)  ✅ matches your /exports/pdf?kind=... format
+// =========================================================
+export async function billingExportCasePdf(caseId, { kind = "FULL_CASE", download = false } = {}, config = {}) {
+    const id = toIntId(caseId, "caseId")
+    return getBlob(`/billing/cases/${id}/exports/pdf`, {
+        params: cleanParams({
+            kind,
+            download: download ? "1" : undefined,
+        }),
+        ...config,
+    })
+}

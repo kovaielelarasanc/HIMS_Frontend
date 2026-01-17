@@ -123,33 +123,38 @@ function paymentAllocatedToThisInvoice(p, invoiceId) {
     const invId = Number(invoiceId)
     if (!Number.isFinite(invId) || invId <= 0) return 0
 
-    // ignore VOID
+    // ignore VOID only
     if (upper(p?.status) === "VOID") return 0
 
-    // if direction present: only IN
-    if (p?.direction && upper(p.direction) !== "IN") return 0
-
-    // if kind present: only RECEIPT/ADVANCE_ADJUSTMENT
+    // allow more kinds (your backend may use ADVANCE / ADJUSTMENT etc.)
     const k = upper(p?.kind || "")
-    if (k && !["RECEIPT", "ADVANCE_ADJUSTMENT"].includes(k)) return 0
+    const blocked = ["REFUND", "REVERSAL", "CHARGEBACK", "VOID"]
+    if (k && blocked.includes(k)) return 0
 
-    // best: already present
+    // direct allocated fields (some APIs return this)
     const direct =
         p?.allocated_amount ??
         p?.amount_allocated ??
         p?.invoice_amount ??
-        p?.invoice_allocated_amount
+        p?.invoice_allocated_amount ??
+        p?.applied_amount
 
     if (direct != null) return Math.max(0, num(direct, 0))
 
     // allocations array
-    if (Array.isArray(p?.allocations) && p.allocations.length) {
-        const sum = p.allocations.reduce((s, a) => {
+    const allocs =
+        Array.isArray(p?.allocations) ? p.allocations :
+            Array.isArray(p?.payment_allocations) ? p.payment_allocations :
+                null
+
+    if (Array.isArray(allocs) && allocs.length) {
+        const sum = allocs.reduce((s, a) => {
             if (upper(a?.status) === "VOID") return s
-            if (Number(a?.invoice_id) !== invId) return s
-            return s + num(a?.amount, 0)
+            const aInv = Number(a?.invoice_id ?? a?.billing_invoice_id ?? a?.invoiceId)
+            if (aInv !== invId) return s
+            return s + num(a?.amount ?? a?.allocated_amount, 0)
         }, 0)
-        return Math.max(0, sum)
+        return Math.max(0, Number(sum.toFixed(2)))
     }
 
     // fallback only if payment tied to invoice
@@ -157,6 +162,7 @@ function paymentAllocatedToThisInvoice(p, invoiceId) {
 
     return 0
 }
+
 
 /**
  * Module -> ServiceGroup lock mapping
@@ -334,17 +340,23 @@ export default function InvoiceEditor() {
     const grandTotal = num(invoice?.grand_total ?? 0)
 
     const paidTotal = useMemo(() => {
-        const fromInv = invoice?.paid_total ?? invoice?.paid_amount ?? invoice?.paid ?? null
-        if (fromInv != null && Number.isFinite(Number(fromInv))) return Math.max(0, num(fromInv, 0))
-        return payments.reduce((s, p) => s + paymentAllocatedToThisInvoice(p, invoice?.id), 0)
+        // allocation-first truth
+        const allocPaid = payments.reduce((s, p) => s + paymentAllocatedToThisInvoice(p, invoice?.id), 0)
+
+        // fallback only if payments not loaded yet
+        if (!payments?.length) {
+            const fromInv = invoice?.paid_total ?? invoice?.paid_amount ?? invoice?.paid ?? null
+            if (fromInv != null && Number.isFinite(Number(fromInv))) return Math.max(0, num(fromInv, 0))
+        }
+
+        return Math.max(0, Number(allocPaid.toFixed(2)))
     }, [payments, invoice?.id, invoice?.paid_total, invoice?.paid_amount, invoice?.paid])
 
     const dueTotal = useMemo(() => {
-        const fromInv =
-            invoice?.due_total ?? invoice?.outstanding_total ?? invoice?.balance_due ?? null
-        if (fromInv != null && Number.isFinite(Number(fromInv))) return Math.max(0, num(fromInv, 0))
-        return Math.max(0, grandTotal - paidTotal)
-    }, [invoice?.due_total, invoice?.outstanding_total, invoice?.balance_due, grandTotal, paidTotal])
+        // ALWAYS compute due from grand - paid (prevents stale due_total UI)
+        const due = grandTotal - paidTotal
+        return Math.max(0, Number(due.toFixed(2)))
+    }, [grandTotal, paidTotal])
 
     const totals = useMemo(() => {
         const sub = lines.reduce((s, r) => s + num(r.line_total ?? num(r.qty) * num(r.unit_price)), 0)
@@ -1263,10 +1275,19 @@ function PaymentsPanel({ invoice, payments, paidTotal, dueTotal, onPaid }) {
 
         setSaving(true)
         try {
+            const payerType = upper(invoice?.payer_type || "PATIENT")
+            const payerIdRaw = invoice?.payer_id
+            const payerId =
+                payerType === "PATIENT"
+                    ? undefined
+                    : (payerIdRaw != null && Number(payerIdRaw) > 0 ? Number(payerIdRaw) : undefined)
+
             await billingPayOnCase(invoice.billing_case_id, {
                 amount: amt,
                 mode: form.mode,
                 invoice_id: invoice.id,
+                payer_type: payerType,
+                payer_id: payerId,
                 txn_ref: form.txn_ref || undefined,
                 notes: form.notes || undefined,
             })
