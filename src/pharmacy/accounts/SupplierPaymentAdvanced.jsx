@@ -43,8 +43,8 @@ function KpiTile({ label, children }) {
 }
 
 export default function SupplierPaymentsScreen() {
-  const canView = useCan('pharmacy.accounts.supplier_payments.view')
-  const canManage = useCan('pharmacy.accounts.supplier_payments.manage')
+  const canView = useCan('pharmacy.accounts.supplier_ledger.view')
+  const canManage = useCan('pharmacy.accounts.supplier_ledger.manage')
 
   const [suppliers, setSuppliers] = useState([])
   const [supplierId, setSupplierId] = useState('')

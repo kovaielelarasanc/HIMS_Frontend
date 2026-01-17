@@ -10,6 +10,7 @@ import {
     openPatientPrintWindow,
     listPatientAuditLogs,
 } from '../api/patients'
+
 import {
     X,
     User,
@@ -28,23 +29,29 @@ import {
 } from 'lucide-react'
 import { formatIST } from '@/ipd/components/timeZONE'
 
-
+/* -------------------- small utils -------------------- */
 function safe(val) {
     if (val === null || val === undefined) return '—'
+    if (val === true) return 'Yes'
+    if (val === false) return 'No'
     const s = String(val).trim()
     return s ? s : '—'
 }
 
 function formatRefSource(code) {
     if (!code) return '—'
+    const c = String(code).trim().toLowerCase()
     const map = {
         doctor: 'Doctor',
         google: 'Google',
         social_media: 'Social Media',
+        socialmedia: 'Social Media',
         ads: 'Advertisements',
         other: 'Other',
+        walkin: 'Walk-in',
+        walk_in: 'Walk-in',
     }
-    return map[code] || code
+    return map[c] || code
 }
 
 function formatBytes(size) {
@@ -55,7 +62,7 @@ function formatBytes(size) {
     return `${(n / (1024 * 1024)).toFixed(1)} MB`
 }
 
-// ---- helpers for audit log UI ----
+/* -------------------- audit helpers -------------------- */
 function formatAuditValue(value) {
     if (value === null || value === undefined) return '—'
     if (typeof value === 'string') {
@@ -88,6 +95,7 @@ function getAuditChanges(log) {
     return changes
 }
 
+/* -------------------- UI primitives -------------------- */
 function IconButton({ title, onClick, disabled, children }) {
     return (
         <button
@@ -114,9 +122,7 @@ function SegTab({ active, onClick, children }) {
             onClick={onClick}
             className={[
                 'px-3 py-1.5 text-[12px] font-medium rounded-full transition whitespace-nowrap',
-                active
-                    ? 'bg-slate-900 text-white shadow-sm'
-                    : 'bg-transparent text-slate-600 hover:bg-black/[0.04]',
+                active ? 'bg-slate-900 text-white shadow-sm' : 'bg-transparent text-slate-600 hover:bg-black/[0.04]',
             ].join(' ')}
         >
             {children}
@@ -130,9 +136,7 @@ function Card({ title, icon, right, children }) {
             <div className="px-4 pt-4 pb-3 flex items-center justify-between gap-3">
                 <div className="flex items-center gap-2 min-w-0">
                     <span className="text-slate-400">{icon}</span>
-                    <h3 className="text-[13px] font-semibold text-slate-900 tracking-tight truncate">
-                        {title}
-                    </h3>
+                    <h3 className="text-[13px] font-semibold text-slate-900 tracking-tight truncate">{title}</h3>
                 </div>
                 {right}
             </div>
@@ -148,13 +152,12 @@ function KV({ label, value, icon }) {
                 {icon ? <span className="text-slate-400">{icon}</span> : null}
                 <span>{label}</span>
             </div>
-            <div className="text-[12px] font-medium text-slate-900 text-right break-words">
-                {safe(value)}
-            </div>
+            <div className="text-[12px] font-medium text-slate-900 text-right break-words">{safe(value)}</div>
         </div>
     )
 }
 
+/* -------------------- component -------------------- */
 export default function PatientDetailDrawer({ open, onClose, patient, onUpdated }) {
     const [tab, setTab] = useState('overview') // overview | attachments | consents | activity
 
@@ -191,6 +194,8 @@ export default function PatientDetailDrawer({ open, onClose, patient, onUpdated 
     const p = fullPatient || patient
     const primaryAddress = (p?.addresses && p.addresses[0]) || null
     const ageText = p?.age_text || ''
+    const isPregnant = !!p?.is_pregnant
+    const rchId = p?.rch_id || ''
 
     const addressText = useMemo(() => {
         if (!primaryAddress) return '—'
@@ -204,7 +209,11 @@ export default function PatientDetailDrawer({ open, onClose, patient, onUpdated 
     }, [primaryAddress])
 
     const closePreview = () => {
-        if (previewUrl) URL.revokeObjectURL(previewUrl)
+        try {
+            if (previewUrl) URL.revokeObjectURL(previewUrl)
+        } catch {
+            // ignore
+        }
         setPreviewDoc(null)
         setPreviewUrl('')
         setPreviewType('')
@@ -214,9 +223,7 @@ export default function PatientDetailDrawer({ open, onClose, patient, onUpdated 
         previewDoc &&
         (previewType?.startsWith('image/') || /\.(png|jpe?g|gif|webp|bmp)$/i.test(previewDoc.filename || ''))
 
-    const isPdf =
-        previewDoc &&
-        (previewType === 'application/pdf' || /\.pdf$/i.test(previewDoc.filename || ''))
+    const isPdf = previewDoc && (previewType === 'application/pdf' || /\.pdf$/i.test(previewDoc.filename || ''))
 
     const loadAll = async (id, { silent = false } = {}) => {
         if (!id) return
@@ -357,8 +364,22 @@ export default function PatientDetailDrawer({ open, onClose, patient, onUpdated 
             const res = await API.get(`/patients/documents/${doc.id}/file`, { responseType: 'blob' })
             const blob = res.data
             const contentType =
-                res.headers['content-type'] || doc.mime || doc.content_type || doc.mime_type || 'application/octet-stream'
-            const url = URL.createObjectURL(contentType ? new Blob([blob], { type: contentType }) : blob)
+                res.headers?.['content-type'] ||
+                doc.mime ||
+                doc.content_type ||
+                doc.mime_type ||
+                'application/octet-stream'
+
+            const typedBlob = new Blob([blob], { type: contentType })
+            const url = URL.createObjectURL(typedBlob)
+
+            // cleanup previous url (if any) before replacing
+            try {
+                if (previewUrl) URL.revokeObjectURL(previewUrl)
+            } catch {
+                // ignore
+            }
+
             setPreviewDoc(doc)
             setPreviewUrl(url)
             setPreviewType(contentType)
@@ -373,8 +394,12 @@ export default function PatientDetailDrawer({ open, onClose, patient, onUpdated 
             const res = await API.get(`/patients/documents/${doc.id}/file`, { responseType: 'blob' })
             const blob = res.data
             const contentType =
-                res.headers['content-type'] || doc.mime || doc.content_type || doc.mime_type || 'application/octet-stream'
-            const url = URL.createObjectURL(contentType ? new Blob([blob], { type: contentType }) : blob)
+                res.headers?.['content-type'] ||
+                doc.mime ||
+                doc.content_type ||
+                doc.mime_type ||
+                'application/octet-stream'
+            const url = URL.createObjectURL(new Blob([blob], { type: contentType }))
             const a = document.createElement('a')
             a.href = url
             a.download = doc.filename || 'document'
@@ -396,7 +421,6 @@ export default function PatientDetailDrawer({ open, onClose, patient, onUpdated 
             <div
                 className={[
                     'absolute inset-y-0 right-0',
-                    // mobile: full; desktop: drawer width
                     'w-full sm:w-[560px] lg:w-[760px] max-w-[92vw]',
                     'bg-white shadow-2xl border-l border-black/50',
                     'flex flex-col',
@@ -414,26 +438,39 @@ export default function PatientDetailDrawer({ open, onClose, patient, onUpdated 
                                     </div>
                                     <div className="min-w-0">
                                         <div className="truncate text-[15px] font-semibold text-slate-900 tracking-tight">
-                                            {p.first_name} {p.last_name || ''}
+                                            {p?.first_name} {p?.last_name || ''}
                                         </div>
                                         <div className="truncate text-[12px] text-slate-500">
-                                            UHID: <span className="font-mono">{safe(p.uhid)}</span>
+                                            UHID: <span className="font-mono">{safe(p?.uhid)}</span>
                                             {ageText ? ` • Age: ${ageText}` : ''}
                                         </div>
                                     </div>
                                 </div>
 
                                 <div className="mt-2 flex flex-wrap items-center gap-2">
-                                    {p.patient_type ? (
+                                    {p?.patient_type ? (
                                         <span className="inline-flex items-center rounded-full bg-black/[0.05] px-2.5 py-1 text-[11px] font-medium text-slate-700">
                                             {p.patient_type}
                                         </span>
                                     ) : null}
-                                    {p.tag ? (
+                                    {p?.tag ? (
                                         <span className="inline-flex items-center rounded-full bg-black/[0.05] px-2.5 py-1 text-[11px] font-medium text-slate-700">
                                             {p.tag}
                                         </span>
                                     ) : null}
+
+                                    {/* ✅ Pregnancy / RCH chips */}
+                                    {isPregnant ? (
+                                        <span className="inline-flex items-center rounded-full bg-rose-50 px-2.5 py-1 text-[11px] font-semibold text-rose-700 border border-rose-200">
+                                            Pregnant
+                                        </span>
+                                    ) : null}
+                                    {rchId ? (
+                                        <span className="inline-flex items-center rounded-full bg-slate-50 px-2.5 py-1 text-[11px] font-semibold text-slate-700 border border-black/10">
+                                            RCH: <span className="ml-1 font-mono">{rchId}</span>
+                                        </span>
+                                    ) : null}
+
                                     <span className="inline-flex items-center gap-1.5 text-[11px] text-slate-500">
                                         <ShieldCheck className="h-3.5 w-3.5 text-emerald-600" />
                                         Audit-ready
@@ -490,34 +527,44 @@ export default function PatientDetailDrawer({ open, onClose, patient, onUpdated 
                         <>
                             <Card title="Patient" icon={<FileText className="h-4 w-4" />}>
                                 <div className="divide-y divide-black/5">
-                                    <KV label="Gender" value={p.gender} />
-                                    <KV label="DOB" value={p.dob} />
-                                    <KV label="Marital Status" value={p.marital_status} />
-                                    <KV label="Blood Group" value={p.blood_group} />
-                                    <KV label="Religion" value={p.religion} />
-                                    <KV label="Occupation" value={p.occupation} />
+                                    <KV label="Gender" value={p?.gender} />
+                                    <KV label="DOB" value={p?.dob} />
+                                    <KV label="Marital Status" value={p?.marital_status} />
+                                    <KV label="Blood Group" value={p?.blood_group} />
+                                    <KV label="Religion" value={p?.religion} />
+                                    <KV label="Occupation" value={p?.occupation} />
                                 </div>
                             </Card>
 
+                            {/* ✅ Maternal / RCH card (only if used) */}
+                            {isPregnant || rchId ? (
+                                <Card title="Maternal / RCH" icon={<ShieldCheck className="h-4 w-4" />}>
+                                    <div className="divide-y divide-black/5">
+                                        <KV label="Pregnant" value={isPregnant} />
+                                        <KV label="RCH ID (Govt)" value={rchId || '—'} />
+                                    </div>
+                                </Card>
+                            ) : null}
+
                             <Card title="Contact" icon={<Phone className="h-4 w-4" />}>
                                 <div className="divide-y divide-black/5">
-                                    <KV label="Mobile" value={p.phone} icon={<Phone className="h-3.5 w-3.5" />} />
-                                    <KV label="Email" value={p.email} icon={<Mail className="h-3.5 w-3.5" />} />
+                                    <KV label="Mobile" value={p?.phone} icon={<Phone className="h-3.5 w-3.5" />} />
+                                    <KV label="Email" value={p?.email} icon={<Mail className="h-3.5 w-3.5" />} />
                                 </div>
                             </Card>
 
                             <Card title="Reference & Credit" icon={<ShieldCheck className="h-4 w-4" />}>
                                 <div className="divide-y divide-black/5">
-                                    <KV label="Reference Source" value={formatRefSource(p.ref_source)} />
-                                    <KV label="Referring Doctor" value={p.ref_doctor_name} />
-                                    <KV label="Credit Type" value={p.credit_type} />
-                                    <KV label="Payer" value={p.credit_payer_name} />
-                                    <KV label="TPA" value={p.credit_tpa_name} />
-                                    <KV label="Credit Plan" value={p.credit_plan_name} />
-                                    <KV label="Policy Number" value={p.policy_number} />
-                                    <KV label="Policy Name" value={p.policy_name} />
-                                    <KV label="Principal Member" value={p.principal_member_name} />
-                                    <KV label="Family ID" value={p.family_id} />
+                                    <KV label="Reference Source" value={formatRefSource(p?.ref_source)} />
+                                    <KV label="Referring Doctor" value={p?.ref_doctor_name} />
+                                    <KV label="Credit Type" value={p?.credit_type} />
+                                    <KV label="Payer" value={p?.credit_payer_name} />
+                                    <KV label="TPA" value={p?.credit_tpa_name} />
+                                    <KV label="Credit Plan" value={p?.credit_plan_name} />
+                                    <KV label="Policy Number" value={p?.policy_number} />
+                                    <KV label="Policy Name" value={p?.policy_name} />
+                                    <KV label="Principal Member" value={p?.principal_member_name} />
+                                    <KV label="Family ID" value={p?.family_id} />
                                 </div>
                             </Card>
 
@@ -534,7 +581,11 @@ export default function PatientDetailDrawer({ open, onClose, patient, onUpdated 
                             <Card
                                 title="Upload"
                                 icon={<Upload className="h-4 w-4" />}
-                                right={<span className="text-[11px] text-slate-500">{docs.length ? `${docs.length} file(s)` : 'No files'}</span>}
+                                right={
+                                    <span className="text-[11px] text-slate-500">
+                                        {docs.length ? `${docs.length} file(s)` : 'No files'}
+                                    </span>
+                                }
                             >
                                 <form onSubmit={handleUploadDoc} className="grid gap-2">
                                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -680,7 +731,9 @@ export default function PatientDetailDrawer({ open, onClose, patient, onUpdated 
                                         <ul className="divide-y divide-black/5">
                                             {consents.map((c) => (
                                                 <li key={c.id} className="px-4 py-3">
-                                                    <div className="text-[12px] font-semibold text-slate-900">{safe(c.type)}</div>
+                                                    <div className="text-[12px] font-semibold text-slate-900">
+                                                        {safe(c.type)}
+                                                    </div>
                                                     <div className="text-[11px] text-slate-500 mt-0.5">
                                                         {c.captured_at ? new Date(c.captured_at).toLocaleString() : '—'}
                                                     </div>
@@ -702,7 +755,11 @@ export default function PatientDetailDrawer({ open, onClose, patient, onUpdated 
                             icon={<Activity className="h-4 w-4" />}
                             right={
                                 <span className="text-[11px] text-slate-500">
-                                    {auditLoading ? 'Loading…' : auditLogs.length ? `Latest ${auditLogs.length}` : 'No history'}
+                                    {auditLoading
+                                        ? 'Loading…'
+                                        : auditLogs.length
+                                            ? `Latest ${auditLogs.length}`
+                                            : 'No history'}
                                 </span>
                             }
                         >
@@ -721,16 +778,19 @@ export default function PatientDetailDrawer({ open, onClose, patient, onUpdated 
                                             log.user_name ||
                                             log.user_email ||
                                             (log.user_id ? `User #${log.user_id}` : 'System')
-                                        const ts = log.created_at ? new Date(log.created_at).toLocaleString() : ''
 
                                         return (
                                             <div key={log.id} className="rounded-2xl border border-black/50 bg-white p-3">
                                                 <div className="flex items-center justify-between gap-2">
                                                     <div className="text-[12px] font-semibold text-slate-900">
                                                         {safe(log.action || 'UPDATE')}
-                                                        <span className="ml-2 text-[12px] font-normal text-slate-500">{safe(actor)}</span>
+                                                        <span className="ml-2 text-[12px] font-normal text-slate-500">
+                                                            {safe(actor)}
+                                                        </span>
                                                     </div>
-                                                    <div className="text-[11px] text-slate-500">{log?.created_at ? formatIST(log.created_at) : " "}</div>
+                                                    <div className="text-[11px] text-slate-500">
+                                                        {log?.created_at ? formatIST(log.created_at) : ' '}
+                                                    </div>
                                                 </div>
 
                                                 {changes.length > 0 ? (
@@ -749,7 +809,9 @@ export default function PatientDetailDrawer({ open, onClose, patient, onUpdated 
                                                         ) : null}
                                                     </ul>
                                                 ) : (
-                                                    <div className="mt-2 text-[12px] text-slate-600">Multiple fields updated.</div>
+                                                    <div className="mt-2 text-[12px] text-slate-600">
+                                                        Multiple fields updated.
+                                                    </div>
                                                 )}
                                             </div>
                                         )
@@ -796,7 +858,11 @@ export default function PatientDetailDrawer({ open, onClose, patient, onUpdated 
 
                             <div className="flex-1 bg-slate-50 flex items-center justify-center">
                                 {isImage ? (
-                                    <img src={previewUrl} alt={previewDoc.filename} className="max-h-full max-w-full object-contain" />
+                                    <img
+                                        src={previewUrl}
+                                        alt={previewDoc.filename}
+                                        className="max-h-full max-w-full object-contain"
+                                    />
                                 ) : isPdf ? (
                                     <iframe src={previewUrl} title={previewDoc.filename} className="w-full h-full" />
                                 ) : (

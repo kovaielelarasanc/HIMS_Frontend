@@ -19,6 +19,7 @@ import {
     Printer,
     RefreshCcw,
     X,
+    Lock,
 } from "lucide-react"
 
 import { toast } from "sonner"
@@ -29,12 +30,12 @@ import { ScrollArea } from "@/components/ui/scroll-area"
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet"
 import { Button } from "@/components/ui/button"
 
-
 import LabScreen from "./quickorders/LabScreen"
 import RisScreen from "./quickorders/RisScreen"
 import RxScreen from "./quickorders/RxScreen"
 import OtScreen from "./quickorders/OtScreen"
 import WardPatientUsageTab from "./quickorders/WardPatientUsagePage"
+
 import {
     cx,
     useMediaQuery,
@@ -48,6 +49,9 @@ import {
     downloadBlob,
     printBlob,
 } from "@/components/quickorders/_shared"
+
+// ✅ Permission helper (safe in loops/maps)
+import { useCanFn } from "@/hooks/useCan"
 
 // ---- Quick Orders APIs ----
 import {
@@ -63,17 +67,41 @@ import {
 // ---- Lab pdf ----
 import { fetchLisReportPdf } from "@/api/lab"
 
-// ✅ NEW: Ward summary (optional, to show count + recent usage on home)
+// ✅ Ward summary (optional, to show count + recent usage on home)
 import { invListPatientConsumptions } from "@/api/inventoryConsumption"
-
-
-
-
 
 const fadeIn = {
     initial: { opacity: 0, y: 6 },
     animate: { opacity: 1, y: 0 },
     transition: { duration: 0.18 },
+}
+
+// ✅ QuickOrder permission map (your requirement)
+// ("quickorder",["radiology","pharmacy","laboratory","ot","consumables"])
+const QO_PERMS = {
+    lab: ["quickorder.laboratory"],
+    ris: ["quickorder.radiology"],
+    rx: ["quickorder.pharmacy"],
+    ot: ["quickorder.ot"],
+    ward: ["quickorder.consumables"],
+}
+
+// ✅ Optional fallbacks (so existing installs still work even before you assign quickorder.*)
+// You can remove these later if you want strict quickorder.* only.
+const FALLBACK_PERMS = {
+    lab: ["orders.lab.view", "orders.lab.create", "lis.orders.view", "lis.orders.create", "lab.orders.view", "lab.orders.create"],
+    ris: ["orders.ris.view", "orders.ris.create", "ris.orders.view", "ris.orders.create", "radiology.orders.view", "radiology.orders.create"],
+    rx: [
+        "pharmacy.rx.view",
+        "pharmacy.rx.create",
+        "pharmacy.prescriptions.view",
+        "pharmacy.prescriptions.create",
+        "prescriptions.view",
+        "prescriptions.create",
+        "pharmacy.view",
+    ],
+    ot: ["ot.schedule.view", "ot.schedule.create"],
+    ward: ["inventory.consume.view", "inventory.consume.create", "inventory.stock.view", "inventory.items.view", "inventory.view"],
 }
 
 function normalizeList(v) {
@@ -96,6 +124,14 @@ export default function QuickOrders({
     className = "",
 }) {
     const isMobile = useMediaQuery("(max-width: 640px)")
+    const { canAny } = useCanFn()
+
+    // ✅ Permissions
+    const canLab = canAny([...QO_PERMS.lab, ...FALLBACK_PERMS.lab])
+    const canRis = canAny([...QO_PERMS.ris, ...FALLBACK_PERMS.ris])
+    const canRx = canAny([...QO_PERMS.rx, ...FALLBACK_PERMS.rx])
+    const canOtBase = canAny([...QO_PERMS.ot, ...FALLBACK_PERMS.ot])
+    const canWard = canAny([...QO_PERMS.ward, ...FALLBACK_PERMS.ward])
 
     // screens: home + lab/ris/rx/ot/ward
     const [screen, setScreen] = useState("home")
@@ -146,26 +182,54 @@ export default function QuickOrders({
         return ctx ? String(ctx).toUpperCase() : ""
     }, [ctx])
 
-    // Load summary
+    // ✅ OT permission depends on context (IPD only)
+    const canOt = canOtBase && ctx === "ipd"
+
+    // ✅ Helper: open screens with guard
+    const openScreen = useCallback(
+        (target) => {
+            if (target === "lab" && !canLab) return toast.error("Not permitted (Lab Quick Order)")
+            if (target === "ris" && !canRis) return toast.error("Not permitted (Radiology Quick Order)")
+            if (target === "rx" && !canRx) return toast.error("Not permitted (Pharmacy Quick Order)")
+            if (target === "ward" && !canWard) return toast.error("Not permitted (Consumables / Ward Usage)")
+            if (target === "ot") {
+                if (!canOtBase) return toast.error("Not permitted (OT Quick Order)")
+                if (ctx !== "ipd") return toast.error("OT Quick Order is available only for IPD Admission")
+            }
+            setScreen(target)
+        },
+        [canLab, canRis, canRx, canWard, canOtBase, ctx]
+    )
+
+    const anyQuickOrderAccess = canLab || canRis || canRx || canOtBase || canWard
+
+    // Load summary (permission-aware)
     const loadSummary = useCallback(async () => {
         if (!patient?.id || !ctx || !contextId) return
         setLoadingSummary(true)
         try {
             const [lab, ris, rx, ot, ward] = await Promise.all([
-                listLabOrdersForContext({ patientId: patient.id, contextType: ctx, contextId, limit: 10 }),
-                listRadiologyOrdersForContext({ patientId: patient.id, contextType: ctx, contextId, limit: 10 }),
-                listPharmacyPrescriptionsForContext({ patientId: patient.id, contextType: ctx, contextId, limit: 10 }),
-                ctx === "ipd"
+                canLab
+                    ? listLabOrdersForContext({ patientId: patient.id, contextType: ctx, contextId, limit: 10 })
+                    : Promise.resolve([]),
+                canRis
+                    ? listRadiologyOrdersForContext({ patientId: patient.id, contextType: ctx, contextId, limit: 10 })
+                    : Promise.resolve([]),
+                canRx
+                    ? listPharmacyPrescriptionsForContext({ patientId: patient.id, contextType: ctx, contextId, limit: 10 })
+                    : Promise.resolve([]),
+                ctx === "ipd" && canOtBase
                     ? listOtSchedulesForContext({ patientId: patient.id, admissionId: contextId, limit: 10 })
                     : Promise.resolve([]),
-                // ✅ Ward usage summary (optional, helps counts + recent list)
-                invListPatientConsumptions({
-                    limit: 10,
-                    offset: 0,
-                    patient_id: Number(patient.id),
-                    encounter_type: wardEncounterType,
-                    encounter_id: Number(contextId),
-                }).catch(() => []),
+                canWard
+                    ? invListPatientConsumptions({
+                        limit: 10,
+                        offset: 0,
+                        patient_id: Number(patient.id),
+                        encounter_type: wardEncounterType,
+                        encounter_id: Number(contextId),
+                    }).catch(() => [])
+                    : Promise.resolve([]),
             ])
 
             setSummary({
@@ -182,7 +246,7 @@ export default function QuickOrders({
         } finally {
             setLoadingSummary(false)
         }
-    }, [patient?.id, ctx, contextId, wardEncounterType])
+    }, [patient?.id, ctx, contextId, wardEncounterType, canLab, canRis, canRx, canOtBase, canWard])
 
     useEffect(() => {
         loadSummary()
@@ -205,6 +269,7 @@ export default function QuickOrders({
 
     // Lab PDF actions
     const labPdfActions = async (orderId, mode) => {
+        if (!canLab) return toast.error("Not permitted (Lab Quick Order)")
         if (!orderId) return toast.error("Invalid Lab Order ID")
         try {
             const res = await fetchLisReportPdf(orderId)
@@ -220,6 +285,7 @@ export default function QuickOrders({
 
     // Rx PDF actions
     const rxActions = async (rxId, mode) => {
+        if (!canRx) return toast.error("Not permitted (Pharmacy Quick Order)")
         if (!rxId) return toast.error("Invalid prescription ID")
         try {
             const res = await downloadRxPdf(rxId)
@@ -233,8 +299,21 @@ export default function QuickOrders({
         }
     }
 
+    const canOpenDetailsForType = useCallback(
+        (type) => {
+            if (type === "lab") return canLab
+            if (type === "ris") return canRis
+            if (type === "rx") return canRx
+            if (type === "ot") return canOtBase
+            return false
+        },
+        [canLab, canRis, canRx, canOtBase]
+    )
+
     // Details open
     const openDetails = async (type, item) => {
+        if (!canOpenDetailsForType(type)) return toast.error("Not permitted")
+
         setDetailsType(type)
         setDetailsItem(item)
         setDetailsOpen(true)
@@ -257,33 +336,74 @@ export default function QuickOrders({
         }
     }
 
+    const LockedPanel = ({ title, hint }) => (
+        <div className="rounded-3xl border border-slate-200 bg-white/70 backdrop-blur p-6">
+            <div className="flex items-center gap-2">
+                <div className="h-10 w-10 rounded-2xl bg-slate-900 text-white flex items-center justify-center">
+                    <Lock className="h-4 w-4" />
+                </div>
+                <div className="min-w-0">
+                    <div className="text-sm font-semibold text-slate-900">{title}</div>
+                    <div className="text-xs text-slate-500 mt-0.5">{hint}</div>
+                </div>
+            </div>
+
+            <div className="mt-4">
+                <PremiumButton tone="slate" variant="outline" className="h-10" type="button" onClick={() => setScreen("home")}>
+                    Back to Quick Orders
+                </PremiumButton>
+            </div>
+        </div>
+    )
+
     // Home cards
-    const ModuleCard = ({ tone, icon: Icon, title, subtitle, count, onOpen }) => (
+    const ModuleCard = ({ tone, icon: Icon, title, subtitle, count, onOpen, disabled = false, disabledHint }) => (
         <button
             type="button"
-            onClick={onOpen}
+            onClick={() => {
+                if (disabled) {
+                    toast.error(disabledHint || "Not permitted")
+                    return
+                }
+                onOpen?.()
+            }}
             className={cx(
                 "group w-full text-left rounded-2xl border border-slate-200 bg-white/70 backdrop-blur",
-                "px-4 py-4 shadow-[0_12px_28px_rgba(15,23,42,0.06)] hover:bg-white transition-all"
+                "px-4 py-4 shadow-[0_12px_28px_rgba(15,23,42,0.06)] transition-all",
+                disabled ? "opacity-60 cursor-not-allowed" : "hover:bg-white"
             )}
         >
             <div className="flex items-start justify-between gap-3">
                 <div className="flex items-center gap-3">
-                    <div className={cx("h-11 w-11 rounded-2xl flex items-center justify-center text-white", tone)}>
+                    <div
+                        className={cx(
+                            "h-11 w-11 rounded-2xl flex items-center justify-center text-white",
+                            disabled ? "bg-slate-400" : tone
+                        )}
+                    >
                         <Icon className="h-5 w-5" />
                     </div>
                     <div className="min-w-0">
-                        <div className="text-sm font-semibold text-slate-900">{title}</div>
+                        <div className="text-sm font-semibold text-slate-900 flex items-center gap-2">
+                            {title}
+                            {disabled && <Lock className="h-3.5 w-3.5 text-slate-500" />}
+                        </div>
                         <div className="text-[11px] text-slate-500 mt-0.5">{subtitle}</div>
                     </div>
                 </div>
                 <span className="text-[11px] font-semibold text-slate-700 bg-slate-100 rounded-full px-2.5 py-0.5">
-                    {count}
+                    {disabled ? "—" : count}
                 </span>
             </div>
 
             <div className="mt-3 text-[11px] text-slate-600">
-                Tap to open <span className="font-semibold">{title}</span> screen
+                {disabled ? (
+                    <span className="font-semibold">Access required</span>
+                ) : (
+                    <>
+                        Tap to open <span className="font-semibold">{title}</span> screen
+                    </>
+                )}
             </div>
         </button>
     )
@@ -303,9 +423,7 @@ export default function QuickOrders({
                                             <Activity className="h-4 w-4" />
                                         </div>
                                         <div>
-                                            <CardTitle className="text-base sm:text-lg font-semibold text-slate-900">
-                                                Quick Orders
-                                            </CardTitle>
+                                            <CardTitle className="text-base sm:text-lg font-semibold text-slate-900">Quick Orders</CardTitle>
                                             <p className="text-xs text-slate-500 mt-0.5">
                                                 Main dashboard + split screens for Lab / Radiology / Pharmacy / OT / Ward Usage.
                                             </p>
@@ -315,10 +433,7 @@ export default function QuickOrders({
                                     <div className="flex flex-wrap items-center gap-2 text-xs">
                                         <Badge className="bg-slate-900 text-slate-50 px-3 py-1 rounded-full">{contextLabel}</Badge>
 
-                                        <Badge
-                                            variant="outline"
-                                            className="flex items-center gap-1.5 border-slate-300 bg-white/80 rounded-full"
-                                        >
+                                        <Badge variant="outline" className="flex items-center gap-1.5 border-slate-300 bg-white/80 rounded-full">
                                             <Hash className="h-3 w-3 text-slate-500" />
                                             <span className="font-medium text-slate-800">{contextNumberLabel}</span>
                                         </Badge>
@@ -378,9 +493,7 @@ export default function QuickOrders({
                                         </div>
                                         <div className="min-w-0">
                                             <div className="text-[11px] text-slate-500">Patient</div>
-                                            <div className="text-[12px] font-semibold text-slate-900 truncate">
-                                                {safePatientName(patient)}
-                                            </div>
+                                            <div className="text-[12px] font-semibold text-slate-900 truncate">{safePatientName(patient)}</div>
                                         </div>
                                     </div>
 
@@ -390,9 +503,7 @@ export default function QuickOrders({
                                         </div>
                                         <div className="min-w-0">
                                             <div className="text-[11px] text-slate-500">Demographics</div>
-                                            <div className="text-[12px] font-semibold text-slate-900 truncate">
-                                                {safeGenderAge(patient)}
-                                            </div>
+                                            <div className="text-[12px] font-semibold text-slate-900 truncate">{safeGenderAge(patient)}</div>
                                         </div>
                                     </div>
 
@@ -405,18 +516,28 @@ export default function QuickOrders({
                                             loadSummary()
                                             toast.success("Refreshed")
                                         }}
+                                        disabled={!anyQuickOrderAccess}
+                                        title={!anyQuickOrderAccess ? "No quick order permission" : "Refresh"}
                                     >
                                         <RefreshCcw className="h-4 w-4 mr-2" />
                                         Refresh
                                     </PremiumButton>
                                 </div>
 
+                                {!anyQuickOrderAccess && (
+                                    <div className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-800 flex items-start gap-2">
+                                        <Lock className="h-4 w-4 mt-0.5" />
+                                        <div>
+                                            You don’t have access to Quick Orders. Assign permissions under module{" "}
+                                            <span className="font-semibold">quickorder</span>: radiology, pharmacy, laboratory, ot, consumables.
+                                        </div>
+                                    </div>
+                                )}
+
                                 {!canUseContext && (
                                     <div className="rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-[11px] text-rose-800 flex items-start gap-2">
                                         <AlertTriangle className="h-4 w-4 mt-0.5" />
-                                        <div>
-                                            Missing patient/context. Please ensure patient, context type (OPD/IPD) and context id are present.
-                                        </div>
+                                        <div>Missing patient/context. Please ensure patient, context type (OPD/IPD) and context id are present.</div>
                                     </div>
                                 )}
                             </div>
@@ -434,7 +555,9 @@ export default function QuickOrders({
                                             title="Lab"
                                             subtitle="Order tests from LIS masters"
                                             count={summary.lab?.length || 0}
-                                            onOpen={() => setScreen("lab")}
+                                            onOpen={() => openScreen("lab")}
+                                            disabled={!canLab}
+                                            disabledHint="Not permitted (Lab Quick Order)"
                                         />
                                         <ModuleCard
                                             tone="bg-indigo-600"
@@ -442,7 +565,9 @@ export default function QuickOrders({
                                             title="Radiology"
                                             subtitle="Order investigations from RIS"
                                             count={summary.ris?.length || 0}
-                                            onOpen={() => setScreen("ris")}
+                                            onOpen={() => openScreen("ris")}
+                                            disabled={!canRis}
+                                            disabledHint="Not permitted (Radiology Quick Order)"
                                         />
                                         <ModuleCard
                                             tone="bg-emerald-600"
@@ -450,7 +575,9 @@ export default function QuickOrders({
                                             title="Pharmacy"
                                             subtitle="Create e-Prescription from inventory"
                                             count={summary.rx?.length || 0}
-                                            onOpen={() => setScreen("rx")}
+                                            onOpen={() => openScreen("rx")}
+                                            disabled={!canRx}
+                                            disabledHint="Not permitted (Pharmacy Quick Order)"
                                         />
                                         <ModuleCard
                                             tone="bg-amber-600"
@@ -458,7 +585,9 @@ export default function QuickOrders({
                                             title="OT"
                                             subtitle="Schedule OT (IPD only)"
                                             count={ctx === "ipd" ? summary.ot?.length || 0 : "—"}
-                                            onOpen={() => setScreen("ot")}
+                                            onOpen={() => openScreen("ot")}
+                                            disabled={!canOtBase || ctx !== "ipd"}
+                                            disabledHint={!canOtBase ? "Not permitted (OT Quick Order)" : "OT Quick Order is available only for IPD Admission"}
                                         />
                                         <ModuleCard
                                             tone="bg-teal-600"
@@ -466,7 +595,9 @@ export default function QuickOrders({
                                             title="Ward Usage"
                                             subtitle="Consumables used (billable usage)"
                                             count={summary.ward?.length || 0}
-                                            onOpen={() => setScreen("ward")}
+                                            onOpen={() => openScreen("ward")}
+                                            disabled={!canWard}
+                                            disabledHint="Not permitted (Consumables / Ward Usage)"
                                         />
                                     </div>
 
@@ -485,285 +616,325 @@ export default function QuickOrders({
                                         </div>
 
                                         {/* LAB */}
-                                        <Card className="border-slate-200 bg-white/70 backdrop-blur rounded-2xl">
-                                            <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <FlaskConical className="h-4 w-4 text-sky-600" />
-                                                    <CardTitle className="text-xs font-semibold">Lab Orders</CardTitle>
-                                                </div>
-                                                <StatusChip tone="lab">{summary.lab?.length || 0}</StatusChip>
-                                            </CardHeader>
-                                            <CardContent className="px-4 pb-4 pt-0">
-                                                <div className="space-y-2 max-h-44 overflow-auto text-[11px]">
-                                                    {!summary.lab?.length && !loadingSummary && (
-                                                        <div className="text-slate-500 text-[12px]">No lab orders yet.</div>
-                                                    )}
-                                                    {summary.lab?.map((o) => (
-                                                        <button
-                                                            key={o.id}
-                                                            type="button"
-                                                            onClick={() => openDetails("lab", o)}
-                                                            className="w-full text-left flex items-center justify-between gap-2 px-3 py-2 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50"
-                                                        >
-                                                            <div className="flex flex-col min-w-0">
-                                                                <span className="font-semibold text-slate-900 truncate">
-                                                                    {o.order_no || `LAB-${String(o.id).padStart(6, "0")}`}
-                                                                </span>
-                                                                <span className="text-[10px] text-slate-500 truncate">
-                                                                    {fmtIST(o.created_at || o.order_datetime)}
-                                                                </span>
-                                                            </div>
-                                                            <span className="text-[10px] text-slate-600 capitalize shrink-0">
-                                                                {o.status || "ordered"}
-                                                            </span>
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </CardContent>
-                                        </Card>
-
-                                        {/* RIS */}
-                                        <Card className="border-slate-200 bg-white/70 backdrop-blur rounded-2xl">
-                                            <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <Radio className="h-4 w-4 text-indigo-600" />
-                                                    <CardTitle className="text-xs font-semibold">Radiology Orders</CardTitle>
-                                                </div>
-                                                <StatusChip tone="ris">{summary.ris?.length || 0}</StatusChip>
-                                            </CardHeader>
-                                            <CardContent className="px-4 pb-4 pt-0">
-                                                <div className="space-y-2 max-h-44 overflow-auto text-[11px]">
-                                                    {!summary.ris?.length && !loadingSummary && (
-                                                        <div className="text-slate-500 text-[12px]">No radiology orders yet.</div>
-                                                    )}
-                                                    {summary.ris?.map((o) => (
-                                                        <button
-                                                            key={o.id}
-                                                            type="button"
-                                                            onClick={() => openDetails("ris", o)}
-                                                            className="w-full text-left flex items-center justify-between gap-2 px-3 py-2 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50"
-                                                        >
-                                                            <div className="flex flex-col min-w-0">
-                                                                <span className="font-semibold text-slate-900 truncate">
-                                                                    {o.order_no || `RIS-${String(o.id).padStart(6, "0")}`}
-                                                                </span>
-                                                                <span className="text-[10px] text-slate-500 truncate">
-                                                                    {fmtIST(o.created_at || o.order_datetime)}
-                                                                </span>
-                                                            </div>
-                                                            <span className="text-[10px] text-slate-600 capitalize shrink-0">
-                                                                {o.status || "ordered"}
-                                                            </span>
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </CardContent>
-                                        </Card>
-
-                                        {/* RX */}
-                                        <Card className="border-slate-200 bg-white/70 backdrop-blur rounded-2xl">
-                                            <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <Pill className="h-4 w-4 text-emerald-600" />
-                                                    <CardTitle className="text-xs font-semibold">Pharmacy Rx</CardTitle>
-                                                </div>
-                                                <StatusChip tone="rx">{summary.rx?.length || 0}</StatusChip>
-                                            </CardHeader>
-                                            <CardContent className="px-4 pb-4 pt-0">
-                                                <div className="space-y-2 max-h-44 overflow-auto text-[11px]">
-                                                    {!summary.rx?.length && !loadingSummary && (
-                                                        <div className="text-slate-500 text-[12px]">No prescriptions yet.</div>
-                                                    )}
-                                                    {summary.rx?.map((o) => (
-                                                        <button
-                                                            key={o.id}
-                                                            type="button"
-                                                            onClick={() => openDetails("rx", o)}
-                                                            className="w-full text-left flex items-center justify-between gap-2 px-3 py-2 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50"
-                                                        >
-                                                            <div className="flex flex-col min-w-0">
-                                                                <span className="font-semibold text-slate-900 truncate">
-                                                                    {o.rx_number || `RX-${String(o.id).padStart(6, "0")}`}
-                                                                </span>
-                                                                <span className="text-[10px] text-slate-500 truncate">
-                                                                    {fmtIST(o.rx_datetime || o.created_at)}
-                                                                </span>
-                                                            </div>
-                                                            <span className="text-[10px] text-slate-600 capitalize shrink-0">
-                                                                {o.status || "pending"}
-                                                            </span>
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </CardContent>
-                                        </Card>
-
-                                        {/* OT */}
-                                        {ctx === "ipd" && (
+                                        {canLab ? (
                                             <Card className="border-slate-200 bg-white/70 backdrop-blur rounded-2xl">
                                                 <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
                                                     <div className="flex items-center gap-2">
-                                                        <ScissorsLineDashed className="h-4 w-4 text-amber-600" />
-                                                        <CardTitle className="text-xs font-semibold">OT Schedules</CardTitle>
+                                                        <FlaskConical className="h-4 w-4 text-sky-600" />
+                                                        <CardTitle className="text-xs font-semibold">Lab Orders</CardTitle>
                                                     </div>
-                                                    <StatusChip tone="ot">{summary.ot?.length || 0}</StatusChip>
+                                                    <StatusChip tone="lab">{summary.lab?.length || 0}</StatusChip>
                                                 </CardHeader>
                                                 <CardContent className="px-4 pb-4 pt-0">
                                                     <div className="space-y-2 max-h-44 overflow-auto text-[11px]">
-                                                        {!summary.ot?.length && !loadingSummary && (
-                                                            <div className="text-slate-500 text-[12px]">No OT schedules yet.</div>
+                                                        {!summary.lab?.length && !loadingSummary && (
+                                                            <div className="text-slate-500 text-[12px]">No lab orders yet.</div>
                                                         )}
-                                                        {summary.ot?.map((o) => (
+                                                        {summary.lab?.map((o) => (
                                                             <button
                                                                 key={o.id}
                                                                 type="button"
-                                                                onClick={() => openDetails("ot", o)}
+                                                                onClick={() => openDetails("lab", o)}
                                                                 className="w-full text-left flex items-center justify-between gap-2 px-3 py-2 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50"
                                                             >
                                                                 <div className="flex flex-col min-w-0">
                                                                     <span className="font-semibold text-slate-900 truncate">
-                                                                        {o.case_no || `OT-${String(o.id).padStart(6, "0")}`}
+                                                                        {o.order_no || `LAB-${String(o.id).padStart(6, "0")}`}
                                                                     </span>
                                                                     <span className="text-[10px] text-slate-500 truncate">
-                                                                        {fmtIST(o.created_at || o.scheduled_at)}
+                                                                        {fmtIST(o.created_at || o.order_datetime)}
                                                                     </span>
                                                                 </div>
-                                                                <span className="text-[10px] text-slate-600 capitalize shrink-0">
-                                                                    {o.status || "planned"}
-                                                                </span>
+                                                                <span className="text-[10px] text-slate-600 capitalize shrink-0">{o.status || "ordered"}</span>
                                                             </button>
                                                         ))}
                                                     </div>
                                                 </CardContent>
                                             </Card>
+                                        ) : (
+                                            <Card className="border-slate-200 bg-white/60 backdrop-blur rounded-2xl">
+                                                <CardContent className="p-4 text-xs text-slate-600 flex items-center gap-2">
+                                                    <Lock className="h-4 w-4" /> Lab Orders (no access)
+                                                </CardContent>
+                                            </Card>
+                                        )}
+
+                                        {/* RIS */}
+                                        {canRis ? (
+                                            <Card className="border-slate-200 bg-white/70 backdrop-blur rounded-2xl">
+                                                <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <Radio className="h-4 w-4 text-indigo-600" />
+                                                        <CardTitle className="text-xs font-semibold">Radiology Orders</CardTitle>
+                                                    </div>
+                                                    <StatusChip tone="ris">{summary.ris?.length || 0}</StatusChip>
+                                                </CardHeader>
+                                                <CardContent className="px-4 pb-4 pt-0">
+                                                    <div className="space-y-2 max-h-44 overflow-auto text-[11px]">
+                                                        {!summary.ris?.length && !loadingSummary && (
+                                                            <div className="text-slate-500 text-[12px]">No radiology orders yet.</div>
+                                                        )}
+                                                        {summary.ris?.map((o) => (
+                                                            <button
+                                                                key={o.id}
+                                                                type="button"
+                                                                onClick={() => openDetails("ris", o)}
+                                                                className="w-full text-left flex items-center justify-between gap-2 px-3 py-2 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50"
+                                                            >
+                                                                <div className="flex flex-col min-w-0">
+                                                                    <span className="font-semibold text-slate-900 truncate">
+                                                                        {o.order_no || `RIS-${String(o.id).padStart(6, "0")}`}
+                                                                    </span>
+                                                                    <span className="text-[10px] text-slate-500 truncate">
+                                                                        {fmtIST(o.created_at || o.order_datetime)}
+                                                                    </span>
+                                                                </div>
+                                                                <span className="text-[10px] text-slate-600 capitalize shrink-0">{o.status || "ordered"}</span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+                                        ) : (
+                                            <Card className="border-slate-200 bg-white/60 backdrop-blur rounded-2xl">
+                                                <CardContent className="p-4 text-xs text-slate-600 flex items-center gap-2">
+                                                    <Lock className="h-4 w-4" /> Radiology Orders (no access)
+                                                </CardContent>
+                                            </Card>
+                                        )}
+
+                                        {/* RX */}
+                                        {canRx ? (
+                                            <Card className="border-slate-200 bg-white/70 backdrop-blur rounded-2xl">
+                                                <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <Pill className="h-4 w-4 text-emerald-600" />
+                                                        <CardTitle className="text-xs font-semibold">Pharmacy Rx</CardTitle>
+                                                    </div>
+                                                    <StatusChip tone="rx">{summary.rx?.length || 0}</StatusChip>
+                                                </CardHeader>
+                                                <CardContent className="px-4 pb-4 pt-0">
+                                                    <div className="space-y-2 max-h-44 overflow-auto text-[11px]">
+                                                        {!summary.rx?.length && !loadingSummary && (
+                                                            <div className="text-slate-500 text-[12px]">No prescriptions yet.</div>
+                                                        )}
+                                                        {summary.rx?.map((o) => (
+                                                            <button
+                                                                key={o.id}
+                                                                type="button"
+                                                                onClick={() => openDetails("rx", o)}
+                                                                className="w-full text-left flex items-center justify-between gap-2 px-3 py-2 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50"
+                                                            >
+                                                                <div className="flex flex-col min-w-0">
+                                                                    <span className="font-semibold text-slate-900 truncate">
+                                                                        {o.rx_number || `RX-${String(o.id).padStart(6, "0")}`}
+                                                                    </span>
+                                                                    <span className="text-[10px] text-slate-500 truncate">{fmtIST(o.rx_datetime || o.created_at)}</span>
+                                                                </div>
+                                                                <span className="text-[10px] text-slate-600 capitalize shrink-0">{o.status || "pending"}</span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+                                        ) : (
+                                            <Card className="border-slate-200 bg-white/60 backdrop-blur rounded-2xl">
+                                                <CardContent className="p-4 text-xs text-slate-600 flex items-center gap-2">
+                                                    <Lock className="h-4 w-4" /> Pharmacy Rx (no access)
+                                                </CardContent>
+                                            </Card>
+                                        )}
+
+                                        {/* OT */}
+                                        {ctx === "ipd" && (
+                                            <>
+                                                {canOtBase ? (
+                                                    <Card className="border-slate-200 bg-white/70 backdrop-blur rounded-2xl">
+                                                        <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
+                                                            <div className="flex items-center gap-2">
+                                                                <ScissorsLineDashed className="h-4 w-4 text-amber-600" />
+                                                                <CardTitle className="text-xs font-semibold">OT Schedules</CardTitle>
+                                                            </div>
+                                                            <StatusChip tone="ot">{summary.ot?.length || 0}</StatusChip>
+                                                        </CardHeader>
+                                                        <CardContent className="px-4 pb-4 pt-0">
+                                                            <div className="space-y-2 max-h-44 overflow-auto text-[11px]">
+                                                                {!summary.ot?.length && !loadingSummary && (
+                                                                    <div className="text-slate-500 text-[12px]">No OT schedules yet.</div>
+                                                                )}
+                                                                {summary.ot?.map((o) => (
+                                                                    <button
+                                                                        key={o.id}
+                                                                        type="button"
+                                                                        onClick={() => openDetails("ot", o)}
+                                                                        className="w-full text-left flex items-center justify-between gap-2 px-3 py-2 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50"
+                                                                    >
+                                                                        <div className="flex flex-col min-w-0">
+                                                                            <span className="font-semibold text-slate-900 truncate">
+                                                                                {o.case_no || `OT-${String(o.id).padStart(6, "0")}`}
+                                                                            </span>
+                                                                            <span className="text-[10px] text-slate-500 truncate">{fmtIST(o.created_at || o.scheduled_at)}</span>
+                                                                        </div>
+                                                                        <span className="text-[10px] text-slate-600 capitalize shrink-0">{o.status || "planned"}</span>
+                                                                    </button>
+                                                                ))}
+                                                            </div>
+                                                        </CardContent>
+                                                    </Card>
+                                                ) : (
+                                                    <Card className="border-slate-200 bg-white/60 backdrop-blur rounded-2xl">
+                                                        <CardContent className="p-4 text-xs text-slate-600 flex items-center gap-2">
+                                                            <Lock className="h-4 w-4" /> OT Schedules (no access)
+                                                        </CardContent>
+                                                    </Card>
+                                                )}
+                                            </>
                                         )}
 
                                         {/* WARD USAGE (small summary) */}
-                                        <Card className="border-slate-200 bg-white/70 backdrop-blur rounded-2xl">
-                                            <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
-                                                <div className="flex items-center gap-2">
-                                                    <ClipboardList className="h-4 w-4 text-teal-600" />
-                                                    <CardTitle className="text-xs font-semibold">Ward Usage</CardTitle>
-                                                </div>
-                                                <StatusChip tone="slate">{summary.ward?.length || 0}</StatusChip>
-                                            </CardHeader>
-                                            <CardContent className="px-4 pb-4 pt-0">
-                                                <div className="space-y-2 max-h-44 overflow-auto text-[11px]">
-                                                    {!summary.ward?.length && !loadingSummary && (
-                                                        <div className="text-slate-500 text-[12px]">No usage entries yet.</div>
-                                                    )}
-                                                    {summary.ward?.map((r) => (
-                                                        <button
-                                                            key={r.consumption_id || r.id}
-                                                            type="button"
-                                                            onClick={() => setScreen("ward")}
-                                                            className="w-full text-left flex items-center justify-between gap-2 px-3 py-2 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50"
-                                                        >
-                                                            <div className="flex flex-col min-w-0">
-                                                                <span className="font-semibold text-slate-900 truncate">
-                                                                    {r.consumption_number || `#${r.consumption_id || r.id}`}
-                                                                </span>
-                                                                <span className="text-[10px] text-slate-500 truncate">{fmtIST(r.posted_at || r.created_at)}</span>
-                                                            </div>
-                                                            <span className="text-[10px] text-slate-600 shrink-0">
-                                                                Qty: {r.total_qty ?? "—"}
-                                                            </span>
-                                                        </button>
-                                                    ))}
-                                                </div>
+                                        {canWard ? (
+                                            <Card className="border-slate-200 bg-white/70 backdrop-blur rounded-2xl">
+                                                <CardHeader className="py-3 px-4 flex flex-row items-center justify-between">
+                                                    <div className="flex items-center gap-2">
+                                                        <ClipboardList className="h-4 w-4 text-teal-600" />
+                                                        <CardTitle className="text-xs font-semibold">Ward Usage</CardTitle>
+                                                    </div>
+                                                    <StatusChip tone="slate">{summary.ward?.length || 0}</StatusChip>
+                                                </CardHeader>
+                                                <CardContent className="px-4 pb-4 pt-0">
+                                                    <div className="space-y-2 max-h-44 overflow-auto text-[11px]">
+                                                        {!summary.ward?.length && !loadingSummary && (
+                                                            <div className="text-slate-500 text-[12px]">No usage entries yet.</div>
+                                                        )}
+                                                        {summary.ward?.map((r) => (
+                                                            <button
+                                                                key={r.consumption_id || r.id}
+                                                                type="button"
+                                                                onClick={() => openScreen("ward")}
+                                                                className="w-full text-left flex items-center justify-between gap-2 px-3 py-2 rounded-2xl bg-white border border-slate-200 hover:bg-slate-50"
+                                                            >
+                                                                <div className="flex flex-col min-w-0">
+                                                                    <span className="font-semibold text-slate-900 truncate">
+                                                                        {r.consumption_number || `#${r.consumption_id || r.id}`}
+                                                                    </span>
+                                                                    <span className="text-[10px] text-slate-500 truncate">{fmtIST(r.posted_at || r.created_at)}</span>
+                                                                </div>
+                                                                <span className="text-[10px] text-slate-600 shrink-0">Qty: {r.total_qty ?? "—"}</span>
+                                                            </button>
+                                                        ))}
+                                                    </div>
 
-                                                <div className="mt-3">
-                                                    <PremiumButton
-                                                        tone="slate"
-                                                        variant="outline"
-                                                        className="h-9 w-full text-[11px]"
-                                                        onClick={() => setScreen("ward")}
-                                                        type="button"
-                                                    >
-                                                        <ClipboardList className="h-4 w-4 mr-2" />
-                                                        Open Ward Usage
-                                                    </PremiumButton>
-                                                </div>
-                                            </CardContent>
-                                        </Card>
+                                                    <div className="mt-3">
+                                                        <PremiumButton
+                                                            tone="slate"
+                                                            variant="outline"
+                                                            className="h-9 w-full text-[11px]"
+                                                            onClick={() => openScreen("ward")}
+                                                            type="button"
+                                                        >
+                                                            <ClipboardList className="h-4 w-4 mr-2" />
+                                                            Open Ward Usage
+                                                        </PremiumButton>
+                                                    </div>
+                                                </CardContent>
+                                            </Card>
+                                        ) : (
+                                            <Card className="border-slate-200 bg-white/60 backdrop-blur rounded-2xl">
+                                                <CardContent className="p-4 text-xs text-slate-600 flex items-center gap-2">
+                                                    <Lock className="h-4 w-4" /> Ward Usage (no access)
+                                                </CardContent>
+                                            </Card>
+                                        )}
                                     </div>
                                 </div>
                             ) : screen === "lab" ? (
-                                <LabScreen
-                                    patient={patient}
-                                    ctx={ctx}
-                                    contextId={contextId}
-                                    canUseContext={canUseContext}
-                                    onBack={() => setScreen("home")}
-                                    loadSummary={loadSummary}
-                                    loadingSummary={loadingSummary}
-                                    summaryLab={summary.lab}
-                                    openDetails={openDetails}
-                                    labPdfActions={labPdfActions}
-                                />
-                            ) : screen === "ris" ? (
-                                <RisScreen
-                                    patient={patient}
-                                    ctx={ctx}
-                                    contextId={contextId}
-                                    canUseContext={canUseContext}
-                                    onBack={() => setScreen("home")}
-                                    loadSummary={loadSummary}
-                                    loadingSummary={loadingSummary}
-                                    summaryRis={summary.ris}
-                                    openDetails={openDetails}
-                                />
-                            ) : screen === "rx" ? (
-                                <RxScreen
-                                    patient={patient}
-                                    ctx={ctx}
-                                    contextId={contextId}
-                                    canUseContext={canUseContext}
-                                    onBack={() => setScreen("home")}
-                                    loadSummary={loadSummary}
-                                    loadingSummary={loadingSummary}
-                                    summaryRx={summary.rx}
-                                    openDetails={openDetails}
-                                    defaultLocationId={defaultLocationId}
-                                />
-                            ) : screen === "ward" ? (
-                                <div className="space-y-3">
-                                    <div className="flex items-center justify-between">
-                                        <PremiumButton
-                                            tone="slate"
-                                            variant="outline"
-                                            className="h-10"
-                                            type="button"
-                                            onClick={() => setScreen("home")}
-                                        >
-                                            Back to Quick Orders
-                                        </PremiumButton>
-
-                                        <Badge variant="outline" className="rounded-full bg-white/80 border-slate-300">
-                                            Ward Patient Usage
-                                        </Badge>
-                                    </div>
-
-                                    <WardPatientUsageTab
+                                canLab ? (
+                                    <LabScreen
                                         patient={patient}
                                         ctx={ctx}
                                         contextId={contextId}
+                                        canUseContext={canUseContext}
+                                        onBack={() => setScreen("home")}
+                                        loadSummary={loadSummary}
+                                        loadingSummary={loadingSummary}
+                                        summaryLab={summary.lab}
+                                        openDetails={openDetails}
+                                        labPdfActions={labPdfActions}
+                                    />
+                                ) : (
+                                    <LockedPanel title="Lab Quick Order" hint="You don’t have permission: quickorder.laboratory" />
+                                )
+                            ) : screen === "ris" ? (
+                                canRis ? (
+                                    <RisScreen
+                                        patient={patient}
+                                        ctx={ctx}
+                                        contextId={contextId}
+                                        canUseContext={canUseContext}
+                                        onBack={() => setScreen("home")}
+                                        loadSummary={loadSummary}
+                                        loadingSummary={loadingSummary}
+                                        summaryRis={summary.ris}
+                                        openDetails={openDetails}
+                                    />
+                                ) : (
+                                    <LockedPanel title="Radiology Quick Order" hint="You don’t have permission: quickorder.radiology" />
+                                )
+                            ) : screen === "rx" ? (
+                                canRx ? (
+                                    <RxScreen
+                                        patient={patient}
+                                        ctx={ctx}
+                                        contextId={contextId}
+                                        canUseContext={canUseContext}
+                                        onBack={() => setScreen("home")}
+                                        loadSummary={loadSummary}
+                                        loadingSummary={loadingSummary}
+                                        summaryRx={summary.rx}
+                                        openDetails={openDetails}
                                         defaultLocationId={defaultLocationId}
                                     />
-                                </div>
+                                ) : (
+                                    <LockedPanel title="Pharmacy Quick Order" hint="You don’t have permission: quickorder.pharmacy" />
+                                )
+                            ) : screen === "ward" ? (
+                                canWard ? (
+                                    <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                            <PremiumButton tone="slate" variant="outline" className="h-10" type="button" onClick={() => setScreen("home")}>
+                                                Back to Quick Orders
+                                            </PremiumButton>
+
+                                            <Badge variant="outline" className="rounded-full bg-white/80 border-slate-300">
+                                                Ward Patient Usage
+                                            </Badge>
+                                        </div>
+
+                                        <WardPatientUsageTab patient={patient} ctx={ctx} contextId={contextId} defaultLocationId={defaultLocationId} />
+                                    </div>
+                                ) : (
+                                    <LockedPanel title="Ward Usage (Consumables)" hint="You don’t have permission: quickorder.consumables" />
+                                )
                             ) : (
-                                <OtScreen
-                                    patient={patient}
-                                    ctx={ctx}
-                                    contextId={contextId}
-                                    canUseContext={canUseContext}
-                                    onBack={() => setScreen("home")}
-                                    loadSummary={loadSummary}
-                                    loadingSummary={loadingSummary}
-                                    summaryOt={summary.ot}
-                                    openDetails={openDetails}
-                                    currentUser={currentUser}
-                                />
+                                canOt ? (
+                                    <OtScreen
+                                        patient={patient}
+                                        ctx={ctx}
+                                        contextId={contextId}
+                                        canUseContext={canUseContext}
+                                        onBack={() => setScreen("home")}
+                                        loadSummary={loadSummary}
+                                        loadingSummary={loadingSummary}
+                                        summaryOt={summary.ot}
+                                        openDetails={openDetails}
+                                        currentUser={currentUser}
+                                    />
+                                ) : (
+                                    <LockedPanel
+                                        title="OT Quick Order"
+                                        hint={!canOtBase ? "You don’t have permission: quickorder.ot" : "OT Quick Order is available only for IPD Admission"}
+                                    />
+                                )
                             )}
                         </CardContent>
                     </Card>
@@ -791,9 +962,7 @@ export default function QuickOrders({
                                             {detailsType === "rx" && "Prescription"}
                                             {detailsType === "ot" && "OT Schedule"}
                                         </SheetTitle>
-                                        <SheetDescription className="text-xs">
-                                            {detailsItem?.id ? `ID: ${detailsItem.id}` : ""}
-                                        </SheetDescription>
+                                        <SheetDescription className="text-xs">{detailsItem?.id ? `ID: ${detailsItem.id}` : ""}</SheetDescription>
                                     </SheetHeader>
                                 </div>
                                 <Button
@@ -854,59 +1023,29 @@ export default function QuickOrders({
                         {detailsItem?.id && (
                             <div className={cx("border-t border-slate-200 bg-white/90 backdrop-blur", isMobile ? "p-3" : "p-4")}>
                                 <div className="flex flex-wrap gap-2">
-                                    {detailsType === "lab" && (
+                                    {detailsType === "lab" && canLab && (
                                         <>
-                                            <PremiumButton
-                                                tone="lab"
-                                                variant="outline"
-                                                className="rounded-2xl"
-                                                onClick={() => labPdfActions(detailsItem.id, "view")}
-                                            >
+                                            <PremiumButton tone="lab" variant="outline" className="rounded-2xl" onClick={() => labPdfActions(detailsItem.id, "view")}>
                                                 <Eye className="h-4 w-4 mr-2" /> View PDF
                                             </PremiumButton>
-                                            <PremiumButton
-                                                tone="lab"
-                                                variant="outline"
-                                                className="rounded-2xl"
-                                                onClick={() => labPdfActions(detailsItem.id, "print")}
-                                            >
+                                            <PremiumButton tone="lab" variant="outline" className="rounded-2xl" onClick={() => labPdfActions(detailsItem.id, "print")}>
                                                 <Printer className="h-4 w-4 mr-2" /> Print
                                             </PremiumButton>
-                                            <PremiumButton
-                                                tone="lab"
-                                                variant="solid"
-                                                className="rounded-2xl"
-                                                onClick={() => labPdfActions(detailsItem.id, "download")}
-                                            >
+                                            <PremiumButton tone="lab" variant="solid" className="rounded-2xl" onClick={() => labPdfActions(detailsItem.id, "download")}>
                                                 <Download className="h-4 w-4 mr-2" /> Download
                                             </PremiumButton>
                                         </>
                                     )}
 
-                                    {detailsType === "rx" && (
+                                    {detailsType === "rx" && canRx && (
                                         <>
-                                            <PremiumButton
-                                                tone="rx"
-                                                variant="outline"
-                                                className="rounded-2xl"
-                                                onClick={() => rxActions(detailsItem.id, "view")}
-                                            >
+                                            <PremiumButton tone="rx" variant="outline" className="rounded-2xl" onClick={() => rxActions(detailsItem.id, "view")}>
                                                 <Eye className="h-4 w-4 mr-2" /> View PDF
                                             </PremiumButton>
-                                            <PremiumButton
-                                                tone="rx"
-                                                variant="outline"
-                                                className="rounded-2xl"
-                                                onClick={() => rxActions(detailsItem.id, "print")}
-                                            >
+                                            <PremiumButton tone="rx" variant="outline" className="rounded-2xl" onClick={() => rxActions(detailsItem.id, "print")}>
                                                 <Printer className="h-4 w-4 mr-2" /> Print
                                             </PremiumButton>
-                                            <PremiumButton
-                                                tone="rx"
-                                                variant="solid"
-                                                className="rounded-2xl"
-                                                onClick={() => rxActions(detailsItem.id, "download")}
-                                            >
+                                            <PremiumButton tone="rx" variant="solid" className="rounded-2xl" onClick={() => rxActions(detailsItem.id, "download")}>
                                                 <Download className="h-4 w-4 mr-2" /> Download
                                             </PremiumButton>
                                         </>
@@ -916,6 +1055,14 @@ export default function QuickOrders({
                                         Close
                                     </PremiumButton>
                                 </div>
+
+                                {/* If user somehow opened details without perms */}
+                                {(detailsType === "lab" && !canLab) || (detailsType === "rx" && !canRx) ? (
+                                    <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-[11px] text-slate-700 flex items-start gap-2">
+                                        <Lock className="h-4 w-4 mt-0.5" />
+                                        <div>You don’t have permission for these actions.</div>
+                                    </div>
+                                ) : null}
                             </div>
                         )}
                     </div>

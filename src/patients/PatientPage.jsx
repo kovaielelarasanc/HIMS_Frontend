@@ -31,6 +31,9 @@ import {
     Bookmark,
     Trash2,
     ArrowDownUp,
+    Baby,
+    BadgeCheck,
+    IdCard,
 } from 'lucide-react'
 
 // shadcn/ui
@@ -84,6 +87,10 @@ function extractAgeYears(p) {
     return m ? Number(m[1]) : null
 }
 
+function boolish(v) {
+    return v === true || v === 1 || v === '1' || v === 'true' || v === 'True'
+}
+
 /* ------------------------- Fetch All (server-paged) ------------------------- */
 const SERVER_PAGE_LIMIT = 500
 const MAX_PAGES_GUARD = 1000 // safety: 1000 * 500 = 500k rows max (won't happen normally)
@@ -102,6 +109,7 @@ function StatPill({ label, value, tone = 'slate' }) {
         emerald: 'bg-emerald-50 text-emerald-700',
         rose: 'bg-rose-50 text-rose-700',
         sky: 'bg-sky-50 text-sky-700',
+        violet: 'bg-violet-50 text-violet-700',
     }
     return (
         <div
@@ -406,6 +414,8 @@ function CommandPalette({ open, onClose, primary, patientTypeFilter, onPickPatie
                                 const fullName = `${p.first_name || ''} ${p.last_name || ''}`.trim() || '—'
                                 const active = p.is_active !== false
                                 const selected = i === idx
+                                const pregnant = boolish(p.is_pregnant)
+                                const rch = String(p.rch_id || '').trim()
 
                                 return (
                                     <li key={p.id}>
@@ -446,6 +456,19 @@ function CommandPalette({ open, onClose, primary, patientTypeFilter, onPickPatie
                                                             <Badge variant="secondary" className="rounded-full border border-black/10 bg-black/[0.03] text-slate-700">
                                                                 {active ? 'Active' : 'Inactive'}
                                                             </Badge>
+
+                                                            {pregnant && (
+                                                                <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 border border-violet-100 px-2 py-0.5 text-[11px] text-violet-700">
+                                                                    <Baby className="h-3.5 w-3.5" />
+                                                                    Pregnant
+                                                                </span>
+                                                            )}
+                                                            {rch && (
+                                                                <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 border border-black/10 px-2 py-0.5 text-[11px] text-slate-700">
+                                                                    <IdCard className="h-3.5 w-3.5 text-slate-500" />
+                                                                    RCH: {rch}
+                                                                </span>
+                                                            )}
                                                         </div>
                                                     </div>
 
@@ -468,6 +491,7 @@ function CommandPalette({ open, onClose, primary, patientTypeFilter, onPickPatie
 const FILTER_DEFAULT = {
     status: 'all', // all | active | inactive
     gender: 'all', // all | male | female | other
+    pregnancy: 'all', // all | pregnant | not_pregnant
     blood_group: '',
     tag_contains: '',
     has_phone: false,
@@ -488,7 +512,6 @@ function FilterChip({ label, onRemove }) {
             {label}
             <button
                 type="button"
-                classjk
                 className="h-5 w-5 rounded-full hover:bg-black/[0.05] grid place-items-center"
                 onClick={onRemove}
                 title="Remove"
@@ -499,7 +522,6 @@ function FilterChip({ label, onRemove }) {
     )
 }
 
-/* ✅ FIXED: removed the stray "s" attribute that breaks JSX */
 function NativeSelect({ value, onChange, children }) {
     return (
         <select
@@ -575,6 +597,16 @@ function FiltersDialog({ open, onOpenChange, filters, setFilters, primary }) {
                                     <option value="male">Male</option>
                                     <option value="female">Female</option>
                                     <option value="other">Other</option>
+                                </NativeSelect>
+                            </div>
+
+                            {/* ✅ Pregnancy / RCH filter (safe even if backend doesn't return is_pregnant yet) */}
+                            <div className="grid gap-1">
+                                <div className="text-[11px] font-bold text-slate-600 uppercase">Pregnancy</div>
+                                <NativeSelect value={filters.pregnancy} onChange={(v) => set('pregnancy', v)}>
+                                    <option value="all">All</option>
+                                    <option value="pregnant">Pregnant</option>
+                                    <option value="not_pregnant">Not Pregnant</option>
                                 </NativeSelect>
                             </div>
 
@@ -907,7 +939,8 @@ export default function PatientPage() {
     const baseStats = useMemo(() => {
         const total = patients.length
         const active = patients.filter((p) => p.is_active !== false).length
-        return { total, active, inactive: total - active }
+        const preg = patients.filter((p) => boolish(p.is_pregnant)).length
+        return { total, active, inactive: total - active, pregnant: preg }
     }, [patients])
 
     const activeTypeLabel = useMemo(() => {
@@ -926,7 +959,6 @@ export default function PatientPage() {
 
             const baseParams = buildServerParams(search, patientType)
 
-            // start fresh
             setLoading(true)
             setLoadingMore(false)
             setPatients([])
@@ -939,13 +971,12 @@ export default function PatientPage() {
                 while (pageNo < MAX_PAGES_GUARD) {
                     pageNo += 1
                     const res = await listPatients({ ...baseParams, limit: SERVER_PAGE_LIMIT, offset })
-                    if (loadSeqRef.current !== seq) return // stale request, stop
+                    if (loadSeqRef.current !== seq) return
 
                     const batch = res?.data || []
                     totalLoaded += batch.length
                     setLoadedCount(totalLoaded)
 
-                    // progressive update: first page ends "loading", remaining pages as "loadingMore"
                     if (offset === 0) {
                         setPatients(batch)
                         setLoading(false)
@@ -953,14 +984,11 @@ export default function PatientPage() {
                         setPatients((prev) => prev.concat(batch))
                     }
 
-                    if (batch.length < SERVER_PAGE_LIMIT) break // last page
+                    if (batch.length < SERVER_PAGE_LIMIT) break
                     offset += SERVER_PAGE_LIMIT
-
-                    // if more pages exist, show "loading more"
                     setLoadingMore(true)
                 }
 
-                // finished
                 setLoading(false)
                 setLoadingMore(false)
             } catch (err) {
@@ -1132,6 +1160,7 @@ export default function PatientPage() {
         return (
             f.status !== 'all' ||
             f.gender !== 'all' ||
+            f.pregnancy !== 'all' ||
             !!String(f.blood_group || '').trim() ||
             !!String(f.tag_contains || '').trim() ||
             !!String(f.age_min || '').trim() ||
@@ -1162,6 +1191,12 @@ export default function PatientPage() {
             if (f.gender !== 'all') {
                 const g = String(p.gender || '').toLowerCase()
                 if (g !== f.gender) return false
+            }
+
+            if (f.pregnancy !== 'all') {
+                const preg = boolish(p.is_pregnant)
+                if (f.pregnancy === 'pregnant' && !preg) return false
+                if (f.pregnancy === 'not_pregnant' && preg) return false
             }
 
             if (bgNeed) {
@@ -1226,7 +1261,8 @@ export default function PatientPage() {
     const shownStats = useMemo(() => {
         const total = filteredPatients.length
         const active = filteredPatients.filter((p) => p.is_active !== false).length
-        return { total, active, inactive: total - active }
+        const preg = filteredPatients.filter((p) => boolish(p.is_pregnant)).length
+        return { total, active, inactive: total - active, pregnant: preg }
     }, [filteredPatients])
 
     const chips = useMemo(() => {
@@ -1235,6 +1271,7 @@ export default function PatientPage() {
 
         if (f.status !== 'all') out.push({ k: 'status', label: `Status: ${f.status}` })
         if (f.gender !== 'all') out.push({ k: 'gender', label: `Gender: ${f.gender}` })
+        if (f.pregnancy !== 'all') out.push({ k: 'pregnancy', label: `Pregnancy: ${f.pregnancy.replace('_', ' ')}` })
         if (String(f.blood_group || '').trim()) out.push({ k: 'blood_group', label: `Blood: ${f.blood_group}` })
         if (String(f.tag_contains || '').trim()) out.push({ k: 'tag_contains', label: `Tag: ${f.tag_contains}` })
         if (f.has_phone) out.push({ k: 'has_phone', label: 'Has Phone' })
@@ -1329,6 +1366,8 @@ export default function PatientPage() {
                                         <StatPill label="Showing" value={`${shownStats.total}/${baseStats.total}`} tone="sky" />
                                         <StatPill label="Active" value={shownStats.active} tone="emerald" />
                                         {shownStats.inactive > 0 && <StatPill label="Inactive" value={shownStats.inactive} tone="rose" />}
+                                        {shownStats.pregnant > 0 && <StatPill label="Pregnant" value={shownStats.pregnant} tone="violet" />}
+
                                         <div className="inline-flex items-center gap-2 rounded-full bg-black/[0.04] px-3 py-1 text-[12px] font-semibold text-slate-700">
                                             <Tag className="h-4 w-4 opacity-70" />
                                             Type: {activeTypeLabel}
@@ -1607,6 +1646,8 @@ export default function PatientPage() {
                                                 pagedPatients.map((p) => {
                                                     const fullName = `${p.first_name || ''} ${p.last_name || ''}`.trim() || '—'
                                                     const active = p.is_active !== false
+                                                    const pregnant = boolish(p.is_pregnant)
+                                                    const rch = String(p.rch_id || '').trim()
 
                                                     return (
                                                         <tr
@@ -1638,9 +1679,23 @@ export default function PatientPage() {
                                                                                     <span>Age: {p.age_text || '—'}</span>
                                                                                     <span className="text-slate-300">•</span>
                                                                                     <span>{p.gender || '—'}</span>
+
                                                                                     <Badge variant="secondary" className="rounded-full border border-black/10 bg-black/[0.03] text-slate-700">
                                                                                         {active ? 'Active' : 'Inactive'}
                                                                                     </Badge>
+
+                                                                                    {pregnant && (
+                                                                                        <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 border border-violet-100 px-2 py-0.5 text-[11px] text-violet-700">
+                                                                                            <Baby className="h-3.5 w-3.5" />
+                                                                                            Pregnant
+                                                                                        </span>
+                                                                                    )}
+                                                                                    {rch && (
+                                                                                        <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 border border-black/10 px-2 py-0.5 text-[11px] text-slate-700">
+                                                                                            <IdCard className="h-3.5 w-3.5 text-slate-500" />
+                                                                                            RCH: {rch}
+                                                                                        </span>
+                                                                                    )}
                                                                                 </div>
                                                                             </div>
 
@@ -1678,6 +1733,12 @@ export default function PatientPage() {
                                                                     {p.tag && (
                                                                         <span className="inline-flex items-center rounded-full bg-emerald-50 border border-emerald-100 px-2.5 py-1 text-[11px] text-emerald-700">
                                                                             {p.tag}
+                                                                        </span>
+                                                                    )}
+                                                                    {pregnant && (
+                                                                        <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 border border-violet-100 px-2.5 py-1 text-[11px] text-violet-700">
+                                                                            <BadgeCheck className="h-3.5 w-3.5" />
+                                                                            ANC
                                                                         </span>
                                                                     )}
                                                                 </div>
@@ -1750,6 +1811,8 @@ export default function PatientPage() {
                                             pagedPatients.map((p) => {
                                                 const fullName = `${p.first_name || ''} ${p.last_name || ''}`.trim() || '—'
                                                 const active = p.is_active !== false
+                                                const pregnant = boolish(p.is_pregnant)
+                                                const rch = String(p.rch_id || '').trim()
 
                                                 return (
                                                     <Card
@@ -1785,6 +1848,19 @@ export default function PatientPage() {
                                                                                 <span>Age: {p.age_text || '—'}</span>
                                                                                 <span className="text-slate-300">•</span>
                                                                                 <span>{p.gender || '—'}</span>
+
+                                                                                {pregnant && (
+                                                                                    <span className="inline-flex items-center gap-1 rounded-full bg-violet-50 border border-violet-100 px-2 py-0.5 text-[11px] text-violet-700">
+                                                                                        <Baby className="h-3.5 w-3.5" />
+                                                                                        Pregnant
+                                                                                    </span>
+                                                                                )}
+                                                                                {rch && (
+                                                                                    <span className="inline-flex items-center gap-1 rounded-full bg-slate-50 border border-black/10 px-2 py-0.5 text-[11px] text-slate-700">
+                                                                                        <IdCard className="h-3.5 w-3.5 text-slate-500" />
+                                                                                        RCH: {rch}
+                                                                                    </span>
+                                                                                )}
                                                                             </div>
                                                                         </div>
 

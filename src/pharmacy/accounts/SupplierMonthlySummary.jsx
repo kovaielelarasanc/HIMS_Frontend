@@ -39,8 +39,8 @@ function KpiTile({ label, children, tone = 'slate' }) {
 }
 
 export default function SupplierMonthlySummaryScreen() {
-  const canView = useCan('pharmacy.accounts.supplier_ledger.monthly_summary.view')
-  const canExport = useCan('pharmacy.accounts.supplier_ledger.monthly_summary.export')
+  const canView = useCan('pharmacy.accounts.supplier_ledger.view')
+  const canExport = useCan('pharmacy.accounts.supplier_ledger.view')
 
   const [month, setMonth] = useState(currentMonthStr())
   const [rows, setRows] = useState([])
