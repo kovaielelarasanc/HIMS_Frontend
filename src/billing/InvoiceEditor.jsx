@@ -369,11 +369,23 @@ export default function InvoiceEditor() {
     // ✅ Columns: prefer backend meta; fallback to DOC/DEFAULT local columns
     const columns = useMemo(() => {
         const colMap = modulesMeta?.columns || {}
-        if (docMode) return colMap.DOC || FALLBACK_DOC_COLS
 
-        const key = isPharmacyModule(moduleCode) ? "PHARMACY" : "DEFAULT"
-        return colMap[key] || colMap.DEFAULT || FALLBACK_DEFAULT_COLS
+        let base
+        if (docMode) {
+            base = colMap.DOC || FALLBACK_DOC_COLS
+        } else {
+            const key = isPharmacyModule(moduleCode) ? "PHARMACY" : "DEFAULT"
+            base = colMap[key] || colMap.DEFAULT || FALLBACK_DEFAULT_COLS
+        }
+
+        // ✅ Pharmacy: enforce Batch No column (and convert batch_id -> batch_no if needed)
+        if (isPharmacyModule(moduleCode)) {
+            return ensurePharmacyBatchNoColumn(base)
+        }
+
+        return base
     }, [modulesMeta, moduleCode, docMode])
+
 
     const filteredLines = useMemo(() => {
         const q = String(lineQ || "").trim().toLowerCase()
@@ -1097,8 +1109,59 @@ function fmtCell(key, v) {
     return String(v)
 }
 
+function getLineMeta(line) {
+    const m =
+        (line?.meta && typeof line.meta === "object" ? line.meta : null) ||
+        (line?.meta_json && typeof line.meta_json === "object" ? line.meta_json : null) ||
+        (line?.metaJson && typeof line.metaJson === "object" ? line.metaJson : null)
+    return m || null
+}
+
+function getBatchNo(line) {
+    const m = getLineMeta(line)
+    const v =
+        m?.batch_no ??
+        m?.batchNo ??
+        m?.batch_number ??
+        m?.batchNumber ??
+        m?.batch
+    const s = String(v ?? "").trim()
+    return s || ""
+}
+
+function ensurePharmacyBatchNoColumn(cols) {
+    const base = Array.isArray(cols) ? [...cols] : []
+
+    // If backend gives batch_id column, convert it to batch_no column (UI-only)
+    const idxBatchId = base.findIndex((c) => String(c?.key || "").toLowerCase().includes("batch_id"))
+    if (idxBatchId >= 0) {
+        base[idxBatchId] = { ...base[idxBatchId], key: "batch_no", label: "Batch No" }
+        return base
+    }
+
+    // If Batch No already exists, keep as-is
+    const hasBatchNo = base.some((c) => {
+        const k = String(c?.key || "").toLowerCase()
+        return k === "batch_no" || k.endsWith(".batch_no") || k.includes("batch_no")
+    })
+    if (hasBatchNo) return base
+
+    // Insert after Item Name/Description
+    const idxDesc = base.findIndex((c) => String(c?.key || "") === "description")
+    const insertAt = idxDesc >= 0 ? idxDesc + 1 : 3
+
+    return [
+        ...base.slice(0, insertAt),
+        { key: "batch_no", label: "Batch No" },
+        ...base.slice(insertAt),
+    ]
+}
+
+
+
 function LinesTable({ columns, lines, canEdit, onPatch, onAskDelete, onAskEdit, isPharmacy, docMode }) {
     const cols = columns || (docMode ? FALLBACK_DOC_COLS : FALLBACK_DEFAULT_COLS)
+    const hasBatchCol = isPharmacy && cols.some((c) => String(c?.key || "") === "batch_no")
 
     return (
         <div className="overflow-x-auto">
@@ -1116,12 +1179,26 @@ function LinesTable({ columns, lines, canEdit, onPatch, onAskDelete, onAskEdit, 
                 <tbody>
                     {lines.map((r) => {
                         const autoLinked = !r?.is_manual && String(r?.source_module || "").trim()
+                        console.log(r.meta, " batch id")
                         return (
                             <tr key={r.id} className="border-b border-slate-50 hover:bg-slate-50/60">
                                 {cols.map((c) => {
                                     const key = c.key
                                     const raw = getNested(r, key)
-
+                                    if (key === "batch_no" && isPharmacy) {
+                                        const bn = getBatchNo(r)
+                                        return (
+                                            <td key={key} className="py-3 pr-4">
+                                                {bn ? (
+                                                    <span className="inline-flex max-w-[180px] truncate rounded-xl border border-slate-100 bg-slate-50 px-2 py-1 text-xs font-extrabold text-slate-800">
+                                                        {bn}
+                                                    </span>
+                                                ) : (
+                                                    <span className="text-slate-400">—</span>
+                                                )}
+                                            </td>
+                                        )
+                                    }
                                     if (key === "qty") {
                                         return (
                                             <td key={key} className="py-3 pr-4">
@@ -1174,8 +1251,13 @@ function LinesTable({ columns, lines, canEdit, onPatch, onAskDelete, onAskEdit, 
                                                     {r.item_type || "—"} · {r.item_id ?? "—"} · {r.source_module || "—"}
                                                     {r.is_manual ? <span className="ml-2 rounded-lg bg-slate-100 px-2 py-0.5">MANUAL</span> : null}
                                                     {autoLinked ? <span className="ml-2 rounded-lg bg-amber-50 px-2 py-0.5 text-amber-800">AUTO</span> : null}
-                                                    {isPharmacy && r?.meta?.batch_id ? (
-                                                        <span className="ml-2 rounded-lg bg-slate-100 px-2 py-0.5">BATCH {r.meta.batch_id}</span>
+                                                    {isPharmacy && !hasBatchCol ? (
+                                                        (() => {
+                                                            const bn = getBatchNo(r)
+                                                            return bn ? (
+                                                                <span className="ml-2 rounded-lg bg-slate-100 px-2 py-0.5">BATCH {bn}</span>
+                                                            ) : null
+                                                        })()
                                                     ) : null}
                                                 </div>
                                             ) : null}
@@ -1649,11 +1731,11 @@ function EditLineDialog({ line, docMode, isPharmacy, onClose, onConfirm }) {
                             <Textarea
                                 value={form.meta_json}
                                 onChange={(e) => setForm({ ...form, meta_json: e.target.value })}
-                                placeholder='{"batch_id":123,"expiry_date":"2026-12-31"}'
+                                placeholder='{"batch_no":"AB1234","expiry_date":"2026-12-31","hsn_sac":"3004"}'
                             />
                         </Field>
                         <div className="mt-2 text-xs text-slate-500">
-                            Pharmacy tip: store batch_id / expiry_date / HSN/SAC if available.
+                            Pharmacy tip: store batch_no / expiry_date / HSN/SAC if available.
                         </div>
                     </div>
                 ) : null}
@@ -1683,7 +1765,7 @@ function ManualLineDialog({ invoice, moduleCode, onClose, onDone }) {
         doctor_name: "",
         department_name: "",
 
-        meta_json: pharmacy ? { batch_id: "", expiry_date: "", hsn_sac: "" } : null,
+        meta_json: pharmacy ? { batch_no: "", expiry_date: "", hsn_sac: "" } : null,
 
         manual_reason: "Manual entry",
     })
