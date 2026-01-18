@@ -472,8 +472,8 @@ const GROUPS = [
     items: [
 
       // NEW SCREENS
-      { key: 'billing-Dashboard', label: 'Billing DASHBOARD', to: '/billing/dashboard', icon: LayoutDashboard, reqAny: ['billing.view', 'billing.create'] },
-      { key: 'billing masters', label: 'Billing Masters', to: '/masters/charge-master', icon: LayoutDashboard, reqAny: ['billing.view', 'billing.create'] },
+      { key: 'billing-Dashboard', label: 'Billing DASHBOARD', to: '/billing/dashboard', icon: LayoutDashboard, reqAny: ['billing.view', 'billing.manage'] },
+      { key: 'billing masters', label: 'Billing Masters', to: '/masters/charge-master', icon: LayoutDashboard, reqAny: ['billing.view', 'masters.charge_items.manage', 'masters.charge_items.view'] },
 
 
 
