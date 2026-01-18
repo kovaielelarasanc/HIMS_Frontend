@@ -35,6 +35,7 @@ import {
     DialogFooter,
 } from "@/components/ui/dialog"
 import { ScrollArea } from "@/components/ui/scroll-area"
+import { formatIST } from "@/ipd/components/timeZONE"
 
 function cx(...x) {
     return x.filter(Boolean).join(" ")
@@ -717,7 +718,7 @@ export default function WardPatientUsageTab({
                                                         <div className="font-medium truncate">
                                                             {r.consumption_number || `#${r.consumption_id}`}
                                                         </div>
-                                                        <div className="mt-1 text-xs text-slate-500">{fmtIST(r.posted_at)}</div>
+                                                        <div className="mt-1 text-xs text-slate-500">{formatIST(r.posted_at)}</div>
                                                     </div>
                                                     <Badge variant="secondary" className="rounded-full shrink-0">
                                                         {r.total_lines} lines
