@@ -56,6 +56,7 @@ import {
   Barcode,
   Wand2,
 } from "lucide-react"
+import { formatIST } from "@/ipd/components/timeZONE"
 
 /* ----------------------------- constants ----------------------------- */
 
@@ -1510,7 +1511,7 @@ export default function PharmacyRx() {
                                       rxList.map((row) => {
                                         const status = (row.status || "").toUpperCase() || "PENDING"
                                         const type = fromBackendType(row.type || row.rx_type || "OPD")
-                                        const createdStr = fmtDT(row.created_at || row.rx_datetime || row.bill_date)
+                                        const createdStr = formatIST(row.created_at || row.rx_datetime || row.bill_date)
 
                                         const patientName =
                                           row.patient_name ||

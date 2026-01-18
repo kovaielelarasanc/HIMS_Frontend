@@ -1681,7 +1681,7 @@ export default function Orders() {
                         <span className="hidden sm:inline">Refresh</span>
                     </button>
 
-                    <PermGate anyOf={['lab.orders.create', 'orders.lab.create']}>
+                    {/* <PermGate anyOf={['lab.orders.create', 'orders.lab.create']}>
                         <button
                             onClick={openDrawer}
                             className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-3.5 py-2 text-sm font-semibold text-white shadow-md shadow-slate-900/20 hover:bg-slate-800 active:scale-[0.99]"
@@ -1689,7 +1689,7 @@ export default function Orders() {
                             <Plus className="h-4 w-4" />
                             New Order
                         </button>
-                    </PermGate>
+                    </PermGate> */}
                 </div>
             </header>
 

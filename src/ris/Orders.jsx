@@ -544,7 +544,7 @@ export default function RisOrders() {
                                     Filters
                                 </button>
 
-                                <PermGate anyOf={['orders.ris.create', 'radiology.orders.create']}>
+                                {/* <PermGate anyOf={['orders.ris.create', 'radiology.orders.create']}>
                                     <button
                                         className="inline-flex h-10 items-center gap-2 rounded-2xl bg-slate-900 px-4 text-[12px] font-semibold text-white shadow-sm hover:bg-slate-800"
                                         onClick={() => setOpenCreate(true)}
@@ -553,7 +553,7 @@ export default function RisOrders() {
                                         <Plus className="h-4 w-4" />
                                         New Order
                                     </button>
-                                </PermGate>
+                                </PermGate> */}
                             </div>
 
                             <div className="flex flex-wrap items-center justify-between gap-2">

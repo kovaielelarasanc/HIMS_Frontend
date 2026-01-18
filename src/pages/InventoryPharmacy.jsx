@@ -587,16 +587,46 @@ export default function InventoryPharmacy() {
         {/* ✅ FULL WIDTH TABS */}
         <div className="space-y-4">
           <Tabs value={tab} onValueChange={setTab} className="space-y-4">
-            <TabsList className="w-full justify-start bg-white/70 backdrop-blur border border-slate-500/70 rounded-2xl p-1 overflow-x-auto">
-              <TabsTrigger className="rounded-xl px-4 py-2 text-xs" value="dashboard">Dashboard</TabsTrigger>
-              <TabsTrigger className="rounded-xl px-4 py-2 text-xs" value="items">Items</TabsTrigger>
-              <TabsTrigger className="rounded-xl px-4 py-2 text-xs" value="locations">Locations</TabsTrigger>
-              <TabsTrigger className="rounded-xl px-4 py-2 text-xs" value="suppliers">Suppliers</TabsTrigger>
-              {/* <TabsTrigger className="rounded-xl px-4 py-2 text-xs" value="stock">Stock & Alerts</TabsTrigger> */}
-              <TabsTrigger className="rounded-xl px-4 py-2 text-xs" value="po">Purchase Orders</TabsTrigger>
-              <TabsTrigger className="rounded-xl px-4 py-2 text-xs" value="grn">GRN</TabsTrigger>
-              <TabsTrigger className="rounded-xl px-4 py-2 text-xs" value="returns">Returns</TabsTrigger>
-              <TabsTrigger className="rounded-xl px-4 py-2 text-xs" value="txns">Transactions</TabsTrigger>
+            <TabsList
+              className="
+      w-full justify-start gap-1
+      bg-white/80 backdrop-blur
+      border border-slate-200
+      rounded-2xl p-1
+      overflow-x-auto
+    "
+            >
+              {[
+                ["dashboard", "Dashboard"],
+                ["items", "Items"],
+                ["locations", "Locations"],
+                ["suppliers", "Suppliers"],
+                ["po", "Purchase Orders"],
+                ["grn", "GRN"],
+                ["returns", "Returns"],
+                ["txns", "Transactions"],
+              ].map(([v, label]) => (
+                <TabsTrigger
+                  key={v}
+                  value={v}
+                  className="
+          rounded-xl px-4 py-2 text-xs font-semibold whitespace-nowrap
+          transition-colors
+          text-slate-600 hover:text-slate-900 hover:bg-slate-900/5
+          focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400
+          focus-visible:ring-offset-2 focus-visible:ring-offset-white
+
+          data-[state=active]:bg-slate-900 data-[state=active]:text-white
+          data-[state=active]:shadow-sm
+
+          dark:text-slate-300 dark:hover:text-white dark:hover:bg-white/10
+          dark:focus-visible:ring-offset-slate-950
+          dark:data-[state=active]:bg-white dark:data-[state=active]:text-slate-900
+        "
+                >
+                  {label}
+                </TabsTrigger>
+              ))}
             </TabsList>
 
             <TabsContent value="dashboard" className="m-0">
@@ -635,16 +665,6 @@ export default function InventoryPharmacy() {
               />
             </TabsContent>
 
-            {/* <TabsContent value="stock" className="m-0">
-              <StockAlertsTab
-                stock={stock}
-                quarantineStock={quarantineStock}
-                stockLoading={stockLoading}
-                activeLocation={activeLocation}
-                startReturnForBatch={() => setReturnSheetOpen(true)}
-              />
-            </TabsContent> */}
-
             <TabsContent value="po" className="m-0">
               <PurchaseOrdersTab />
             </TabsContent>
@@ -666,6 +686,7 @@ export default function InventoryPharmacy() {
               <TransactionsTab txns={txns} txnLoading={txnLoading} />
             </TabsContent>
           </Tabs>
+
         </div>
 
         {/* QUICK ACTIONS SHEET */}
