@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate, useParams } from "react-router-dom"
 import { toast } from "sonner"
-
+import { useCan } from "../hooks/useCan"
 import {
     billingGetCase,
     billingGetInsurance,
@@ -87,6 +87,7 @@ import {
 } from "lucide-react"
 
 import BillingPrintDownload from "@/billing/print/BillingPrintDownload"
+import InsuranceTab from "./insurance/InsuranceTab"
 
 const TABS = [
     { key: "OVERVIEW", label: "Overview", icon: Layers },
@@ -137,6 +138,8 @@ function pickLatestPayableInvoice(invoices = []) {
 }
 
 export default function BillingCaseDetail() {
+
+    const canManageInsurance = useCan("billing.insurance.manage")
     const { caseId } = useParams()
     const nav = useNavigate()
     const [exportOpen, setExportOpen] = useState(false)
@@ -541,13 +544,9 @@ export default function BillingCaseDetail() {
 
                     {tab === "INSURANCE" && (
                         <InsuranceTab
-                            loading={insLoading}
                             caseId={caseId}
-                            insurance={insurance}
-                            preauths={preauths}
-                            claims={claims}
-                            invoices={payableInvoices}
-                            onReload={loadInsuranceFlows}
+                            canManage={canManageInsurance}
+                            invoices={invoices} // ✅ pass invoices so Insurance tab can auto-pick insurer invoices
                         />
                     )}
 
@@ -1478,183 +1477,6 @@ function AdvancesTab({ caseId, advances, refunds, due, onDone }) {
         </Card>
     )
 }
-
-/* -------------------- Insurance / Claims Tab -------------------- */
-
-function InsuranceTab({ loading, caseId, insurance, preauths, claims, invoices, onReload }) {
-    const [editOpen, setEditOpen] = useState(false)
-    const [preauthOpen, setPreauthOpen] = useState(false)
-    const [claimOpen, setClaimOpen] = useState(false)
-
-    const sortedPreauths = useMemo(() => {
-        return [...(preauths || [])].sort((a, b) => Number(b.id) - Number(a.id))
-    }, [preauths])
-
-    const sortedClaims = useMemo(() => {
-        return [...(claims || [])].sort((a, b) => Number(b.id) - Number(a.id))
-    }, [claims])
-
-    const latestInvoice = useMemo(() => pickLatestPayableInvoice(invoices), [invoices])
-
-    return (
-        <div className="space-y-4">
-            <Card>
-                <CardHeader
-                    title="Insurance Case"
-                    subtitle="Policy + member + approved limits (if payer_mode is INSURANCE/MIXED)"
-                    right={
-                        <div className="flex flex-wrap items-center gap-2">
-                            <Button variant="outline" onClick={onReload} disabled={loading} className="gap-2">
-                                <RefreshCcw className={cn("h-4 w-4", loading ? "animate-spin" : "")} />
-                                Reload
-                            </Button>
-                            <Button onClick={() => setEditOpen(true)} className="gap-2">
-                                <Settings className="h-4 w-4" />
-                                Edit Insurance
-                            </Button>
-                        </div>
-                    }
-                />
-                <CardBody>
-                    {loading ? (
-                        <div className="h-40 animate-pulse rounded-2xl bg-slate-100" />
-                    ) : !insurance ? (
-                        <EmptyState
-                            title="No insurance record"
-                            desc="Create insurance case to enable preauth + claims."
-                        />
-                    ) : (
-                        <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                            <Info label="Status" value={insurance.status || "—"} />
-                            <Info label="Payer" value={insurance.payer_name || insurance.payer_kind || insurance.payer_id || "—"} />
-                            <Info label="TPA" value={insurance.tpa_name || insurance.tpa_id || "—"} />
-                            <Info label="Policy No" value={insurance.policy_no || "—"} />
-                            <Info label="Member ID" value={insurance.member_id || "—"} />
-                            <Info label="Plan" value={insurance.plan_name || "—"} />
-                            <Info label="Sum Insured" value={`₹ ${money(insurance.sum_insured ?? insurance.coverage_limit ?? 0)}`} />
-                            <Info label="Approved Limit" value={`₹ ${money(insurance.approved_limit ?? insurance.approved_amount ?? 0)}`} />
-                            <div className="md:col-span-2">
-                                <Info label="Notes" value={insurance.remarks || insurance.notes || "—"} />
-                            </div>
-                        </div>
-                    )}
-                </CardBody>
-            </Card>
-
-            {/* Preauth */}
-            <Card>
-                <CardHeader
-                    title="Preauth Requests"
-                    subtitle="Create → Submit → Approve/Reject/Cancel"
-                    right={
-                        <div className="flex flex-wrap items-center gap-2">
-                            <Button variant="outline" onClick={() => setPreauthOpen(true)} className="gap-2">
-                                <Plus className="h-4 w-4" />
-                                New Preauth
-                            </Button>
-                            <Badge tone="slate">{sortedPreauths.length} total</Badge>
-                        </div>
-                    }
-                />
-                <CardBody>
-                    {loading ? (
-                        <div className="h-40 animate-pulse rounded-2xl bg-slate-100" />
-                    ) : sortedPreauths.length === 0 ? (
-                        <EmptyState title="No preauth" desc="Create preauth if insurer requires authorization." />
-                    ) : (
-                        <div className="overflow-x-auto">
-                            <table className="w-full min-w-[980px] text-left text-sm">
-                                <thead className="text-xs font-bold text-slate-600">
-                                    <tr className="border-b border-slate-100">
-                                        <th className="py-3 pr-4">Preauth</th>
-                                        <th className="py-3 pr-4">Status</th>
-                                        <th className="py-3 pr-4">Requested</th>
-                                        <th className="py-3 pr-4">Approved</th>
-                                        <th className="py-3 pr-4">Ref</th>
-                                        <th className="py-3 pr-4">Updated</th>
-                                        <th className="py-3 pr-0 text-right">Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {sortedPreauths.map((p) => (
-                                        <PreauthRow key={p.id} preauth={p} onChanged={onReload} />
-                                    ))}
-                                </tbody>
-                            </table>
-                        </div>
-                    )}
-                </CardBody>
-            </Card>
-
-            {/* Claims */}
-            <Card>
-                <CardHeader
-                    title="Claims"
-                    subtitle="Create from invoice → Submit → Ack → Approve → Settle (or Reject/Cancel/Reopen)"
-                    right={
-                        <div className="flex flex-wrap items-center gap-2">
-                            <Button onClick={() => setClaimOpen(true)} className="gap-2">
-                                <FileText className="h-4 w-4" />
-                                Create / Refresh Claim
-                            </Button>
-                            <Badge tone="slate">{sortedClaims.length} total</Badge>
-                        </div>
-                    }
-                />
-                <CardBody>
-                    {loading ? (
-                        <div className="h-40 animate-pulse rounded-2xl bg-slate-100" />
-                    ) : sortedClaims.length === 0 ? (
-                        <EmptyState title="No claims" desc="Create claim from posted/approved invoice." />
-                    ) : (
-                        <div className="space-y-3">
-                            {sortedClaims.map((c) => (
-                                <ClaimCard key={c.id} claim={c} onChanged={onReload} />
-                            ))}
-                        </div>
-                    )}
-
-                    {claimOpen && (
-                        <ClaimCreateDialog
-                            caseId={caseId}
-                            invoices={invoices}
-                            defaultInvoiceId={latestInvoice?.id || ""}
-                            onClose={() => setClaimOpen(false)}
-                            onDone={() => {
-                                setClaimOpen(false)
-                                onReload()
-                            }}
-                        />
-                    )}
-
-                    {editOpen && (
-                        <InsuranceEditDialog
-                            caseId={caseId}
-                            insurance={insurance}
-                            onClose={() => setEditOpen(false)}
-                            onDone={() => {
-                                setEditOpen(false)
-                                onReload()
-                            }}
-                        />
-                    )}
-
-                    {preauthOpen && (
-                        <PreauthCreateDialog
-                            caseId={caseId}
-                            onClose={() => setPreauthOpen(false)}
-                            onDone={() => {
-                                setPreauthOpen(false)
-                                onReload()
-                            }}
-                        />
-                    )}
-                </CardBody>
-            </Card>
-        </div>
-    )
-}
-
 /* -------------------- Settings Tab -------------------- */
 
 function SettingsTab({ loading, payerMeta, refMeta, value, onChange, onReloadMeta, onSave, saving }) {
