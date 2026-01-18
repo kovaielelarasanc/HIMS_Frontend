@@ -668,10 +668,10 @@ export async function billingVoidReceipt(paymentId, payload = {}, config = {}) {
 // =========================================================
 // INVOICE PRINT/EXPORT
 // =========================================================
-export async function billingGetInvoicePdf(invoiceId, config = {}) {
-    const id = toIntId(invoiceId, "invoiceId")
-    return getBlob(`/billing/invoices/${id}/print`, config)
-}
+// export async function billingGetInvoicePdf(invoiceId, config = {}) {
+//     const id = toIntId(invoiceId, "invoiceId")
+//     return getBlob(`/billing/invoices/${id}/print`, config)
+// }
 export async function billingExportInvoiceCsv(invoiceId, config = {}) {
     const id = toIntId(invoiceId, "invoiceId")
     return getBlob(`/billing/invoices/${id}/export.csv`, config)
@@ -792,4 +792,13 @@ export async function billingExportCasePdf(caseId, { kind = "FULL_CASE", downloa
         }),
         ...config,
     })
+}
+
+
+export async function billingGetInvoicePdf(invoiceId, { disposition = "inline" } = {}) {
+    const res = await API.get(`/billing/print/invoices/${invoiceId}/pdf`, {
+        params: { disposition },
+        responseType: "blob",
+    })
+    return res.data
 }

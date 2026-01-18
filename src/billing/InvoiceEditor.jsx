@@ -76,9 +76,8 @@ function upper(v) {
 
 function isPharmacyModule(m) {
     const x = String(m || "").trim().toUpperCase()
-    return x === "PHM" || x === "PHC" || x === "PHARMACY"
+    return x === "PHM" || x === "PHC" || x === "PHARMACY" || x === "PHARM"
 }
-
 function isDocModule(m) {
     return String(m || "").trim().toUpperCase() === "DOC"
 }
@@ -89,7 +88,7 @@ function prettyModuleLabel(code, fallback) {
     if (x === "LAB") return "Laboratory"
     if (x === "BLOOD") return "Blood Bank"
     if (x === "SCAN" || x === "XRAY" || x === "RAD") return "Radiology"
-    if (x === "PHM" || x === "PHC" || x === "PHARMACY") return "Pharmacy"
+    if (x === "PHM" || x === "PHC" || x === "PHARM" || x === "PHARMACY") return "Pharmacy"
     if (x === "ROOM") return "Room / Bed Charges"
     if (x === "PROC") return "Procedures"
     if (x === "OT") return "OT"
@@ -106,7 +105,6 @@ function fmtDateISO(v) {
         return String(v).slice(0, 10)
     }
 }
-
 function fmtDateTime(v) {
     if (!v) return "—"
     try {
@@ -163,7 +161,6 @@ function paymentAllocatedToThisInvoice(p, invoiceId) {
     return 0
 }
 
-
 /**
  * Module -> ServiceGroup lock mapping
  * (must match your ServiceGroup enum names)
@@ -177,6 +174,7 @@ const MODULE_TO_GROUP = {
     RAD: "RAD",
     PHM: "PHARM",
     PHC: "PHARM",
+    PHARM: "PHARM",
     PHARMACY: "PHARM",
     ROOM: "ROOM",
     NURSING: "NURSING",
@@ -204,6 +202,21 @@ const FALLBACK_DEFAULT_COLS = [
     { key: "net_amount", label: "Total" },
 ]
 
+// ✅ Pharmacy fallback columns (Batch No / Expiry / HSN-SAC)
+const FALLBACK_PHARMACY_COLS = [
+    { key: "service_date", label: "Bill Date" },
+    { key: "item_code", label: "Code" },
+    { key: "description", label: "Item Name" },
+    { key: "meta.batch_no", label: "Batch No" },
+    { key: "meta.expiry_date", label: "Expiry" },
+    { key: "qty", label: "Qty" },
+    { key: "unit_price", label: "Item Amt" },
+    { key: "meta.hsn_sac", label: "HSN/SAC" },
+    { key: "gst_rate", label: "GST %" },
+    { key: "tax_amount", label: "Tax" },
+    { key: "net_amount", label: "Total" },
+]
+
 // ✅ DOC columns (Doctor + Department visible)
 const FALLBACK_DOC_COLS = [
     { key: "service_date", label: "Service Date" },
@@ -217,6 +230,28 @@ const FALLBACK_DOC_COLS = [
     { key: "tax_amount", label: "Tax" },
     { key: "net_amount", label: "Total" },
 ]
+
+// -----------------------------
+// PDF helpers (inline vs download)
+// -----------------------------
+function openPdfPreview(blob) {
+    const url = URL.createObjectURL(blob)
+    const win = window.open(url, "_blank", "noopener,noreferrer")
+    return { url, win }
+}
+
+async function getInvoicePdfBlob(invoiceId, { disposition = "inline" } = {}) {
+    // ✅ Keep compatibility with both versions of billingGetInvoicePdf():
+    // - New: billingGetInvoicePdf(id, { disposition })
+    // - Old: billingGetInvoicePdf(id)
+    try {
+        const b = await billingGetInvoicePdf(invoiceId, { disposition })
+        if (b) return b
+    } catch {
+        // ignore and fallback
+    }
+    return await billingGetInvoicePdf(invoiceId)
+}
 
 export default function InvoiceEditor() {
     const { invoiceId } = useParams()
@@ -260,9 +295,7 @@ export default function InvoiceEditor() {
         billingModulesMeta()
             .then((m) => alive && setModulesMeta(m))
             .catch(() => { })
-        return () => {
-            alive = false
-        }
+        return () => { alive = false }
     }, [])
 
     // -----------------------------
@@ -321,9 +354,7 @@ export default function InvoiceEditor() {
                 await loadAudit()
                 if (!alive) return
             })()
-        return () => {
-            alive = false
-        }
+        return () => { alive = false }
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [tab, invoiceId])
 
@@ -340,10 +371,8 @@ export default function InvoiceEditor() {
     const grandTotal = num(invoice?.grand_total ?? 0)
 
     const paidTotal = useMemo(() => {
-        // allocation-first truth
         const allocPaid = payments.reduce((s, p) => s + paymentAllocatedToThisInvoice(p, invoice?.id), 0)
 
-        // fallback only if payments not loaded yet
         if (!payments?.length) {
             const fromInv = invoice?.paid_total ?? invoice?.paid_amount ?? invoice?.paid ?? null
             if (fromInv != null && Number.isFinite(Number(fromInv))) return Math.max(0, num(fromInv, 0))
@@ -353,7 +382,6 @@ export default function InvoiceEditor() {
     }, [payments, invoice?.id, invoice?.paid_total, invoice?.paid_amount, invoice?.paid])
 
     const dueTotal = useMemo(() => {
-        // ALWAYS compute due from grand - paid (prevents stale due_total UI)
         const due = grandTotal - paidTotal
         return Math.max(0, Number(due.toFixed(2)))
     }, [grandTotal, paidTotal])
@@ -366,26 +394,22 @@ export default function InvoiceEditor() {
         return { sub, disc, tax, grand }
     }, [lines])
 
-    // ✅ Columns: prefer backend meta; fallback to DOC/DEFAULT local columns
+    // ✅ Columns: prefer backend meta; fallback to DOC/PHARM/DEFAULT local columns
     const columns = useMemo(() => {
         const colMap = modulesMeta?.columns || {}
 
         let base
         if (docMode) {
             base = colMap.DOC || FALLBACK_DOC_COLS
+        } else if (isPharmacyModule(moduleCode)) {
+            base = colMap.PHARMACY || colMap.PHARM || FALLBACK_PHARMACY_COLS
         } else {
-            const key = isPharmacyModule(moduleCode) ? "PHARMACY" : "DEFAULT"
-            base = colMap[key] || colMap.DEFAULT || FALLBACK_DEFAULT_COLS
+            base = colMap.DEFAULT || FALLBACK_DEFAULT_COLS
         }
 
-        // ✅ Pharmacy: enforce Batch No column (and convert batch_id -> batch_no if needed)
-        if (isPharmacyModule(moduleCode)) {
-            return ensurePharmacyBatchNoColumn(base)
-        }
-
+        if (isPharmacyModule(moduleCode)) return ensurePharmacyBatchNoColumn(base)
         return base
     }, [modulesMeta, moduleCode, docMode])
-
 
     const filteredLines = useMemo(() => {
         const q = String(lineQ || "").trim().toLowerCase()
@@ -456,30 +480,39 @@ export default function InvoiceEditor() {
     }
 
     async function onPrint() {
+        if (!invoice?.id) return
         try {
-            const blob = await billingGetInvoicePdf(invoice.id)
-            if (!blob) throw new Error("PDF route not available")
-            const url = URL.createObjectURL(blob)
-            const w = window.open(url, "_blank")
-            if (!w) {
+            const blob = await getInvoicePdfBlob(invoice.id, { disposition: "inline" })
+            if (!blob) throw new Error("PDF not available")
+
+            const { url, win } = openPdfPreview(blob)
+
+            // popup blocked -> fallback to download
+            if (!win) {
                 downloadBlob(blob, `${invoice.invoice_number || "invoice"}.pdf`)
+                setTimeout(() => URL.revokeObjectURL(url), 60_000)
                 return
             }
-            w.addEventListener("load", () => {
+
+            // safer than "load" event for objectURL
+            setTimeout(() => {
                 try {
-                    w.print()
+                    win.focus()
+                    win.print()
                 } catch { }
-            })
-            setTimeout(() => URL.revokeObjectURL(url), 5000)
+            }, 350)
+
+            setTimeout(() => URL.revokeObjectURL(url), 60_000)
         } catch (e) {
             toast.error(e?.message || "Failed to open PDF")
         }
     }
 
     async function onDownload() {
+        if (!invoice?.id) return
         try {
-            const blob = await billingGetInvoicePdf(invoice.id)
-            if (!blob) throw new Error("PDF route not available")
+            const blob = await getInvoicePdfBlob(invoice.id, { disposition: "attachment" })
+            if (!blob) throw new Error("PDF not available")
             downloadBlob(blob, `${invoice.invoice_number || "invoice"}.pdf`)
         } catch (e) {
             toast.error(e?.message || "Download failed")
@@ -1086,29 +1119,6 @@ function InfoTile({ icon, title, value }) {
    Lines Table
 ---------------------------------- */
 
-function getNested(obj, path) {
-    const parts = String(path || "").split(".")
-    let cur = obj
-    for (const p of parts) {
-        if (!cur) return undefined
-        cur = cur[p]
-    }
-    return cur
-}
-
-function fmtCell(key, v) {
-    if (v == null || v === "") return "—"
-    const k = String(key || "")
-
-    if (k === "service_date") {
-        return fmtDateISO(v) || "—"
-    }
-    if (k.includes("amount") || k === "unit_price" || k === "line_total" || k === "net_amount") {
-        return `₹ ${money(v)}`
-    }
-    return String(v)
-}
-
 function getLineMeta(line) {
     const m =
         (line?.meta && typeof line.meta === "object" ? line.meta : null) ||
@@ -1117,14 +1127,62 @@ function getLineMeta(line) {
     return m || null
 }
 
+function getNested(obj, path) {
+    const p = String(path || "")
+    if (!p) return undefined
+
+    // ✅ Allow meta.* columns from backend modulesMeta
+    if (p.startsWith("meta.")) {
+        const m = getLineMeta(obj) || {}
+        const k = p.slice(5)
+        return m?.[k]
+    }
+
+    // Some UIs send batch_no without meta prefix
+    if (p === "batch_no" || p === "batchNo") {
+        const m = getLineMeta(obj) || {}
+        return m?.batch_no ?? m?.batchNo ?? m?.batch_number ?? m?.batchNumber ?? m?.batch ?? m?.batch_id ?? m?.batchId
+    }
+
+    const parts = p.split(".")
+    let cur = obj
+    for (const key of parts) {
+        if (!cur) return undefined
+        cur = cur[key]
+    }
+    return cur
+}
+
+function fmtCell(key, v) {
+    if (v == null || v === "") return "—"
+    const k = String(key || "")
+
+    if (k === "service_date") return fmtDateISO(v) || "—"
+
+    // expiry formatting (supports YYYY-MM-DD / ISO)
+    if (k.includes("expiry") || k.includes("exp_date")) {
+        const s = String(v)
+        // quick normalize
+        if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10)
+        return fmtDateISO(s) || s
+    }
+
+    if (k.includes("amount") || k === "unit_price" || k === "line_total" || k === "net_amount" || k === "tax_amount") {
+        return `₹ ${money(v)}`
+    }
+    return String(v)
+}
+
 function getBatchNo(line) {
-    const m = getLineMeta(line)
+    const m = getLineMeta(line) || {}
     const v =
         m?.batch_no ??
         m?.batchNo ??
         m?.batch_number ??
         m?.batchNumber ??
-        m?.batch
+        m?.batch ??
+        m?.batch_id ??
+        m?.batchId
     const s = String(v ?? "").trim()
     return s || ""
 }
@@ -1132,36 +1190,40 @@ function getBatchNo(line) {
 function ensurePharmacyBatchNoColumn(cols) {
     const base = Array.isArray(cols) ? [...cols] : []
 
-    // If backend gives batch_id column, convert it to batch_no column (UI-only)
-    const idxBatchId = base.findIndex((c) => String(c?.key || "").toLowerCase().includes("batch_id"))
+    // Convert any batch_id style column to meta.batch_no
+    const idxBatchId = base.findIndex((c) => {
+        const k = String(c?.key || "").toLowerCase()
+        return k.includes("batch_id") || k === "meta.batch_id"
+    })
     if (idxBatchId >= 0) {
-        base[idxBatchId] = { ...base[idxBatchId], key: "batch_no", label: "Batch No" }
-        return base
+        base[idxBatchId] = { ...base[idxBatchId], key: "meta.batch_no", label: "Batch No" }
     }
 
-    // If Batch No already exists, keep as-is
+    // If Batch No exists already, keep
     const hasBatchNo = base.some((c) => {
         const k = String(c?.key || "").toLowerCase()
-        return k === "batch_no" || k.endsWith(".batch_no") || k.includes("batch_no")
+        return k === "meta.batch_no" || k === "batch_no" || k.includes("batch_no")
     })
     if (hasBatchNo) return base
 
-    // Insert after Item Name/Description
+    // Insert after description
     const idxDesc = base.findIndex((c) => String(c?.key || "") === "description")
     const insertAt = idxDesc >= 0 ? idxDesc + 1 : 3
 
     return [
         ...base.slice(0, insertAt),
-        { key: "batch_no", label: "Batch No" },
+        { key: "meta.batch_no", label: "Batch No" },
         ...base.slice(insertAt),
     ]
 }
 
-
-
 function LinesTable({ columns, lines, canEdit, onPatch, onAskDelete, onAskEdit, isPharmacy, docMode }) {
-    const cols = columns || (docMode ? FALLBACK_DOC_COLS : FALLBACK_DEFAULT_COLS)
-    const hasBatchCol = isPharmacy && cols.some((c) => String(c?.key || "") === "batch_no")
+    const cols = columns || (docMode ? FALLBACK_DOC_COLS : (isPharmacy ? FALLBACK_PHARMACY_COLS : FALLBACK_DEFAULT_COLS))
+
+    const hasBatchCol = isPharmacy && cols.some((c) => {
+        const k = String(c?.key || "").toLowerCase()
+        return k === "meta.batch_no" || k === "batch_no" || k.includes("batch_no")
+    })
 
     return (
         <div className="overflow-x-auto">
@@ -1179,13 +1241,20 @@ function LinesTable({ columns, lines, canEdit, onPatch, onAskDelete, onAskEdit, 
                 <tbody>
                     {lines.map((r) => {
                         const autoLinked = !r?.is_manual && String(r?.source_module || "").trim()
-                        console.log(r.meta, " batch id")
+
                         return (
                             <tr key={r.id} className="border-b border-slate-50 hover:bg-slate-50/60">
                                 {cols.map((c) => {
                                     const key = c.key
                                     const raw = getNested(r, key)
-                                    if (key === "batch_no" && isPharmacy) {
+
+                                    // ✅ Batch No pill UI
+                                    const keyLower = String(key || "").toLowerCase()
+                                    const isBatch =
+                                        isPharmacy &&
+                                        (keyLower === "meta.batch_no" || keyLower === "batch_no" || keyLower.endsWith(".batch_no") || keyLower.includes("batch_no"))
+
+                                    if (isBatch) {
                                         const bn = getBatchNo(r)
                                         return (
                                             <td key={key} className="py-3 pr-4">
@@ -1199,6 +1268,7 @@ function LinesTable({ columns, lines, canEdit, onPatch, onAskDelete, onAskEdit, 
                                             </td>
                                         )
                                     }
+
                                     if (key === "qty") {
                                         return (
                                             <td key={key} className="py-3 pr-4">
@@ -1211,6 +1281,7 @@ function LinesTable({ columns, lines, canEdit, onPatch, onAskDelete, onAskEdit, 
                                             </td>
                                         )
                                     }
+
                                     if (key === "unit_price") {
                                         function toDecStr(v) {
                                             const s = String(v ?? "").replace(/[₹,\s]/g, "").trim()
@@ -1227,6 +1298,7 @@ function LinesTable({ columns, lines, canEdit, onPatch, onAskDelete, onAskEdit, 
                                             </td>
                                         )
                                     }
+
                                     if (key === "discount_amount") {
                                         return (
                                             <td key={key} className="py-3 pr-4">
@@ -1803,7 +1875,6 @@ function ManualLineDialog({ invoice, moduleCode, onClose, onDone }) {
             try {
                 await billingAddManualLineV2(invoice.id, payload)
             } catch (e) {
-                // legacy fallback (may not support meta_json well)
                 await billingAddManualLine(invoice.id, payload)
             }
 
@@ -1893,7 +1964,7 @@ function ManualLineDialog({ invoice, moduleCode, onClose, onDone }) {
                                         // ignore parse errors live
                                     }
                                 }}
-                                placeholder='{"batch_id":"123","expiry_date":"2026-12-31","hsn_sac":"3004"}'
+                                placeholder='{"batch_no":"AB1234","expiry_date":"2026-12-31","hsn_sac":"3004"}'
                             />
                         </Field>
                     </div>
