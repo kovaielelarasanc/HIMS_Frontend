@@ -111,6 +111,7 @@ import WardPatientUsagePage from "./components/quickorders/WardPatientUsagePage"
 import InventoryIndentsPage from "./pages/inventory/InventoryIndentsPage";
 import InventoryIssuesPage from "./pages/inventory/InventoryIssuesPage";
 import LisMasters from "./lab/LisMasters";
+import BillingRevenueDashboard from "./billing/BillingRevenueDashboard";
 
 
 export default function App() {
@@ -261,6 +262,7 @@ export default function App() {
             <Route path="/billing/cases" element={<BillingCasesList />} />
             <Route path="/billing/cases/:caseId" element={<BillingCaseDetail />} />
             <Route path="/billing/cases/:caseId/invoices/:invoiceId" element={<InvoiceDetail />} /> */}
+            <Route path="/billing/revenue-dashboard" element={<BillingRevenueDashboard />} />
             <Route path="/billing/*" element={<BillingRoutes />} />
             <Route path="/billing/dashboard" element={<BillingDashboard />} />
             <Route path="/billing/cases/:caseId" element={<BillingCaseDetail />} />

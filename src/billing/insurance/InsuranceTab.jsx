@@ -43,6 +43,7 @@ import {
   claimSettle,
   claimDeny,
   claimQuery,
+  claimApprove,
 } from "@/api/billingInsurance"
 
 const CLEAR = "__CLEAR__" // ✅ Radix SelectItem value must NOT be empty string
@@ -192,6 +193,12 @@ export default function InsuranceTab({ caseId, canManage = true }) {
     }
     return Array.from(map.values())
   }, [lines])
+  const insurerInvoiceIds = useMemo(() => {
+    return byInvoice
+      .filter(inv => String(inv.invoice_number || "").toUpperCase().startsWith("IINV"))
+      .map(inv => Number(inv.invoice_id))
+      .filter(Boolean)
+  }, [byInvoice])
 
   const invoiceIdsFromLines = useMemo(() => {
     const s = new Set()
@@ -434,11 +441,21 @@ export default function InsuranceTab({ caseId, canManage = true }) {
   const doCreateAndSendClaim = async () => {
     try {
       if (!ins) return toast.error("Setup insurance first")
+
+      if (!insurerInvoiceIds.length) {
+        return toast.error("No INSURER invoices found. Do Step 3 Split first.")
+      }
+
       const amt = toNum(claimForm.claim_amount || totals.insurer, 0)
       if (amt <= 0) return toast.error("Claim amount must be > 0")
 
-      const cl = await claimCreate(caseId, { claim_amount: amt, remarks: claimForm.remarks || null })
-      await claimSubmit(caseId, cl.id) // ✅ pass claim_id only, not object
+      const cl = await claimCreate(caseId, {
+        claim_amount: amt,
+        remarks: claimForm.remarks || null,
+        insurer_invoice_ids: insurerInvoiceIds, // ✅ ONLY insurer invoices
+      })
+
+      await claimSubmit(caseId, cl.id)
       toast.success("Claim submitted to insurer/TPA")
       setOpenClaim(false)
       loadAll()
@@ -446,6 +463,7 @@ export default function InsuranceTab({ caseId, canManage = true }) {
       toast.error(e?.response?.data?.detail || "Claim submit failed")
     }
   }
+
 
   const submitExistingClaim = async (claimId) => {
     try {
@@ -791,6 +809,21 @@ export default function InsuranceTab({ caseId, canManage = true }) {
                     disabled={!canManage || String(latestClaim.status).toUpperCase() !== "DRAFT"}
                   >
                     <Send className="h-4 w-4 mr-1" /> Submit
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={() =>
+                      claimApprove(caseId, latestClaim.id, {
+                        approved_amount: toNum(latestClaim.claim_amount),
+                        settled_amount: 0,
+                        remarks: "",
+                      })
+                        .then(loadAll)
+                        .catch((e) => toast.error(e?.response?.data?.detail || "Approve failed"))
+                    }
+                    disabled={!canManage || !["SUBMITTED", "UNDER_QUERY"].includes(String(latestClaim.status).toUpperCase())}
+                  >
+                    <CheckCircle2 className="h-4 w-4 mr-1" /> Mark Approved
                   </Button>
 
                   <Button

@@ -472,6 +472,7 @@ const GROUPS = [
     items: [
 
       // NEW SCREENS
+      { key: 'billing-revenue', label: 'Billing revenue', to: '/billing/revenue-dashboard', icon: LayoutDashboard, reqAny: ['billing.view', 'billing.manage'] },
       { key: 'billing-Dashboard', label: 'Billing DASHBOARD', to: '/billing/dashboard', icon: LayoutDashboard, reqAny: ['billing.view', 'billing.manage'] },
       { key: 'billing masters', label: 'Billing Masters', to: '/masters/charge-master', icon: LayoutDashboard, reqAny: ['billing.view', 'masters.charge_items.manage', 'masters.charge_items.view'] },
 

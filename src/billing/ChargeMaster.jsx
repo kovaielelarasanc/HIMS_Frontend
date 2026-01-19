@@ -1,7 +1,6 @@
 // FILE: src/pages/masters/ChargeMaster.jsx
 import React, { useEffect, useMemo, useRef, useState, useCallback } from "react"
 import { toast } from "sonner"
-import API from "@/api/client"
 
 import {
     createChargeItem,
@@ -28,9 +27,8 @@ import {
     CheckCircle2,
     XCircle,
     Sparkles,
-    PlusCircle,
-    Settings2,
     ShieldCheck,
+    Tag,
 } from "lucide-react"
 
 const CATEGORIES = [
@@ -40,33 +38,78 @@ const CATEGORIES = [
     { value: "BLOOD", label: "Blood Bank" },
 ]
 
-// ✅ Safe defaults (work even if header master endpoints not ready)
-const DEFAULT_MODULE_HEADERS = [
-    { value: "OPD", label: "OPD" },
-    { value: "IPD", label: "IPD" },
-    { value: "OT", label: "OT" },
-    { value: "ER", label: "ER" },
-    { value: "LAB", label: "LAB" },
-    { value: "RIS", label: "RIS" },
-    { value: "PHARM", label: "PHARM" },
-    { value: "ROOM", label: "ROOM" },
-    { value: "MISC", label: "MISC" },
-]
+// ✅ Fixed Modules (module headers)
+const MODULES = {
+    ADM: "Admission Charges",
+    ROOM: "Observation / Room Charges",
+    BLOOD: "Blood Bank Charges",
+    LAB: "Clinical Lab Charges",
+    DIET: "Dietary Charges",
+    DOC: "Doctor Fees",
+    PHM: "Pharmacy Charges (Medicines)",
+    PHC: "Pharmacy Charges (Consumables)",
+    PROC: "Procedure Charges",
+    SCAN: "Scan Charges",
+    SURG: "Surgery Charges",
+    XRAY: "X-Ray Charges",
+    MISC: "Misc Charges",
+    OTT: "OT Theater Charges",
+    OTI: "OT Instrument Charges",
+    OTD: "OT Device Charges",
+}
 
-const DEFAULT_SERVICE_HEADERS = [
-    { value: "CONSULT", label: "CONSULT" },
-    { value: "LAB", label: "LAB" },
-    { value: "RAD", label: "RAD" },
-    { value: "PHARM", label: "PHARM" },
-    { value: "OT", label: "OT" },
-    { value: "PROC", label: "PROC" },
-    { value: "ROOM", label: "ROOM" },
-    { value: "NURSING", label: "NURSING" },
-    { value: "MISC", label: "MISC" },
-]
+// ✅ Predefined module headers for selects (from MODULES)
+const PREDEFINED_HEADERS = Object.entries(MODULES).map(([value, desc]) => ({
+    value,
+    label: `${value} — ${desc}`,
+}))
 
-// ✅ For service header → billing mapping UI
-const SERVICE_GROUPS = ["CONSULT", "LAB", "RAD", "PHARM", "OT", "PROC", "ROOM", "NURSING", "MISC"]
+const PREDEFINED_CODES_SET = new Set(PREDEFINED_HEADERS.map((x) => x.value))
+
+// ✅ Fixed Service Groups (service header → service_group mapping)
+// (UI hint mapping: selecting service_header shows same value as group)
+const HEADER_TO_SERVICE_GROUP = {
+    CONSULT: "CONSULT",
+    LAB: "LAB",
+    RAD: "RAD",
+    PHARM: "PHARM",
+    OT: "OT",
+    ROOM: "ROOM",
+    NURSING: "NURSING",
+    SURGEON: "SURGEON",
+    ANESTHESIA: "ANESTHESIA",
+    OT_DOCTOR: "OT_DOCTOR",
+    MISC: "MISC",
+    OPD: "OPD",
+    IPD: "IPD",
+    GENERAL: "GENERAL",
+}
+
+// ✅ Optional: nicer service labels
+const SERVICE_LABELS = {
+    CONSULT: "Consultation",
+    LAB: "Lab Services",
+    RAD: "Radiology Services",
+    PHARM: "Pharmacy Services",
+    OT: "Operation Theatre Services",
+    ROOM: "Room Charges",
+    NURSING: "Nursing Charges",
+    SURGEON: "Surgeon Fees",
+    ANESTHESIA: "Anesthesia Charges",
+    OT_DOCTOR: "OT Doctor Fees",
+    MISC: "Miscellaneous",
+    OPD: "OPD Charges",
+    IPD: "IPD Charges",
+    GENERAL: "General Charges",
+}
+
+// ✅ Service header options for selects (from HEADER_TO_SERVICE_GROUP keys)
+const SERVICE_HEADERS = Object.keys(HEADER_TO_SERVICE_GROUP).map((k) => ({
+    value: k,
+    label: `${k} — ${SERVICE_LABELS[k] || k.replaceAll("_", " ")}`,
+}))
+
+const SERVICE_CODES_SET = new Set(SERVICE_HEADERS.map((x) => x.value))
 
 const cx = (...a) => a.filter(Boolean).join(" ")
 
@@ -82,19 +125,6 @@ function normalizeCode(code) {
 function normalizeHdr(v) {
     const s = String(v ?? "").trim().toUpperCase()
     return s === "" ? "" : s
-}
-
-function unwrapAny(res) {
-    // Supports either {status,data} wrapper or plain payload
-    const payload = res?.data
-    if (payload && typeof payload === "object" && "status" in payload) {
-        if (payload?.status === false) {
-            const msg = payload?.error?.msg || payload?.error?.message || "Request failed"
-            throw new Error(msg)
-        }
-        return payload?.data ?? payload
-    }
-    return payload
 }
 
 function validate(form) {
@@ -120,12 +150,16 @@ function validate(form) {
     if (Number.isNaN(gst)) errors.gst_rate = "Invalid GST"
     if (gst < 0 || gst > 100) errors.gst_rate = "GST must be 0 to 100"
 
-    // MISC requires headers
+    // ✅ MISC requires fixed module/service selections
     if (category === "MISC") {
         const mh = normalizeHdr(form.module_header)
         const sh = normalizeHdr(form.service_header)
+
         if (!mh) errors.module_header = "Module header is required for MISC"
         if (!sh) errors.service_header = "Service header is required for MISC"
+
+        if (mh && !PREDEFINED_CODES_SET.has(mh)) errors.module_header = "Invalid module header"
+        if (sh && !SERVICE_CODES_SET.has(sh)) errors.service_header = "Invalid service header"
     }
 
     return errors
@@ -178,7 +212,7 @@ function Badge({ children, tone = "slate", icon }) {
 
 function Segmented({ value, onChange, options }) {
     return (
-        <div className="inline-flex rounded-2xl border border-slate-200 bg-white p-1 shadow-sm">
+        <div className="inline-flex rounded-2xl border border-slate-200 bg-white p-1 shadow-sm overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
             {options.map((o) => {
                 const active = String(value) === String(o.value)
                 return (
@@ -186,7 +220,7 @@ function Segmented({ value, onChange, options }) {
                         key={o.value}
                         onClick={() => onChange(o.value)}
                         className={cx(
-                            "px-3.5 h-9 rounded-xl text-sm font-semibold transition",
+                            "px-3.5 h-9 rounded-xl text-sm font-semibold transition whitespace-nowrap",
                             active ? "bg-slate-900 text-white" : "text-slate-700 hover:bg-slate-50"
                         )}
                     >
@@ -219,7 +253,6 @@ function IconButton({ onClick, disabled, title, children, tone = "default" }) {
     )
 }
 
-// ✅ FIX: forwardRef so Ctrl/Cmd+K focus works
 const SoftInput = React.forwardRef(function SoftInput(
     { value, onChange, placeholder, icon, className = "", onKeyDown },
     ref
@@ -262,13 +295,29 @@ function SoftSelect({ value, onChange, children, disabled, className = "" }) {
 function DividerLabel({ icon, title, subtitle }) {
     return (
         <div className="flex items-start gap-3">
-            <div className="h-10 w-10 rounded-2xl bg-slate-900 text-white flex items-center justify-center shadow-sm">{icon}</div>
+            <div className="h-10 w-10 rounded-2xl bg-slate-900 text-white flex items-center justify-center shadow-sm">
+                {icon}
+            </div>
             <div>
                 <div className="text-sm font-semibold text-slate-900">{title}</div>
                 {subtitle ? <div className="text-xs text-slate-500 mt-0.5">{subtitle}</div> : null}
             </div>
         </div>
     )
+}
+
+function withLegacyOptions(list, value, isAllowedSet) {
+    const v = normalizeHdr(value)
+    if (!v) return list
+    if (isAllowedSet.has(v)) return list
+    return [{ value: v, label: `${v} — Legacy (please change)` }, ...list]
+}
+
+function labelFrom(list, value) {
+    const v = normalizeHdr(value)
+    if (!v) return "—"
+    const hit = list.find((x) => x.value === v)
+    return hit?.label || v
 }
 
 export default function ChargeMaster() {
@@ -304,28 +353,6 @@ export default function ChargeMaster() {
     })
     const [errors, setErrors] = useState({})
 
-    // ✅ Header masters (dynamic)
-    const [headersLoading, setHeadersLoading] = useState(false)
-    const [moduleHeaders, setModuleHeaders] = useState(DEFAULT_MODULE_HEADERS)
-    const [serviceHeaders, setServiceHeaders] = useState(DEFAULT_SERVICE_HEADERS)
-    const [serviceHeaderMeta, setServiceHeaderMeta] = useState([]) // full rows (code, name, service_group)
-
-    // quick add (inside item modal)
-    const [showAddModule, setShowAddModule] = useState(false)
-    const [showAddService, setShowAddService] = useState(false)
-    const [newMH, setNewMH] = useState({ code: "", name: "" })
-    const [newSH, setNewSH] = useState({ code: "", name: "", service_group: "MISC" })
-    const [addingMH, setAddingMH] = useState(false)
-    const [addingSH, setAddingSH] = useState(false)
-
-    // Header manager modal
-    const [headerMgrOpen, setHeaderMgrOpen] = useState(false)
-    const [headerMgrTab, setHeaderMgrTab] = useState("MODULE") // MODULE | SERVICE
-    const [hdrSearch, setHdrSearch] = useState("")
-    const [hdrRowsMH, setHdrRowsMH] = useState([])
-    const [hdrRowsSH, setHdrRowsSH] = useState([])
-    const [hdrBusy, setHdrBusy] = useState(false)
-
     const abortRef = useRef(null)
 
     const isActiveParam = useMemo(() => {
@@ -334,7 +361,6 @@ export default function ChargeMaster() {
     }, [activeFilter])
 
     const pageCount = useMemo(() => Math.max(1, Math.ceil(total / pageSize)), [total, pageSize])
-
     const isMisc = useMemo(() => String(category).toUpperCase() === "MISC", [category])
 
     const totalsChip = useMemo(() => {
@@ -343,52 +369,16 @@ export default function ChargeMaster() {
         return { activeCount, inactiveCount }
     }, [rows])
 
-    const ensureOption = useCallback((opts, value) => {
-        const v = normalizeHdr(value)
-        if (!v) return opts
-        if (opts.some((o) => String(o.value) === v)) return opts
-        return [{ value: v, label: `${v} (legacy)` }, ...opts]
-    }, [])
+    const moduleHeaderOptionsForModal = useMemo(
+        () => withLegacyOptions(PREDEFINED_HEADERS, form.module_header, PREDEFINED_CODES_SET),
+        [form.module_header]
+    )
+    const serviceHeaderOptionsForModal = useMemo(
+        () => withLegacyOptions(SERVICE_HEADERS, form.service_header, SERVICE_CODES_SET),
+        [form.service_header]
+    )
 
-    const loadHeaders = useCallback(async ({ silent = true } = {}) => {
-        setHeadersLoading(true)
-        try {
-            const [mhRes, shRes] = await Promise.all([
-                API.get("/masters/charge-items/headers/module", { params: { is_active: true } }),
-                API.get("/masters/charge-items/headers/service", { params: { is_active: true } }),
-            ])
-
-            const mh = unwrapAny(mhRes)
-            const sh = unwrapAny(shRes)
-
-            const mhItems = (mh?.items || []).map((x) => ({
-                value: normalizeHdr(x.code),
-                label: x.name ? `${normalizeHdr(x.code)} — ${x.name}` : normalizeHdr(x.code),
-                _raw: x,
-            }))
-            const shItems = (sh?.items || []).map((x) => ({
-                value: normalizeHdr(x.code),
-                label: x.name ? `${normalizeHdr(x.code)} — ${x.name}` : normalizeHdr(x.code),
-                _raw: x,
-            }))
-
-            const mergedMH = mhItems.length ? mhItems : DEFAULT_MODULE_HEADERS
-            const mergedSH = shItems.length ? shItems : DEFAULT_SERVICE_HEADERS
-
-            setModuleHeaders(mergedMH)
-            setServiceHeaders(mergedSH)
-            setServiceHeaderMeta((sh?.items || []).map((x) => ({ ...x, code: normalizeHdr(x.code) })))
-        } catch (e) {
-            if (!silent) toast.error(e?.response?.data?.detail || e?.message || "Failed to load headers")
-            setModuleHeaders(DEFAULT_MODULE_HEADERS)
-            setServiceHeaders(DEFAULT_SERVICE_HEADERS)
-            setServiceHeaderMeta([])
-        } finally {
-            setHeadersLoading(false)
-        }
-    }, [])
-
-    async function load() {
+    const load = useCallback(async () => {
         if (abortRef.current) abortRef.current.abort()
         const ac = new AbortController()
         abortRef.current = ac
@@ -418,12 +408,11 @@ export default function ChargeMaster() {
         } finally {
             if (!ac.signal.aborted) setLoading(false)
         }
-    }
+    }, [category, isActiveParam, search, page, pageSize, moduleHeaderFilter, serviceHeaderFilter])
 
     useEffect(() => {
         load()
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [category, activeFilter, page, pageSize, moduleHeaderFilter, serviceHeaderFilter])
+    }, [load])
 
     // search debounce
     useEffect(() => {
@@ -444,11 +433,6 @@ export default function ChargeMaster() {
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [category])
 
-    // Load header masters when needed
-    useEffect(() => {
-        if (isMisc || modalOpen || headerMgrOpen) loadHeaders({ silent: true })
-    }, [isMisc, modalOpen, headerMgrOpen, loadHeaders])
-
     // keyboard: Ctrl/Cmd + K focus search
     const searchRef = useRef(null)
     useEffect(() => {
@@ -466,11 +450,6 @@ export default function ChargeMaster() {
     function openCreate() {
         setEditing(null)
         setErrors({})
-        setShowAddModule(false)
-        setShowAddService(false)
-        setNewMH({ code: "", name: "" })
-        setNewSH({ code: "", name: "", service_group: "MISC" })
-
         setForm({
             category,
             code: "",
@@ -487,15 +466,6 @@ export default function ChargeMaster() {
     function openEdit(row) {
         setEditing(row)
         setErrors({})
-        setShowAddModule(false)
-        setShowAddService(false)
-        setNewMH({ code: "", name: "" })
-        setNewSH({ code: "", name: "", service_group: "MISC" })
-
-        // Ensure legacy headers appear as options
-        setModuleHeaders((prev) => ensureOption(prev, row?.module_header))
-        setServiceHeaders((prev) => ensureOption(prev, row?.service_header))
-
         setForm({
             category: row.category,
             code: row.code,
@@ -585,99 +555,15 @@ export default function ChargeMaster() {
         setPage(1)
     }
 
-    // -------------------------
-    // Header manager (CRUD-ish)
-    // -------------------------
-    const loadHeaderManager = useCallback(async () => {
-        setHdrBusy(true)
-        try {
-            const [mhRes, shRes] = await Promise.all([
-                API.get("/masters/charge-items/headers/module", { params: { q: hdrSearch || "" } }),
-                API.get("/masters/charge-items/headers/service", { params: { q: hdrSearch || "" } }),
-            ])
-            const mh = unwrapAny(mhRes)
-            const sh = unwrapAny(shRes)
-            setHdrRowsMH(mh?.items || [])
-            setHdrRowsSH(sh?.items || [])
-        } catch (e) {
-            toast.error(e?.response?.data?.detail || e?.message || "Failed to load header masters")
-        } finally {
-            setHdrBusy(false)
-        }
-    }, [hdrSearch])
-
-    useEffect(() => {
-        if (!headerMgrOpen) return
-        loadHeaderManager()
-    }, [headerMgrOpen, loadHeaderManager])
-
-    useEffect(() => {
-        if (!headerMgrOpen) return
-        const t = setTimeout(() => loadHeaderManager(), 350)
-        return () => clearTimeout(t)
-    }, [hdrSearch, headerMgrOpen, loadHeaderManager])
-
-    async function createModuleHeaderInline(payload) {
-        setAddingMH(true)
-        try {
-            await API.post("/masters/charge-items/headers/module", payload)
-            toast.success("Module header added")
-            setNewMH({ code: "", name: "" })
-            setShowAddModule(false)
-            await loadHeaders({ silent: true })
-            if (modalOpen) setForm((f) => ({ ...f, module_header: payload.code }))
-            if (headerMgrOpen) loadHeaderManager()
-        } catch (e) {
-            toast.error(e?.response?.data?.detail || e?.message || "Failed")
-        } finally {
-            setAddingMH(false)
-        }
-    }
-
-    async function createServiceHeaderInline(payload) {
-        setAddingSH(true)
-        try {
-            await API.post("/masters/charge-items/headers/service", payload)
-            toast.success("Service header added")
-            setNewSH({ code: "", name: "", service_group: "MISC" })
-            setShowAddService(false)
-            await loadHeaders({ silent: true })
-            if (modalOpen) setForm((f) => ({ ...f, service_header: payload.code }))
-            if (headerMgrOpen) loadHeaderManager()
-        } catch (e) {
-            toast.error(e?.response?.data?.detail || e?.message || "Failed")
-        } finally {
-            setAddingSH(false)
-        }
-    }
-
-    async function toggleHeaderActive(type, row) {
-        setHdrBusy(true)
-        try {
-            if (type === "MODULE") {
-                await API.patch(`/masters/charge-items/headers/module/${row.id}`, { is_active: !row.is_active })
-            } else {
-                await API.patch(`/masters/charge-items/headers/service/${row.id}`, { is_active: !row.is_active })
-            }
-            toast.success(row.is_active ? "Disabled" : "Enabled")
-            await loadHeaders({ silent: true })
-            await loadHeaderManager()
-        } catch (e) {
-            toast.error(e?.response?.data?.detail || e?.message || "Failed")
-        } finally {
-            setHdrBusy(false)
-        }
-    }
-
-    // ✅ FIX: correct condition
     const headerHint = useMemo(() => {
         if (String(form.category).toUpperCase() !== "MISC") return ""
         const sh = normalizeHdr(form.service_header)
         if (!sh) return ""
-        const meta = serviceHeaderMeta.find((x) => normalizeHdr(x.code) === sh)
-        if (!meta?.service_group) return ""
-        return `Mapped to Billing ServiceGroup: ${String(meta.service_group).toUpperCase()}`
-    }, [form.category, form.service_header, serviceHeaderMeta])
+        const mapped = HEADER_TO_SERVICE_GROUP[sh]
+        if (!mapped) return ""
+        const nice = SERVICE_LABELS[sh] ? ` — ${SERVICE_LABELS[sh]}` : ""
+        return `Mapped to Service Group: ${mapped}${nice}`
+    }, [form.category, form.service_header])
 
     return (
         <div className="p-4 md:p-6">
@@ -699,7 +585,7 @@ export default function ChargeMaster() {
                                 <div>
                                     <div className="text-xl font-semibold text-slate-900">Charge Master</div>
                                     <div className="text-sm text-slate-500">
-                                        ADM / DIET / MISC / BLOOD master items · NABH-friendly structure
+                                        Fixed Modules + Fixed Service Groups · MISC requires both selections
                                     </div>
                                 </div>
                             </div>
@@ -714,25 +600,18 @@ export default function ChargeMaster() {
                                 <Badge tone="slate" icon={<Hash className="h-3.5 w-3.5" />}>
                                     Total: {total}
                                 </Badge>
-                                {headersLoading ? (
-                                    <Badge tone="violet" icon={<RefreshCcw className="h-3.5 w-3.5 animate-spin" />}>
-                                        Loading Headers…
-                                    </Badge>
-                                ) : (
-                                    <Badge tone="violet" icon={<ShieldCheck className="h-3.5 w-3.5" />}>
-                                        Header Masters Ready
-                                    </Badge>
-                                )}
+                                <Badge tone="violet" icon={<ShieldCheck className="h-3.5 w-3.5" />}>
+                                    Fixed Headers Mode
+                                </Badge>
                             </div>
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2">
-                            <IconButton onClick={() => setHeaderMgrOpen(true)} title="Manage module/service headers">
-                                <Settings2 className="h-4 w-4" />
-                                Headers
-                            </IconButton>
-
-                            <IconButton onClick={() => setShowAdvanced((s) => !s)} title="Filters" tone={showAdvanced ? "dark" : "default"}>
+                            <IconButton
+                                onClick={() => setShowAdvanced((s) => !s)}
+                                title="Filters"
+                                tone={showAdvanced ? "dark" : "default"}
+                            >
                                 <SlidersHorizontal className="h-4 w-4" />
                                 Filters
                             </IconButton>
@@ -781,7 +660,7 @@ export default function ChargeMaster() {
                                     ref={searchRef}
                                     value={search}
                                     onChange={(e) => setSearch(e.target.value)}
-                                    placeholder="Search code / name / headers… (Ctrl/Cmd+K)"
+                                    placeholder="Search code / name… (Ctrl/Cmd+K)"
                                     icon={<Search className="h-4 w-4" />}
                                     className="w-full sm:w-[420px]"
                                     onKeyDown={(e) => {
@@ -828,7 +707,7 @@ export default function ChargeMaster() {
                                 <div className="mt-4 grid grid-cols-1 md:grid-cols-3 gap-3">
                                     <div className={cx(!isMisc && "opacity-60")}>
                                         <label className="text-xs font-semibold text-slate-600">Module Header (MISC)</label>
-                                        <div className="mt-1 flex items-center gap-2">
+                                        <div className="mt-1">
                                             <SoftSelect
                                                 value={moduleHeaderFilter}
                                                 onChange={(e) => {
@@ -838,30 +717,19 @@ export default function ChargeMaster() {
                                                 disabled={!isMisc}
                                             >
                                                 <option value="">All</option>
-                                                {moduleHeaders.map((m) => (
+                                                {PREDEFINED_HEADERS.map((m) => (
                                                     <option key={m.value} value={m.value}>
-                                                        {m.label || m.value}
+                                                        {m.label}
                                                     </option>
                                                 ))}
                                             </SoftSelect>
-
-                                            <IconButton
-                                                onClick={() => {
-                                                    setHeaderMgrTab("MODULE")
-                                                    setHeaderMgrOpen(true)
-                                                }}
-                                                disabled={!isMisc}
-                                                title="Manage module headers"
-                                            >
-                                                <PlusCircle className="h-4 w-4" />
-                                            </IconButton>
                                         </div>
-                                        <div className="mt-1 text-[11px] text-slate-500">Filters by BillingInvoice.module</div>
+                                        <div className="mt-1 text-[11px] text-slate-500">Fixed module headers only.</div>
                                     </div>
 
                                     <div className={cx(!isMisc && "opacity-60")}>
-                                        <label className="text-xs font-semibold text-slate-600">Service Header (MISC)</label>
-                                        <div className="mt-1 flex items-center gap-2">
+                                        <label className="text-xs font-semibold text-slate-600">Service Group (MISC)</label>
+                                        <div className="mt-1">
                                             <SoftSelect
                                                 value={serviceHeaderFilter}
                                                 onChange={(e) => {
@@ -871,36 +739,26 @@ export default function ChargeMaster() {
                                                 disabled={!isMisc}
                                             >
                                                 <option value="">All</option>
-                                                {serviceHeaders.map((s) => (
+                                                {SERVICE_HEADERS.map((s) => (
                                                     <option key={s.value} value={s.value}>
-                                                        {s.label || s.value}
+                                                        {s.label}
                                                     </option>
                                                 ))}
                                             </SoftSelect>
-
-                                            <IconButton
-                                                onClick={() => {
-                                                    setHeaderMgrTab("SERVICE")
-                                                    setHeaderMgrOpen(true)
-                                                }}
-                                                disabled={!isMisc}
-                                                title="Manage service headers"
-                                            >
-                                                <PlusCircle className="h-4 w-4" />
-                                            </IconButton>
                                         </div>
-                                        <div className="mt-1 text-[11px] text-slate-500">Filters by ChargeItem.service_header</div>
+                                        <div className="mt-1 text-[11px] text-slate-500">Fixed service groups only.</div>
                                     </div>
 
                                     <div className="rounded-3xl border border-slate-200 bg-white p-4">
                                         <div className="text-xs font-semibold text-slate-700">Tip</div>
                                         <div className="mt-1 text-xs text-slate-500">
-                                            Switch to <span className="font-semibold">MISC</span> to unlock{" "}
-                                            <span className="font-semibold">Module / Service</span> header filters.
+                                            Switch to <span className="font-semibold">MISC</span> to unlock these filters.
+                                            <div className="mt-1">Only your fixed modules + service groups are allowed.</div>
                                         </div>
                                         <div className="mt-3 flex flex-wrap gap-2">
-                                            <Badge tone="blue">BillingInvoice.module</Badge>
-                                            <Badge tone="amber">BillingInvoiceLine.service_group</Badge>
+                                            <Badge tone="blue" icon={<Layers className="h-3.5 w-3.5" />}>Module Header</Badge>
+                                            <Badge tone="amber" icon={<Tag className="h-3.5 w-3.5" />}>Service Group</Badge>
+                                            <Badge tone="violet" icon={<ShieldCheck className="h-3.5 w-3.5" />}>No Dynamic Create</Badge>
                                         </div>
                                     </div>
                                 </div>
@@ -976,10 +834,10 @@ export default function ChargeMaster() {
                                                     {String(r.category).toUpperCase() === "MISC" ? (
                                                         <div className="flex flex-wrap items-center gap-2">
                                                             <Badge tone="blue" icon={<Layers className="h-3.5 w-3.5" />}>
-                                                                {r.module_header || "—"}
+                                                                {normalizeHdr(r.module_header) || "—"}
                                                             </Badge>
-                                                            <Badge tone="amber" icon={<ShieldCheck className="h-3.5 w-3.5" />}>
-                                                                {r.service_header || "—"}
+                                                            <Badge tone="amber" icon={<Tag className="h-3.5 w-3.5" />}>
+                                                                {normalizeHdr(r.service_header) || "—"}
                                                             </Badge>
                                                         </div>
                                                     ) : (
@@ -1014,7 +872,7 @@ export default function ChargeMaster() {
                                                 </td>
 
                                                 <td className="px-4 py-3">
-                                                    <div className="flex items-center gap-2">
+                                                    <div className="flex items-center gap-2 flex-wrap">
                                                         <IconButton onClick={() => openEdit(r)} title="Edit">
                                                             <Pencil className="h-4 w-4" />
                                                             Edit
@@ -1083,14 +941,18 @@ export default function ChargeMaster() {
             <Modal
                 open={modalOpen}
                 title={editing ? "Edit Charge Item" : "Create Charge Item"}
-                subtitle="Premium workflow · Validations match backend rules (MISC requires headers)"
+                subtitle="Responsive · Fixed Modules + Fixed Service Groups · MISC requires both"
                 onClose={closeModal}
                 maxW="max-w-5xl"
             >
                 <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.2fr)_minmax(0,1fr)] gap-5">
                     {/* Left: form */}
                     <div className="rounded-3xl border border-slate-200 bg-white p-5">
-                        <DividerLabel icon={<Sparkles className="h-5 w-5" />} title="Charge Details" subtitle="Keep code consistent. Use headers only for MISC." />
+                        <DividerLabel
+                            icon={<Sparkles className="h-5 w-5" />}
+                            title="Charge Details"
+                            subtitle="Use headers only for MISC. Values are fixed."
+                        />
 
                         <div className="mt-5 grid grid-cols-1 md:grid-cols-2 gap-4">
                             <div className="md:col-span-2">
@@ -1116,7 +978,12 @@ export default function ChargeMaster() {
                             <div>
                                 <label className="text-xs font-semibold text-slate-600">Code</label>
                                 <div className="mt-1">
-                                    <SoftInput value={form.code} onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))} placeholder="e.g. ADM_REG" icon={<Hash className="h-4 w-4" />} />
+                                    <SoftInput
+                                        value={form.code}
+                                        onChange={(e) => setForm((f) => ({ ...f, code: e.target.value }))}
+                                        placeholder="e.g. ADM_REG"
+                                        icon={<Hash className="h-4 w-4" />}
+                                    />
                                 </div>
                                 {errors.code ? <div className="mt-2 text-xs text-rose-600">{errors.code}</div> : null}
                             </div>
@@ -1161,90 +1028,41 @@ export default function ChargeMaster() {
                                         <label className="text-xs font-semibold text-slate-600">
                                             Module Header <span className="text-rose-600">*</span>
                                         </label>
-                                        <div className="mt-1 flex items-center gap-2">
-                                            <SoftSelect value={form.module_header} onChange={(e) => setForm((f) => ({ ...f, module_header: e.target.value }))} disabled={saving}>
+                                        <div className="mt-1">
+                                            <SoftSelect
+                                                value={form.module_header}
+                                                onChange={(e) => setForm((f) => ({ ...f, module_header: e.target.value }))}
+                                                disabled={saving}
+                                            >
                                                 <option value="">Select module…</option>
-                                                {moduleHeaders.map((m) => (
+                                                {moduleHeaderOptionsForModal.map((m) => (
                                                     <option key={m.value} value={m.value}>
-                                                        {m.label || m.value}
+                                                        {m.label}
                                                     </option>
                                                 ))}
                                             </SoftSelect>
-
-                                            <IconButton onClick={() => setShowAddModule((v) => !v)} disabled={saving} title="Add module header">
-                                                <PlusCircle className="h-4 w-4" />
-                                            </IconButton>
                                         </div>
-
                                         {errors.module_header ? <div className="mt-2 text-xs text-rose-600">{errors.module_header}</div> : null}
-                                        <div className="mt-1 text-[11px] text-slate-500">Used for billing module routing (BillingInvoice.module)</div>
-
-                                        {showAddModule ? (
-                                            <div className="mt-3 rounded-3xl border border-slate-200 bg-slate-50 p-3">
-                                                <div className="flex items-center justify-between">
-                                                    <div className="text-xs font-semibold text-slate-800">Add Module Header</div>
-                                                    <button
-                                                        onClick={() => setShowAddModule(false)}
-                                                        className="text-xs font-semibold text-slate-600 hover:text-slate-900 underline"
-                                                    >
-                                                        Close
-                                                    </button>
-                                                </div>
-
-                                                <div className="mt-2 grid grid-cols-1 md:grid-cols-3 gap-2">
-                                                    <input
-                                                        value={newMH.code}
-                                                        onChange={(e) => setNewMH((p) => ({ ...p, code: e.target.value }))}
-                                                        className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-slate-200"
-                                                        placeholder="CODE (max 16) e.g. DENTAL"
-                                                        disabled={addingMH || saving}
-                                                    />
-                                                    <input
-                                                        value={newMH.name}
-                                                        onChange={(e) => setNewMH((p) => ({ ...p, name: e.target.value }))}
-                                                        className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-slate-200"
-                                                        placeholder="Name (optional)"
-                                                        disabled={addingMH || saving}
-                                                    />
-                                                    <button
-                                                        onClick={() => {
-                                                            const payload = {
-                                                                code: normalizeHdr(newMH.code),
-                                                                name: String(newMH.name || "").trim() || null,
-                                                                is_active: true,
-                                                            }
-                                                            if (!payload.code) return toast.error("Module header code is required")
-                                                            createModuleHeaderInline(payload)
-                                                        }}
-                                                        disabled={addingMH || saving}
-                                                        className="h-11 rounded-2xl bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
-                                                    >
-                                                        {addingMH ? "Saving…" : "Save"}
-                                                    </button>
-                                                </div>
-
-                                                <div className="mt-2 text-[11px] text-slate-500">Added header becomes selectable immediately.</div>
-                                            </div>
-                                        ) : null}
+                                        <div className="mt-1 text-[11px] text-slate-500">Fixed modules only.</div>
                                     </div>
 
                                     <div>
                                         <label className="text-xs font-semibold text-slate-600">
-                                            Service Header <span className="text-rose-600">*</span>
+                                            Service Group <span className="text-rose-600">*</span>
                                         </label>
-                                        <div className="mt-1 flex items-center gap-2">
-                                            <SoftSelect value={form.service_header} onChange={(e) => setForm((f) => ({ ...f, service_header: e.target.value }))} disabled={saving}>
-                                                <option value="">Select service…</option>
-                                                {serviceHeaders.map((s) => (
+                                        <div className="mt-1">
+                                            <SoftSelect
+                                                value={form.service_header}
+                                                onChange={(e) => setForm((f) => ({ ...f, service_header: e.target.value }))}
+                                                disabled={saving}
+                                            >
+                                                <option value="">Select service group…</option>
+                                                {serviceHeaderOptionsForModal.map((s) => (
                                                     <option key={s.value} value={s.value}>
-                                                        {s.label || s.value}
+                                                        {s.label}
                                                     </option>
                                                 ))}
                                             </SoftSelect>
-
-                                            <IconButton onClick={() => setShowAddService((v) => !v)} disabled={saving} title="Add service header">
-                                                <PlusCircle className="h-4 w-4" />
-                                            </IconButton>
                                         </div>
 
                                         {errors.service_header ? <div className="mt-2 text-xs text-rose-600">{errors.service_header}</div> : null}
@@ -1254,71 +1072,8 @@ export default function ChargeMaster() {
                                                 <span className="font-semibold">Mapping:</span> {headerHint}
                                             </div>
                                         ) : (
-                                            <div className="mt-1 text-[11px] text-slate-500">This header maps to Billing service_group (from master).</div>
+                                            <div className="mt-1 text-[11px] text-slate-500">Pick correct fixed service group.</div>
                                         )}
-
-                                        {showAddService ? (
-                                            <div className="mt-3 rounded-3xl border border-slate-200 bg-slate-50 p-3">
-                                                <div className="flex items-center justify-between">
-                                                    <div className="text-xs font-semibold text-slate-800">Add Service Header</div>
-                                                    <button
-                                                        onClick={() => setShowAddService(false)}
-                                                        className="text-xs font-semibold text-slate-600 hover:text-slate-900 underline"
-                                                    >
-                                                        Close
-                                                    </button>
-                                                </div>
-
-                                                <div className="mt-2 grid grid-cols-1 md:grid-cols-4 gap-2">
-                                                    <input
-                                                        value={newSH.code}
-                                                        onChange={(e) => setNewSH((p) => ({ ...p, code: e.target.value }))}
-                                                        className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-slate-200"
-                                                        placeholder="CODE (max 16) e.g. IMPLANT"
-                                                        disabled={addingSH || saving}
-                                                    />
-                                                    <input
-                                                        value={newSH.name}
-                                                        onChange={(e) => setNewSH((p) => ({ ...p, name: e.target.value }))}
-                                                        className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-slate-200"
-                                                        placeholder="Name (optional)"
-                                                        disabled={addingSH || saving}
-                                                    />
-                                                    <select
-                                                        value={newSH.service_group}
-                                                        onChange={(e) => setNewSH((p) => ({ ...p, service_group: e.target.value }))}
-                                                        className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-slate-200"
-                                                        disabled={addingSH || saving}
-                                                    >
-                                                        {SERVICE_GROUPS.map((g) => (
-                                                            <option key={g} value={g}>
-                                                                {g}
-                                                            </option>
-                                                        ))}
-                                                    </select>
-                                                    <button
-                                                        onClick={() => {
-                                                            const payload = {
-                                                                code: normalizeHdr(newSH.code),
-                                                                name: String(newSH.name || "").trim() || null,
-                                                                service_group: normalizeHdr(newSH.service_group) || "MISC",
-                                                                is_active: true,
-                                                            }
-                                                            if (!payload.code) return toast.error("Service header code is required")
-                                                            createServiceHeaderInline(payload)
-                                                        }}
-                                                        disabled={addingSH || saving}
-                                                        className="h-11 rounded-2xl bg-slate-900 px-4 text-sm font-semibold text-white hover:bg-slate-800 disabled:opacity-50"
-                                                    >
-                                                        {addingSH ? "Saving…" : "Save"}
-                                                    </button>
-                                                </div>
-
-                                                <div className="mt-2 text-[11px] text-slate-500">
-                                                    Choose correct <span className="font-semibold">service_group</span> for billing totals grouping.
-                                                </div>
-                                            </div>
-                                        ) : null}
                                     </div>
                                 </>
                             ) : null}
@@ -1326,7 +1081,12 @@ export default function ChargeMaster() {
                             <div>
                                 <label className="text-xs font-semibold text-slate-600">Price (₹)</label>
                                 <div className="mt-1">
-                                    <SoftInput value={form.price} onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))} placeholder="0.00" icon={<IndianRupee className="h-4 w-4" />} />
+                                    <SoftInput
+                                        value={form.price}
+                                        onChange={(e) => setForm((f) => ({ ...f, price: e.target.value }))}
+                                        placeholder="0.00"
+                                        icon={<IndianRupee className="h-4 w-4" />}
+                                    />
                                 </div>
                                 {errors.price ? <div className="mt-2 text-xs text-rose-600">{errors.price}</div> : null}
                             </div>
@@ -1334,7 +1094,12 @@ export default function ChargeMaster() {
                             <div>
                                 <label className="text-xs font-semibold text-slate-600">GST %</label>
                                 <div className="mt-1">
-                                    <SoftInput value={form.gst_rate} onChange={(e) => setForm((f) => ({ ...f, gst_rate: e.target.value }))} placeholder="0.00" icon={<BadgePercent className="h-4 w-4" />} />
+                                    <SoftInput
+                                        value={form.gst_rate}
+                                        onChange={(e) => setForm((f) => ({ ...f, gst_rate: e.target.value }))}
+                                        placeholder="0.00"
+                                        icon={<BadgePercent className="h-4 w-4" />}
+                                    />
                                 </div>
                                 {errors.gst_rate ? <div className="mt-2 text-xs text-rose-600">{errors.gst_rate}</div> : null}
                             </div>
@@ -1360,227 +1125,72 @@ export default function ChargeMaster() {
 
                     {/* Right: guidance */}
                     <div className="rounded-3xl border border-slate-200 bg-slate-50/60 p-5">
-                        <DividerLabel icon={<ShieldCheck className="h-5 w-5" />} title="Rules & Routing" subtitle="These match your backend enforcement logic." />
+                        <DividerLabel
+                            icon={<ShieldCheck className="h-5 w-5" />}
+                            title="Rules & Routing"
+                            subtitle="Simple + NABH-friendly (no dynamic masters)."
+                        />
 
                         <div className="mt-4 space-y-3 text-sm text-slate-700">
                             <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                                <div className="font-semibold text-slate-900">Category → Invoice module</div>
+                                <div className="font-semibold text-slate-900">MISC requires two selections</div>
                                 <div className="mt-1 text-xs text-slate-500 leading-relaxed">
-                                    <span className="font-semibold">ADM / DIET / BLOOD</span> must be billed under same module invoice.
-                                    <br />
-                                    <span className="font-semibold">MISC</span> uses module_header + service_header (dynamic masters).
+                                    For <span className="font-semibold">MISC</span>, choose:
+                                    <div className="mt-1">
+                                        <span className="font-semibold">Module Header</span> (fixed modules) +{" "}
+                                        <span className="font-semibold">Service Group</span> (fixed service groups).
+                                    </div>
                                 </div>
                             </div>
 
                             <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                                <div className="font-semibold text-slate-900">MISC headers are mandatory</div>
-                                <div className="mt-1 text-xs text-slate-500 leading-relaxed">
-                                    If category is <span className="font-semibold">MISC</span>, you must choose both headers.
-                                    You can add new headers instantly using “+”.
+                                <div className="font-semibold text-slate-900">Fixed Modules</div>
+                                <div className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                    {PREDEFINED_HEADERS.slice(0, 10).map((h) => (
+                                        <div key={h.value} className="rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2">
+                                            <div className="text-xs font-semibold text-slate-900">{h.value}</div>
+                                            <div className="text-[11px] text-slate-500">{MODULES[h.value]}</div>
+                                        </div>
+                                    ))}
+                                </div>
+                                <div className="mt-2 text-[11px] text-slate-500">
+                                    Total modules: <span className="font-semibold">{PREDEFINED_HEADERS.length}</span>
                                 </div>
                             </div>
 
                             <div className="rounded-2xl border border-slate-200 bg-white p-4">
-                                <div className="font-semibold text-slate-900">Service Header mapping</div>
-                                <div className="mt-1 text-xs text-slate-500 leading-relaxed">
-                                    Each service header maps to Billing <span className="font-semibold">service_group</span>.
-                                    Pick correct group while creating new service header.
+                                <div className="font-semibold text-slate-900">Fixed Service Groups</div>
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                    {SERVICE_HEADERS.map((s) => (
+                                        <Badge key={s.value} tone="violet">
+                                            {s.value}
+                                        </Badge>
+                                    ))}
                                 </div>
                             </div>
 
                             <div className="rounded-2xl border border-slate-200 bg-white p-4">
                                 <div className="font-semibold text-slate-900">Safety</div>
-                                <div className="mt-1 text-xs text-slate-500 leading-relaxed">
+                                <div className="mt-1 text-xs text-slate-500">
                                     Prefer <span className="font-semibold">soft delete</span> (inactive) to preserve billing history.
                                 </div>
                             </div>
-                        </div>
-                    </div>
-                </div>
-            </Modal>
 
-            {/* Header Manager Modal */}
-            <Modal
-                open={headerMgrOpen}
-                title="Header Masters"
-                subtitle="Add / enable / disable module & service headers (maps to billing routing)"
-                onClose={() => setHeaderMgrOpen(false)}
-                maxW="max-w-6xl"
-            >
-                <div className="flex flex-col gap-4">
-                    <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-                        <Segmented
-                            value={headerMgrTab}
-                            onChange={setHeaderMgrTab}
-                            options={[
-                                { value: "MODULE", label: "Module Headers" },
-                                { value: "SERVICE", label: "Service Headers" },
-                            ]}
-                        />
-                        <div className="flex items-center gap-2">
-                            <SoftInput value={hdrSearch} onChange={(e) => setHdrSearch(e.target.value)} placeholder="Search headers…" icon={<Search className="h-4 w-4" />} className="w-full md:w-[420px]" />
-                            <IconButton onClick={loadHeaderManager} disabled={hdrBusy} title="Refresh">
-                                <RefreshCcw className={cx("h-4 w-4", hdrBusy && "animate-spin")} />
-                                Refresh
-                            </IconButton>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)] gap-4">
-                        {/* Left: add */}
-                        <div className="rounded-3xl border border-slate-200 bg-slate-50/70 p-4">
-                            <div className="text-sm font-semibold text-slate-900 flex items-center gap-2">
-                                <Plus className="h-4 w-4 text-slate-600" />
-                                Add new {headerMgrTab === "MODULE" ? "module" : "service"} header
-                            </div>
-
-                            {headerMgrTab === "MODULE" ? (
-                                <div className="mt-3 grid grid-cols-1 md:grid-cols-3 gap-2">
-                                    <input
-                                        value={newMH.code}
-                                        onChange={(e) => setNewMH((p) => ({ ...p, code: e.target.value }))}
-                                        className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-slate-200"
-                                        placeholder="CODE e.g. DENTAL"
-                                        disabled={addingMH}
-                                    />
-                                    <input
-                                        value={newMH.name}
-                                        onChange={(e) => setNewMH((p) => ({ ...p, name: e.target.value }))}
-                                        className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-slate-200"
-                                        placeholder="Name (optional)"
-                                        disabled={addingMH}
-                                    />
-                                    <button
-                                        onClick={() => {
-                                            const payload = { code: normalizeHdr(newMH.code), name: String(newMH.name || "").trim() || null, is_active: true }
-                                            if (!payload.code) return toast.error("Module header code is required")
-                                            createModuleHeaderInline(payload)
-                                        }}
-                                        disabled={addingMH}
-                                        className="h-11 rounded-2xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 disabled:opacity-50"
-                                    >
-                                        {addingMH ? "Saving…" : "Save"}
-                                    </button>
-                                </div>
-                            ) : (
-                                <div className="mt-3 grid grid-cols-1 md:grid-cols-4 gap-2">
-                                    <input
-                                        value={newSH.code}
-                                        onChange={(e) => setNewSH((p) => ({ ...p, code: e.target.value }))}
-                                        className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-slate-200"
-                                        placeholder="CODE e.g. IMPLANT"
-                                        disabled={addingSH}
-                                    />
-                                    <input
-                                        value={newSH.name}
-                                        onChange={(e) => setNewSH((p) => ({ ...p, name: e.target.value }))}
-                                        className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-slate-200"
-                                        placeholder="Name (optional)"
-                                        disabled={addingSH}
-                                    />
-                                    <select
-                                        value={newSH.service_group}
-                                        onChange={(e) => setNewSH((p) => ({ ...p, service_group: e.target.value }))}
-                                        className="h-11 rounded-2xl border border-slate-200 bg-white px-3 text-sm outline-none focus:ring-2 focus:ring-slate-200"
-                                        disabled={addingSH}
-                                    >
-                                        {SERVICE_GROUPS.map((g) => (
-                                            <option key={g} value={g}>
-                                                {g}
-                                            </option>
-                                        ))}
-                                    </select>
-                                    <button
-                                        onClick={() => {
-                                            const payload = {
-                                                code: normalizeHdr(newSH.code),
-                                                name: String(newSH.name || "").trim() || null,
-                                                service_group: normalizeHdr(newSH.service_group) || "MISC",
-                                                is_active: true,
-                                            }
-                                            if (!payload.code) return toast.error("Service header code is required")
-                                            createServiceHeaderInline(payload)
-                                        }}
-                                        disabled={addingSH}
-                                        className="h-11 rounded-2xl bg-slate-900 text-white text-sm font-semibold hover:bg-slate-800 disabled:opacity-50"
-                                    >
-                                        {addingSH ? "Saving…" : "Save"}
-                                    </button>
+                            {String(form.category).toUpperCase() === "MISC" && (
+                                <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                                    <div className="font-semibold text-slate-900">Live Preview</div>
+                                    <div className="mt-2 text-xs text-slate-600 space-y-1">
+                                        <div>
+                                            <span className="font-semibold">Module:</span>{" "}
+                                            {form.module_header ? labelFrom(PREDEFINED_HEADERS, form.module_header) : "—"}
+                                        </div>
+                                        <div>
+                                            <span className="font-semibold">Service:</span>{" "}
+                                            {form.service_header ? labelFrom(SERVICE_HEADERS, form.service_header) : "—"}
+                                        </div>
+                                    </div>
                                 </div>
                             )}
-
-                            <div className="mt-3 text-[11px] text-slate-500">New headers become available immediately in Charge Item creation.</div>
-                        </div>
-
-                        {/* Right: list */}
-                        <div className="rounded-3xl border border-slate-200 bg-white overflow-hidden">
-                            <div className="px-4 py-3 border-b border-slate-200 bg-slate-50">
-                                <div className="text-sm font-semibold text-slate-900">
-                                    Existing {headerMgrTab === "MODULE" ? "Module" : "Service"} Headers
-                                </div>
-                            </div>
-
-                            <div className="max-h-[420px] overflow-auto">
-                                <table className="w-full text-sm">
-                                    <thead className="sticky top-0 bg-white border-b border-slate-200">
-                                        <tr className="text-left text-slate-600">
-                                            <th className="px-4 py-3">Code</th>
-                                            <th className="px-4 py-3">Name</th>
-                                            {headerMgrTab === "SERVICE" ? <th className="px-4 py-3">Service Group</th> : null}
-                                            <th className="px-4 py-3">Status</th>
-                                            <th className="px-4 py-3 w-[170px]">Action</th>
-                                        </tr>
-                                    </thead>
-
-                                    <tbody className="divide-y divide-slate-100">
-                                        {hdrBusy ? (
-                                            <tr>
-                                                <td className="px-4 py-6 text-slate-500" colSpan={headerMgrTab === "SERVICE" ? 5 : 4}>
-                                                    Loading…
-                                                </td>
-                                            </tr>
-                                        ) : (headerMgrTab === "MODULE" ? hdrRowsMH : hdrRowsSH).length === 0 ? (
-                                            <tr>
-                                                <td className="px-4 py-6 text-slate-500" colSpan={headerMgrTab === "SERVICE" ? 5 : 4}>
-                                                    No headers found.
-                                                </td>
-                                            </tr>
-                                        ) : (
-                                            (headerMgrTab === "MODULE" ? hdrRowsMH : hdrRowsSH).map((h) => (
-                                                <tr key={h.id} className="hover:bg-slate-50/60">
-                                                    <td className="px-4 py-3 font-semibold text-slate-900">{normalizeHdr(h.code)}</td>
-                                                    <td className="px-4 py-3 text-slate-700">{h.name || <span className="text-slate-400">—</span>}</td>
-                                                    {headerMgrTab === "SERVICE" ? (
-                                                        <td className="px-4 py-3">
-                                                            <Badge tone="violet">{String(h.service_group || "MISC").toUpperCase()}</Badge>
-                                                        </td>
-                                                    ) : null}
-                                                    <td className="px-4 py-3">{h.is_active ? <Badge tone="green">Active</Badge> : <Badge tone="red">Inactive</Badge>}</td>
-                                                    <td className="px-4 py-3">
-                                                        <IconButton onClick={() => toggleHeaderActive(headerMgrTab, h)} disabled={hdrBusy} title="Enable/Disable">
-                                                            {h.is_active ? (
-                                                                <>
-                                                                    <ToggleLeft className="h-4 w-4" />
-                                                                    Disable
-                                                                </>
-                                                            ) : (
-                                                                <>
-                                                                    <ToggleRight className="h-4 w-4" />
-                                                                    Enable
-                                                                </>
-                                                            )}
-                                                        </IconButton>
-                                                    </td>
-                                                </tr>
-                                            ))
-                                        )}
-                                    </tbody>
-                                </table>
-                            </div>
-
-                            <div className="px-4 py-3 border-t border-slate-200 bg-slate-50 text-xs text-slate-500">
-                                Tip: Disable headers instead of deleting (keeps historical billing consistency).
-                            </div>
                         </div>
                     </div>
                 </div>

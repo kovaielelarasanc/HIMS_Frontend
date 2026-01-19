@@ -92,3 +92,6 @@ export const claimDeny = (_caseId, claimId, payload) =>
 
 export const claimQuery = (_caseId, claimId, payload) =>
     API.post(`/billing/claims/${claimId}/query`, payload).then((r) => r.data)
+
+export const claimApprove = (_caseId, claimId, payload) =>
+    API.post(`/billing/claims/${claimId}/approve`, payload).then((r) => r.data)
