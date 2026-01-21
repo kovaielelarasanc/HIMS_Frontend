@@ -112,6 +112,10 @@ import InventoryIndentsPage from "./pages/inventory/InventoryIndentsPage";
 import InventoryIssuesPage from "./pages/inventory/InventoryIssuesPage";
 import LisMasters from "./lab/LisMasters";
 import BillingRevenueDashboard from "./billing/BillingRevenueDashboard";
+import EmrPatientChart from "./emr/new/EmrPatientChart";
+import EmrTemplateLibrary from "./emr/new/EmrTemplateLibrary";
+import EmrRecordsInbox from "./emr/new/EmrRecordsInbox";
+import EmrExportRelease from "./emr/new/EmrExportRelease";
 
 
 export default function App() {
@@ -214,6 +218,10 @@ export default function App() {
 
             {/* EMR */}
             <Route path="/emr" element={<EmrConsole />} />
+            <Route path="/emr/chart" element={<EmrPatientChart />} />
+            <Route path="/emr/templates" element={<EmrTemplateLibrary />} />
+            <Route path="/emr/record/inbox" element={<EmrRecordsInbox />} />
+            <Route path="/emr/export/release" element={<EmrExportRelease />} />
 
             {/* Templates */}
             <Route path="/templates" element={<Templates />} />

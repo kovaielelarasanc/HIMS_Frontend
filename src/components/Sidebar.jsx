@@ -56,7 +56,12 @@ import {
   Warehouse,
   ArrowUpRight,
   ClipboardSignature,
-  BellRing
+  BellRing,
+  Library,
+  Inbox,
+  Share2,
+  LucideClipboardList
+
 } from 'lucide-react'
 
 const defaultPrimary = '#2563eb'
@@ -132,11 +137,50 @@ const GROUPS = [
     flatLink: { to: '/mis', reqAny: ['mis.view'] },
   },
   {
-    key: 'emr',
-    label: 'Patients EMR',
-    icon: FileText,
-    flatLink: { to: '/emr', reqAny: ['emr.view'] },
+    key: "emr",
+    label: "Electronic Medical Records",
+    icon: FileText, // or Stethoscope
+    reqAny: ["emr.view"], // group-level gate
+    items: [
+      {
+        key: "emr.patients",
+        label: "Patients EMR",
+        to: "/emr",
+        icon: UsersIcon,
+        reqAny: ["emr.view"],
+      },
+      {
+        key: "emr.chart",
+        label: "EMR Chart (Hub)",
+        to: "/emr/chart",
+        icon: LayoutDashboard,
+        reqAny: ["emr.chart.view", "emr.view"],
+      },
+
+      {
+        key: "emr.templates",
+        label: "Template Library",
+        to: "/emr/templates",
+        icon: Library,
+        reqAny: ["emr.templates.view", "emr.view"],
+      },
+      {
+        key: "emr.inbox",
+        label: "Records Inbox",
+        to: "/emr/record/inbox",
+        icon: Inbox,
+        reqAny: ["emr.inbox.view", "emr.view"],
+      },
+      {
+        key: "emr.exports",
+        label: "Export & Release",
+        to: "/emr/export/release",
+        icon: Share2,
+        reqAny: ["emr.exports.view", "emr.view"],
+      },
+    ],
   },
+
 
   // Pharmacy
   {
