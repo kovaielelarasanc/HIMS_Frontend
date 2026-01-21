@@ -24,7 +24,7 @@ import {
     Hash,
 } from "lucide-react"
 import { toast } from "sonner"
-
+import { useNavigate } from "react-router-dom"
 import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -340,7 +340,7 @@ function sleep(ms) {
 
 export default function EmrPatientChart() {
     const isMobile = useIsMobile(1024)
-
+    const navigate = useNavigate()
     // Patient search
     const [q, setQ] = useState("")
     const [searching, setSearching] = useState(false)
@@ -665,7 +665,9 @@ export default function EmrPatientChart() {
                                         <Button
                                             variant="outline"
                                             className="rounded-2xl"
-                                            onClick={() => toast("Wire export builder in Phase 5")}
+                                            onClick={() => {
+                                                navigator
+                                            }}
                                             disabled={!patient}
                                         >
                                             <Download className="mr-2 h-4 w-4" /> Export

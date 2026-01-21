@@ -60,7 +60,9 @@ import {
   Library,
   Inbox,
   Share2,
-  LucideClipboardList
+  LucideClipboardList,
+  Pin,
+  PinIcon
 
 } from 'lucide-react'
 
@@ -154,6 +156,13 @@ const GROUPS = [
         label: "EMR Chart (Hub)",
         to: "/emr/chart",
         icon: LayoutDashboard,
+        reqAny: ["emr.chart.view", "emr.view"],
+      },
+       {
+        key: "emr.pinned",
+        label: "Recent Pinned",
+        to: "/emr/quick",
+        icon: PinIcon,
         reqAny: ["emr.chart.view", "emr.view"],
       },
 
