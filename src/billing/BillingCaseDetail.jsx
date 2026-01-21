@@ -46,17 +46,23 @@ import AdvancesTab from "./caseTabs/AdvancesTab"
 import SettingsTab from "./caseTabs/SettingsTab"
 
 import { StatCard, normItems, toNum, upper } from "./caseTabs/shared"
+import BillingCaseHeader from "./caseTabs/BillingCaseHeader"
+import BillingCaseKpiRibbon from "./caseTabs/BillingCaseKpiRibbon"
+import BillingCaseTabsBar from "./caseTabs/BillingCaseTabsBar"
 
 const TABS = [
-    { key: "OVERVIEW", label: "Overview", icon: Layers },
-    { key: "INVOICE_SUMMARY", label: "Invoice Summary", icon: ListChecks },
-    { key: "ADD_ITEM", label: "Add Item Line", icon: FilePlus2 },
-    { key: "INVOICES", label: "Invoices", icon: Layers },
-    { key: "PAYMENTS", label: "Payments", icon: CheckCircle2 },
-    { key: "ADVANCES", label: "Advances", icon: Wallet },
-    { key: "INSURANCE", label: "Insurance / Claims", icon: Shield },
-    { key: "SETTINGS", label: "Bill Type & Referral", icon: Settings },
+    { key: "OVERVIEW", label: "Overview", shortLabel: "Overview", mobileLabel: "Overview", group: "Case", hint: "Case snapshot & key stats", icon: Layers },
+    { key: "INVOICE_SUMMARY", label: "Invoice Summary", shortLabel: "Summary", mobileLabel: "Summary", group: "Case", hint: "Grouped totals (Module/Status)", icon: ListChecks },
+
+    { key: "ADD_ITEM", label: "Add Item Line", shortLabel: "Add Item", mobileLabel: "Add", group: "Billing", hint: "Add manual line / service", icon: FilePlus2 },
+    { key: "INVOICES", label: "Invoices", shortLabel: "Invoices", mobileLabel: "Invoices", group: "Billing", hint: "Bills, approvals, posted", icon: Layers },
+    { key: "PAYMENTS", label: "Payments", shortLabel: "Payments", mobileLabel: "Pay", group: "Billing", hint: "Receipts & allocations", icon: CheckCircle2 },
+    { key: "ADVANCES", label: "Advances", shortLabel: "Advances", mobileLabel: "Adv", group: "Billing", hint: "Deposits, refunds, adjustments", icon: Wallet },
+
+    { key: "INSURANCE", label: "Insurance / Claims", shortLabel: "Insurance", mobileLabel: "Ins", group: "Insurance", hint: "Preauth, claim, split, coverage", icon: Shield },
+    { key: "SETTINGS", label: "Bill Type & Referral", shortLabel: "Settings", mobileLabel: "Set", group: "Settings", hint: "Payer mode, referral info", icon: Settings },
 ]
+
 
 export default function BillingCaseDetail() {
     const canManageInsurance = useCan("billing.insurance.manage")
@@ -247,95 +253,37 @@ export default function BillingCaseDetail() {
     return (
         <div className="w-full">
             {/* Top bar */}
-            <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                <div className="flex items-start gap-3">
-                    <Button variant="outline" onClick={() => nav("/billing")}>
-                        <ArrowLeft className="h-4 w-4" /> Back
-                    </Button>
-
-                    <div>
-                        <div className="text-xl font-extrabold text-slate-900">Billing Case</div>
-                        <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-500">
-                            <span className="font-semibold text-slate-800">{headerTitle}</span>
-                            <StatusBadge status={caseRow?.status} />
-                            <Badge tone="slate">{caseRow?.payer_mode || "SELF"}</Badge>
-                            <span>· Patient: {caseRow?.patient_name || "—"}</span>
-                            <span className="text-slate-400">·</span>
-                            <span>UHID: {caseRow?.uhid || "—"}</span>
-                            <span className="text-slate-400">·</span>
-                            <span>Phone: {caseRow?.phone || "—"}</span>
-                        </div>
-                    </div>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                        variant="outline"
-                        onClick={() => {
-                            loadAll()
-                            loadDashboard()
-                        }}
-                        disabled={loading}
-                    >
-                        <RefreshCcw className={cn("h-4 w-4", loading ? "animate-spin" : "")} />
-                        Refresh
-                    </Button>
-
+            <BillingCaseHeader
+                caseRow={caseRow}
+                loading={loading}
+                onBack={() => nav("/billing")}
+                onRefresh={() => {
+                    loadAll()
+                    loadDashboard()
+                }}
+                onAddItem={() => nav(`/billing/cases/${caseId}/add-item`)}
+                printNode={
                     <BillingPrintDownload
                         caseId={Number(caseId)}
                         caseNumber={caseRow?.case_number}
                         patientName={caseRow?.patient_name}
                         uhid={caseRow?.uhid}
                     />
-
-                    <Button onClick={() => nav(`/billing/cases/${caseId}/add-item`)} className="gap-2">
-                        <FilePlus2 size={16} />
-                        Add Item Line
-                    </Button>
-                </div>
-            </div>
+                }
+            />
 
             {/* Summary cards */}
-            <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
-                <StatCard title="Billed" value={`₹ ${money(totals.totalBilled)}`} icon={IndianRupee} />
-                <StatCard title="Paid" value={`₹ ${money(totals.totalPaid)}`} icon={CheckCircle2} />
-                <StatCard title="Total Advance" value={`₹ ${money(totals.totalAdvance)}`} icon={Wallet} />
-                <StatCard
-                    title="Available Advance"
-                    value={`₹ ${money(totals.availableAdvance)}`}
-                    icon={Wallet}
-                    right={
-                        <Badge tone={totals.availableAdvance > 0 ? "green" : "slate"}>
-                            {totals.availableAdvance > 0 ? "Usable" : "—"}
-                        </Badge>
-                    }
-                />
-                <StatCard
-                    title="Due"
-                    value={`₹ ${money(totals.due)}`}
-                    right={<Badge tone={totals.due > 0 ? "amber" : "green"}>{totals.due > 0 ? "Pending" : "Clear"}</Badge>}
-                />
-            </div>
+            <BillingCaseKpiRibbon
+                totals={totals}
+                money={money}
+                loading={loading}
+                onGoInvoices={() => setTab("INVOICES")}
+                onGoPayments={() => setTab("PAYMENTS")}
+                onGoAdvances={() => setTab("ADVANCES")}
+            />
 
             {/* Tabs */}
-            <div className="mb-3 flex flex-wrap items-center gap-2">
-                {TABS.map((t) => {
-                    const Icon = t.icon
-                    return (
-                        <button
-                            key={t.key}
-                            onClick={() => setTab(t.key)}
-                            className={cn(
-                                "flex items-center gap-2 rounded-2xl px-4 py-2 text-sm font-extrabold transition",
-                                tab === t.key ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700 hover:bg-slate-200"
-                            )}
-                        >
-                            <Icon className="h-4 w-4" />
-                            {t.label}
-                        </button>
-                    )
-                })}
-            </div>
+            <BillingCaseTabsBar tabs={TABS} value={tab} onChange={setTab} />
 
             {loading ? (
                 <div className="space-y-3">

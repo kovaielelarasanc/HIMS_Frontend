@@ -60,8 +60,8 @@ export function StatusBadge({ status }) {
 
 export function Button({ children, variant = "default", size = "md", className, ...props }) {
     const variants = {
-        default: "bg-slate-900 text-white hover:bg-slate-800",
-        outline: "bg-white text-slate-900 border border-slate-200 hover:bg-slate-50",
+        default: "bg-rose-600 text-white hover:bg-slate-800",
+        outline: "bg-[#121212] text-[#ffff] border border-slate-200 hover:bg-slate-50 hover:text-black",
         ghost: "bg-transparent text-slate-800 hover:bg-slate-100",
         danger: "bg-rose-600 text-white hover:bg-rose-700",
     }
