@@ -44,6 +44,7 @@ import InvoicesTab from "./caseTabs/InvoicesTab"
 import PaymentsTab from "./caseTabs/PaymentsTab"
 import AdvancesTab from "./caseTabs/AdvancesTab"
 import SettingsTab from "./caseTabs/SettingsTab"
+import CollectTab from "./caseTabs/CollectTab"
 
 import { StatCard, normItems, toNum, upper } from "./caseTabs/shared"
 import BillingCaseHeader from "./caseTabs/BillingCaseHeader"
@@ -68,6 +69,8 @@ export default function BillingCaseDetail() {
     const canManageInsurance = useCan("billing.insurance.manage")
     const { caseId } = useParams()
     const nav = useNavigate()
+
+    const [collectReloadKey, setCollectReloadKey] = useState(0)
 
     const [tab, setTab] = useState("OVERVIEW")
     const [loading, setLoading] = useState(true)
@@ -101,6 +104,15 @@ export default function BillingCaseDetail() {
         referral_notes: "",
     })
     const [savingSettings, setSavingSettings] = useState(false)
+    const collectRefreshKey = useMemo(() => {
+        const maxId = (arr) => Math.max(0, ...(arr || []).map((x) => Number(x?.id) || 0))
+        return [
+            maxId(invoices),   // ✅ include invoices
+            maxId(payments),
+            maxId(advances),
+            maxId(refunds),
+        ].join("-")
+    }, [invoices, payments, advances, refunds])
 
     const abortRef = useRef(null)
 
@@ -127,6 +139,7 @@ export default function BillingCaseDetail() {
             setAdvances(normItems(adv))
             setRefunds(normItems(ref))
             setFinance(fin)
+            setCollectReloadKey((x) => x + 1)
 
             // optional: keep insurance cache warm (safe)
             await billingGetInsurance(caseId, { signal: ac.signal }).catch(() => null)
@@ -260,7 +273,9 @@ export default function BillingCaseDetail() {
                 onRefresh={() => {
                     loadAll()
                     loadDashboard()
+                    setCollectReloadKey((x) => x + 1)
                 }}
+
                 onAddItem={() => nav(`/billing/cases/${caseId}/add-item`)}
                 printNode={
                     <BillingPrintDownload
@@ -323,11 +338,13 @@ export default function BillingCaseDetail() {
                     {tab === "INVOICES" && <InvoicesTab invoices={invoices} onOpen={(id) => nav(`/billing/invoices/${id}`)} />}
 
                     {tab === "PAYMENTS" && (
-                        <PaymentsTab caseId={caseId} payments={payments} invoices={payableInvoices} onDone={loadAll} />
+                        <CollectTab
+                            caseId={caseId ? Number(caseId) : 0}
+                            refreshKey={`${caseId}-${invoices.length}-${payments.length}-${advances.length}-${refunds.length}`}
+                        />
                     )}
-
                     {tab === "ADVANCES" && (
-                        <AdvancesTab caseId={caseId} advances={advances} refunds={refunds} due={totals.due} onDone={loadAll} />
+                        <AdvancesTab caseId={Number(caseId)} advances={advances} refunds={refunds} due={totals.due} onDone={loadAll} />
                     )}
 
                     {tab === "INSURANCE" && (
