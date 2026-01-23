@@ -88,7 +88,10 @@ function makeEmptyForm() {
 
 function mapPatientToForm(p) {
   if (!p) return makeEmptyForm()
-  const addr = (p.addresses && p.addresses[0]) || null
+  const addr = 
+    (p.addresses || []).find((a) => String(a.type || '').toLowerCase() === 'current') ||
+    (p.addresses && p.addresses[0]) ||
+    null
   return {
     prefix: p.prefix || '',
     first_name: p.first_name || '',
@@ -471,14 +474,14 @@ function PatientFormModalInner({ onClose, onSaved, initialPatient, lookups }) {
         // address: send only if user filled something
         address: addressHasAny(form.address)
           ? {
-              type: form.address.type || 'current',
-              line1: nullIfEmpty(form.address.line1) || '',
-              line2: nullIfEmpty(form.address.line2) || '',
-              city: nullIfEmpty(form.address.city) || '',
-              state: nullIfEmpty(form.address.state) || '',
-              pincode: nullIfEmpty(form.address.pincode) || '',
-              country: nullIfEmpty(form.address.country) || 'India',
-            }
+            type: form.address.type || 'current',
+            line1: nullIfEmpty(form.address.line1) || '',
+            line2: nullIfEmpty(form.address.line2) || '',
+            city: nullIfEmpty(form.address.city) || '',
+            state: nullIfEmpty(form.address.state) || '',
+            pincode: nullIfEmpty(form.address.pincode) || '',
+            country: nullIfEmpty(form.address.country) || 'India',
+          }
           : null,
       }
 

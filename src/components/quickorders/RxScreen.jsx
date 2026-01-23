@@ -884,8 +884,8 @@ export default function RxScreen({
                             {/* Lines */}
                             {rxLines.length > 0 && (
                                 <div className="border border-slate-200 rounded-2xl bg-slate-50/60 overflow-hidden">
-                                    <ScrollArea className="max-h-64">
-                                        <div className="min-w-[980px]">
+                                    <ScrollArea className="min-h-64">
+                                        <div className="min-w-12xl">
                                             <table className="w-full text-[11px]">
                                                 <thead className="bg-slate-100 text-slate-700">
                                                     <tr>
