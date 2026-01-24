@@ -1,5 +1,5 @@
 // FILE: frontend/src/emr/EmrExportRelease.jsx
-import React, { useEffect, useMemo, useState } from "react"
+import React, { useEffect, useMemo, useRef, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { toast } from "sonner"
 import {
@@ -39,25 +39,117 @@ import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Switch } from "@/components/ui/switch"
-import { Checkbox } from "@/components/ui/checkbox"
+import API from "@/api/client"
 
 /**
- * ✅ EMR Export & Release (MRD / Sharing) — UI Only
- * Features:
- * - Export builder (bundle PDF): cover page, index, watermark, password, attachments, audit summary
- * - Permissions: roles/users, expiry, download/print controls, OTP toggle (placeholder)
- * - Release actions: generate bundle, download, share (email/whatsapp placeholders)
- * - Audit logs: event timeline
- * - Apple Premium UI + multi-color dept tone + responsive + full scroll-safe layout
+ * ✅ EMR Export & Release — Production API Integrated
  *
- * Backend later:
- * - GET /emr/patients/:id/visits
- * - GET /emr/visits/:id/records
- * - POST /emr/exports/build
- * - POST /emr/exports/:id/release
- * - GET /emr/exports/:id/audit
+ * Uses:
+ * - GET  /api/emr/patients/:id/summary              (added below in backend patch)
+ * - GET  /api/emr/patients/:id/encounters           (already exists in your backend)
+ * - GET  /api/emr/records?patient_id=:id            (already exists; we filter by encounter client-side)
+ * - POST /api/emr/exports/bundles                   (already exists)
+ * - PUT  /api/emr/exports/bundles/:id               (already exists)
+ * - POST /api/emr/exports/bundles/:id/generate      (patched below to accept optional {pdf_password})
+ * - POST /api/emr/exports/bundles/:id/share         (already exists)
+ * - GET  /api/emr/exports/bundles/:id/audit         (added below in backend patch)
+ * - GET  /api/emr/exports/share/:token              (already exists; used for download/share link)
  */
 
+// ---------------------------
+// API Helper (safe unwrap)
+// ---------------------------
+// const API_ORIGIN = (import.meta?.env?.VITE_API_ORIGIN || "").replace(/\/$/, "")
+const EMR_BASE = `${API}/emr`
+
+function getAccessToken() {
+    // If you use cookies, keep it empty; fetch will still work with credentials.
+    return localStorage.getItem("access_token") || localStorage.getItem("token") || ""
+}
+
+function normalizeApiError(err) {
+    if (!err) return "Unknown error"
+    if (typeof err === "string") return err
+    if (err?.message) return err.message
+    return "Request failed"
+}
+
+async function apiFetch(path, { method = "GET", body, signal } = {}) {
+    const token = getAccessToken()
+    const headers = { "Content-Type": "application/json" }
+    if (token) headers.Authorization = `Bearer ${token}`
+
+    const res = await fetch(`${EMR_BASE}${path}`, {
+        method,
+        headers,
+        credentials: "include",
+        body: body ? JSON.stringify(body) : undefined,
+        signal,
+    })
+
+    let json = null
+    const ct = res.headers.get("content-type") || ""
+    if (ct.includes("application/json")) {
+        json = await res.json().catch(() => null)
+    } else {
+        // For non-json responses (rare here), try text
+        const text = await res.text().catch(() => "")
+        json = text ? { raw: text } : null
+    }
+
+    // Support your backend's ok()/err() wrapper shapes
+    const unwrapped =
+        json && typeof json === "object" && "status" in json
+            ? json.status
+                ? json.data ?? json
+                : (() => {
+                    const msg =
+                        json?.msg ||
+                        json?.message ||
+                        json?.error?.message ||
+                        json?.error ||
+                        "Request failed"
+                    const e = new Error(msg)
+                    e.details = json
+                    throw e
+                })()
+            : json
+
+    if (!res.ok) {
+        const msg =
+            (json && (json?.detail || json?.msg || json?.message)) ||
+            `HTTP ${res.status}`
+        const e = new Error(msg)
+        e.details = json
+        throw e
+    }
+
+    return unwrapped
+}
+
+// Download helper for Bearer-token auth
+async function downloadPdfViaFetch(urlPath, filename = "export.pdf") {
+    const token = getAccessToken()
+    const headers = {}
+    if (token) headers.Authorization = `Bearer ${token}`
+
+    const res = await fetch(urlPath, { headers, credentials: "include" })
+    if (!res.ok) throw new Error(`Download failed (HTTP ${res.status})`)
+    const blob = await res.blob()
+    const blobUrl = window.URL.createObjectURL(blob)
+
+    const a = document.createElement("a")
+    a.href = blobUrl
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    window.URL.revokeObjectURL(blobUrl)
+}
+
+// ---------------------------
+// UI Helpers
+// ---------------------------
 function useIsMobile(breakpointPx = 1024) {
     const [isMobile, setIsMobile] = useState(false)
     useEffect(() => {
@@ -128,106 +220,29 @@ function deptTone(deptRaw) {
 
 function fmtDate(d) {
     try {
-        return new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
+        return new Date(d).toLocaleDateString("en-IN", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+        })
     } catch {
         return String(d || "")
     }
 }
 function fmtTime(d) {
     try {
-        return new Date(d).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
+        return new Date(d).toLocaleTimeString("en-IN", {
+            hour: "2-digit",
+            minute: "2-digit",
+        })
     } catch {
         return ""
     }
 }
-function uid(prefix = "EXP") {
-    return `${prefix}-${Math.random().toString(16).slice(2, 7).toUpperCase()}-${Date.now().toString(36).toUpperCase()}`
-}
 
-const DEPARTMENTS = ["ALL", "Common (All)", "General Medicine", "General Surgery", "OBGYN", "Cardiology", "Orthopedics", "ICU", "Pathology/Lab", "Radiology"]
-
-const SHARE_ROLES = ["Doctor", "Nurse", "Receptionist", "Lab Staff", "Radiology Staff", "MRD", "Admin"]
-const EXTERNAL_CHANNELS = ["Email", "WhatsApp", "Download Link"]
-
-function demoPatient() {
-    return { id: 1, name: "Pavithra S", uhid: "NH-000001", age: 26, gender: "F", phone: "9600457842" }
-}
-function demoVisits() {
-    return [
-        { id: "OP-2026-00122", type: "OP", dept: "OBGYN", doctor: "Dr. K. Priya", when: "2026-01-21T03:35:00Z", status: "In Progress" },
-        { id: "OP-2026-00118", type: "OP", dept: "General Medicine", doctor: "Dr. R. Kumar", when: "2026-01-20T06:10:00Z", status: "Completed" },
-        { id: "IP-2026-00033", type: "IP", dept: "ICU", doctor: "Dr. A. Selvam", when: "2026-01-14T09:00:00Z", status: "Admitted" },
-    ]
-}
-function demoRecords(visitId) {
-    const base = [
-        {
-            id: "REC-00011",
-            dept: "OBGYN",
-            type: "OPD_NOTE",
-            title: "OBGYN OPD Note · LMP/EDD Review",
-            updated_at: "2026-01-21T04:10:00Z",
-            signed: false,
-            confidential: false,
-            pages_est: 2,
-            attachments: 1,
-        },
-        {
-            id: "REC-00012",
-            dept: "OBGYN",
-            type: "LAB_RESULT",
-            title: "CBC Result · Report",
-            updated_at: "2026-01-21T04:30:00Z",
-            signed: true,
-            confidential: false,
-            pages_est: 1,
-            attachments: 1,
-            abnormal: true,
-        },
-        {
-            id: "REC-00013",
-            dept: "OBGYN",
-            type: "CONSENT",
-            title: "Consent · Procedure",
-            updated_at: "2026-01-20T10:10:00Z",
-            signed: true,
-            confidential: true,
-            pages_est: 2,
-            attachments: 0,
-        },
-        {
-            id: "REC-00014",
-            dept: "ICU",
-            type: "PROGRESS_NOTE",
-            title: "ICU Progress Note · Day 3",
-            updated_at: "2026-01-15T06:10:00Z",
-            signed: false,
-            confidential: true,
-            pages_est: 3,
-            attachments: 0,
-        },
-        {
-            id: "REC-00015",
-            dept: "Radiology",
-            type: "RADIOLOGY_REPORT",
-            title: "USG Abdomen · Report",
-            updated_at: "2026-01-21T05:05:00Z",
-            signed: true,
-            confidential: false,
-            pages_est: 2,
-            attachments: 1,
-        },
-    ]
-    // UI-only: filter records by visit dept as a feel-good demo
-    if (!visitId) return base
-    if (visitId.startsWith("IP")) return base.filter((r) => ["ICU"].includes(r.dept))
-    if (visitId.startsWith("OP-2026-00118")) return base.filter((r) => ["General Medicine", "Radiology"].includes(r.dept) || r.dept === "Common (All)")
-    return base.filter((r) => r.dept === "OBGYN" || r.dept === "Radiology" || r.dept === "Common (All)")
-}
-
-/** -----------------------------------------------
- * Optional Fullscreen Wrapper (scroll-safe)
- * ----------------------------------------------- */
+// ---------------------------
+// Fullscreen Wrapper
+// ---------------------------
 export function EmrExportReleaseDialog({ open, onOpenChange, patient }) {
     return (
         <Dialog open={!!open} onOpenChange={onOpenChange}>
@@ -243,11 +258,18 @@ export function EmrExportReleaseDialog({ open, onOpenChange, patient }) {
                     <DialogHeader className="shrink-0 border-b border-slate-200 bg-white/70 px-4 py-3 backdrop-blur-xl md:px-6">
                         <div className="flex items-center justify-between gap-3">
                             <DialogTitle className="text-base">Export & Release</DialogTitle>
-                            <Button variant="ghost" size="icon" className="h-10 w-10 rounded-2xl" onClick={() => onOpenChange?.(false)}>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-10 w-10 rounded-2xl"
+                                onClick={() => onOpenChange?.(false)}
+                            >
                                 <X className="h-4 w-4" />
                             </Button>
                         </div>
-                        <div className="mt-1 text-xs text-slate-500">MRD export builder · permissions · audit logs</div>
+                        <div className="mt-1 text-xs text-slate-500">
+                            MRD export builder · permissions · audit logs
+                        </div>
                     </DialogHeader>
 
                     <div className="flex-1 min-h-0 overflow-y-auto">
@@ -259,18 +281,40 @@ export function EmrExportReleaseDialog({ open, onOpenChange, patient }) {
     )
 }
 
-/** -----------------------------------------------
- * Main Page Component
- * ----------------------------------------------- */
+// ---------------------------
+// Main Component
+// ---------------------------
 export default function EmrExportRelease({ patient: patientProp, fullscreen = false }) {
     const isMobile = useIsMobile(1024)
 
-    const patient = patientProp || demoPatient()
-    const visits = useMemo(() => demoVisits(), [])
-    const [visitId, setVisitId] = useState(visits?.[0]?.id || "")
-    const visit = useMemo(() => visits.find((v) => v.id === visitId) || null, [visits, visitId])
+    // patientProp can be {id} or full object. We always fetch real summary for correctness.
+    const patientId = Number(patientProp?.id || patientProp?.patient_id || 0) || 0
 
-    const allRecords = useMemo(() => demoRecords(visitId), [visitId])
+    // Core data
+    const [patient, setPatient] = useState(patientProp || null)
+    const [encounters, setEncounters] = useState([])
+    const [visitKey, setVisitKey] = useState("") // `${encounter_type}:${encounter_id}`
+    const [records, setRecords] = useState([])
+
+    // Meta lists (dynamic > fallback)
+    const [deptOptions, setDeptOptions] = useState(["ALL"])
+    const SHARE_ROLES = useMemo(
+        () => ["Doctor", "Nurse", "Receptionist", "Lab Staff", "Radiology Staff", "MRD", "Admin"],
+        []
+    )
+    const EXTERNAL_CHANNELS = useMemo(() => ["Email", "WhatsApp", "Download Link"], [])
+
+    // Loading / errors
+    const [loading, setLoading] = useState({
+        patient: false,
+        encounters: false,
+        records: false,
+        build: false,
+        audit: false,
+        share: false,
+    })
+
+    const abortRef = useRef({ patient: null, encounters: null, records: null, audit: null })
 
     // filters
     const [q, setQ] = useState("")
@@ -299,7 +343,7 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
     const [maskPHI, setMaskPHI] = useState(false) // UI-only
     const [notes, setNotes] = useState("")
 
-    // Permissions
+    // Permissions (UI policy today, server enforces expiry/max-download only)
     const [internalRoles, setInternalRoles] = useState(() => new Set(["MRD"]))
     const [externalChannels, setExternalChannels] = useState(() => new Set(["Email"]))
     const [expiryDays, setExpiryDays] = useState(7)
@@ -309,39 +353,185 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
     const [allowForward, setAllowForward] = useState(false)
 
     // Output
-    const [bundle, setBundle] = useState(null) // {id, created_at, pages, size_est, status}
+    const [bundle, setBundle] = useState(null) // {id, created_at, pages, size_est_mb, status, share_token?, share_url?}
     const [released, setReleased] = useState(false)
 
-    // Audit logs
-    const [audit, setAudit] = useState(() => [
-        { at: new Date().toISOString(), by: "System", action: "Opened Export & Release", meta: "UI only" },
-    ])
+    // Audit logs (from API)
+    const [audit, setAudit] = useState([])
 
-    const tone = deptTone(visit?.dept || "General Medicine")
+    const activeVisit = useMemo(() => {
+        const [t, id] = (visitKey || "").split(":")
+        const encounter_type = (t || "").toUpperCase()
+        const encounter_id = Number(id || 0) || 0
+        const row = encounters.find(
+            (e) => String(e.encounter_type).toUpperCase() === encounter_type && Number(e.encounter_id) === encounter_id
+        )
+        return row || null
+    }, [visitKey, encounters])
 
-    // Init name
+    const tone = deptTone(activeVisit?.dept_code || activeVisit?.dept_name || "General Medicine")
+
+    // ---------------------------
+    // Load patient + encounters
+    // ---------------------------
     useEffect(() => {
-        const defaultName = `MRD_${patient.uhid}_${(visit?.id || "VISIT").replaceAll("-", "")}_${new Date().toISOString().slice(0, 10)}`
+        console.log(patientId, "888888888888888888888888888888888");
+
+        if (!patientId) return
+
+            ; (async () => {
+                abortRef.current.patient?.abort?.()
+                const controller = new AbortController()
+                abortRef.current.patient = controller
+
+                try {
+                    setLoading((p) => ({ ...p, patient: true }))
+                    const p = await apiFetch(`/patients/${patientId}/summary`, { signal: controller.signal })
+                    setPatient(p)
+                } catch (e) {
+                    toast.error(normalizeApiError(e))
+                } finally {
+                    setLoading((p) => ({ ...p, patient: false }))
+                }
+            })()
+    }, [patientId])
+
+    useEffect(() => {
+        if (!patientId) return
+
+            ; (async () => {
+                abortRef.current.encounters?.abort?.()
+                const controller = new AbortController()
+                abortRef.current.encounters = controller
+
+                try {
+                    setLoading((p) => ({ ...p, encounters: true }))
+                    const rows = await apiFetch(`/patients/${patientId}/encounters?limit=100`, { signal: controller.signal })
+
+                    const norm = (Array.isArray(rows) ? rows : [])
+                        .map((r) => ({
+                            encounter_type: (r.encounter_type || "").toUpperCase(),
+                            encounter_id: Number(r.encounter_id || 0) || 0,
+                            encounter_code: r.encounter_code || `${r.encounter_type}-${r.encounter_id}`,
+                            dept_code: r.dept_code || r.dept || "",
+                            dept_name: r.dept_name || r.dept || "",
+                            doctor_name: r.doctor_name || r.doctor || "",
+                            status: r.status || "",
+                            encounter_at: r.encounter_at || r.created_at || null,
+                        }))
+                        .filter((r) => r.encounter_type && r.encounter_id)
+
+                    setEncounters(norm)
+
+                    // default selection
+                    if (!visitKey && norm.length) {
+                        setVisitKey(`${norm[0].encounter_type}:${norm[0].encounter_id}`)
+                    }
+                } catch (e) {
+                    toast.error(normalizeApiError(e))
+                } finally {
+                    setLoading((p) => ({ ...p, encounters: false }))
+                }
+            })()
+    }, [patientId]) // eslint-disable-line react-hooks/exhaustive-deps
+
+    // Init bundle name when visit changes
+    useEffect(() => {
+        if (!patient?.uhid) return
+        if (!activeVisit) return
+        const safeCode = String(activeVisit.encounter_code || `${activeVisit.encounter_type}-${activeVisit.encounter_id}`)
+            .replaceAll(":", "_")
+            .replaceAll("/", "_")
+            .replaceAll(" ", "_")
+        const defaultName = `MRD_${patient.uhid}_${safeCode}_${new Date().toISOString().slice(0, 10)}`
         setBundleName((p) => p || defaultName)
         // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [visit?.id])
+    }, [activeVisit?.encounter_type, activeVisit?.encounter_id, patient?.uhid])
 
-    // Clear selection when visit changes
+    // Clear selection/bundle when visit changes
     useEffect(() => {
         setSelected(new Set())
         setBundle(null)
         setReleased(false)
-        addAudit("Changed Visit", visitId)
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [visitId])
+        setAudit([])
+    }, [visitKey])
 
-    function addAudit(action, meta) {
-        setAudit((p) => [{ at: new Date().toISOString(), by: "You", action, meta: meta || "" }, ...p])
-    }
+    // ---------------------------
+    // Load records for patient (and filter by encounter client-side)
+    // ---------------------------
+    useEffect(() => {
+        if (!patientId) return
+        if (!activeVisit) return
 
+            ; (async () => {
+                abortRef.current.records?.abort?.()
+                const controller = new AbortController()
+                abortRef.current.records = controller
+
+                try {
+                    setLoading((p) => ({ ...p, records: true }))
+
+                    // We fetch patient records once (paged) and filter by encounter fields.
+                    // This avoids backend changes. (If you want server-side encounter filtering, tell me.)
+                    const pageSize = 100
+                    let page = 1
+                    let all = []
+                    let total = 0
+
+                    // max 5 pages (500 records) to prevent runaway; adjust if needed.
+                    for (let i = 0; i < 5; i++) {
+                        const resp = await apiFetch(
+                            `/records?patient_id=${patientId}&page=${page}&page_size=${pageSize}`,
+                            { signal: controller.signal }
+                        )
+                        const items = resp?.items || []
+                        total = Number(resp?.total || 0) || items.length
+                        all = all.concat(items)
+
+                        if (all.length >= total || items.length < pageSize) break
+                        page += 1
+                    }
+
+                    const encType = String(activeVisit.encounter_type || "").toUpperCase()
+                    const encId = Number(activeVisit.encounter_id || 0) || 0
+
+                    // Normalize rows into the UI schema
+                    const mapped = all
+                        .filter((r) => String(r.encounter_type || "").toUpperCase() === encType && Number(r.encounter_id || 0) === encId)
+                        .map((r) => ({
+                            id: String(r.id),
+                            dept: r.dept_code || r.dept_name || "Common (All)",
+                            type: r.record_type_code || r.record_type || "RECORD",
+                            title: r.title || r.summary || `Record #${r.id}`,
+                            updated_at: r.updated_at || r.created_at || new Date().toISOString(),
+                            signed: !!r.signed_at || String(r.status || "").toUpperCase() === "SIGNED",
+                            confidential: !!r.is_confidential,
+                            pages_est: Number(r.pages_est || 1) || 1, // backend can send pages_est; default 1
+                            attachments: Number(r.attachments_count || 0) || 0,
+                            abnormal: !!r.has_abnormal,
+                        }))
+
+                    setRecords(mapped)
+
+                    // department filter options (dynamic)
+                    const deptSet = new Set(["ALL"])
+                    mapped.forEach((x) => deptSet.add(String(x.dept || "").trim() || "Common (All)"))
+                    setDeptOptions(Array.from(deptSet))
+                } catch (e) {
+                    toast.error(normalizeApiError(e))
+                    setRecords([])
+                } finally {
+                    setLoading((p) => ({ ...p, records: false }))
+                }
+            })()
+    }, [patientId, activeVisit?.encounter_type, activeVisit?.encounter_id])
+
+    // ---------------------------
+    // Filtering + selection math
+    // ---------------------------
     const filteredRecords = useMemo(() => {
         const qq = (q || "").trim().toLowerCase()
-        let x = [...allRecords]
+        let x = [...records]
 
         if (dept !== "ALL") x = x.filter((r) => (r.dept || "").toUpperCase() === dept.toUpperCase())
         if (onlySigned) x = x.filter((r) => !!r.signed)
@@ -353,12 +543,15 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
                 return hay.includes(qq)
             })
         }
-        // sort latest updated
+
         x.sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
         return x
-    }, [allRecords, q, dept, onlySigned, showConfidential])
+    }, [records, q, dept, onlySigned, showConfidential])
 
-    const selectedRows = useMemo(() => allRecords.filter((r) => selected.has(r.id)), [allRecords, selected])
+    const selectedRows = useMemo(
+        () => records.filter((r) => selected.has(r.id)),
+        [records, selected]
+    )
 
     const selectedPages = useMemo(() => {
         let pages = selectedRows.reduce((s, r) => s + Number(r.pages_est || 0), 0)
@@ -368,7 +561,10 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
         return pages
     }, [selectedRows, includeCover, includeIndex, includeAuditSummary])
 
-    const selectedAttachments = useMemo(() => selectedRows.reduce((s, r) => s + Number(r.attachments || 0), 0), [selectedRows])
+    const selectedAttachments = useMemo(
+        () => selectedRows.reduce((s, r) => s + Number(r.attachments || 0), 0),
+        [selectedRows]
+    )
 
     const hasConfidentialSelected = useMemo(() => selectedRows.some((r) => r.confidential), [selectedRows])
     const hasUnsignedSelected = useMemo(() => selectedRows.some((r) => !r.signed), [selectedRows])
@@ -406,44 +602,158 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
     }
 
     function validateBuild() {
-        if (!visitId) return "Choose a visit"
+        if (!patientId) return "Patient is missing"
+        if (!activeVisit) return "Choose a visit"
         if (!selectedCount) return "Select at least one record"
         if (!bundleName.trim() || bundleName.trim().length < 3) return "Bundle name is required (min 3 chars)"
         if (passwordOn && (!password || password.length < 6)) return "Password must be at least 6 characters"
         return null
     }
 
-    function buildBundle() {
+    // ---------------------------
+    // API Actions: Build / Generate / Share / Audit
+    // ---------------------------
+    async function fetchAudit(bundleId) {
+        if (!bundleId) return
+        abortRef.current.audit?.abort?.()
+        const controller = new AbortController()
+        abortRef.current.audit = controller
+
+        try {
+            setLoading((p) => ({ ...p, audit: true }))
+            const rows = await apiFetch(`/exports/bundles/${bundleId}/audit?limit=200`, { signal: controller.signal })
+            // expected rows: [{at, by, action, meta}]
+            setAudit(Array.isArray(rows) ? rows : [])
+        } catch (e) {
+            // audit is non-blocking
+            console.warn(e)
+        } finally {
+            setLoading((p) => ({ ...p, audit: false }))
+        }
+    }
+
+    async function buildBundle() {
         const err = validateBuild()
         if (err) return toast.error(err)
 
-        const id = uid("EXP")
-        const sizeEstMb = Math.max(0.3, (selectedPages * 0.18) + (includeAttachments ? selectedAttachments * 0.35 : 0)).toFixed(1)
-        const obj = {
-            id,
-            created_at: new Date().toISOString(),
-            name: bundleName.trim(),
-            pages: selectedPages,
-            size_est_mb: sizeEstMb,
-            status: "READY",
+        try {
+            setLoading((p) => ({ ...p, build: true }))
+
+            const recordIds = selectedRows
+                .map((r) => Number(r.id))
+                .filter((n) => Number.isFinite(n) && n > 0)
+
+            // 1) Create bundle
+            const created = await apiFetch(`/exports/bundles`, {
+                method: "POST",
+                body: {
+                    patient_id: patientId,
+                    encounter_type: activeVisit.encounter_type,
+                    encounter_id: activeVisit.encounter_id,
+                    title: bundleName.trim(),
+                    watermark_text: watermarkOn ? watermarkText : "",
+                    record_ids: recordIds,
+                    // Keep extra "notes/purpose" in title/notes on UI for now (DB schema dependent)
+                },
+            })
+
+            const bundleId = Number(created?.bundle_id || created?.id || 0)
+            if (!bundleId) throw new Error("Bundle creation failed: missing bundle_id")
+
+            // 2) Generate PDF (optional password)
+            const gen = await apiFetch(`/exports/bundles/${bundleId}/generate`, {
+                method: "POST",
+                body: passwordOn ? { pdf_password: password } : {},
+            })
+
+            const status = gen?.status || "GENERATED"
+
+            const sizeEstMb = Math.max(
+                0.3,
+                selectedPages * 0.18 + (includeAttachments ? selectedAttachments * 0.35 : 0)
+            ).toFixed(1)
+
+            setBundle({
+                id: bundleId,
+                created_at: new Date().toISOString(),
+                name: bundleName.trim(),
+                pages: selectedPages,
+                size_est_mb: sizeEstMb,
+                status,
+            })
+            setReleased(false)
+
+            toast.success("Bundle generated successfully")
+            await fetchAudit(bundleId)
+        } catch (e) {
+            toast.error(normalizeApiError(e))
+        } finally {
+            setLoading((p) => ({ ...p, build: false }))
         }
-        setBundle(obj)
-        setReleased(false)
-        toast.success("Bundle generated (UI only)")
-        addAudit("Built Export Bundle", `${obj.id} · ${obj.pages} pages · ~${obj.size_est_mb}MB`)
     }
 
-    function releaseBundle(channel) {
-        if (!bundle) return toast.error("Generate bundle first")
-        setReleased(true)
-        toast.success(`Released via ${channel} (UI only)`)
-        addAudit("Released Export", `${bundle.id} via ${channel}`)
+    async function releaseBundle(channel) {
+        if (!bundle?.id) return toast.error("Generate bundle first")
+
+        try {
+            setLoading((p) => ({ ...p, share: true }))
+
+            // Backend supports expiry + max_downloads today.
+            const share = await apiFetch(`/exports/bundles/${bundle.id}/share`, {
+                method: "POST",
+                body: {
+                    expires_in_days: Math.max(0, Math.min(365, Number(expiryDays || 0))),
+                    max_downloads: 0, // 0 = unlimited in your service
+                },
+            })
+
+            const token = share?.share_token
+            if (!token) throw new Error("Share creation failed: missing share_token")
+
+            const shareUrl = `${API_ORIGIN || window.location.origin}/api/emr/exports/share/${token}`
+
+            setBundle((p) => ({ ...(p || {}), share_token: token, share_url: shareUrl }))
+            setReleased(true)
+
+            toast.success(`Released via ${channel}`)
+            await fetchAudit(bundle.id)
+        } catch (e) {
+            toast.error(normalizeApiError(e))
+        } finally {
+            setLoading((p) => ({ ...p, share: false }))
+        }
     }
 
-    function downloadBundle() {
-        if (!bundle) return toast.error("Generate bundle first")
-        toast.success("Download started (UI only)")
-        addAudit("Downloaded Bundle", bundle.id)
+    async function downloadBundle() {
+        if (!bundle?.share_url && !bundle?.id) return toast.error("Generate bundle first")
+
+        try {
+            // For download we generate a fresh share token (safer than storing one)
+            const share = await apiFetch(`/exports/bundles/${bundle.id}/share`, {
+                method: "POST",
+                body: { expires_in_days: 0, max_downloads: 0 },
+            })
+
+            const token = share?.share_token
+            if (!token) throw new Error("Download token generation failed")
+
+            const url = `${API_ORIGIN || window.location.origin}/api/emr/exports/share/${token}`
+            const filename = `${bundle?.name || "export"}.pdf`
+
+            // If auth uses cookies, window.open works too.
+            // If auth uses Bearer token, we fetch blob.
+            const tokenLocal = getAccessToken()
+            if (tokenLocal) {
+                await downloadPdfViaFetch(url, filename)
+            } else {
+                window.open(url, "_blank", "noopener,noreferrer")
+            }
+
+            toast.success("Download started")
+            await fetchAudit(bundle.id)
+        } catch (e) {
+            toast.error(normalizeApiError(e))
+        }
     }
 
     function resetAll() {
@@ -470,12 +780,54 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
         setAllowDownload(true)
         setAllowPrint(false)
         setAllowForward(false)
+        setAudit([])
         toast.success("Reset done")
-        addAudit("Reset Export Builder", "UI only")
+    }
+
+    async function refreshAll() {
+        if (!patientId) return
+        toast.message("Refreshing…")
+        // re-trigger by resetting keys
+        try {
+            setLoading((p) => ({ ...p, patient: true, encounters: true, records: true }))
+            const p = await apiFetch(`/patients/${patientId}/summary`)
+            setPatient(p)
+
+            const rows = await apiFetch(`/patients/${patientId}/encounters?limit=100`)
+            const norm = (Array.isArray(rows) ? rows : [])
+                .map((r) => ({
+                    encounter_type: (r.encounter_type || "").toUpperCase(),
+                    encounter_id: Number(r.encounter_id || 0) || 0,
+                    encounter_code: r.encounter_code || `${r.encounter_type}-${r.encounter_id}`,
+                    dept_code: r.dept_code || r.dept || "",
+                    dept_name: r.dept_name || r.dept || "",
+                    doctor_name: r.doctor_name || r.doctor || "",
+                    status: r.status || "",
+                    encounter_at: r.encounter_at || r.created_at || null,
+                }))
+                .filter((r) => r.encounter_type && r.encounter_id)
+
+            setEncounters(norm)
+            if (!visitKey && norm.length) setVisitKey(`${norm[0].encounter_type}:${norm[0].encounter_id}`)
+
+            toast.success("Refreshed")
+        } catch (e) {
+            toast.error(normalizeApiError(e))
+        } finally {
+            setLoading((p) => ({ ...p, patient: false, encounters: false, records: false }))
+        }
     }
 
     // Mobile: open right pane in dialog
     const [mobilePaneOpen, setMobilePaneOpen] = useState(false)
+
+    const visitsForSelect = useMemo(() => {
+        return encounters.map((v) => ({
+            key: `${v.encounter_type}:${v.encounter_id}`,
+            label: `${v.encounter_type} · ${v.encounter_code || v.encounter_id} · ${v.dept_code || v.dept_name || "-"}`,
+            when: v.encounter_at,
+        }))
+    }, [encounters])
 
     return (
         <div className="min-h-[100dvh] w-full bg-gradient-to-br from-indigo-50/60 via-white to-rose-50/60">
@@ -487,31 +839,27 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
                             <div className="flex items-center gap-2">
                                 <div className={cn("h-2.5 w-2.5 rounded-full bg-gradient-to-r", tone.bar)} />
                                 <div className="text-[15px] font-semibold text-slate-900">Export & Release</div>
-                                <Badge variant="outline" className="rounded-xl">
-                                    MRD / Sharing
-                                </Badge>
+                                <Badge variant="outline" className="rounded-xl">MRD / Sharing</Badge>
                             </div>
-                            <div className="mt-1 text-xs text-slate-500">
-                                Bundle PDF export · permissions · audit trail
-                            </div>
+                            <div className="mt-1 text-xs text-slate-500">Bundle PDF export · permissions · audit trail</div>
                         </div>
 
                         <div className="flex flex-wrap items-center gap-2">
                             <Button variant="outline" className="rounded-2xl" onClick={resetAll}>
                                 <X className="mr-2 h-4 w-4" /> Reset
                             </Button>
-                            <Button variant="outline" className="rounded-2xl" onClick={() => toast("Refresh (wire API later)")}>
+                            <Button variant="outline" className="rounded-2xl" onClick={refreshAll} disabled={loading.patient || loading.encounters || loading.records}>
                                 <RefreshCcw className="mr-2 h-4 w-4" /> Refresh
                             </Button>
+
                             {isMobile ? (
                                 <Button className={cn("rounded-2xl", tone.btn)} onClick={() => setMobilePaneOpen(true)}>
-                                    <Settings className="mr-2 h-4 w-4" />
-                                    Builder
+                                    <Settings className="mr-2 h-4 w-4" /> Builder
                                 </Button>
                             ) : (
-                                <Button className={cn("rounded-2xl", tone.btn)} onClick={buildBundle}>
+                                <Button className={cn("rounded-2xl", tone.btn)} onClick={buildBundle} disabled={loading.build}>
                                     <FileDown className="mr-2 h-4 w-4" />
-                                    Generate Bundle
+                                    {loading.build ? "Generating…" : "Generate Bundle"}
                                 </Button>
                             )}
                         </div>
@@ -523,46 +871,51 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
                             <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
                                 <div className="min-w-0">
                                     <div className="text-sm font-semibold text-slate-900">
-                                        {patient.name} <span className="text-slate-500">({patient.uhid})</span>
+                                        {patient?.name || "—"} <span className="text-slate-500">({patient?.uhid || "—"})</span>
                                     </div>
                                     <div className="mt-1 text-xs text-slate-500">
-                                        {patient.age} / {patient.gender} · {patient.phone}
+                                        {(patient?.age ?? "—")} / {(patient?.gender ?? "—")} · {(patient?.phone ?? "—")}
                                     </div>
                                 </div>
 
                                 <div className="flex flex-wrap items-center gap-2">
                                     <Badge className={cn("rounded-xl", tone.chip)}>
                                         <Building2 className="mr-1 h-3.5 w-3.5" />
-                                        {visit?.dept || "—"}
+                                        {activeVisit?.dept_code || activeVisit?.dept_name || "—"}
                                     </Badge>
                                     <Badge variant="outline" className="rounded-xl">
                                         <Layers className="mr-1 h-3.5 w-3.5" />
-                                        {visit?.type || "—"} · {visit?.id || "—"}
+                                        {(activeVisit?.encounter_type || "—")} · {(activeVisit?.encounter_code || "—")}
                                     </Badge>
                                 </div>
                             </div>
 
                             <div className="grid grid-cols-1 gap-2 sm:grid-cols-[1fr_1fr]">
                                 <select
-                                    value={visitId}
-                                    onChange={(e) => setVisitId(e.target.value)}
+                                    value={visitKey}
+                                    onChange={(e) => setVisitKey(e.target.value)}
                                     className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-300"
+                                    disabled={!visitsForSelect.length || loading.encounters}
                                 >
-                                    {visits.map((v) => (
-                                        <option key={v.id} value={v.id}>
-                                            {v.type} · {v.id} · {v.dept}
-                                        </option>
-                                    ))}
+                                    {visitsForSelect.length ? (
+                                        visitsForSelect.map((v) => (
+                                            <option key={v.key} value={v.key}>
+                                                {v.label}
+                                            </option>
+                                        ))
+                                    ) : (
+                                        <option value="">No visits</option>
+                                    )}
                                 </select>
 
                                 <div className="flex items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-white px-3">
                                     <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
                                         <Calendar className="h-4 w-4" />
-                                        {visit ? fmtDate(visit.when) : "—"}
+                                        {activeVisit?.encounter_at ? fmtDate(activeVisit.encounter_at) : "—"}
                                     </div>
                                     <div className="flex items-center gap-2 text-xs font-semibold text-slate-700">
                                         <Clock3 className="h-4 w-4" />
-                                        {visit ? fmtTime(visit.when) : "—"}
+                                        {activeVisit?.encounter_at ? fmtTime(activeVisit.encounter_at) : "—"}
                                     </div>
                                 </div>
                             </div>
@@ -624,7 +977,7 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
                                     onChange={(e) => setDept(e.target.value)}
                                     className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-300"
                                 >
-                                    {DEPARTMENTS.map((d) => (
+                                    {deptOptions.map((d) => (
                                         <option key={d} value={d}>
                                             {d}
                                         </option>
@@ -666,16 +1019,18 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
                         <CardContent className="min-h-0">
                             <div className="max-h-[calc(100dvh-430px)] min-h-[260px] overflow-y-auto pr-1 lg:max-h-[calc(100dvh-360px)]">
                                 <div className="space-y-2">
-                                    {filteredRecords.map((r) => (
-                                        <RecordRow
-                                            key={r.id}
-                                            row={r}
-                                            checked={selected.has(r.id)}
-                                            onToggle={() => toggleSelect(r.id)}
-                                        />
-                                    ))}
+                                    {loading.records ? (
+                                        <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 p-6 text-center">
+                                            <div className="text-sm font-semibold text-slate-800">Loading records…</div>
+                                            <div className="mt-1 text-xs text-slate-500">Fetching real-time data from API.</div>
+                                        </div>
+                                    ) : (
+                                        filteredRecords.map((r) => (
+                                            <RecordRow key={r.id} row={r} checked={selected.has(r.id)} onToggle={() => toggleSelect(r.id)} />
+                                        ))
+                                    )}
 
-                                    {!filteredRecords.length ? (
+                                    {!loading.records && !filteredRecords.length ? (
                                         <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 p-6 text-center">
                                             <div className="text-sm font-semibold text-slate-800">No records found</div>
                                             <div className="mt-1 text-xs text-slate-500">Try clearing filters/search.</div>
@@ -687,13 +1042,28 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
                             {/* Warnings */}
                             <div className="mt-4 space-y-2">
                                 {hasUnsignedSelected ? (
-                                    <Warn tone="amber" icon={AlertTriangle} title="Unsigned records selected" desc="MRD export usually requires signed documents. You can still export (config policy later)." />
+                                    <Warn
+                                        tone="amber"
+                                        icon={AlertTriangle}
+                                        title="Unsigned records selected"
+                                        desc="MRD export usually requires signed documents. You can still export depending on policy."
+                                    />
                                 ) : null}
                                 {hasConfidentialSelected ? (
-                                    <Warn tone="rose" icon={Lock} title="Confidential records included" desc="Make sure permissions and watermark/password are enabled before release." />
+                                    <Warn
+                                        tone="rose"
+                                        icon={Lock}
+                                        title="Confidential records included"
+                                        desc="Enable watermark/password and verify permissions before release."
+                                    />
                                 ) : null}
                                 {hasAbnormalSelected ? (
-                                    <Warn tone="indigo" icon={AlertTriangle} title="Abnormal results present" desc="Consider adding audit summary for medico-legal clarity." />
+                                    <Warn
+                                        tone="indigo"
+                                        icon={AlertTriangle}
+                                        title="Abnormal results present"
+                                        desc="Consider adding audit summary for medico-legal clarity."
+                                    />
                                 ) : null}
                             </div>
                         </CardContent>
@@ -706,7 +1076,7 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
                             setTab={setTab}
                             tone={tone}
                             patient={patient}
-                            visit={visit}
+                            visit={activeVisit}
                             selectedRows={selectedRows}
                             selectedCount={selectedCount}
                             selectedPages={selectedPages}
@@ -755,10 +1125,13 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
                             }}
                             bundle={bundle}
                             released={released}
+                            loading={loading}
                             onBuild={buildBundle}
                             onDownload={downloadBundle}
                             onRelease={releaseBundle}
                             audit={audit}
+                            shareRoles={SHARE_ROLES}
+                            externalChannelList={EXTERNAL_CHANNELS}
                         />
                     </div>
                 </div>
@@ -791,7 +1164,7 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
                                 setTab={setTab}
                                 tone={tone}
                                 patient={patient}
-                                visit={visit}
+                                visit={activeVisit}
                                 selectedRows={selectedRows}
                                 selectedCount={selectedCount}
                                 selectedPages={selectedPages}
@@ -840,10 +1213,13 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
                                 }}
                                 bundle={bundle}
                                 released={released}
+                                loading={loading}
                                 onBuild={buildBundle}
                                 onDownload={downloadBundle}
                                 onRelease={releaseBundle}
                                 audit={audit}
+                                shareRoles={SHARE_ROLES}
+                                externalChannelList={EXTERNAL_CHANNELS}
                                 compact
                             />
                         </div>
@@ -853,9 +1229,9 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
                                 <Button variant="outline" className="rounded-2xl" onClick={() => setMobilePaneOpen(false)}>
                                     Close
                                 </Button>
-                                <Button className={cn("rounded-2xl", tone.btn)} onClick={buildBundle}>
+                                <Button className={cn("rounded-2xl", tone.btn)} onClick={buildBundle} disabled={loading.build}>
                                     <FileDown className="mr-2 h-4 w-4" />
-                                    Generate Bundle
+                                    {loading.build ? "Generating…" : "Generate Bundle"}
                                 </Button>
                             </div>
                         </div>
@@ -866,9 +1242,9 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
     )
 }
 
-/** -----------------------------------------------
- * Right Pane (Builder / Permissions / Audit)
- * ----------------------------------------------- */
+// ---------------------------
+// Right Pane (Builder / Permissions / Audit)
+// ---------------------------
 function RightPane({
     tab,
     setTab,
@@ -883,10 +1259,13 @@ function RightPane({
     perms,
     bundle,
     released,
+    loading,
     onBuild,
     onDownload,
     onRelease,
     audit,
+    shareRoles,
+    externalChannelList,
     compact = false,
 }) {
     const {
@@ -945,7 +1324,7 @@ function RightPane({
 
                     <Badge className={cn("rounded-xl", tone.chip)}>
                         <Building2 className="mr-1 h-3.5 w-3.5" />
-                        {visit?.dept || "—"}
+                        {visit?.dept_code || visit?.dept_name || "—"}
                     </Badge>
                 </div>
 
@@ -953,15 +1332,9 @@ function RightPane({
                     <Tabs value={tab} onValueChange={setTab}>
                         <div className="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                             <TabsList className="w-max min-w-full justify-start gap-1 rounded-2xl border border-slate-200 bg-white p-1">
-                                <TabsTrigger value="BUILDER" className="whitespace-nowrap rounded-xl">
-                                    Builder
-                                </TabsTrigger>
-                                <TabsTrigger value="PERMISSIONS" className="whitespace-nowrap rounded-xl">
-                                    Permissions
-                                </TabsTrigger>
-                                <TabsTrigger value="AUDIT" className="whitespace-nowrap rounded-xl">
-                                    Audit
-                                </TabsTrigger>
+                                <TabsTrigger value="BUILDER" className="whitespace-nowrap rounded-xl">Builder</TabsTrigger>
+                                <TabsTrigger value="PERMISSIONS" className="whitespace-nowrap rounded-xl">Permissions</TabsTrigger>
+                                <TabsTrigger value="AUDIT" className="whitespace-nowrap rounded-xl">Audit</TabsTrigger>
                             </TabsList>
                         </div>
                     </Tabs>
@@ -969,17 +1342,17 @@ function RightPane({
             </CardHeader>
 
             <CardContent className={cn("min-h-0 space-y-4", compact ? "px-0" : "")}>
-                {/* Summary card */}
+                {/* Summary */}
                 <div className="rounded-3xl border border-slate-200 bg-white p-4">
                     <div className="flex flex-wrap items-center gap-2">
                         <Badge variant="outline" className="rounded-xl">
-                            <Layers className="mr-1 h-3.5 w-3.5" /> {visit?.type || "—"} · {visit?.id || "—"}
+                            <Layers className="mr-1 h-3.5 w-3.5" /> {visit?.encounter_type || "—"} · {visit?.encounter_code || "—"}
                         </Badge>
                         <Badge variant="outline" className="rounded-xl">
-                            <Calendar className="mr-1 h-3.5 w-3.5" /> {visit ? fmtDate(visit.when) : "—"}
+                            <Calendar className="mr-1 h-3.5 w-3.5" /> {visit?.encounter_at ? fmtDate(visit.encounter_at) : "—"}
                         </Badge>
                         <Badge variant="outline" className="rounded-xl">
-                            <Clock3 className="mr-1 h-3.5 w-3.5" /> {visit ? fmtTime(visit.when) : "—"}
+                            <Clock3 className="mr-1 h-3.5 w-3.5" /> {visit?.encounter_at ? fmtTime(visit.encounter_at) : "—"}
                         </Badge>
                         <Badge className="rounded-xl bg-slate-900 text-white">
                             <ListChecks className="mr-1 h-3.5 w-3.5" /> {selectedCount} selected
@@ -993,7 +1366,7 @@ function RightPane({
                     </div>
 
                     <div className="mt-3 text-xs text-slate-500">
-                        Patient: <span className="font-semibold text-slate-700">{patient.name}</span> ({patient.uhid})
+                        Patient: <span className="font-semibold text-slate-700">{patient?.name || "—"}</span> ({patient?.uhid || "—"})
                     </div>
                 </div>
 
@@ -1009,7 +1382,7 @@ function RightPane({
                             <Card className="rounded-3xl border-slate-200 bg-white">
                                 <CardHeader className="pb-2">
                                     <CardTitle className="text-base">Bundle Settings</CardTitle>
-                                    <div className="text-xs text-slate-500">PDF bundle config (UI only)</div>
+                                    <div className="text-xs text-slate-500">PDF bundle config (API integrated)</div>
                                 </CardHeader>
                                 <CardContent className="space-y-3">
                                     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -1017,7 +1390,7 @@ function RightPane({
                                             <Input value={bundleName} onChange={(e) => setBundleName(e.target.value)} className="h-10 rounded-2xl" />
                                         </Field>
 
-                                        <Field label="Purpose" hint="Shown in audit logs and cover page">
+                                        <Field label="Purpose" hint="Shown in audit logs and cover page (UI policy today)">
                                             <select
                                                 value={purpose}
                                                 onChange={(e) => setPurpose(e.target.value)}
@@ -1033,34 +1406,10 @@ function RightPane({
 
                                     <Separator />
 
-                                    <ToggleCard
-                                        icon={FileText}
-                                        title="Cover page"
-                                        desc="Patient + visit summary cover"
-                                        checked={includeCover}
-                                        onCheckedChange={setIncludeCover}
-                                    />
-                                    <ToggleCard
-                                        icon={ListChecks}
-                                        title="Index page"
-                                        desc="Record list with page mapping"
-                                        checked={includeIndex}
-                                        onCheckedChange={setIncludeIndex}
-                                    />
-                                    <ToggleCard
-                                        icon={Paperclip}
-                                        title="Include attachments"
-                                        desc="Append uploaded PDFs/images"
-                                        checked={includeAttachments}
-                                        onCheckedChange={setIncludeAttachments}
-                                    />
-                                    <ToggleCard
-                                        icon={History}
-                                        title="Audit summary page"
-                                        desc="Add audit summary into PDF"
-                                        checked={includeAuditSummary}
-                                        onCheckedChange={setIncludeAuditSummary}
-                                    />
+                                    <ToggleCard icon={FileText} title="Cover page" desc="Patient + visit summary cover" checked={includeCover} onCheckedChange={setIncludeCover} />
+                                    <ToggleCard icon={ListChecks} title="Index page" desc="Record list with page mapping" checked={includeIndex} onCheckedChange={setIncludeIndex} />
+                                    <ToggleCard icon={Paperclip} title="Include attachments" desc="Append uploaded PDFs/images" checked={includeAttachments} onCheckedChange={setIncludeAttachments} />
+                                    <ToggleCard icon={History} title="Audit summary page" desc="Add audit summary into PDF" checked={includeAuditSummary} onCheckedChange={setIncludeAuditSummary} />
 
                                     <Separator />
 
@@ -1084,7 +1433,7 @@ function RightPane({
                                     <ToggleCard
                                         icon={KeyRound}
                                         title="Password protect"
-                                        desc="Encrypt PDF bundle"
+                                        desc="Encrypt PDF bundle (backend patched to accept pdf_password)"
                                         checked={passwordOn}
                                         onCheckedChange={setPasswordOn}
                                         right={
@@ -1119,9 +1468,9 @@ function RightPane({
                                     </div>
 
                                     <div className="flex flex-wrap gap-2 pt-2">
-                                        <Button className={cn("rounded-2xl", tone.btn)} onClick={onBuild} disabled={!selectedCount}>
+                                        <Button className={cn("rounded-2xl", tone.btn)} onClick={onBuild} disabled={!selectedCount || loading.build}>
                                             <FileDown className="mr-2 h-4 w-4" />
-                                            Generate Bundle
+                                            {loading.build ? "Generating…" : "Generate Bundle"}
                                         </Button>
 
                                         <Button variant="outline" className="rounded-2xl" onClick={onDownload} disabled={!bundle}>
@@ -1136,7 +1485,14 @@ function RightPane({
                                                 <CheckCircle2 className="h-4 w-4" />
                                                 <span className="font-semibold">Bundle ready:</span> {bundle.name} · {bundle.pages} pages · ~{bundle.size_est_mb}MB
                                             </div>
-                                            <div className="mt-1 text-xs text-emerald-800">ID: {bundle.id} · Created {fmtDate(bundle.created_at)} {fmtTime(bundle.created_at)}</div>
+                                            <div className="mt-1 text-xs text-emerald-800">
+                                                ID: {bundle.id} · Created {fmtDate(bundle.created_at)} {fmtTime(bundle.created_at)}
+                                            </div>
+                                            {bundle.share_url ? (
+                                                <div className="mt-2 text-xs text-emerald-900">
+                                                    Share URL: <span className="break-all font-semibold">{bundle.share_url}</span>
+                                                </div>
+                                            ) : null}
                                         </div>
                                     ) : (
                                         <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 p-4 text-center">
@@ -1151,20 +1507,20 @@ function RightPane({
                             <Card className="rounded-3xl border-slate-200 bg-white">
                                 <CardHeader className="pb-2">
                                     <CardTitle className="text-base">Release</CardTitle>
-                                    <div className="text-xs text-slate-500">Share/export actions (UI only)</div>
+                                    <div className="text-xs text-slate-500">Share/export actions (API integrated)</div>
                                 </CardHeader>
                                 <CardContent className="space-y-3">
                                     <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
-                                        <ActionBtn disabled={!bundle} onClick={() => onRelease("MRD")} icon={Shield} tone={tone} title="MRD Release" desc="Issue official MRD copy" />
-                                        <ActionBtn disabled={!bundle} onClick={() => onRelease("Email")} icon={Share2} tone={tone} title="Email" desc="Send to recipient" />
-                                        <ActionBtn disabled={!bundle} onClick={() => onRelease("WhatsApp")} icon={Share2} tone={tone} title="WhatsApp" desc="Share link/message" />
+                                        <ActionBtn disabled={!bundle || loading.share} onClick={() => onRelease("MRD")} icon={Shield} tone={tone} title="MRD Release" desc="Issue MRD share token" />
+                                        <ActionBtn disabled={!bundle || loading.share} onClick={() => onRelease("Email")} icon={Share2} tone={tone} title="Email" desc="Generate share token (email sending later)" />
+                                        <ActionBtn disabled={!bundle || loading.share} onClick={() => onRelease("WhatsApp")} icon={Share2} tone={tone} title="WhatsApp" desc="Generate share token (WhatsApp sending later)" />
                                     </div>
 
                                     {released ? (
                                         <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-3 text-sm text-indigo-900">
                                             <div className="flex items-center gap-2">
                                                 <CheckCircle2 className="h-4 w-4" />
-                                                Released successfully (UI only)
+                                                Released successfully
                                             </div>
                                             <div className="mt-1 text-xs text-indigo-800">Audit updated automatically.</div>
                                         </div>
@@ -1185,7 +1541,7 @@ function RightPane({
                             <Card className="rounded-3xl border-slate-200 bg-white">
                                 <CardHeader className="pb-2">
                                     <CardTitle className="text-base">Access Controls</CardTitle>
-                                    <div className="text-xs text-slate-500">Who can view/download this export</div>
+                                    <div className="text-xs text-slate-500">UI policy today (backend enforces expiry/max-download)</div>
                                 </CardHeader>
                                 <CardContent className="space-y-3">
                                     <div className="rounded-3xl border border-slate-200 bg-white p-3">
@@ -1194,13 +1550,11 @@ function RightPane({
                                                 <div className="text-sm font-semibold text-slate-900">Internal Roles</div>
                                                 <div className="text-xs text-slate-500">Allowed roles inside hospital</div>
                                             </div>
-                                            <Badge variant="outline" className="rounded-xl">
-                                                {internalRoles.size}
-                                            </Badge>
+                                            <Badge variant="outline" className="rounded-xl">{internalRoles.size}</Badge>
                                         </div>
 
                                         <div className="flex flex-wrap gap-2">
-                                            {SHARE_ROLES.map((r) => {
+                                            {shareRoles.map((r) => {
                                                 const active = internalRoles.has(r)
                                                 return (
                                                     <button
@@ -1216,9 +1570,7 @@ function RightPane({
                                                         }}
                                                         className={cn(
                                                             "rounded-full px-3 py-1 text-xs font-semibold ring-1 transition",
-                                                            active
-                                                                ? "bg-slate-900 text-white ring-slate-900"
-                                                                : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
+                                                            active ? "bg-slate-900 text-white ring-slate-900" : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
                                                         )}
                                                     >
                                                         <Users className="mr-1 inline h-3.5 w-3.5" />
@@ -1235,13 +1587,11 @@ function RightPane({
                                                 <div className="text-sm font-semibold text-slate-900">External Channels</div>
                                                 <div className="text-xs text-slate-500">How the bundle can be shared</div>
                                             </div>
-                                            <Badge variant="outline" className="rounded-xl">
-                                                {externalChannels.size}
-                                            </Badge>
+                                            <Badge variant="outline" className="rounded-xl">{externalChannels.size}</Badge>
                                         </div>
 
                                         <div className="flex flex-wrap gap-2">
-                                            {EXTERNAL_CHANNELS.map((c) => {
+                                            {externalChannelList.map((c) => {
                                                 const active = externalChannels.has(c)
                                                 return (
                                                     <button
@@ -1257,9 +1607,7 @@ function RightPane({
                                                         }}
                                                         className={cn(
                                                             "rounded-full px-3 py-1 text-xs font-semibold ring-1 transition",
-                                                            active
-                                                                ? "bg-slate-900 text-white ring-slate-900"
-                                                                : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
+                                                            active ? "bg-slate-900 text-white ring-slate-900" : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
                                                         )}
                                                     >
                                                         <Share2 className="mr-1 inline h-3.5 w-3.5" />
@@ -1272,32 +1620,14 @@ function RightPane({
 
                                     <Separator />
 
-                                    <ToggleCard
-                                        icon={Download}
-                                        title="Allow download"
-                                        desc="Recipient can download the file"
-                                        checked={allowDownload}
-                                        onCheckedChange={setAllowDownload}
-                                    />
-                                    <ToggleCard
-                                        icon={FileDown}
-                                        title="Allow print"
-                                        desc="Recipient can print the file"
-                                        checked={allowPrint}
-                                        onCheckedChange={setAllowPrint}
-                                    />
-                                    <ToggleCard
-                                        icon={Share2}
-                                        title="Allow forward"
-                                        desc="Recipient can forward/share"
-                                        checked={allowForward}
-                                        onCheckedChange={setAllowForward}
-                                    />
+                                    <ToggleCard icon={Download} title="Allow download" desc="UI policy (enforce later in share model)" checked={allowDownload} onCheckedChange={setAllowDownload} />
+                                    <ToggleCard icon={FileDown} title="Allow print" desc="UI policy (enforce later in share model)" checked={allowPrint} onCheckedChange={setAllowPrint} />
+                                    <ToggleCard icon={Share2} title="Allow forward" desc="UI policy (enforce later in share model)" checked={allowForward} onCheckedChange={setAllowForward} />
 
                                     <Separator />
 
                                     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                                        <Field label="Expiry (days)" hint="Auto revoke access after N days">
+                                        <Field label="Expiry (days)" hint="Backend uses this for share token expiry">
                                             <Input
                                                 value={String(expiryDays)}
                                                 onChange={(e) => {
@@ -1315,7 +1645,7 @@ function RightPane({
                                             <div className="flex items-center justify-between gap-3">
                                                 <div className="min-w-0">
                                                     <div className="text-sm font-semibold text-slate-900">Require OTP</div>
-                                                    <div className="text-xs text-slate-500">External access OTP (future)</div>
+                                                    <div className="text-xs text-slate-500">Future (not enforced yet)</div>
                                                 </div>
                                                 <Switch checked={requireOtp} onCheckedChange={(v) => setRequireOtp(!!v)} />
                                             </div>
@@ -1325,7 +1655,7 @@ function RightPane({
                                     <div className="rounded-2xl border border-indigo-200 bg-indigo-50 p-3 text-xs text-indigo-900">
                                         <div className="flex items-start gap-2">
                                             <UserPlus className="h-4 w-4" />
-                                            Configure user-specific permissions in backend later (users, tokens, consent).
+                                            User-specific permissions, consent, OTP, and channel delivery can be enforced after share model extension.
                                         </div>
                                     </div>
                                 </CardContent>
@@ -1348,7 +1678,12 @@ function RightPane({
                                 </CardHeader>
                                 <CardContent className="space-y-2">
                                     <div className="max-h-[520px] overflow-y-auto pr-1">
-                                        {audit?.length ? (
+                                        {loading.audit ? (
+                                            <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 p-6 text-center">
+                                                <div className="text-sm font-semibold text-slate-800">Loading audit…</div>
+                                                <div className="mt-1 text-xs text-slate-500">Fetching from API.</div>
+                                            </div>
+                                        ) : audit?.length ? (
                                             <div className="space-y-2">
                                                 {audit.map((a, idx) => (
                                                     <div key={idx} className="rounded-2xl border border-slate-200 bg-white p-3">
@@ -1356,20 +1691,18 @@ function RightPane({
                                                             <div className="flex items-center gap-2">
                                                                 <Badge className="rounded-xl bg-slate-900 text-white">
                                                                     <History className="mr-1 h-3.5 w-3.5" />
-                                                                    {a.action}
+                                                                    {a.action || "EVENT"}
                                                                 </Badge>
                                                                 <Badge variant="outline" className="rounded-xl">
-                                                                    {a.by}
+                                                                    {a.by || "—"}
                                                                 </Badge>
                                                             </div>
                                                             <div className="text-xs text-slate-500">
-                                                                {fmtDate(a.at)} · {fmtTime(a.at)}
+                                                                {a.at ? `${fmtDate(a.at)} · ${fmtTime(a.at)}` : "—"}
                                                             </div>
                                                         </div>
 
-                                                        {a.meta ? (
-                                                            <div className="mt-2 text-xs text-slate-600">{a.meta}</div>
-                                                        ) : null}
+                                                        {a.meta ? <div className="mt-2 text-xs text-slate-600">{String(a.meta)}</div> : null}
                                                     </div>
                                                 ))}
                                             </div>
@@ -1382,7 +1715,7 @@ function RightPane({
                                     </div>
 
                                     <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-3 text-xs text-slate-700">
-                                        Tip: On backend, store audit events with user_id, ip, device, consent_ref, and document hash.
+                                        Tip: Backend audit can store user_id, ip, ua, consent_ref, and document hash for medico-legal traceability.
                                     </div>
                                 </CardContent>
                             </Card>
@@ -1394,16 +1727,18 @@ function RightPane({
     )
 }
 
-/** -----------------------------------------------
- * Small UI components
- * ----------------------------------------------- */
+// ---------------------------
+// Small UI components
+// ---------------------------
 function Pill({ icon: Icon, label, value, toneClass }) {
     const cls = toneClass || "bg-slate-50 text-slate-700 ring-slate-200"
     return (
         <div className={cn("inline-flex items-center gap-2 rounded-2xl px-3 py-2 text-xs font-semibold ring-1", cls)}>
             <Icon className="h-4 w-4" />
             <span>{label}</span>
-            <span className="ml-1 rounded-full bg-white/70 px-2 py-0.5 text-xs font-bold text-slate-900 ring-1 ring-slate-200">{value}</span>
+            <span className="ml-1 rounded-full bg-white/70 px-2 py-0.5 text-xs font-bold text-slate-900 ring-1 ring-slate-200">
+                {value}
+            </span>
         </div>
     )
 }
@@ -1475,7 +1810,14 @@ function RecordRow({ row, checked, onToggle }) {
                     </div>
 
                     <div className="flex shrink-0 flex-col items-end gap-2">
-                        <Badge className={cn("rounded-xl", row.signed ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200" : "bg-slate-50 text-slate-700 ring-1 ring-slate-200")}>
+                        <Badge
+                            className={cn(
+                                "rounded-xl",
+                                row.signed
+                                    ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+                                    : "bg-slate-50 text-slate-700 ring-1 ring-slate-200"
+                            )}
+                        >
                             {row.signed ? "Signed" : "Draft"}
                         </Badge>
                     </div>
@@ -1545,7 +1887,12 @@ function ActionBtn({ disabled, onClick, icon: Icon, tone, title, desc }) {
             )}
         >
             <div className="flex items-start gap-3">
-                <div className={cn("grid h-11 w-11 place-items-center rounded-3xl ring-1 ring-slate-200", disabled ? "bg-slate-50 text-slate-600" : "bg-slate-900 text-white ring-slate-900")}>
+                <div
+                    className={cn(
+                        "grid h-11 w-11 place-items-center rounded-3xl ring-1 ring-slate-200",
+                        disabled ? "bg-slate-50 text-slate-600" : "bg-slate-900 text-white ring-slate-900"
+                    )}
+                >
                     <Icon className="h-5 w-5" />
                 </div>
                 <div className="min-w-0">

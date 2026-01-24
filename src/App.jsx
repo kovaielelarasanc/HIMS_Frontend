@@ -116,6 +116,7 @@ import EmrPatientChart from "./emr/new/EmrPatientChart";
 import EmrTemplateLibrary from "./emr/new/EmrTemplateLibrary";
 import EmrRecordsInbox from "./emr/new/EmrRecordsInbox";
 import EmrExportRelease from "./emr/new/EmrExportRelease";
+import EmrRecentPinned from "./emr/new/EmrRecentPinned";
 
 
 export default function App() {
@@ -219,6 +220,7 @@ export default function App() {
             {/* EMR */}
             <Route path="/emr" element={<EmrConsole />} />
             <Route path="/emr/chart" element={<EmrPatientChart />} />
+            <Route path="/emr/quick" element={<EmrRecentPinned />} />
             <Route path="/emr/templates" element={<EmrTemplateLibrary />} />
             <Route path="/emr/record/inbox" element={<EmrRecordsInbox />} />
             <Route path="/emr/export/release" element={<EmrExportRelease />} />

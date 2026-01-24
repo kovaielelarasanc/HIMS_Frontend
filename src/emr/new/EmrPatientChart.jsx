@@ -31,26 +31,19 @@ import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import {
-    Dialog,
-    DialogContent,
-    DialogHeader,
-    DialogTitle,
-    DialogFooter,
-} from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
+
 import { EmrCreateRecordDialog } from "./EmrCreateRecordFlow"
 
+import { listPatients } from "@/api/patients"
+import { getPatientChart, getEmrRecord } from "@/api/emrChart"
+import { apiErrorMessage } from "@/api/_unwrap"
+
 /**
- * ✅ Drop-in EMR Patient Chart (Main Hub)
- * - Search patient (UHID/Name/Phone)
- * - Patient header
- * - Timeline (grouped by day)
- * - Filters
- * - Preview pane (desktop) + Preview modal (mobile)
- *
- * Integrate API:
- * 1) Replace mockSearchPatients(q) with backend search
- * 2) Replace mockFetchRecords(patientId) with backend fetch
+ * ✅ EMR Patient Chart (Main Hub) — API Wired
+ * - Search patient via GET /patients?q=
+ * - Fetch chart timeline via GET /emr/patients/{id}/chart
+ * - Fetch record preview via GET /emr/records/{record_id}
  */
 
 const ENCOUNTERS = ["ALL", "OP", "IP", "ER", "OT"]
@@ -68,7 +61,6 @@ const TYPES = [
     "EXTERNAL_DOCUMENT",
 ]
 
-/** Departments derived from your uploaded department-wise case sheet list (canonicalized) */
 const DEPARTMENTS = [
     "ALL",
     "Common (All)",
@@ -106,27 +98,27 @@ const DEPARTMENTS = [
 function deptTone(deptRaw) {
     const d = (deptRaw || "").toUpperCase()
     const map = {
-        "OBGYN": {
+        OBGYN: {
             bar: "from-pink-500/70 via-rose-500/60 to-orange-400/50",
             chip: "bg-rose-50 text-rose-700 ring-1 ring-rose-200",
             glow: "shadow-[0_20px_70px_-35px_rgba(244,63,94,0.45)]",
         },
-        "CARDIOLOGY": {
+        CARDIOLOGY: {
             bar: "from-red-500/70 via-rose-500/60 to-amber-400/40",
             chip: "bg-red-50 text-red-700 ring-1 ring-red-200",
             glow: "shadow-[0_20px_70px_-35px_rgba(239,68,68,0.45)]",
         },
-        "ICU": {
+        ICU: {
             bar: "from-indigo-500/70 via-blue-500/55 to-cyan-400/45",
             chip: "bg-indigo-50 text-indigo-700 ring-1 ring-indigo-200",
             glow: "shadow-[0_20px_70px_-35px_rgba(99,102,241,0.45)]",
         },
-        "ORTHOPEDICS": {
+        ORTHOPEDICS: {
             bar: "from-emerald-500/65 via-teal-500/55 to-lime-400/40",
             chip: "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200",
             glow: "shadow-[0_20px_70px_-35px_rgba(16,185,129,0.45)]",
         },
-        "DERMATOLOGY": {
+        DERMATOLOGY: {
             bar: "from-fuchsia-500/60 via-pink-500/50 to-amber-400/35",
             chip: "bg-fuchsia-50 text-fuchsia-700 ring-1 ring-fuchsia-200",
             glow: "shadow-[0_20px_70px_-35px_rgba(217,70,239,0.45)]",
@@ -136,12 +128,12 @@ function deptTone(deptRaw) {
             chip: "bg-amber-50 text-amber-800 ring-1 ring-amber-200",
             glow: "shadow-[0_20px_70px_-35px_rgba(245,158,11,0.45)]",
         },
-        "UROLOGY": {
+        UROLOGY: {
             bar: "from-sky-500/60 via-cyan-500/55 to-emerald-400/40",
             chip: "bg-sky-50 text-sky-700 ring-1 ring-sky-200",
             glow: "shadow-[0_20px_70px_-35px_rgba(14,165,233,0.45)]",
         },
-        "NEUROLOGY": {
+        NEUROLOGY: {
             bar: "from-violet-500/60 via-indigo-500/55 to-sky-400/40",
             chip: "bg-violet-50 text-violet-700 ring-1 ring-violet-200",
             glow: "shadow-[0_20px_70px_-35px_rgba(139,92,246,0.45)]",
@@ -152,11 +144,13 @@ function deptTone(deptRaw) {
             glow: "shadow-[0_20px_70px_-35px_rgba(100,116,139,0.35)]",
         },
     }
-    return map[d] || {
-        bar: "from-slate-500/55 via-slate-400/35 to-sky-400/25",
-        chip: "bg-slate-50 text-slate-700 ring-1 ring-slate-200",
-        glow: "shadow-[0_20px_70px_-35px_rgba(100,116,139,0.28)]",
-    }
+    return (
+        map[d] || {
+            bar: "from-slate-500/55 via-slate-400/35 to-sky-400/25",
+            chip: "bg-slate-50 text-slate-700 ring-1 ring-slate-200",
+            glow: "shadow-[0_20px_70px_-35px_rgba(100,116,139,0.28)]",
+        }
+    )
 }
 
 function statusPill(st) {
@@ -181,7 +175,7 @@ function typeMeta(t) {
         NURSING_NOTE: { label: "Nursing", icon: ClipboardList },
         EXTERNAL_DOCUMENT: { label: "External Doc", icon: FileText },
     }
-    return map[x] || { label: (t || "Record"), icon: FileText }
+    return map[x] || { label: t || "Record", icon: FileText }
 }
 
 function fmtDate(d) {
@@ -192,7 +186,6 @@ function fmtDate(d) {
         return String(d || "")
     }
 }
-
 function fmtTime(d) {
     try {
         const dt = new Date(d)
@@ -201,14 +194,12 @@ function fmtTime(d) {
         return ""
     }
 }
-
 function isBetween(dateIso, fromIso, toIso) {
     const v = dateIso ? new Date(dateIso).getTime() : 0
     const f = fromIso ? new Date(fromIso).getTime() : -Infinity
     const t = toIso ? new Date(toIso).getTime() : Infinity
     return v >= f && v <= t
 }
-
 function groupLabel(ts) {
     const d = new Date(ts)
     const now = new Date()
@@ -220,7 +211,6 @@ function groupLabel(ts) {
     if (diffDays <= 7) return "This Week"
     return fmtDate(day)
 }
-
 function useIsMobile(breakpointPx = 1024) {
     const [isMobile, setIsMobile] = useState(false)
     useEffect(() => {
@@ -233,76 +223,114 @@ function useIsMobile(breakpointPx = 1024) {
     return isMobile
 }
 
-/** ----------------- MOCK DATA + MOCK API (replace with real API) ----------------- */
+/** ---------- Normalizers (patient + record) ---------- */
 
-const MOCK_PATIENTS = [
-    { id: 101, uhid: "NH-000101", name: "Pavithra S", phone: "9600457842", gender: "F", age: 26, blood: "O+", flags: ["Allergy"], lastVisit: "2026-01-18T10:20:00Z" },
-    { id: 102, uhid: "NH-000102", name: "Arun K", phone: "9345123456", gender: "M", age: 34, blood: "B+", flags: [], lastVisit: "2026-01-20T07:10:00Z" },
-    { id: 103, uhid: "NH-000103", name: "Sangeetha R", phone: "9790012345", gender: "F", age: 29, blood: "A+", flags: ["High Risk"], lastVisit: "2026-01-21T03:35:00Z" },
-    { id: 104, uhid: "NH-000104", name: "Karthik V", phone: "9000011111", gender: "M", age: 41, blood: "AB+", flags: ["Diabetic"], lastVisit: "2026-01-14T09:00:00Z" },
-    { id: 105, uhid: "NH-000105", name: "Meena L", phone: "8888888888", gender: "F", age: 51, blood: "O-", flags: ["HTN"], lastVisit: "2026-01-11T12:00:00Z" },
-]
+function normalizePatient(p) {
+    if (!p) return null
 
-const MOCK_RECORDS_BY_PATIENT = {
-    101: [
-        mkRecord("2026-01-21T02:15:00Z", "OPD_NOTE", "OBGYN", "SIGNED", "OP visit · Pelvic pain", "OP", "OP-2026-00121", [
-            "Chief complaint: Pelvic pain (3 days)",
-            "History: mild fever, no discharge",
-            "Exam: tenderness lower abdomen",
-            "Plan: USG pelvis, CBC, NSAID",
-        ], [{ name: "USG_Pelvis_Request.pdf" }]),
-        mkRecord("2026-01-21T03:05:00Z", "LAB_RESULT", "Pathology/Lab", "FINAL", "CBC Result", "OP", "OP-2026-00121", [
-            "Hb: 12.1 g/dL",
-            "WBC: 11,200 /mm³ (mild high)",
-            "Platelets: 2.4 lakh",
-        ]),
-        mkRecord("2026-01-20T05:40:00Z", "PRESCRIPTION", "OBGYN", "SIGNED", "Rx · Pain management", "OP", "OP-2026-00118", [
-            "Tab Ibuprofen 400mg · SOS after food",
-            "Cap Pantoprazole 40mg · OD",
-            "Review in 2 days",
-        ]),
-        mkRecord("2026-01-18T10:20:00Z", "RADIOLOGY_REPORT", "OBGYN", "FINAL", "USG Pelvis Report", "OP", "OP-2026-00112", [
-            "Uterus: normal size",
-            "Ovary: simple cyst ~3.2cm (right)",
-            "Impression: benign cyst; follow-up advised",
-        ], [{ name: "USG_Pelvis_Report.pdf" }]),
-        mkRecord("2026-01-14T09:10:00Z", "CONSENT", "OBGYN", "SIGNED", "Consent · Procedure", "OP", "OP-2026-00102", [
-            "Consent captured for minor procedure.",
-            "Risks explained; patient understood.",
-        ]),
-    ],
-    102: [
-        mkRecord("2026-01-20T07:10:00Z", "OPD_NOTE", "General Medicine", "DRAFT", "OP visit · Fever", "OP", "OP-2026-00119", [
-            "Chief complaint: Fever (2 days)",
-            "Plan: CBC, Dengue NS1, Paracetamol",
-        ]),
-        mkRecord("2026-01-20T09:15:00Z", "LAB_RESULT", "Pathology/Lab", "FINAL", "Dengue NS1", "OP", "OP-2026-00119", ["Negative"]),
-    ],
-    103: [
-        mkRecord("2026-01-21T03:35:00Z", "OPD_NOTE", "Cardiology", "SIGNED", "OP visit · Chest discomfort", "OP", "OP-2026-00122", [
-            "ECG advised; troponin ordered",
-            "Vitals stable; counselled",
-        ]),
-    ],
-    104: [
-        mkRecord("2026-01-14T09:00:00Z", "PROGRESS_NOTE", "ICU", "SIGNED", "ICU Day-2 Progress", "IP", "IP-2026-00033", [
-            "Stable overnight; oxygen weaned",
-            "Continue antibiotics; monitor vitals",
-        ]),
-    ],
-    105: [
-        mkRecord("2026-01-11T12:00:00Z", "DISCHARGE_SUMMARY", "General Medicine", "FINAL", "Discharge Summary", "IP", "IP-2026-00021", [
-            "Dx: HTN",
-            "Meds on discharge: Amlodipine",
-            "Follow-up: 1 week",
-        ], [{ name: "Discharge_Summary.pdf" }]),
-    ],
+    const id = p.id ?? p.patient_id ?? p.patientId
+
+    const uhid =
+        p.uhid ??
+        p.patient_code ??
+        p.mrn ??
+        p.reg_no ??
+        p.regNo ??
+        p.code ??
+        ""
+
+    const first = (p.first_name ?? p.firstName ?? "").trim()
+    const last = (p.last_name ?? p.lastName ?? "").trim()
+
+    const name =
+        (p.name ??
+            p.full_name ??
+            p.fullName ??
+            p.display_name ??
+            [first, last].filter(Boolean).join(" ")
+        )?.trim() || "—"
+
+    const phone =
+        p.phone ??
+        p.mobile ??
+        p.mobile_no ??
+        p.mobileNo ??
+        p.contact ??
+        ""
+
+    // normalize gender to UI-friendly short code
+    const rawGender = (p.gender ?? p.sex ?? "").toString().trim().toLowerCase()
+    const gender =
+        rawGender === "male" || rawGender === "m"
+            ? "M"
+            : rawGender === "female" || rawGender === "f"
+                ? "F"
+                : rawGender
+                    ? rawGender.toUpperCase()
+                    : ""
+
+    // prefer exact age string if available
+    const age =
+        p.age ??
+        p.age_years ??
+        p.ageYears ??
+        null
+
+    const ageText =
+        (p.age_short_text ?? p.ageShortText ?? p.age_text ?? p.ageText ?? "").toString().trim()
+
+    const blood =
+        p.blood ??
+        p.blood_group ??
+        p.bloodGroup ??
+        ""
+
+    const lastVisit =
+        p.lastVisit ??
+        p.last_visit ??
+        p.last_visit_at ??
+        p.lastVisitAt ??
+        p.updated_at ??
+        p.updatedAt ??
+        p.created_at ??
+        null
+
+    const flags =
+        Array.isArray(p.flags) ? p.flags :
+            Array.isArray(p.alerts) ? p.alerts :
+                Array.isArray(p.tags) ? p.tags :
+                    p.tag ? [p.tag] :
+                        []
+
+    return {
+        ...p,
+        id,
+        uhid,
+        name,
+        phone,
+        gender,
+        age,
+        ageText,
+        blood,
+        lastVisit,
+        flags,
+    }
 }
 
-function mkRecord(ts, type, dept, status, title, encounterType, encounterId, lines = [], attachments = []) {
-    const id = `${type}-${dept}-${ts}`
+
+function normalizeRecordRow(r) {
+    if (!r) return null
+    const ts = r.updated_at || r.created_at || r.signed_at || null
+    const type = r.record_type_code || r.record_type || "RECORD"
+    const dept = r.dept_name || r.dept_code || "—"
+    const status = r.status || "DRAFT"
+    const title = r.title || typeMeta(type).label
+    const encounterType = r.encounter_type || r.encounterType || "OP"
+    const encounterId = r.encounter_id || r.encounterId || ""
+    const author = r.author_name || r.created_by_name || r.author || "—"
+    const summary = r.preview_text || r.summary || ""
     return {
-        id,
+        id: r.id,
         ts,
         type,
         dept,
@@ -310,30 +338,123 @@ function mkRecord(ts, type, dept, status, title, encounterType, encounterId, lin
         title,
         encounterType,
         encounterId,
-        author: status === "DRAFT" ? "—" : "Dr. K. Priya",
-        summary: (lines || []).slice(0, 2).join(" · "),
-        contentLines: lines || [],
-        attachments: attachments || [],
+        author,
+        summary,
+        // filled after detail fetch:
+        contentLines: [],
+        attachments: [],
+        _raw: r,
     }
 }
 
-async function mockSearchPatients(q) {
-    await sleep(120)
-    const x = (q || "").trim().toLowerCase()
-    if (!x) return []
-    return MOCK_PATIENTS.filter((p) => {
-        const hay = `${p.uhid} ${p.name} ${p.phone}`.toLowerCase()
-        return hay.includes(x)
-    }).slice(0, 8)
+function formatRecordContentLines(detailRecord) {
+    const content = detailRecord?.content || {}
+    const lines = []
+
+    const pushKV = (k, v) => {
+        if (v == null) return
+        if (typeof v === "string" && v.trim()) lines.push(`${k}: ${v.trim()}`)
+        else if (typeof v === "number" || typeof v === "boolean") lines.push(`${k}: ${String(v)}`)
+    }
+
+    // Common fields
+    pushKV("Chief Complaint", content.chief_complaint || content.cc)
+    pushKV("History", content.history || content.hpi)
+    pushKV("Assessment", content.assessment)
+    pushKV("Plan", content.plan)
+
+    // SOAP blocks (if stored)
+    const soap = content.soap || content.soap_json
+    if (soap && typeof soap === "object") {
+        if (soap.S) lines.push(`S: ${String(soap.S)}`)
+        if (soap.O) lines.push(`O: ${String(soap.O)}`)
+        if (soap.A) lines.push(`A: ${String(soap.A)}`)
+        if (soap.P) lines.push(`P: ${String(soap.P)}`)
+    }
+
+    // Note text
+    if (typeof content.note_text === "string" && content.note_text.trim()) {
+        lines.push(content.note_text.trim())
+    }
+    if (typeof content.note === "string" && content.note.trim()) {
+        lines.push(content.note.trim())
+    }
+
+    // Vitals
+    const vitals = content.vitals || content.vitals_json
+    if (vitals && typeof vitals === "object") {
+        const vitParts = []
+        for (const k of ["bp", "pulse", "rr", "temp", "spo2", "weight", "height", "bmi"]) {
+            if (vitals[k] != null && String(vitals[k]).trim() !== "") vitParts.push(`${k.toUpperCase()}: ${vitals[k]}`)
+        }
+        if (vitParts.length) lines.push(`Vitals: ${vitParts.join(" · ")}`)
+    }
+
+    // Meds
+    const meds = content.meds || content.meds_json
+    if (Array.isArray(meds) && meds.length) {
+        for (const m of meds.slice(0, 30)) {
+            if (typeof m === "string") lines.push(m)
+            else if (m && typeof m === "object") {
+                const n = m.name || m.drug || m.item || "Medicine"
+                const dose = m.dose || m.strength || ""
+                const freq = m.freq || m.frequency || ""
+                const dur = m.duration || ""
+                const inst = m.instructions || m.note || ""
+                lines.push([n, dose, freq, dur].filter(Boolean).join(" · ") + (inst ? ` — ${inst}` : ""))
+            }
+        }
+    }
+
+    // Sections (template style)
+    const sections = content.sections
+    if (Array.isArray(sections) && sections.length) {
+        for (const s of sections.slice(0, 25)) {
+            if (!s) continue
+            const title = s.title || s.name || ""
+            if (title) lines.push(`— ${title} —`)
+            const items = s.items || s.lines || s.fields
+            if (Array.isArray(items)) {
+                for (const it of items.slice(0, 40)) {
+                    if (typeof it === "string" && it.trim()) lines.push(`• ${it.trim()}`)
+                    else if (it && typeof it === "object") {
+                        const k = it.label || it.key || it.name || "Item"
+                        const v = it.value ?? it.val ?? it.text ?? ""
+                        if (String(v).trim()) lines.push(`• ${k}: ${v}`)
+                    }
+                }
+            }
+        }
+    }
+
+    // Fallback: if nothing captured, show “No structured content”
+    return lines.filter(Boolean).slice(0, 200)
 }
 
-async function mockFetchRecords(patientId) {
-    await sleep(140)
-    return MOCK_RECORDS_BY_PATIENT[patientId] || []
+function extractAttachments(detailRecord) {
+    const content = detailRecord?.content || {}
+    const a =
+        content.attachments ||
+        content.files ||
+        content.documents ||
+        detailRecord?.attachments ||
+        []
+    if (!Array.isArray(a)) return []
+    return a
+        .map((x) => {
+            if (!x) return null
+            if (typeof x === "string") return { name: x }
+            return {
+                name: x.name || x.filename || x.file_name || "Attachment",
+                url: x.url || x.path || x.download_url || null,
+            }
+        })
+        .filter(Boolean)
 }
 
-function sleep(ms) {
-    return new Promise((r) => setTimeout(r, ms))
+function formatPatientLabel(p) {
+    if (!p) return ""
+    return `${p.uhid || "UHID"} · ${p.name || "Patient"}`
 }
 
 /** ----------------- PAGE ----------------- */
@@ -341,13 +462,14 @@ function sleep(ms) {
 export default function EmrPatientChart() {
     const isMobile = useIsMobile(1024)
     const navigate = useNavigate()
+
     // Patient search
     const [q, setQ] = useState("")
     const [searching, setSearching] = useState(false)
     const [results, setResults] = useState([])
     const [dropOpen, setDropOpen] = useState(false)
     const searchBoxRef = useRef(null)
-    const [open, setOpen] = useState(false)
+
     const [patient, setPatient] = useState(null)
 
     // Records
@@ -355,16 +477,14 @@ export default function EmrPatientChart() {
     const [records, setRecords] = useState([])
     const [activeId, setActiveId] = useState(null)
 
-    const patients = {
-        id: 101,
-        uhid: "NH-000101",
-        name: "Pavithra S",
-        gender: "F",
-        age: 26,
-        phone: "9600457842",
-    }
+    // Record details cache (for preview)
+    const [detailMap, setDetailMap] = useState({}) // { [recordId]: { ...uiRecordMerged } }
+
     // Preview modal (mobile)
     const [previewOpen, setPreviewOpen] = useState(false)
+
+    // Create record dialog
+    const [open, setOpen] = useState(false)
 
     // Filters
     const [f, setF] = useState({
@@ -387,57 +507,129 @@ export default function EmrPatientChart() {
         return () => window.removeEventListener("mousedown", onDown)
     }, [])
 
-    // Debounced patient search
+    /** Debounced patient search */
     useEffect(() => {
-        let alive = true
-        const t = setTimeout(async () => {
-            const x = (q || "").trim()
-            if (!x) {
-                setResults([])
-                setSearching(false)
-                return
-            }
-            setSearching(true)
-            const rows = await mockSearchPatients(x)
-            if (!alive) return
-            setResults(rows)
+        const x = (q || "").trim()
+        // don’t auto-search if input equals selected patient label
+        if (patient && x === formatPatientLabel(patient)) return
+
+        if (!x || x.length < 2) {
+            setResults([])
             setSearching(false)
-            setDropOpen(true)
+            return
+        }
+
+        let alive = true
+        const controller = new AbortController()
+
+        const t = setTimeout(async () => {
+            setSearching(true)
+            try {
+                const rows = await listPatients(x, controller.signal)
+                console.log(rows, "checked");
+
+                if (!alive) return
+                const norm = (rows?.data || [])?.map(normalizePatient).filter(Boolean)
+                setResults(norm.slice(0, 10))
+                setDropOpen(true)
+            } catch (e) {
+                if (!alive) return
+                // ignore abort
+                if (e?.name !== "CanceledError" && e?.name !== "AbortError") {
+                    toast.error(apiErrorMessage(e, "Failed to search patients"))
+                }
+            } finally {
+                if (alive) setSearching(false)
+            }
         }, 250)
+
         return () => {
             alive = false
+            controller.abort()
             clearTimeout(t)
         }
-    }, [q])
+    }, [q]) // eslint-disable-line react-hooks/exhaustive-deps
 
-    // Load records when patient changes
+    /** Load chart timeline when patient changes */
     useEffect(() => {
         let alive = true
+        const controller = new AbortController()
+
         async function run() {
             if (!patient?.id) {
                 setRecords([])
                 setActiveId(null)
+                setDetailMap({})
                 return
             }
+
             setLoadingRecords(true)
             try {
-                const rows = await mockFetchRecords(patient.id)
+                // Server side filters that are safe:
+                const params = {
+                    page: 1,
+                    page_size: 20,
+                    // pass only exact-safe filters:
+                    ...(f.status !== "ALL" ? { status: f.status } : {}),
+                    ...(f.type !== "ALL" ? { record_type_code: f.type } : {}),
+                    ...(f.recordQ?.trim() ? { q: f.recordQ.trim() } : {}),
+                }
+                console.log(params, "checked");
+
+
+                const data = await getPatientChart(patient.id, params, controller.signal)
                 if (!alive) return
-                const sorted = [...rows].sort((a, b) => new Date(b.ts) - new Date(a.ts))
+
+                const items = data?.timeline?.items || []
+                const uiRows = items.map(normalizeRecordRow).filter(Boolean)
+
+                // Sort desc by ts
+                const sorted = [...uiRows].sort((a, b) => new Date(b.ts || 0) - new Date(a.ts || 0))
+
                 setRecords(sorted)
                 setActiveId(sorted?.[0]?.id || null)
             } catch (e) {
-                toast.error("Failed to load EMR records")
+                if (!alive) return
+                if (e?.name !== "CanceledError" && e?.name !== "AbortError") {
+                    toast.error(apiErrorMessage(e, "Failed to load EMR records"))
+                }
             } finally {
                 if (alive) setLoadingRecords(false)
             }
         }
+
         run()
         return () => {
             alive = false
+            controller.abort()
         }
-    }, [patient?.id])
+        // patient changes => reload
+    }, [patient?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
+    /** Ensure record detail loaded for preview */
+    async function ensureDetail(recordId) {
+        if (!recordId) return
+        if (detailMap[recordId]) return
+
+        const controller = new AbortController()
+        try {
+            const data = await getEmrRecord(recordId, controller.signal)
+            const rec = data?.record || data?.data?.record || null
+            if (!rec) return
+
+            const merged = normalizeRecordRow(rec)
+            merged.contentLines = formatRecordContentLines(rec)
+            merged.attachments = extractAttachments(rec)
+
+            setDetailMap((m) => ({ ...m, [recordId]: merged }))
+        } catch (e) {
+            if (e?.name !== "CanceledError" && e?.name !== "AbortError") {
+                toast.error(apiErrorMessage(e, "Failed to load record preview"))
+            }
+        }
+    }
+
+    /** Client-side filtering (dept/date/encounter) */
     const filtered = useMemo(() => {
         const rq = (f.recordQ || "").trim().toLowerCase()
         return (records || []).filter((r) => {
@@ -446,8 +638,9 @@ export default function EmrPatientChart() {
             if (f.type !== "ALL" && (r.type || "").toUpperCase() !== f.type) return false
             if (f.status !== "ALL" && (r.status || "").toUpperCase() !== f.status) return false
             if ((f.from || f.to) && !isBetween(r.ts, f.from || "", f.to || "")) return false
+
             if (rq) {
-                const hay = `${r.title || ""} ${r.summary || ""} ${r.contentLines?.join(" ") || ""} ${r.encounterId || ""}`.toLowerCase()
+                const hay = `${r.title || ""} ${r.summary || ""} ${r.encounterId || ""}`.toLowerCase()
                 if (!hay.includes(rq)) return false
             }
             return true
@@ -461,29 +654,28 @@ export default function EmrPatientChart() {
             if (!m.has(g)) m.set(g, [])
             m.get(g).push(r)
         }
-        // Preserve “Today/Yesterday/This Week” order, then rest by date desc.
         const order = ["Today", "Yesterday", "This Week"]
         const keys = Array.from(m.keys())
         const special = order.filter((k) => m.has(k))
         const rest = keys
             .filter((k) => !order.includes(k))
             .sort((a, b) => {
-                // groupLabel returns date string for older; sort by parsing.
                 const pa = Date.parse(a)
                 const pb = Date.parse(b)
                 if (Number.isFinite(pa) && Number.isFinite(pb)) return pb - pa
                 return 0
             })
-        const out = []
-        for (const k of [...special, ...rest]) {
-            out.push([k, m.get(k)])
-        }
-        return out
+        return [...special, ...rest].map((k) => [k, m.get(k)])
     }, [filtered])
 
-    const active = useMemo(() => {
+    const activeBase = useMemo(() => {
         return (filtered || []).find((r) => r.id === activeId) || (filtered?.[0] || null)
     }, [filtered, activeId])
+
+    const active = useMemo(() => {
+        if (!activeBase) return null
+        return detailMap[activeBase.id] || activeBase
+    }, [activeBase, detailMap])
 
     const kpis = useMemo(() => {
         const total = filtered.length
@@ -494,8 +686,10 @@ export default function EmrPatientChart() {
     }, [filtered])
 
     function pickPatient(p) {
-        setPatient(p)
-        setQ(`${p.uhid} · ${p.name}`)
+        const np = normalizePatient(p)
+        setPatient(np)
+        setQ(formatPatientLabel(np))
+        setResults([])
         setDropOpen(false)
     }
 
@@ -503,9 +697,40 @@ export default function EmrPatientChart() {
         setF({ encounter: "ALL", dept: "ALL", type: "ALL", status: "ALL", from: "", to: "", recordQ: "" })
     }
 
-    function openPreview(r) {
+    async function openPreview(r) {
         setActiveId(r.id)
+        await ensureDetail(r.id)
         if (isMobile) setPreviewOpen(true)
+    }
+
+    function onChangeSearch(val) {
+        setQ(val)
+        // if user edits search after selecting a patient => clear selected patient
+        if (patient && val !== formatPatientLabel(patient)) {
+            setPatient(null)
+            setRecords([])
+            setActiveId(null)
+            setDetailMap({})
+        }
+    }
+
+    function handleNewRecord() {
+        if (!patient?.id) {
+            toast.error("Select a patient first")
+            return
+        }
+        setOpen(true)
+    }
+
+    function handleExport() {
+        if (!patient?.id) {
+            toast.error("Select a patient first")
+            return
+        }
+        // wire your export page/flow if available
+        // Example route: /emr/export?patient_id=...
+        // navigate(`/emr/export?patient_id=${patient.id}`)
+        toast("Export flow: wire to your EMR export screen (Phase 2)")
     }
 
     return (
@@ -530,7 +755,7 @@ export default function EmrPatientChart() {
                                 <Search className="h-4 w-4 text-slate-500" />
                                 <Input
                                     value={q}
-                                    onChange={(e) => setQ(e.target.value)}
+                                    onChange={(e) => onChangeSearch(e.target.value)}
                                     onFocus={() => setDropOpen(true)}
                                     placeholder="Search by UHID / Name / Phone…"
                                     className="h-8 border-0 bg-transparent p-0 text-[14px] shadow-none focus-visible:ring-0"
@@ -544,6 +769,10 @@ export default function EmrPatientChart() {
                                             setQ("")
                                             setResults([])
                                             setDropOpen(false)
+                                            setPatient(null)
+                                            setRecords([])
+                                            setActiveId(null)
+                                            setDetailMap({})
                                         }}
                                     >
                                         <X className="h-4 w-4" />
@@ -562,6 +791,8 @@ export default function EmrPatientChart() {
                                         <div className="max-h-[320px] overflow-auto">
                                             {searching ? (
                                                 <div className="px-4 py-3 text-sm text-slate-600">Searching…</div>
+                                            ) : results.length === 0 ? (
+                                                <div className="px-4 py-3 text-sm text-slate-600">No matches</div>
                                             ) : (
                                                 results.map((p) => (
                                                     <button
@@ -575,18 +806,23 @@ export default function EmrPatientChart() {
                                                         <div className="min-w-0 flex-1">
                                                             <div className="truncate text-[14px] font-semibold text-slate-900">
                                                                 {p.name}
-                                                                <span className="ml-2 text-xs font-medium text-slate-500">{p.gender} · {p.age}y</span>
+                                                                <span className="ml-2 text-xs font-medium text-slate-500">
+                                                                    {p.gender ? `${p.gender} · ` : ""}
+                                                                    {p.age != null ? `${p.age}y` : ""}
+                                                                </span>
                                                             </div>
                                                             <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-500">
                                                                 <span className="inline-flex items-center gap-1">
-                                                                    <Hash className="h-3.5 w-3.5" /> {p.uhid}
+                                                                    <Hash className="h-3.5 w-3.5" /> {p.uhid || "—"}
                                                                 </span>
                                                                 <span className="inline-flex items-center gap-1">
-                                                                    <Building2 className="h-3.5 w-3.5" /> {p.phone}
+                                                                    <Building2 className="h-3.5 w-3.5" /> {p.phone || "—"}
                                                                 </span>
-                                                                <span className="inline-flex items-center gap-1">
-                                                                    <Calendar className="h-3.5 w-3.5" /> Last: {fmtDate(p.lastVisit)}
-                                                                </span>
+                                                                {p.lastVisit ? (
+                                                                    <span className="inline-flex items-center gap-1">
+                                                                        <Calendar className="h-3.5 w-3.5" /> Last: {fmtDate(p.lastVisit)}
+                                                                    </span>
+                                                                ) : null}
                                                             </div>
                                                         </div>
                                                         <Badge className="rounded-xl bg-slate-900 text-white">Open</Badge>
@@ -601,18 +837,11 @@ export default function EmrPatientChart() {
 
                         {/* Right actions */}
                         <div className="flex items-center gap-2">
-                            <Button
-                                variant="outline"
-                                className="rounded-2xl"
-                                onClick={() => toast("Tip: Start by searching a patient")}
-                            >
+                            <Button variant="outline" className="rounded-2xl" onClick={() => toast("Tip: Start by searching a patient")}>
                                 <Filter className="mr-2 h-4 w-4" />
                                 Quick Tips
                             </Button>
-                            <Button
-                                className="rounded-2xl"
-                                onClick={() => setOpen(!open)}
-                            >
+                            <Button className="rounded-2xl" onClick={handleNewRecord} disabled={!patient?.id}>
                                 <PenLine className="mr-2 h-4 w-4" />
                                 New Record
                             </Button>
@@ -642,13 +871,7 @@ export default function EmrPatientChart() {
                                     <div>
                                         <CardTitle className="text-base">Timeline</CardTitle>
                                         <div className="text-xs text-slate-500">
-                                            {patient ? (
-                                                <>
-                                                    {loadingRecords ? "Loading records…" : `${filtered.length} record(s)`}
-                                                </>
-                                            ) : (
-                                                "Search and select a patient to view records"
-                                            )}
+                                            {patient ? (loadingRecords ? "Loading records…" : `${filtered.length} record(s)`) : "Search and select a patient to view records"}
                                         </div>
                                     </div>
 
@@ -662,14 +885,7 @@ export default function EmrPatientChart() {
                                                 className="h-10 rounded-2xl pl-9"
                                             />
                                         </div>
-                                        <Button
-                                            variant="outline"
-                                            className="rounded-2xl"
-                                            onClick={() => {
-                                                navigator
-                                            }}
-                                            disabled={!patient}
-                                        >
+                                        <Button variant="outline" className="rounded-2xl" onClick={handleExport} disabled={!patient}>
                                             <Download className="mr-2 h-4 w-4" /> Export
                                         </Button>
                                     </div>
@@ -705,12 +921,7 @@ export default function EmrPatientChart() {
 
                                                     <div className="space-y-2">
                                                         {list.map((r) => (
-                                                            <RecordCard
-                                                                key={r.id}
-                                                                record={r}
-                                                                active={r.id === active?.id}
-                                                                onClick={() => openPreview(r)}
-                                                            />
+                                                            <RecordCard key={r.id} record={r} active={r.id === active?.id} onClick={() => openPreview(r)} />
                                                         ))}
                                                     </div>
                                                 </div>
@@ -745,11 +956,13 @@ export default function EmrPatientChart() {
                     </DialogContent>
                 </Dialog>
             </div>
+
+            {/* Create Record Flow */}
             <EmrCreateRecordDialog
                 open={open}
                 onOpenChange={setOpen}
-                patient={patients}
-                defaultDept="OBGYN"
+                patient={patient || null}
+                defaultDept={(patient?.dept_name || patient?.dept || "OBGYN")}
                 onSaved={(payload) => console.log("UI payload:", payload)}
             />
         </div>
@@ -775,8 +988,12 @@ function PatientHeader({ patient }) {
                         </div>
                         <div className="flex items-center gap-2">
                             <Badge className="rounded-xl bg-slate-900 text-white">EMR Hub</Badge>
-                            <Badge variant="outline" className="rounded-xl">Timeline</Badge>
-                            <Badge variant="outline" className="rounded-xl">Preview</Badge>
+                            <Badge variant="outline" className="rounded-xl">
+                                Timeline
+                            </Badge>
+                            <Badge variant="outline" className="rounded-xl">
+                                Preview
+                            </Badge>
                         </div>
                     </div>
                 ) : (
@@ -789,19 +1006,23 @@ function PatientHeader({ patient }) {
                                 <div className="truncate text-base font-semibold text-slate-900">
                                     {patient.name}
                                     <span className="ml-2 text-sm font-medium text-slate-500">
-                                        {patient.gender} · {patient.age}y · {patient.blood}
+                                        {patient.gender ? `${patient.gender || "—"} · ` : ""}
+                                        {patient.age != null ? `${(patient.ageText || (patient.age != null ? `${patient.age}y` : "—"))}` : ""}
+                                        {patient.blood ? ` · ${patient.blood || "—"}` : ""}
                                     </span>
                                 </div>
                                 <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
                                     <span className="inline-flex items-center gap-1">
-                                        <Hash className="h-3.5 w-3.5" /> {patient.uhid}
+                                        <Hash className="h-3.5 w-3.5" /> {patient.uhid || "—"}
                                     </span>
                                     <span className="inline-flex items-center gap-1">
-                                        <Building2 className="h-3.5 w-3.5" /> {patient.phone}
+                                        <Building2 className="h-3.5 w-3.5" /> {patient.phone || "—"}
                                     </span>
-                                    <span className="inline-flex items-center gap-1">
-                                        <Calendar className="h-3.5 w-3.5" /> Last visit: {fmtDate(patient.lastVisit)}
-                                    </span>
+                                    {patient.lastVisit ? (
+                                        <span className="inline-flex items-center gap-1">
+                                            <Calendar className="h-3.5 w-3.5" /> Last visit: {fmtDate(patient.lastVisit)}
+                                        </span>
+                                    ) : null}
                                 </div>
                             </div>
                         </div>
@@ -818,8 +1039,12 @@ function PatientHeader({ patient }) {
                                     <CheckCircle2 className="mr-1 h-3.5 w-3.5" /> No alerts
                                 </Badge>
                             )}
-                            <Badge variant="outline" className="rounded-xl">OP/IP Linked</Badge>
-                            <Badge variant="outline" className="rounded-xl">Audit Ready</Badge>
+                            <Badge variant="outline" className="rounded-xl">
+                                OP/IP Linked
+                            </Badge>
+                            <Badge variant="outline" className="rounded-xl">
+                                Audit Ready
+                            </Badge>
                         </div>
                     </div>
                 )}
@@ -842,22 +1067,11 @@ function FiltersCard({ f, setF, kpis, onClear }) {
 
             <CardContent className="space-y-4">
                 <KpiRow kpis={kpis} />
-
                 <Separator />
 
                 <div className="grid grid-cols-1 gap-3">
-                    <FilterSelect
-                        label="Encounter"
-                        value={f.encounter}
-                        options={ENCOUNTERS}
-                        onChange={(v) => setF((s) => ({ ...s, encounter: v }))}
-                    />
-                    <FilterSelect
-                        label="Department"
-                        value={f.dept}
-                        options={DEPARTMENTS}
-                        onChange={(v) => setF((s) => ({ ...s, dept: v }))}
-                    />
+                    <FilterSelect label="Encounter" value={f.encounter} options={ENCOUNTERS} onChange={(v) => setF((s) => ({ ...s, encounter: v }))} />
+                    <FilterSelect label="Department" value={f.dept} options={DEPARTMENTS} onChange={(v) => setF((s) => ({ ...s, dept: v }))} />
                     <FilterSelect
                         label="Record Type"
                         value={f.type}
@@ -865,39 +1079,24 @@ function FiltersCard({ f, setF, kpis, onClear }) {
                         onChange={(v) => setF((s) => ({ ...s, type: v }))}
                         renderOption={(x) => typeMeta(x).label}
                     />
-                    <FilterSelect
-                        label="Status"
-                        value={f.status}
-                        options={STATUSES}
-                        onChange={(v) => setF((s) => ({ ...s, status: v }))}
-                    />
+                    <FilterSelect label="Status" value={f.status} options={STATUSES} onChange={(v) => setF((s) => ({ ...s, status: v }))} />
 
                     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                         <div>
                             <div className="mb-1 text-xs font-medium text-slate-600">From</div>
-                            <Input
-                                type="date"
-                                value={f.from}
-                                onChange={(e) => setF((s) => ({ ...s, from: e.target.value }))}
-                                className="h-10 rounded-2xl"
-                            />
+                            <Input type="date" value={f.from} onChange={(e) => setF((s) => ({ ...s, from: e.target.value }))} className="h-10 rounded-2xl" />
                         </div>
                         <div>
                             <div className="mb-1 text-xs font-medium text-slate-600">To</div>
-                            <Input
-                                type="date"
-                                value={f.to}
-                                onChange={(e) => setF((s) => ({ ...s, to: e.target.value }))}
-                                className="h-10 rounded-2xl"
-                            />
+                            <Input type="date" value={f.to} onChange={(e) => setF((s) => ({ ...s, to: e.target.value }))} className="h-10 rounded-2xl" />
                         </div>
                     </div>
 
                     <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-slate-50 via-white to-indigo-50/30 p-3">
                         <div className="text-xs font-semibold text-slate-700">Smart Tip</div>
                         <div className="mt-1 text-xs text-slate-500">
-                            Keep <span className="font-medium text-slate-700">Department</span> +{" "}
-                            <span className="font-medium text-slate-700">Record Type</span> filters for fastest chart review.
+                            Keep <span className="font-medium text-slate-700">Department</span> + <span className="font-medium text-slate-700">Record Type</span> filters
+                            for fastest chart review.
                         </div>
                     </div>
                 </div>
@@ -916,10 +1115,7 @@ function KpiRow({ kpis }) {
     return (
         <div className="grid grid-cols-2 gap-2">
             {items.map((x) => (
-                <div
-                    key={x.label}
-                    className={cn("rounded-2xl p-3 ring-1", x.cls)}
-                >
+                <div key={x.label} className={cn("rounded-2xl p-3 ring-1", x.cls)}>
                     <div className="text-xs font-medium">{x.label}</div>
                     <div className="mt-1 text-lg font-semibold">{x.value}</div>
                 </div>
@@ -933,9 +1129,7 @@ function FilterSelect({ label, value, options, onChange, renderOption }) {
         <div>
             <div className="mb-1 flex items-center justify-between">
                 <div className="text-xs font-medium text-slate-600">{label}</div>
-                {value !== "ALL" ? (
-                    <Badge variant="outline" className="rounded-xl">{value}</Badge>
-                ) : null}
+                {value !== "ALL" ? <Badge variant="outline" className="rounded-xl">{value}</Badge> : null}
             </div>
 
             <div className="relative">
@@ -969,7 +1163,6 @@ function RecordCard({ record, active, onClick }) {
                 active ? "border-slate-300 ring-1 ring-slate-200" : "border-slate-200 hover:border-slate-300"
             )}
         >
-            {/* tone bar */}
             <div className={cn("h-1.5 w-full bg-gradient-to-r", tone.bar)} />
 
             <div className={cn("p-4", active ? tone.glow : "")}>
@@ -992,9 +1185,7 @@ function RecordCard({ record, active, onClick }) {
                             </span>
                         </div>
 
-                        <div className="mt-2 truncate text-[14px] font-semibold text-slate-900">
-                            {record.title}
-                        </div>
+                        <div className="mt-2 truncate text-[14px] font-semibold text-slate-900">{record.title}</div>
 
                         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
                             <span className="inline-flex items-center gap-1">
@@ -1003,7 +1194,7 @@ function RecordCard({ record, active, onClick }) {
                             </span>
                             <span className="inline-flex items-center gap-1">
                                 <Layers className="h-3.5 w-3.5" />
-                                {record.encounterType} · {record.encounterId}
+                                {record.encounterType} · {record.encounterId || "—"}
                             </span>
                             {record.author && record.author !== "—" ? (
                                 <span className="inline-flex items-center gap-1">
@@ -1013,22 +1204,11 @@ function RecordCard({ record, active, onClick }) {
                             ) : null}
                         </div>
 
-                        {record.summary ? (
-                            <div className="mt-2 line-clamp-2 text-xs text-slate-600">
-                                {record.summary}
-                            </div>
-                        ) : null}
+                        {record.summary ? <div className="mt-2 line-clamp-2 text-xs text-slate-600">{record.summary}</div> : null}
                     </div>
 
                     <div className="flex flex-col items-end gap-2">
-                        <Badge className="rounded-xl bg-slate-900 text-white">
-                            View
-                        </Badge>
-                        {record.attachments?.length ? (
-                            <Badge variant="outline" className="rounded-xl">
-                                {record.attachments.length} file(s)
-                            </Badge>
-                        ) : null}
+                        <Badge className="rounded-xl bg-slate-900 text-white">View</Badge>
                     </div>
                 </div>
             </div>
@@ -1043,9 +1223,7 @@ function PreviewPane({ record, patient, compact }) {
                 <CardHeader>
                     <CardTitle className="text-base">Preview</CardTitle>
                 </CardHeader>
-                <CardContent className="text-sm text-slate-600">
-                    Select a patient, then click any record to preview here.
-                </CardContent>
+                <CardContent className="text-sm text-slate-600">Select a patient, then click any record to preview here.</CardContent>
             </Card>
         )
     }
@@ -1056,9 +1234,7 @@ function PreviewPane({ record, patient, compact }) {
                 <CardHeader>
                     <CardTitle className="text-base">Preview</CardTitle>
                 </CardHeader>
-                <CardContent className="text-sm text-slate-600">
-                    No record selected.
-                </CardContent>
+                <CardContent className="text-sm text-slate-600">No record selected.</CardContent>
             </Card>
         )
     }
@@ -1094,29 +1270,22 @@ function PreviewPane({ record, patient, compact }) {
                         <CardTitle className="mt-2 text-base">{record.title}</CardTitle>
                         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
                             <span className="inline-flex items-center gap-1">
-                                <Calendar className="h-3.5 w-3.5" /> {fmtDate(record.ts)}
+                                <Calendar className="h-3.5 w-3.5" /> {record.ts ? fmtDate(record.ts) : "—"}
                             </span>
                             <span className="inline-flex items-center gap-1">
-                                <Clock3 className="h-3.5 w-3.5" /> {fmtTime(record.ts)}
+                                <Clock3 className="h-3.5 w-3.5" /> {record.ts ? fmtTime(record.ts) : ""}
                             </span>
                             <span className="inline-flex items-center gap-1">
-                                <Layers className="h-3.5 w-3.5" /> {record.encounterType} · {record.encounterId}
+                                <Layers className="h-3.5 w-3.5" /> {record.encounterType} · {record.encounterId || "—"}
                             </span>
                         </div>
                     </div>
 
                     <div className="flex items-center gap-2">
-                        <Button
-                            variant="outline"
-                            className="rounded-2xl"
-                            onClick={() => toast("Wire edit flow in Phase 2 (+ New Record)")}
-                        >
+                        <Button variant="outline" className="rounded-2xl" onClick={() => toast("Wire edit flow in Phase 2 (+ New Record)")}>
                             <PenLine className="mr-2 h-4 w-4" /> Edit
                         </Button>
-                        <Button
-                            className="rounded-2xl"
-                            onClick={() => toast("Wire sign/e-sign logic with role permissions")}
-                        >
+                        <Button className="rounded-2xl" onClick={() => toast("Wire sign/e-sign logic with role permissions")}>
                             <CheckCircle2 className="mr-2 h-4 w-4" /> Sign
                         </Button>
                     </div>
@@ -1127,10 +1296,12 @@ function PreviewPane({ record, patient, compact }) {
                 <div className="rounded-2xl border border-slate-200 bg-gradient-to-br from-white via-slate-50/40 to-indigo-50/30 p-4">
                     <div className="text-xs font-semibold text-slate-700">Patient</div>
                     <div className="mt-1 text-sm font-semibold text-slate-900">
-                        {patient.name} <span className="text-xs font-medium text-slate-500">({patient.uhid})</span>
+                        {patient.name} <span className="text-xs font-medium text-slate-500">({patient.uhid || "—"})</span>
                     </div>
                     <div className="mt-1 text-xs text-slate-500">
-                        {patient.gender} · {patient.age}y · {patient.phone}
+                        {patient.gender ? `${patient.gender} · ` : ""}
+                        {patient.age != null ? `${patient.age}y · ` : ""}
+                        {patient.phone || "—"}
                     </div>
                 </div>
 
@@ -1154,7 +1325,7 @@ function PreviewPane({ record, patient, compact }) {
 
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                     <MetaTile icon={Stethoscope} label="Author" value={record.author || "—"} />
-                    <MetaTile icon={Layers} label="Encounter" value={`${record.encounterType} · ${record.encounterId}`} />
+                    <MetaTile icon={Layers} label="Encounter" value={`${record.encounterType} · ${record.encounterId || "—"}`} />
                 </div>
 
                 <div>
@@ -1181,18 +1352,10 @@ function PreviewPane({ record, patient, compact }) {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                    <Button
-                        variant="outline"
-                        className="rounded-2xl"
-                        onClick={() => toast("Wire print/PDF view")}
-                    >
+                    <Button variant="outline" className="rounded-2xl" onClick={() => toast("Wire print/PDF view")}>
                         <FileText className="mr-2 h-4 w-4" /> Print / PDF
                     </Button>
-                    <Button
-                        variant="outline"
-                        className="rounded-2xl"
-                        onClick={() => toast("Wire audit drawer (who/what/when)")}
-                    >
+                    <Button variant="outline" className="rounded-2xl" onClick={() => toast("Wire audit drawer (who/what/when)")}>
                         <ShieldCheck className="mr-2 h-4 w-4" /> Audit Trail
                     </Button>
                 </div>
@@ -1219,9 +1382,7 @@ function EmptyHint() {
                 <Search className="h-6 w-6 text-slate-700" />
             </div>
             <div className="mt-3 text-sm font-semibold text-slate-900">Search a patient to open EMR</div>
-            <div className="mt-1 text-xs text-slate-500">
-                Use UHID / name / phone. Then review records by date in the timeline.
-            </div>
+            <div className="mt-1 text-xs text-slate-500">Use UHID / name / phone. Then review records by date in the timeline.</div>
         </div>
     )
 }
@@ -1262,7 +1423,6 @@ function QuickLegend() {
                     <div>Timeline is fast scan, Preview is deep read, Filters make it “1-click retrieval”.</div>
                 </div>
             </CardContent>
-
         </Card>
     )
 }

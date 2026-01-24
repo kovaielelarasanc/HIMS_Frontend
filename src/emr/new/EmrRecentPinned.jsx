@@ -1,16 +1,21 @@
 // FILE: frontend/src/emr/EmrRecentPinned.jsx
-// ✅ EMR Recent & Pinned (Quick Access) — UI Only (Apple-premium, responsive, multicolor tone)
-// - Recent patients / records
-// - Pinned patients / records (persisted in localStorage)
-// - Quick resume drafts + continue last visit
+// ✅ EMR Recent & Pinned (Quick Access) — Production-ready, API-driven
+//
+// Uses APIs:
+// - GET  /api/emr/meta
+// - GET  /api/emr/quick
+// - POST /api/emr/quick/pin/patient
+// - POST /api/emr/quick/pin/record
+// - GET  /api/emr/patients/{patient_id}/encounters?limit=1
+// - GET  /api/emr/records/{record_id}
 //
 // Routing assumptions (edit if your routes differ):
 // - Patient Chart: /emr/chart?patient_id=...
-// - Create Record: /emr/records/new?patient_id=...&visit_id=...
+// - Create Record: /emr/records/new?patient_id=...&encounter_type=...&encounter_id=...&dept_code=...
 //
 // Requires: shadcn/ui + Tailwind + react-router-dom + lucide-react + cn util.
 
-import React, { useEffect, useMemo, useState } from "react"
+import React, { useEffect, useMemo, useRef, useState } from "react"
 import { useNavigate } from "react-router-dom"
 import {
     Search,
@@ -41,34 +46,25 @@ import { Separator } from "@/components/ui/separator"
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 
+import {
+    emrMetaGet,
+    emrQuickGet,
+    emrSetPatientPinned,
+    emrSetRecordPinned,
+    emrPatientEncounters,
+    emrRecordGet,
+    errMsg,
+} from "@/api/emrApi"
+
 /* ------------------------------- helpers ------------------------------- */
-
-const LS_KEYS = {
-    pinnedPatients: "emr.pinned.patients.v1",
-    pinnedRecords: "emr.pinned.records.v1",
-}
-
-function safeJsonParse(v, fallback) {
-    try {
-        const x = JSON.parse(v)
-        return x ?? fallback
-    } catch {
-        return fallback
-    }
-}
 
 function fmtDate(d) {
     try {
-        return new Date(d).toLocaleDateString("en-IN", {
-            day: "2-digit",
-            month: "short",
-            year: "numeric",
-        })
+        return new Date(d).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" })
     } catch {
         return String(d || "")
     }
 }
-
 function fmtTime(d) {
     try {
         return new Date(d).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
@@ -76,16 +72,17 @@ function fmtTime(d) {
         return ""
     }
 }
-
 function isWithinDays(dateStr, days) {
     try {
         const t = new Date(dateStr).getTime()
         const now = Date.now()
-        const delta = now - t
-        return delta <= days * 24 * 60 * 60 * 1000
+        return now - t <= days * 24 * 60 * 60 * 1000
     } catch {
         return true
     }
+}
+function uniq(arr) {
+    return Array.from(new Set((arr || []).filter(Boolean)))
 }
 
 function deptTone(deptRaw) {
@@ -137,8 +134,6 @@ function deptTone(deptRaw) {
         }
     )
 }
-
-const DEPTS = ["ALL", "OBGYN", "Cardiology", "ICU", "Orthopedics", "General Medicine", "General Surgery"]
 
 const TIME_RANGES = [
     { key: "TODAY", label: "Today", days: 1 },
@@ -194,9 +189,7 @@ function ChipSelect({ value, onChange, options, icon: Icon }) {
                         onClick={() => onChange?.(k)}
                         className={cn(
                             "inline-flex items-center gap-2 rounded-2xl border px-3 py-2 text-xs font-semibold transition",
-                            active
-                                ? "border-slate-300 bg-white shadow-sm"
-                                : "border-slate-200 bg-white/60 hover:bg-white"
+                            active ? "border-slate-300 bg-white shadow-sm" : "border-slate-200 bg-white/60 hover:bg-white"
                         )}
                     >
                         {Icon ? <Icon className="h-3.5 w-3.5 text-slate-600" /> : null}
@@ -217,9 +210,7 @@ function IconBtn({ title, onClick, children, disabled }) {
             disabled={!!disabled}
             className={cn(
                 "grid h-9 w-9 place-items-center rounded-2xl ring-1 ring-slate-200 transition",
-                disabled
-                    ? "cursor-not-allowed bg-slate-50 text-slate-300"
-                    : "bg-white text-slate-700 hover:bg-slate-50"
+                disabled ? "cursor-not-allowed bg-slate-50 text-slate-300" : "bg-white text-slate-700 hover:bg-slate-50"
             )}
         >
             {children}
@@ -236,7 +227,7 @@ export default function EmrRecentPinned({
     // Optional overrides for navigation
     onOpenChart, // (patient) => void
     onOpenRecord, // (record) => void
-    onCreateRecord, // ({patient_id, visit_id}) => void
+    onCreateRecord, // ({patient_id, encounter_type, encounter_id, dept_code}) => void
 
     // Optional: if you want to mount it as a TAB inside Patient Chart
     compact = false,
@@ -249,70 +240,231 @@ export default function EmrRecentPinned({
     const [range, setRange] = useState("7D")
     const [showFilters, setShowFilters] = useState(false)
 
-    const [pinnedPatients, setPinnedPatients] = useState([])
-    const [pinnedRecords, setPinnedRecords] = useState([])
+    const [meta, setMeta] = useState(null)
+    const [quick, setQuick] = useState(null)
 
-    // Dummy: patients + visits + records + drafts
-    const data = useMemo(() => seedDummyData(currentUser), [currentUser?.id])
+    const [loading, setLoading] = useState(true)
+    const [loadingPins, setLoadingPins] = useState({}) // key => boolean
 
-    // load pins
-    useEffect(() => {
-        const pp = safeJsonParse(localStorage.getItem(LS_KEYS.pinnedPatients), [])
-        const pr = safeJsonParse(localStorage.getItem(LS_KEYS.pinnedRecords), [])
-        setPinnedPatients(Array.isArray(pp) ? pp : [])
-        setPinnedRecords(Array.isArray(pr) ? pr : [])
-    }, [])
+    const [encByPatient, setEncByPatient] = useState({}) // patient_id -> encounter (latest)
+    const [recordById, setRecordById] = useState({}) // record_id -> record
 
-    // persist pins
-    useEffect(() => {
-        localStorage.setItem(LS_KEYS.pinnedPatients, JSON.stringify(pinnedPatients || []))
-    }, [pinnedPatients])
-
-    useEffect(() => {
-        localStorage.setItem(LS_KEYS.pinnedRecords, JSON.stringify(pinnedRecords || []))
-    }, [pinnedRecords])
+    const toastOnceRef = useRef(new Set())
 
     const timeDays = useMemo(() => TIME_RANGES.find((x) => x.key === range)?.days ?? 7, [range])
 
+    const deptOptions = useMemo(() => {
+        const items = meta?.departments || []
+        return [{ key: "ALL", label: "All" }, ...items.map((d) => ({ key: d.code, label: d.name }))]
+    }, [meta])
+
+    const deptNameByCode = useMemo(() => {
+        const m = new Map()
+            ; (meta?.departments || []).forEach((d) => m.set(String(d.code || "").toUpperCase(), d.name))
+        return m
+    }, [meta])
+
+    const recordTypeLabelByCode = useMemo(() => {
+        const m = new Map()
+            ; (meta?.record_types || []).forEach((t) => m.set(String(t.code || "").toUpperCase(), t.label))
+        return m
+    }, [meta])
+
+    // Fetch meta + quick
+    useEffect(() => {
+        let alive = true
+            ; (async () => {
+                setLoading(true)
+                try {
+                    const days = timeDays >= 36500 ? 36500 : timeDays
+                    const [m, qk] = await Promise.all([
+                        emrMetaGet().catch((e) => {
+                            throw e
+                        }),
+                        emrQuickGet({ days, limitPatients: 50, limitRecords: 60, limitDrafts: 30 }).catch((e) => {
+                            throw e
+                        }),
+                    ])
+                    if (!alive) return
+                    setMeta(m)
+                    setQuick(qk)
+                } catch (e) {
+                    if (!alive) return
+                    toast.error(errMsg(e, "Failed to load quick access"))
+                    setQuick(null)
+                } finally {
+                    if (alive) setLoading(false)
+                }
+            })()
+        return () => {
+            alive = false
+        }
+        // refetch when range changes (because backend quick uses days)
+    }, [timeDays])
+
+    // Load latest encounters for displayed patients (batch via parallel calls)
+    useEffect(() => {
+        let alive = true
+        if (!quick) return
+
+        const pinnedIds = uniq(quick?.pinned_patients || [])
+        const recentIds = uniq((quick?.recents || []).map((r) => r?.patient_id))
+        const ids = uniq([...pinnedIds, ...recentIds]).slice(0, 80)
+
+        const missing = ids.filter((pid) => !encByPatient[String(pid)])
+        if (!missing.length) return
+
+            ; (async () => {
+                const results = await Promise.allSettled(
+                    missing.map(async (pid) => {
+                        const out = await emrPatientEncounters(pid, { limit: 1 })
+                        const enc = out?.encounters?.[0] || null
+                        return { pid, enc }
+                    })
+                )
+                if (!alive) return
+                setEncByPatient((prev) => {
+                    const next = { ...prev }
+                    for (const r of results) {
+                        if (r.status === "fulfilled") {
+                            next[String(r.value.pid)] = r.value.enc
+                        }
+                    }
+                    return next
+                })
+            })()
+
+        return () => {
+            alive = false
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [quick])
+
+    // Load record details for pinned/recent/drafts (batch via parallel calls)
+    useEffect(() => {
+        let alive = true
+        if (!quick) return
+
+        const pinned = uniq(quick?.pinned_records || [])
+        const recentViewed = uniq(
+            (quick?.recents || [])
+                .map((x) => x?.record_id)
+                .filter((rid) => rid && Number(rid) !== 0)
+        )
+        const drafts = uniq((quick?.resume_drafts || []).map((d) => d?.record_id))
+
+        const ids = uniq([...pinned, ...recentViewed, ...drafts]).slice(0, 120)
+        const missing = ids.filter((rid) => !recordById[String(rid)])
+
+        if (!missing.length) return
+
+            ; (async () => {
+                const results = await Promise.allSettled(
+                    missing.map(async (rid) => {
+                        console.log(rid, "1234567890");
+
+                        const rec = await emrRecordGet(rid)
+                        return { rid, rec }
+                    })
+                )
+                if (!alive) return
+                setRecordById((prev) => {
+                    const next = { ...prev }
+                    for (const r of results) {
+                        if (r.status === "fulfilled" && r.value?.rec) {
+                            next[String(r.value.rid)] = r.value.rec
+                        }
+                    }
+                    return next
+                })
+            })()
+
+        return () => {
+            alive = false
+        }
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [quick])
+
+    // helper: last seen per patient (from quick.recents)
+    const lastSeenByPatient = useMemo(() => {
+        const m = new Map()
+            ; (quick?.recents || []).forEach((r) => {
+                const pid = String(r?.patient_id || "")
+                if (!pid) return
+                const t = r?.last_seen_at || null
+                if (!t) return
+                const prev = m.get(pid)
+                if (!prev || new Date(t).getTime() > new Date(prev).getTime()) m.set(pid, t)
+            })
+        return m
+    }, [quick])
+
+    const pinnedPatients = useMemo(() => uniq(quick?.pinned_patients || []), [quick])
+    const pinnedRecords = useMemo(() => uniq(quick?.pinned_records || []), [quick])
+
+    // Build patient objects for UI
+    const allPatients = useMemo(() => {
+        const patientMap = quick?.patient_map || {}
+        const ids = uniq([
+            ...(quick?.pinned_patients || []),
+            ...((quick?.recents || []).map((r) => r?.patient_id) || []),
+        ])
+
+        return ids
+            .map((pid) => {
+                const p = patientMap?.[String(pid)] || {}
+                const enc = encByPatient[String(pid)] || null
+                const lastSeen = lastSeenByPatient.get(String(pid)) || null
+
+                const deptCode = enc?.department_code || null
+                const deptName = enc?.department_name || (deptCode ? deptNameByCode.get(String(deptCode).toUpperCase()) : null)
+
+                return {
+                    id: String(pid),
+                    uhid: p?.uhid || "—",
+                    name: p?.full_name || p?.name || "—",
+                    phone: p?.phone || "",
+                    last_seen_at: lastSeen,
+                    last_encounter: enc
+                        ? {
+                            encounter_type: enc.encounter_type,
+                            encounter_id: enc.encounter_id,
+                            department_code: enc.department_code,
+                            department_name: deptName || enc.department_name || "—",
+                            doctor_name: enc.doctor_name || "—",
+                            when: enc.encounter_at || lastSeen,
+                        }
+                        : null,
+                }
+            })
+            .filter(Boolean)
+    }, [quick, encByPatient, lastSeenByPatient, deptNameByCode])
+
     const filteredPatients = useMemo(() => {
         const qq = (q || "").trim().toLowerCase()
-        return (data.patients || [])
-            .filter((p) => (dept === "ALL" ? true : (p.last_visit?.dept || "").toUpperCase() === dept.toUpperCase()))
-            .filter((p) => (timeDays >= 36500 ? true : isWithinDays(p.last_visit?.when, timeDays)))
+        return (allPatients || [])
+            .filter((p) => {
+                const enc = p.last_encounter
+                const deptCode = String(enc?.department_code || "").toUpperCase()
+                if (dept === "ALL") return true
+                return deptCode === String(dept).toUpperCase()
+            })
+            .filter((p) => {
+                const when = p?.last_encounter?.when || p?.last_seen_at
+                if (timeDays >= 36500) return true
+                return isWithinDays(when, timeDays)
+            })
             .filter((p) => {
                 if (!qq) return true
-                const hay = `${p.name} ${p.uhid} ${p.phone} ${p.last_visit?.dept || ""} ${p.last_visit?.doctor || ""}`.toLowerCase()
+                const hay = `${p.name} ${p.uhid} ${p.phone} ${p.last_encounter?.department_name || ""} ${p.last_encounter?.doctor_name || ""}`.toLowerCase()
                 return hay.includes(qq)
             })
-            .sort((a, b) => new Date(b.last_visit?.when).getTime() - new Date(a.last_visit?.when).getTime())
-    }, [data.patients, q, dept, timeDays])
-
-    const filteredRecords = useMemo(() => {
-        const qq = (q || "").trim().toLowerCase()
-        return (data.records || [])
-            .filter((r) => (dept === "ALL" ? true : (r.dept || "").toUpperCase() === dept.toUpperCase()))
-            .filter((r) => (timeDays >= 36500 ? true : isWithinDays(r.when, timeDays)))
-            .filter((r) => {
-                if (!qq) return true
-                const hay = `${r.title} ${r.type} ${r.dept} ${r.patient_name} ${r.patient_uhid} ${r.status}`.toLowerCase()
-                return hay.includes(qq)
+            .sort((a, b) => {
+                const ta = new Date(a?.last_encounter?.when || a?.last_seen_at || 0).getTime()
+                const tb = new Date(b?.last_encounter?.when || b?.last_seen_at || 0).getTime()
+                return tb - ta
             })
-            .sort((a, b) => new Date(b.when).getTime() - new Date(a.when).getTime())
-    }, [data.records, q, dept, timeDays])
-
-    const myDrafts = useMemo(() => {
-        const qq = (q || "").trim().toLowerCase()
-        return (data.drafts || [])
-            .filter((d) => d.owner_id === currentUser?.id)
-            .filter((d) => (dept === "ALL" ? true : (d.dept || "").toUpperCase() === dept.toUpperCase()))
-            .filter((d) => (timeDays >= 36500 ? true : isWithinDays(d.updated_at, timeDays)))
-            .filter((d) => {
-                if (!qq) return true
-                const hay = `${d.title} ${d.dept} ${d.patient_name} ${d.patient_uhid}`.toLowerCase()
-                return hay.includes(qq)
-            })
-            .sort((a, b) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
-    }, [data.drafts, currentUser?.id, q, dept, timeDays])
+    }, [allPatients, q, dept, timeDays])
 
     const pinnedPatientObjs = useMemo(() => {
         const set = new Set(pinnedPatients || [])
@@ -324,6 +476,65 @@ export default function EmrRecentPinned({
         return filteredPatients.filter((p) => !set.has(p.id)).slice(0, 16)
     }, [filteredPatients, pinnedPatients])
 
+    // Build record objects for UI (from recordById + quick.record_map fallback)
+    const allRecentRecordIds = useMemo(() => {
+        const ids = (quick?.recents || [])
+            .map((x) => x?.record_id)
+            .filter((rid) => rid && Number(rid) !== 0)
+        return uniq(ids).slice(0, 40)
+    }, [quick])
+
+    const filteredRecords = useMemo(() => {
+        const qq = (q || "").trim().toLowerCase()
+        const rmapFallback = quick?.record_map || {}
+        const pmap = quick?.patient_map || {}
+
+        const recs = allRecentRecordIds.map((rid) => {
+            const rec = recordById[String(rid)] || null
+            const fb = rmapFallback[String(rid)] || {}
+            const patientId = String(rec?.patient_id || fb?.patient_id || "")
+            const p = pmap?.[patientId] || {}
+
+            const deptCode = rec?.dept_code || rec?.deptCode || fb?.dept_code || fb?.deptCode || ""
+            const deptName = deptCode ? (deptNameByCode.get(String(deptCode).toUpperCase()) || deptCode) : "—"
+
+            const typeCode = rec?.record_type_code || rec?.recordTypeCode || fb?.record_type_code || ""
+            const typeLabel = typeCode ? (recordTypeLabelByCode.get(String(typeCode).toUpperCase()) || typeCode) : "—"
+
+            const when = rec?.updated_at || rec?.created_at || fb?.updated_at || fb?.last_seen_at || null
+
+            return {
+                id: String(rid),
+                patient_id: patientId,
+                patient_name: p?.full_name || p?.name || "—",
+                patient_uhid: p?.uhid || "—",
+                dept_code: deptCode,
+                dept: deptName,
+                type: typeLabel,
+                title: rec?.title || fb?.title || "—",
+                status: rec?.status || fb?.status || "—",
+                when,
+            }
+        })
+
+        return recs
+            .filter(Boolean)
+            .filter((r) => {
+                if (dept === "ALL") return true
+                return String(r.dept_code || "").toUpperCase() === String(dept).toUpperCase()
+            })
+            .filter((r) => {
+                if (timeDays >= 36500) return true
+                return isWithinDays(r.when, timeDays)
+            })
+            .filter((r) => {
+                if (!qq) return true
+                const hay = `${r.title} ${r.type} ${r.dept} ${r.patient_name} ${r.patient_uhid} ${r.status}`.toLowerCase()
+                return hay.includes(qq)
+            })
+            .sort((a, b) => new Date(b.when || 0).getTime() - new Date(a.when || 0).getTime())
+    }, [allRecentRecordIds, recordById, quick, q, dept, timeDays, deptNameByCode, recordTypeLabelByCode])
+
     const pinnedRecordObjs = useMemo(() => {
         const set = new Set(pinnedRecords || [])
         return filteredRecords.filter((r) => set.has(r.id))
@@ -334,6 +545,54 @@ export default function EmrRecentPinned({
         return filteredRecords.filter((r) => !set.has(r.id)).slice(0, 20)
     }, [filteredRecords, pinnedRecords])
 
+    // Drafts
+    const myDrafts = useMemo(() => {
+        const qq = (q || "").trim().toLowerCase()
+        const drafts = quick?.resume_drafts || []
+        const pmap = quick?.patient_map || {}
+
+        // resume_drafts already mine (backend filters by created_by_user_id in quick_get)
+        // If you want strict mine: compare recordById[record_id].created_by_user_id to currentUser.id
+        return drafts
+            .map((d) => {
+                const rec = recordById[String(d.record_id)] || null
+                const patientId = String(d.patient_id || rec?.patient_id || "")
+                const p = pmap?.[patientId] || {}
+                const deptCode = d?.dept_code || rec?.dept_code || ""
+                const deptName = deptCode ? (deptNameByCode.get(String(deptCode).toUpperCase()) || deptCode) : "—"
+
+                const encType = rec?.encounter_type || rec?.encounterType || null
+                const encId = rec?.encounter_id || rec?.encounterId || null
+
+                return {
+                    id: String(d.record_id),
+                    record_id: String(d.record_id),
+                    patient_id: patientId,
+                    patient_name: p?.full_name || p?.name || "—",
+                    patient_uhid: p?.uhid || "—",
+                    dept_code: deptCode,
+                    dept: deptName,
+                    title: d?.title || rec?.title || "—",
+                    updated_at: d?.updated_at || rec?.updated_at || null,
+                    visit: encType && encId ? { encType, encId } : null,
+                }
+            })
+            .filter((d) => {
+                if (dept === "ALL") return true
+                return String(d.dept_code || "").toUpperCase() === String(dept).toUpperCase()
+            })
+            .filter((d) => {
+                if (timeDays >= 36500) return true
+                return isWithinDays(d.updated_at, timeDays)
+            })
+            .filter((d) => {
+                if (!qq) return true
+                const hay = `${d.title} ${d.dept} ${d.patient_name} ${d.patient_uhid}`.toLowerCase()
+                return hay.includes(qq)
+            })
+            .sort((a, b) => new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime())
+    }, [quick, recordById, currentUser?.id, q, dept, timeDays, deptNameByCode])
+
     function openChart(patient) {
         if (onOpenChart) return onOpenChart(patient)
         navigate(`/emr/chart?patient_id=${encodeURIComponent(patient.id)}`)
@@ -341,32 +600,80 @@ export default function EmrRecentPinned({
 
     function openRecord(record) {
         if (onOpenRecord) return onOpenRecord(record)
-        navigate(`/emr/chart?patient_id=${encodeURIComponent(record.patient_id)}&record_id=${encodeURIComponent(record.id)}`)
+        navigate(
+            `/emr/chart?patient_id=${encodeURIComponent(record.patient_id)}&record_id=${encodeURIComponent(record.id)}`
+        )
     }
 
     function createRecord(patient) {
-        const visit = patient?.last_visit
-        if (!visit) return toast.error("No visit available for this patient")
-        if (onCreateRecord) return onCreateRecord({ patient_id: patient.id, visit_id: visit.id })
-        navigate(`/emr/records/new?patient_id=${encodeURIComponent(patient.id)}&visit_id=${encodeURIComponent(visit.id)}`)
+        const enc = patient?.last_encounter
+        if (!enc?.encounter_type || !enc?.encounter_id) {
+            // prevent bad payloads like your "encounter_type: null" / "encounter_id: null"
+            const key = `no-enc-${patient?.id}`
+            if (!toastOnceRef.current.has(key)) {
+                toastOnceRef.current.add(key)
+                toast.error("No recent encounter found for this patient. Open chart and select an encounter.")
+            }
+            return openChart(patient)
+        }
+
+        const payload = {
+            patient_id: patient.id,
+            encounter_type: enc.encounter_type,
+            encounter_id: enc.encounter_id,
+            dept_code: enc.department_code || null,
+        }
+
+        if (onCreateRecord) return onCreateRecord(payload)
+
+        const qs = new URLSearchParams()
+        qs.set("patient_id", String(payload.patient_id))
+        qs.set("encounter_type", String(payload.encounter_type))
+        qs.set("encounter_id", String(payload.encounter_id))
+        if (payload.dept_code) qs.set("dept_code", String(payload.dept_code))
+        navigate(`/emr/records/new?${qs.toString()}`)
     }
 
-    function togglePinPatient(id) {
-        setPinnedPatients((p) => {
-            const set = new Set(p || [])
-            if (set.has(id)) set.delete(id)
-            else set.add(id)
-            return [...set]
-        })
+    async function togglePinPatient(id) {
+        const key = `pp:${id}`
+        if (loadingPins[key]) return
+        const isPinned = pinnedPatients.includes(String(id))
+        setLoadingPins((p) => ({ ...p, [key]: true }))
+        try {
+            await emrSetPatientPinned(id, !isPinned)
+            setQuick((prev) => {
+                const cur = prev || {}
+                const arr = uniq(cur.pinned_patients || [])
+                const next = isPinned ? arr.filter((x) => String(x) !== String(id)) : uniq([...arr, String(id)])
+                return { ...cur, pinned_patients: next }
+            })
+            toast.success(isPinned ? "Patient unpinned" : "Patient pinned")
+        } catch (e) {
+            toast.error(errMsg(e, "Failed to update pin"))
+        } finally {
+            setLoadingPins((p) => ({ ...p, [key]: false }))
+        }
     }
 
-    function togglePinRecord(id) {
-        setPinnedRecords((p) => {
-            const set = new Set(p || [])
-            if (set.has(id)) set.delete(id)
-            else set.add(id)
-            return [...set]
-        })
+    async function togglePinRecord(id) {
+        const key = `pr:${id}`
+        if (loadingPins[key]) return
+        const isPinned = pinnedRecords.includes(String(id))
+        setLoadingPins((p) => ({ ...p, [key]: true }))
+        try {
+            await emrSetRecordPinned(id, !isPinned)
+            setQuick((prev) => {
+                const cur = prev || {}
+                const arr = uniq(cur.pinned_records || [])
+                const next = isPinned ? arr.filter((x) => String(x) !== String(id)) : uniq([...arr, String(id)])
+                return { ...cur, pinned_records: next }
+            })
+            toast.success(isPinned ? "Record unpinned" : "Record pinned")
+        } catch (e) {
+            toast.error(errMsg(e, "Failed to update pin"))
+        } finally {
+            setLoadingPins((p) => ({ ...p, [key]: false }))
+        }
     }
 
     function resetFilters() {
@@ -402,7 +709,7 @@ export default function EmrRecentPinned({
                                     <div>
                                         <div className="text-base font-semibold text-slate-900">Recent & Pinned</div>
                                         <div className="text-xs text-slate-500">
-                                            Fastest entry for doctors/nurses · resume drafts · continue last visit
+                                            Fastest entry for doctors/nurses · resume drafts · continue last encounter
                                         </div>
                                     </div>
                                 </div>
@@ -432,29 +739,17 @@ export default function EmrRecentPinned({
 
                                 {/* Quick actions */}
                                 <div className="flex flex-wrap items-center gap-2">
-                                    <Button
-                                        variant="outline"
-                                        className="h-10 rounded-2xl"
-                                        onClick={() => setShowFilters((s) => !s)}
-                                    >
+                                    <Button variant="outline" className="h-10 rounded-2xl" onClick={() => setShowFilters((s) => !s)}>
                                         <Filter className="mr-2 h-4 w-4" />
                                         Filters
                                     </Button>
 
-                                    <Button
-                                        variant="outline"
-                                        className="h-10 rounded-2xl"
-                                        onClick={resetFilters}
-                                        title="Clear filters"
-                                    >
+                                    <Button variant="outline" className="h-10 rounded-2xl" onClick={resetFilters} title="Clear filters">
                                         <X className="mr-2 h-4 w-4" />
                                         Reset
                                     </Button>
 
-                                    <Button
-                                        className="h-10 rounded-2xl bg-slate-900 text-white hover:bg-slate-800"
-                                        onClick={() => navigate("/emr/chart")}
-                                    >
+                                    <Button className="h-10 rounded-2xl bg-slate-900 text-white hover:bg-slate-800" onClick={() => navigate("/emr/chart")}>
                                         EMR Chart <ArrowRight className="ml-2 h-4 w-4" />
                                     </Button>
                                 </div>
@@ -466,7 +761,7 @@ export default function EmrRecentPinned({
                             <div className="mt-4 space-y-3">
                                 <Separator />
                                 <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-                                    <ChipSelect value={dept} onChange={setDept} options={DEPTS} icon={Layers} />
+                                    <ChipSelect value={dept} onChange={setDept} options={deptOptions} icon={Layers} />
                                     <ChipSelect value={range} onChange={setRange} options={TIME_RANGES} icon={Clock3} />
                                 </div>
                             </div>
@@ -493,14 +788,15 @@ export default function EmrRecentPinned({
                                 <div className="mt-4">
                                     <TabsContent value="patients">
                                         <div className="space-y-4">
-                                            {/* Pinned Patients */}
                                             <SectionCard
                                                 title="Pinned Patients"
-                                                subtitle="Your shortcuts — one click to open chart or continue last visit"
+                                                subtitle="Your shortcuts — one click to open chart or continue last encounter"
                                                 count={pinnedPatientObjs.length}
                                                 icon={Star}
                                             >
-                                                {pinnedPatientObjs.length ? (
+                                                {loading ? (
+                                                    <EmptyBlock title="Loading…" desc="Fetching pinned patients." />
+                                                ) : pinnedPatientObjs.length ? (
                                                     <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                                                         {pinnedPatientObjs.map((p) => (
                                                             <PatientCard
@@ -514,21 +810,19 @@ export default function EmrRecentPinned({
                                                         ))}
                                                     </div>
                                                 ) : (
-                                                    <EmptyBlock
-                                                        title="No pinned patients"
-                                                        desc="Pin frequent patients to access instantly."
-                                                    />
+                                                    <EmptyBlock title="No pinned patients" desc="Pin frequent patients to access instantly." />
                                                 )}
                                             </SectionCard>
 
-                                            {/* Recent Patients */}
                                             <SectionCard
                                                 title="Recent Patients"
-                                                subtitle="Recently opened patients (based on activity) — filtered by your settings"
+                                                subtitle="Patients you opened recently (based on activity) — filtered by your settings"
                                                 count={recentPatientObjs.length}
                                                 icon={UserRound}
                                             >
-                                                {recentPatientObjs.length ? (
+                                                {loading ? (
+                                                    <EmptyBlock title="Loading…" desc="Fetching recent patients." />
+                                                ) : recentPatientObjs.length ? (
                                                     <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
                                                         {recentPatientObjs.map((p) => (
                                                             <PatientCard
@@ -550,14 +844,15 @@ export default function EmrRecentPinned({
 
                                     <TabsContent value="records">
                                         <div className="space-y-4">
-                                            {/* Pinned Records */}
                                             <SectionCard
                                                 title="Pinned Records"
                                                 subtitle="Important records you want to revisit quickly"
                                                 count={pinnedRecordObjs.length}
                                                 icon={Pin}
                                             >
-                                                {pinnedRecordObjs.length ? (
+                                                {loading ? (
+                                                    <EmptyBlock title="Loading…" desc="Fetching pinned records." />
+                                                ) : pinnedRecordObjs.length ? (
                                                     <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                                                         {pinnedRecordObjs.map((r) => (
                                                             <RecordCard
@@ -570,21 +865,19 @@ export default function EmrRecentPinned({
                                                         ))}
                                                     </div>
                                                 ) : (
-                                                    <EmptyBlock
-                                                        title="No pinned records"
-                                                        desc="Pin key reports, summaries, or important notes."
-                                                    />
+                                                    <EmptyBlock title="No pinned records" desc="Pin key reports, summaries, or important notes." />
                                                 )}
                                             </SectionCard>
 
-                                            {/* Recent Records */}
                                             <SectionCard
                                                 title="Recent Records"
-                                                subtitle="Latest clinical notes, results, and documents"
+                                                subtitle="Records you opened recently (based on activity)"
                                                 count={recentRecordObjs.length}
                                                 icon={FileText}
                                             >
-                                                {recentRecordObjs.length ? (
+                                                {loading ? (
+                                                    <EmptyBlock title="Loading…" desc="Fetching recent records." />
+                                                ) : recentRecordObjs.length ? (
                                                     <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                                                         {recentRecordObjs.map((r) => (
                                                             <RecordCard
@@ -597,7 +890,7 @@ export default function EmrRecentPinned({
                                                         ))}
                                                     </div>
                                                 ) : (
-                                                    <EmptyBlock title="No recent records" desc="Try expanding the date range or clearing filters." />
+                                                    <EmptyBlock title="No recent records" desc="Open a chart/record to populate this list." />
                                                 )}
                                             </SectionCard>
                                         </div>
@@ -611,15 +904,17 @@ export default function EmrRecentPinned({
                                                 count={myDrafts.length}
                                                 icon={Play}
                                             >
-                                                {myDrafts.length ? (
+                                                {loading ? (
+                                                    <EmptyBlock title="Loading…" desc="Fetching drafts." />
+                                                ) : myDrafts.length ? (
                                                     <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
                                                         {myDrafts.map((d) => (
                                                             <DraftCard
                                                                 key={d.id}
                                                                 draft={d}
                                                                 onResume={() => {
-                                                                    toast("Resume (UI only) — route this to your draft editor screen")
-                                                                    navigate(`/emr/chart?patient_id=${encodeURIComponent(d.patient_id)}&draft_id=${encodeURIComponent(d.id)}`)
+                                                                    // safest generic resume route:
+                                                                    navigate(`/emr/chart?patient_id=${encodeURIComponent(d.patient_id)}&record_id=${encodeURIComponent(d.record_id)}`)
                                                                 }}
                                                                 onOpenPatient={() => navigate(`/emr/chart?patient_id=${encodeURIComponent(d.patient_id)}`)}
                                                             />
@@ -630,10 +925,7 @@ export default function EmrRecentPinned({
                                                         title="No drafts"
                                                         desc="Great — you’re fully caught up."
                                                         action={
-                                                            <Button
-                                                                className="rounded-2xl bg-slate-900 text-white hover:bg-slate-800"
-                                                                onClick={() => navigate("/emr/chart")}
-                                                            >
+                                                            <Button className="rounded-2xl bg-slate-900 text-white hover:bg-slate-800" onClick={() => navigate("/emr/chart")}>
                                                                 Go to EMR Chart <ArrowRight className="ml-2 h-4 w-4" />
                                                             </Button>
                                                         }
@@ -650,9 +942,9 @@ export default function EmrRecentPinned({
                                                         <div className="min-w-0">
                                                             <div className="text-sm font-semibold text-slate-900">UX Tip</div>
                                                             <div className="mt-1 text-xs text-slate-500">
-                                                                Best daily flow: <span className="font-semibold text-slate-700">Open pinned patients</span> →
-                                                                resume <span className="font-semibold text-slate-700">drafts</span> →
-                                                                finish and <span className="font-semibold text-slate-700">sign</span>.
+                                                                Best daily flow: <span className="font-semibold text-slate-700">Open pinned patients</span> → resume{" "}
+                                                                <span className="font-semibold text-slate-700">drafts</span> → finish and{" "}
+                                                                <span className="font-semibold text-slate-700">sign</span>.
                                                             </div>
                                                         </div>
                                                     </div>
@@ -698,9 +990,10 @@ function SectionCard({ title, subtitle, count, icon: Icon, children }) {
 }
 
 function PatientCard({ patient, pinned, onPin, onOpen, onContinue }) {
-    const tone = deptTone(patient?.last_visit?.dept)
-    const visit = patient?.last_visit
+    console.log(patient, "wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww");
 
+    const enc = patient?.last_encounter
+    const tone = deptTone(enc?.department_name || enc?.department_code || "")
     return (
         <div
             className={cn(
@@ -715,11 +1008,11 @@ function PatientCard({ patient, pinned, onPin, onOpen, onContinue }) {
                         <div className="flex flex-wrap items-center gap-2">
                             <PillBadge className={cn("rounded-xl", tone.chip)}>
                                 <Stethoscope className="mr-1 h-3.5 w-3.5" />
-                                {visit?.dept || "—"}
+                                {enc?.department_name || "—"}
                             </PillBadge>
                             <PillBadge variant="outline" className="rounded-xl">
                                 <ClipboardList className="mr-1 h-3.5 w-3.5" />
-                                {visit?.encType || "—"} · {visit?.encId || "—"}
+                                {(enc?.encounter_type || "—") + " · " + (enc?.encounter_id || "—")}
                             </PillBadge>
                             {pinned ? (
                                 <PillBadge className="rounded-xl bg-slate-900 text-white">
@@ -735,13 +1028,13 @@ function PatientCard({ patient, pinned, onPin, onOpen, onContinue }) {
 
                         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
                             <span className="inline-flex items-center gap-1">
-                                <Calendar className="h-3.5 w-3.5" /> {fmtDate(visit?.when)}
+                                <Calendar className="h-3.5 w-3.5" /> {fmtDate(enc?.when || patient?.last_seen_at)}
                             </span>
                             <span className="inline-flex items-center gap-1">
-                                <Clock3 className="h-3.5 w-3.5" /> {fmtTime(visit?.when)}
+                                <Clock3 className="h-3.5 w-3.5" /> {fmtTime(enc?.when || patient?.last_seen_at)}
                             </span>
                             <span className="inline-flex items-center gap-1">
-                                <UserRound className="h-3.5 w-3.5" /> {visit?.doctor || "—"}
+                                <UserRound className="h-3.5 w-3.5" /> {enc?.doctor_name || "—"}
                             </span>
                         </div>
 
@@ -750,7 +1043,7 @@ function PatientCard({ patient, pinned, onPin, onOpen, onContinue }) {
                                 Open Chart <ExternalLink className="ml-2 h-4 w-4" />
                             </Button>
                             <Button className={cn("h-9 rounded-2xl", tone.btn)} onClick={onContinue}>
-                                Continue Visit <ArrowRight className="ml-2 h-4 w-4" />
+                                Continue <ArrowRight className="ml-2 h-4 w-4" />
                             </Button>
                         </div>
                     </div>
@@ -775,7 +1068,7 @@ function statusChip(status) {
 }
 
 function RecordCard({ record, pinned, onPin, onOpen }) {
-    const tone = deptTone(record?.dept)
+    const tone = deptTone(record?.dept || "")
     return (
         <div
             className={cn(
@@ -792,9 +1085,7 @@ function RecordCard({ record, pinned, onPin, onOpen }) {
                                 <Stethoscope className="mr-1 h-3.5 w-3.5" />
                                 {record.dept}
                             </PillBadge>
-                            <PillBadge className={cn("rounded-xl", statusChip(record.status))}>
-                                {record.status}
-                            </PillBadge>
+                            <PillBadge className={cn("rounded-xl", statusChip(record.status))}>{record.status}</PillBadge>
                             {pinned ? (
                                 <PillBadge className="rounded-xl bg-slate-900 text-white">
                                     <Pin className="mr-1 h-3.5 w-3.5" />
@@ -852,10 +1143,12 @@ function DraftCard({ draft, onResume, onOpenPatient }) {
                                 {draft.dept}
                             </PillBadge>
                             <PillBadge className={cn("rounded-xl", statusChip("DRAFT"))}>DRAFT</PillBadge>
-                            <PillBadge variant="outline" className="rounded-xl">
-                                <ClipboardList className="mr-1 h-3.5 w-3.5" />
-                                {draft.visit?.encType} · {draft.visit?.encId}
-                            </PillBadge>
+                            {draft.visit ? (
+                                <PillBadge variant="outline" className="rounded-xl">
+                                    <ClipboardList className="mr-1 h-3.5 w-3.5" />
+                                    {draft.visit?.encType} · {draft.visit?.encId}
+                                </PillBadge>
+                            ) : null}
                         </div>
 
                         <div className="mt-2 text-sm font-semibold text-slate-900">{draft.title}</div>
@@ -885,159 +1178,4 @@ function DraftCard({ draft, onResume, onOpenPatient }) {
             </div>
         </div>
     )
-}
-
-/* ------------------------------- dummy dataset ------------------------------- */
-
-function seedDummyData(currentUser) {
-    // You’ll replace with API later:
-    // - GET /emr/recent?range=7D&dept=...
-    // - GET /emr/pins
-    // - GET /emr/drafts?mine=1
-    const patients = [
-        {
-            id: "P-1001",
-            uhid: "NH-000122",
-            name: "Pavithra S",
-            phone: "9600457842",
-            last_visit: {
-                id: "OP-2026-00122",
-                encType: "OP",
-                encId: "OP-2026-00122",
-                dept: "OBGYN",
-                doctor: "Dr. K. Priya",
-                when: "2026-01-21T03:35:00Z",
-            },
-        },
-        {
-            id: "P-1002",
-            uhid: "NH-000118",
-            name: "Arun K",
-            phone: "9876543210",
-            last_visit: {
-                id: "OP-2026-00118",
-                encType: "OP",
-                encId: "OP-2026-00118",
-                dept: "General Medicine",
-                doctor: "Dr. R. Kumar",
-                when: "2026-01-20T06:10:00Z",
-            },
-        },
-        {
-            id: "P-1003",
-            uhid: "NH-000033",
-            name: "Meena R",
-            phone: "9000000001",
-            last_visit: {
-                id: "IP-2026-00033",
-                encType: "IP",
-                encId: "IP-2026-00033",
-                dept: "ICU",
-                doctor: "Dr. A. Selvam",
-                when: "2026-01-14T09:00:00Z",
-            },
-        },
-        {
-            id: "P-1004",
-            uhid: "NH-000009",
-            name: "Vignesh M",
-            phone: "9000000002",
-            last_visit: {
-                id: "ER-2026-00009",
-                encType: "ER",
-                encId: "ER-2026-00009",
-                dept: "Cardiology",
-                doctor: "Dr. S. Nithya",
-                when: "2026-01-11T12:20:00Z",
-            },
-        },
-        {
-            id: "P-1005",
-            uhid: "NH-000201",
-            name: "Karthik S",
-            phone: "9000000003",
-            last_visit: {
-                id: "OP-2026-00201",
-                encType: "OP",
-                encId: "OP-2026-00201",
-                dept: "Orthopedics",
-                doctor: "Dr. P. Anand",
-                when: "2026-01-19T10:10:00Z",
-            },
-        },
-    ]
-
-    const records = [
-        {
-            id: "R-9001",
-            patient_id: "P-1001",
-            patient_name: "Pavithra S",
-            patient_uhid: "NH-000122",
-            dept: "OBGYN",
-            type: "OPD_NOTE",
-            title: "OBGYN OPD Note · Antenatal Visit",
-            status: "DRAFT",
-            when: "2026-01-21T04:10:00Z",
-        },
-        {
-            id: "R-9002",
-            patient_id: "P-1002",
-            patient_name: "Arun K",
-            patient_uhid: "NH-000118",
-            dept: "General Medicine",
-            type: "OPD_NOTE",
-            title: "OPD Consultation · Fever & Body Pain",
-            status: "SIGNED",
-            when: "2026-01-20T07:00:00Z",
-        },
-        {
-            id: "R-9003",
-            patient_id: "P-1003",
-            patient_name: "Meena R",
-            patient_uhid: "NH-000033",
-            dept: "ICU",
-            type: "PROGRESS_NOTE",
-            title: "ICU Progress Note · Day 3",
-            status: "SIGNED",
-            when: "2026-01-14T12:00:00Z",
-        },
-        {
-            id: "R-9004",
-            patient_id: "P-1004",
-            patient_name: "Vignesh M",
-            patient_uhid: "NH-000009",
-            dept: "Cardiology",
-            type: "LAB_RESULT",
-            title: "Lab Result · Lipid Profile",
-            status: "RESULT",
-            when: "2026-01-11T14:10:00Z",
-        },
-    ]
-
-    const drafts = [
-        {
-            id: "D-7001",
-            owner_id: currentUser?.id || 1,
-            patient_id: "P-1001",
-            patient_name: "Pavithra S",
-            patient_uhid: "NH-000122",
-            dept: "OBGYN",
-            title: "OBGYN OPD Note · Follow-up",
-            updated_at: "2026-01-21T05:10:00Z",
-            visit: { encType: "OP", encId: "OP-2026-00122" },
-        },
-        {
-            id: "D-7002",
-            owner_id: currentUser?.id || 1,
-            patient_id: "P-1005",
-            patient_name: "Karthik S",
-            patient_uhid: "NH-000201",
-            dept: "Orthopedics",
-            title: "Ortho OPD Note · Knee Pain",
-            updated_at: "2026-01-19T11:15:00Z",
-            visit: { encType: "OP", encId: "OP-2026-00201" },
-        },
-    ]
-
-    return { patients, records, drafts }
 }

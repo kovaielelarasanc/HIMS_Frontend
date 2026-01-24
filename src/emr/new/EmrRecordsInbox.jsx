@@ -1,5 +1,5 @@
 // FILE: frontend/src/emr/EmrRecordsInbox.jsx
-import React, { useEffect, useMemo, useState } from "react"
+import React, { useEffect, useMemo, useRef, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { toast } from "sonner"
 import {
@@ -29,6 +29,7 @@ import {
   ListChecks,
   Undo2,
   LayoutGrid,
+  Loader2,
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
@@ -40,22 +41,24 @@ import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 
+
+import {
+  emrMetaGet,
+  emrInboxList,
+  emrInboxListMany,
+  emrInboxAck,
+  emrRecordGet,
+  emrSignRecord,
+  errMsg,
+  toId,
+} from "@/api/emrApi"
+
 /**
- * ✅ EMR Records Inbox (Daily Work Queue) — UI Only (Error-free + Responsive)
- * - Tabs: All / Pending Signature / Drafts / Results
- * - Search + Filters (Dept, Priority, Mine, Sort)
- * - Smart grouping: Today / Yesterday / Older (based on updated_at)
- * - Multi-select + Bulk actions:
- *    - Sign Selected (pending signature)
- *    - Acknowledge Selected (results)
- *    - Clear selection / Select all
- * - Left list + Right preview (desktop)
- * - Mobile: preview opens in full-screen dialog with scroll
- *
- * Backend later:
- * - GET /emr/inbox?tab=&q=&dept=&priority=&mine=&sort=
- * - POST /emr/records/{id}/sign
- * - POST /emr/results/{id}/ack
+ * BACKEND BUCKETS (VALID):
+ * - pending_signature
+ * - drafts_to_complete
+ * - new_lab_results
+ * - new_radiology_reports
  */
 
 const TABS = [
@@ -65,23 +68,9 @@ const TABS = [
   { key: "RESULTS", label: "New Results" },
 ]
 
-const DEPARTMENTS = [
-  "ALL",
-  "Common (All)",
-  "General Medicine",
-  "General Surgery",
-  "OBGYN",
-  "Cardiology",
-  "Orthopedics",
-  "ICU",
-  "Pathology/Lab",
-  "Radiology",
-]
-
 const PRIORITIES = ["ALL", "NORMAL", "HIGH", "URGENT"]
 const SORTS = [
   { key: "UPDATED_DESC", label: "Latest Updated" },
-  { key: "DUE_ASC", label: "Due Soon" },
   { key: "PRIORITY_DESC", label: "Priority" },
 ]
 
@@ -95,6 +84,15 @@ function useIsMobile(breakpointPx = 1024) {
     return () => mq.removeEventListener?.("change", on)
   }, [breakpointPx])
   return isMobile
+}
+
+function useDebouncedValue(value, delayMs = 350) {
+  const [v, setV] = useState(value)
+  useEffect(() => {
+    const t = setTimeout(() => setV(value), delayMs)
+    return () => clearTimeout(t)
+  }, [value, delayMs])
+  return v
 }
 
 function deptTone(deptRaw) {
@@ -167,14 +165,6 @@ function fmtTime(d) {
     return ""
   }
 }
-function minutesFromNow(d) {
-  try {
-    const ms = new Date(d).getTime() - Date.now()
-    return Math.round(ms / 60000)
-  } catch {
-    return null
-  }
-}
 function dateKey(updated_at) {
   try {
     const x = new Date(updated_at)
@@ -202,108 +192,64 @@ function kindMeta(kind) {
   return { label: "Item", icon: ClipboardList, chip: "bg-slate-50 text-slate-700 ring-1 ring-slate-200" }
 }
 
-function buildDemoInbox() {
-  return [
-    {
-      id: "REC-OP-00021",
-      kind: "PENDING_SIGN",
-      dept: "OBGYN",
-      title: "OBGYN OPD Note · LMP/EDD Review",
-      patient: { name: "Pavithra S", uhid: "NH-000001", age: 26, gender: "F", phone: "9600457842" },
-      visit: { type: "OP", id: "OP-2026-00122", doctor: "Dr. K. Priya" },
-      assigned_to: "You",
-      priority: "HIGH",
-      due_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-      updated_at: new Date(Date.now() - 14 * 60 * 1000).toISOString(),
-      flags: { confidential: false, abnormal: false, attachments: 1 },
-      preview: {
-        summary: ["Chief Complaint: Lower abdominal pain", "Assessment: Early pregnancy follow-up", "Plan: USG + labs"],
-        sections: ["Chief Complaint", "History", "Exam", "Assessment", "Plan"],
-      },
-    },
-    {
-      id: "REC-IP-00008",
-      kind: "DRAFT",
-      dept: "ICU",
-      title: "ICU Progress Note (Draft)",
-      patient: { name: "Ramesh K", uhid: "NH-000124", age: 58, gender: "M" },
-      visit: { type: "IP", id: "IP-2026-00033", doctor: "Dr. A. Selvam" },
-      assigned_to: "You",
-      priority: "URGENT",
-      due_at: new Date(Date.now() + 25 * 60 * 1000).toISOString(),
-      updated_at: new Date(Date.now() - 5 * 60 * 1000).toISOString(),
-      flags: { confidential: true, abnormal: false, attachments: 0 },
-      preview: {
-        summary: ["Ventilator: SIMV", "ABG: Pending", "Infusions: Noradrenaline", "Plan: Titrate + repeat ABG"],
-        sections: ["Ventilator", "ABG", "Infusions", "Plan"],
-      },
-    },
-    {
-      id: "RES-LAB-90331",
-      kind: "RESULT_LAB",
-      dept: "Pathology/Lab",
-      title: "CBC Result · Alert",
-      patient: { name: "Sathya V", uhid: "NH-000342", age: 39, gender: "F" },
-      visit: { type: "OP", id: "OP-2026-00118", doctor: "Dr. R. Kumar" },
-      assigned_to: "Team",
-      priority: "HIGH",
-      due_at: null,
-      updated_at: new Date(Date.now() - 22 * 60 * 1000).toISOString(),
-      flags: { confidential: false, abnormal: true, attachments: 1 },
-      preview: {
-        summary: ["Hb: 8.4 (Low)", "WBC: 14,200 (High)", "Platelets: 1.1L (Low)"],
-        sections: ["Hb", "WBC", "Platelets"],
-      },
-    },
-    {
-      id: "RES-RAD-11802",
-      kind: "RESULT_RAD",
-      dept: "Radiology",
-      title: "USG Abdomen · Report Ready",
-      patient: { name: "Naveen P", uhid: "NH-000415", age: 44, gender: "M" },
-      visit: { type: "ER", id: "ER-2026-00009", doctor: "Dr. M. Vignesh" },
-      assigned_to: "You",
-      priority: "NORMAL",
-      due_at: null,
-      updated_at: new Date(Date.now() - 55 * 60 * 1000).toISOString(),
-      flags: { confidential: false, abnormal: false, attachments: 1 },
-      preview: {
-        summary: ["Impression: No acute abnormality", "Advice: Clinical correlation"],
-        sections: ["Findings", "Impression", "Advice"],
-      },
-    },
-    {
-      id: "REC-OP-00019",
-      kind: "PENDING_SIGN",
-      dept: "Cardiology",
-      title: "Cardiology OPD Note · Chest Pain",
-      patient: { name: "Lakshmi R", uhid: "NH-000088", age: 47, gender: "F" },
-      visit: { type: "OP", id: "OP-2026-00117", doctor: "Dr. S. Prakash" },
-      assigned_to: "Team",
-      priority: "NORMAL",
-      due_at: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
-      updated_at: new Date(Date.now() - 26 * 60 * 60 * 1000).toISOString(), // yesterday
-      flags: { confidential: false, abnormal: false, attachments: 0 },
-      preview: {
-        summary: ["ECG: Sinus rhythm", "Assessment: Rule out ACS", "Plan: Troponin + Echo"],
-        sections: ["Symptoms", "Risk Factors", "ECG", "Plan"],
-      },
-    },
-    {
-      id: "RES-LAB-90011",
-      kind: "RESULT_LAB",
-      dept: "Pathology/Lab",
-      title: "RFT · Result Ready",
-      patient: { name: "Prakash S", uhid: "NH-000022", age: 51, gender: "M" },
-      visit: { type: "OP", id: "OP-2026-00105", doctor: "Dr. A. Vasanth" },
-      assigned_to: "You",
-      priority: "NORMAL",
-      due_at: null,
-      updated_at: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(), // older
-      flags: { confidential: false, abnormal: false, attachments: 1 },
-      preview: { summary: ["Creatinine: 1.1", "Urea: 28", "eGFR: 78"], sections: ["Urea", "Creatinine", "eGFR"] },
-    },
-  ]
+function safeUpper(v) {
+  return String(v || "").trim().toUpperCase()
+}
+
+function normalizePatient(patient_id, cacheObj) {
+  const pid = toId(patient_id)
+  const cached = cacheObj?.get?.(Number(pid))
+  if (cached) return cached
+  return {
+    id: pid ? Number(pid) : null,
+    name: pid ? `Patient #${pid}` : "Patient",
+    uhid: pid ? String(pid) : "—",
+    age: null,
+    gender: null,
+    phone: null,
+  }
+}
+
+function makePreviewFromRecord(rec) {
+  const sections = Array.isArray(rec?.template_sections) ? rec.template_sections : []
+  const summary = []
+
+  if (typeof rec?.note === "string" && rec.note.trim()) {
+    summary.push(rec.note.trim().slice(0, 180))
+  }
+  if (rec?.content && typeof rec.content === "object") {
+    const keys = Object.keys(rec.content).slice(0, 6)
+    for (const k of keys) {
+      const v = rec.content[k]
+      if (v === null || v === undefined) continue
+      if (typeof v === "string" && v.trim()) summary.push(`${k}: ${v.trim().slice(0, 60)}`)
+      else if (typeof v === "number" || typeof v === "boolean") summary.push(`${k}: ${String(v)}`)
+    }
+  }
+  return { summary: summary.slice(0, 8), sections: sections.slice(0, 50) }
+}
+
+function pickPriorityFromRecord(rec) {
+  const p = rec?.priority || rec?.urgency || rec?.severity || null
+  const up = safeUpper(p)
+  if (up === "URGENT" || up === "HIGH" || up === "NORMAL") return up
+  return "NORMAL"
+}
+
+async function runPool(items, limit, fn) {
+  const q = [...items]
+  const workers = new Array(Math.max(1, limit)).fill(0).map(async () => {
+    while (q.length) {
+      const it = q.shift()
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        await fn(it)
+      } catch {
+        // ignore, fn handles
+      }
+    }
+  })
+  await Promise.all(workers)
 }
 
 export default function EmrRecordsInbox() {
@@ -311,22 +257,43 @@ export default function EmrRecordsInbox() {
 
   const [tab, setTab] = useState("ALL")
   const [q, setQ] = useState("")
-  const [dept, setDept] = useState("ALL")
+  const qDebounced = useDebouncedValue(q, 350)
+
+  const [deptCode, setDeptCode] = useState("ALL")
   const [priority, setPriority] = useState("ALL")
-  const [mine, setMine] = useState(true)
   const [sort, setSort] = useState("UPDATED_DESC")
   const [grouping, setGrouping] = useState(true)
 
-  const [rows, setRows] = useState(() => buildDemoInbox())
+  const [page, setPage] = useState(1)
+  const [pageSize] = useState(80)
 
-  const [activeId, setActiveId] = useState(rows?.[0]?.id || null)
-  const active = useMemo(() => rows.find((r) => r.id === activeId) || null, [rows, activeId])
+  const [meta, setMeta] = useState({ departments: [] })
+  const deptMap = useMemo(() => {
+    const m = new Map()
+    for (const d of meta?.departments || []) m.set(String(d.code), String(d.name || d.code))
+    return m
+  }, [meta])
 
-  // Multi-select state
+  const deptOptions = useMemo(() => {
+    const list = meta?.departments || []
+    return [{ code: "ALL", name: "All Departments" }, ...list.map((d) => ({ code: String(d.code), name: String(d.name || d.code) }))]
+  }, [meta])
+
+  const [rows, setRows] = useState([])
+  const [loading, setLoading] = useState(false)
+
+  const [activeId, setActiveId] = useState(null)
+  const active = useMemo(() => rows.find((r) => r.uid === activeId) || null, [rows, activeId])
+
   const [selected, setSelected] = useState(() => new Set())
   const selectedCount = selected.size
 
-  const tone = deptTone(active?.dept || (dept !== "ALL" ? dept : "General Medicine"))
+  const [busyIds, setBusyIds] = useState(() => new Set())
+
+  const recordCacheRef = useRef(new Map())   // record_id -> record
+  const patientCacheRef = useRef(new Map())  // patient_id -> patient (if you later add patient endpoint)
+
+  const tone = deptTone(active?.dept || (deptCode !== "ALL" ? deptMap.get(deptCode) : "General Medicine"))
 
   const counts = useMemo(() => {
     const all = rows.length
@@ -338,36 +305,27 @@ export default function EmrRecordsInbox() {
   }, [rows])
 
   const filtered = useMemo(() => {
-    const qq = (q || "").trim().toLowerCase()
+    const qq = (qDebounced || "").trim().toLowerCase()
     let x = [...rows]
 
-    if (tab !== "ALL") {
-      if (tab === "PENDING_SIGN") x = x.filter((r) => r.kind === "PENDING_SIGN")
-      if (tab === "DRAFTS") x = x.filter((r) => r.kind === "DRAFT")
-      if (tab === "RESULTS") x = x.filter((r) => r.kind === "RESULT_LAB" || r.kind === "RESULT_RAD")
-    }
-    if (dept !== "ALL") x = x.filter((r) => (r.dept || "").toUpperCase() === dept.toUpperCase())
+    if (deptCode !== "ALL") x = x.filter((r) => String(r.dept_code || "") === String(deptCode))
     if (priority !== "ALL") x = x.filter((r) => (r.priority || "NORMAL") === priority)
-    if (mine) x = x.filter((r) => (r.assigned_to || "").toUpperCase() === "YOU")
 
     if (qq) {
       x = x.filter((r) => {
-        const hay = `${r.id} ${r.title} ${r.dept} ${r.kind} ${r.patient?.name} ${r.patient?.uhid} ${r.visit?.id} ${r.visit?.doctor}`.toLowerCase()
+        const hay = `${r.uid} ${r.title} ${r.dept} ${r.kind} ${r.patient?.name} ${r.patient?.uhid} ${r.visit?.type} ${r.visit?.id}`.toLowerCase()
         return hay.includes(qq)
       })
     }
 
     const prRank = { URGENT: 3, HIGH: 2, NORMAL: 1 }
     const ts = (d) => (d ? new Date(d).getTime() : 0)
-
     if (sort === "UPDATED_DESC") x.sort((a, b) => ts(b.updated_at) - ts(a.updated_at))
-    if (sort === "DUE_ASC") x.sort((a, b) => ts(a.due_at) - ts(b.due_at))
     if (sort === "PRIORITY_DESC") x.sort((a, b) => (prRank[b.priority] || 0) - (prRank[a.priority] || 0))
 
     return x
-  }, [rows, tab, q, dept, priority, mine, sort])
+  }, [rows, deptCode, priority, sort, qDebounced])
 
-  // Grouped list
   const grouped = useMemo(() => {
     if (!grouping) return { ALL: filtered }
     const out = { TODAY: [], YESTERDAY: [], OLDER: [] }
@@ -375,53 +333,45 @@ export default function EmrRecordsInbox() {
     return out
   }, [filtered, grouping])
 
-  // Keep activeId valid
   useEffect(() => {
-    if (!activeId && filtered[0]?.id) setActiveId(filtered[0].id)
-    if (activeId && !filtered.some((r) => r.id === activeId) && filtered[0]?.id) setActiveId(filtered[0].id)
+    if (!activeId && filtered[0]?.uid) setActiveId(filtered[0].uid)
+    if (activeId && !filtered.some((r) => r.uid === activeId) && filtered[0]?.uid) setActiveId(filtered[0].uid)
   }, [filtered, activeId])
 
-  // Clear selection if items disappear
   useEffect(() => {
     setSelected((prev) => {
       const next = new Set()
-      const allowed = new Set(filtered.map((x) => x.id))
+      const allowed = new Set(filtered.map((x) => x.uid))
       prev.forEach((id) => {
         if (allowed.has(id)) next.add(id)
       })
       return next
     })
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filtered.map((x) => x.id).join("|")])
+  }, [filtered.map((x) => x.uid).join("|")])
 
   const [mobilePreviewOpen, setMobilePreviewOpen] = useState(false)
   useEffect(() => {
     if (!isMobile) setMobilePreviewOpen(false)
   }, [isMobile])
 
-  const selectedItems = useMemo(() => filtered.filter((x) => selected.has(x.id)), [filtered, selected])
-  const canBulkSign = useMemo(() => selectedItems.some((x) => x.kind === "PENDING_SIGN"), [selectedItems])
-  const canBulkAck = useMemo(() => selectedItems.some((x) => x.kind === "RESULT_LAB" || x.kind === "RESULT_RAD"), [selectedItems])
+  const selectedItems = useMemo(() => filtered.filter((x) => selected.has(x.uid)), [filtered, selected])
+  const canBulkSign = useMemo(() => selectedItems.some((x) => x.kind === "PENDING_SIGN" && x.record_id), [selectedItems])
+  const canBulkAck = useMemo(() => selectedItems.some((x) => (x.kind === "RESULT_LAB" || x.kind === "RESULT_RAD") && x.inbox_id), [selectedItems])
 
   function clearFilters() {
     setQ("")
-    setDept("ALL")
+    setDeptCode("ALL")
     setPriority("ALL")
-    setMine(true)
     setSort("UPDATED_DESC")
     toast.success("Filters cleared")
   }
 
-  function refresh() {
-    toast.success("Inbox refreshed (UI only)")
-    setRows((p) => [...p])
-  }
-
-  function toggleSelect(id) {
+  function toggleSelect(uid) {
     setSelected((prev) => {
       const next = new Set(prev)
-      if (next.has(id)) next.delete(id)
-      else next.add(id)
+      if (next.has(uid)) next.delete(uid)
+      else next.add(uid)
       return next
     })
   }
@@ -429,7 +379,7 @@ export default function EmrRecordsInbox() {
   function selectAllVisible() {
     setSelected((prev) => {
       const next = new Set(prev)
-      filtered.forEach((x) => next.add(x.id))
+      filtered.forEach((x) => next.add(x.uid))
       return next
     })
     toast.success("Selected all visible items")
@@ -440,61 +390,310 @@ export default function EmrRecordsInbox() {
     toast.success("Selection cleared")
   }
 
-  function bulkSignSelected() {
-    if (!canBulkSign) return toast.error("No pending signature items selected")
-    const ids = selectedItems.filter((x) => x.kind === "PENDING_SIGN").map((x) => x.id)
-    // UI-only: remove them from queue
-    setRows((prev) => prev.filter((r) => !ids.includes(r.id)))
-    setSelected((prev) => {
+  function setBusy(uid, on) {
+    setBusyIds((prev) => {
       const next = new Set(prev)
-      ids.forEach((id) => next.delete(id))
+      if (on) next.add(uid)
+      else next.delete(uid)
       return next
     })
-    toast.success(`Signed ${ids.length} record(s) (UI only)`)
   }
 
-  function bulkAckSelected() {
+  function makeRowFromInboxItem(it) {
+    if (it?.kind === "RECORD") {
+      const rid = toId(it.record_id)
+      const pid = toId(it.patient_id)
+      const stage = safeUpper(it.draft_stage)
+
+      const kind = stage === "READY" ? "PENDING_SIGN" : "DRAFT"
+      const dc = String(it.dept_code || "")
+      const deptName = deptMap.get(dc) || dc || "General Medicine"
+
+      return {
+        uid: `REC:${rid}`,
+        kind,
+        record_id: rid ? Number(rid) : null,
+        inbox_id: null,
+
+        dept_code: dc || null,
+        dept: deptName,
+        title: it.title || "Record",
+        patient_id: pid ? Number(pid) : null,
+        patient: normalizePatient(pid, patientCacheRef.current),
+
+        visit: { type: it.encounter_type || "—", id: it.encounter_id || "—", doctor: "—" },
+
+        priority: "NORMAL",
+        updated_at: it.updated_at || null,
+
+        flags: { confidential: false, abnormal: false, attachments: 0 },
+        preview: { summary: [], sections: [] },
+
+        _raw: it,
+      }
+    }
+
+    if (it?.kind === "RESULT") {
+      const iid = toId(it.inbox_id)
+      const pid = toId(it.patient_id)
+      const src = safeUpper(it.source) // LAB / RIS
+
+      const kind = src === "LAB" ? "RESULT_LAB" : "RESULT_RAD"
+      const deptName = kind === "RESULT_LAB" ? "Pathology/Lab" : "Radiology"
+
+      const payload = it.payload || {}
+      const abnormal =
+        payload?.abnormal === true ||
+        payload?.is_abnormal === true ||
+        payload?.flag_abnormal === true ||
+        safeUpper(payload?.flag) === "ABNORMAL"
+
+      const attachments = Number(payload?.attachments || payload?.attachment_count || 0) || 0
+
+      return {
+        uid: `RES:${iid}`,
+        kind,
+        record_id: null,
+        inbox_id: iid ? Number(iid) : null,
+
+        dept_code: null,
+        dept: deptName,
+        title: it.title || (kind === "RESULT_LAB" ? "Lab Result" : "Radiology Result"),
+        patient_id: pid ? Number(pid) : null,
+        patient: normalizePatient(pid, patientCacheRef.current),
+
+        visit: { type: it.encounter_type || "—", id: it.encounter_id || "—", doctor: "—" },
+
+        priority: abnormal ? "HIGH" : "NORMAL",
+        updated_at: it.created_at || null,
+
+        flags: { confidential: false, abnormal: !!abnormal, attachments },
+        preview: {
+          summary: buildKeySummary(payload),
+          sections: buildKeySections(payload),
+        },
+
+        _raw: it,
+      }
+    }
+
+    return null
+  }
+
+  function buildKeySummary(payload) {
+    if (!payload || typeof payload !== "object") return []
+    const out = []
+    const keys = Object.keys(payload).slice(0, 8)
+    for (const k of keys) {
+      const v = payload[k]
+      if (v === null || v === undefined) continue
+      if (typeof v === "string" && v.trim()) out.push(`${k}: ${v.trim().slice(0, 60)}`)
+      else if (typeof v === "number" || typeof v === "boolean") out.push(`${k}: ${String(v)}`)
+    }
+    return out.slice(0, 8)
+  }
+
+  function buildKeySections(payload) {
+    if (!payload || typeof payload !== "object") return []
+    const s = payload?.sections
+    if (Array.isArray(s)) return s.map((x) => String(x)).slice(0, 30)
+    return Object.keys(payload).slice(0, 20)
+  }
+
+  async function hydrateRecordIfNeeded(record_id) {
+    const rid = toId(record_id)
+    if (!rid) return
+    const key = Number(rid)
+    if (recordCacheRef.current.has(key)) return
+
+    try {
+      const rec = await emrRecordGet(key)
+      recordCacheRef.current.set(key, rec)
+
+      setRows((prev) =>
+        prev.map((r) => {
+          if (r.record_id !== key) return r
+
+          const dc = String(rec?.dept_code || r.dept_code || "")
+          const deptName = deptMap.get(dc) || r.dept || dc || "General Medicine"
+
+          const stage = safeUpper(rec?.draft_stage)
+          const newKind = stage === "READY" ? "PENDING_SIGN" : "DRAFT"
+
+          const preview = makePreviewFromRecord(rec)
+          const pr = pickPriorityFromRecord(rec)
+
+          return {
+            ...r,
+            kind: newKind,
+            dept_code: dc || r.dept_code,
+            dept: deptName,
+            title: rec?.title || r.title,
+            priority: pr || r.priority,
+            updated_at: rec?.updated_at || r.updated_at,
+            flags: { ...r.flags, confidential: !!(rec?.confidential ?? rec?.is_confidential ?? false) },
+            preview: {
+              summary: preview.summary.length ? preview.summary : r.preview?.summary || [],
+              sections: preview.sections.length ? preview.sections : r.preview?.sections || [],
+            },
+            visit: {
+              type: safeUpper(rec?.encounter_type) || r.visit?.type || "—",
+              id: rec?.encounter_id != null ? String(rec.encounter_id) : r.visit?.id || "—",
+              doctor: r.visit?.doctor || "—",
+            },
+          }
+        })
+      )
+    } catch {
+      // non-fatal
+    }
+  }
+
+  async function fetchMeta() {
+    try {
+      const data = await emrMetaGet()
+      setMeta({ departments: Array.isArray(data?.departments) ? data.departments : [] })
+    } catch (e) {
+      toast.error(errMsg(e, "Failed to load EMR meta"))
+    }
+  }
+
+  function bucketsForTab(t) {
+    if (t === "PENDING_SIGN") return ["pending_signature"]
+    if (t === "DRAFTS") return ["drafts_to_complete"]
+    if (t === "RESULTS") return ["new_lab_results", "new_radiology_reports"]
+    // ALL:
+    return ["pending_signature", "drafts_to_complete", "new_lab_results", "new_radiology_reports"]
+  }
+
+  async function fetchInbox({ showToast = false } = {}) {
+    setLoading(true)
+    try {
+      const buckets = bucketsForTab(tab)
+
+      // Use multi-fetch for tabs with multiple buckets (ALL, RESULTS)
+      const data =
+        buckets.length === 1
+          ? await emrInboxList({ bucket: buckets[0], q: qDebounced, page, page_size: Math.min(pageSize, 100) })
+          : await emrInboxListMany({ buckets, q: qDebounced, page, page_size: Math.min(pageSize, 100) })
+
+      const items = Array.isArray(data?.items) ? data.items : []
+      const mapped = items.map(makeRowFromInboxItem).filter(Boolean)
+
+      // Sort merged lists by updated_at desc by default (UI sort can reorder later)
+      mapped.sort((a, b) => (new Date(b.updated_at || 0).getTime() - new Date(a.updated_at || 0).getTime()))
+
+      setRows(mapped)
+
+      if (mapped[0]?.uid) setActiveId((prev) => prev || mapped[0].uid)
+      if (showToast) toast.success("Inbox refreshed")
+
+      // Hydrate top record details for better preview
+      const topRecordIds = mapped.filter((r) => r.record_id).slice(0, 20).map((r) => r.record_id)
+      await runPool(topRecordIds, 6, hydrateRecordIfNeeded)
+    } catch (e) {
+      toast.error(errMsg(e, "Failed to load inbox"))
+      setRows([])
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  useEffect(() => {
+    fetchMeta()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  useEffect(() => {
+    setPage(1)
+  }, [tab, qDebounced])
+
+  useEffect(() => {
+    fetchInbox()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tab, qDebounced, page])
+
+  useEffect(() => {
+    if (!active) return
+    if (active.record_id) hydrateRecordIfNeeded(active.record_id)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeId])
+
+  async function refresh() {
+    await fetchInbox({ showToast: true })
+  }
+
+  async function signOne(item) {
+    if (!item?.record_id) return toast.error("Invalid record selected")
+    const uid = item.uid
+    setBusy(uid, true)
+    try {
+      await emrSignRecord(item.record_id, "")
+      toast.success("Signed successfully")
+      setRows((prev) => prev.filter((r) => r.uid !== uid))
+      setSelected((prev) => {
+        const next = new Set(prev)
+        next.delete(uid)
+        return next
+      })
+    } catch (e) {
+      toast.error(errMsg(e, "Sign failed"))
+    } finally {
+      setBusy(uid, false)
+    }
+  }
+
+  async function ackOne(item) {
+    if (!item?.inbox_id) return toast.error("Invalid inbox result selected")
+    const uid = item.uid
+    setBusy(uid, true)
+    try {
+      await emrInboxAck(item.inbox_id)
+      toast.success("Acknowledged")
+      setRows((prev) => prev.filter((r) => r.uid !== uid))
+      setSelected((prev) => {
+        const next = new Set(prev)
+        next.delete(uid)
+        return next
+      })
+    } catch (e) {
+      toast.error(errMsg(e, "Acknowledge failed"))
+    } finally {
+      setBusy(uid, false)
+    }
+  }
+
+  async function bulkSignSelected() {
+    if (!canBulkSign) return toast.error("No pending signature items selected")
+    const targets = selectedItems.filter((x) => x.kind === "PENDING_SIGN" && x.record_id)
+    toast.message(`Signing ${targets.length} item(s)...`)
+    for (const it of targets) {
+      // eslint-disable-next-line no-await-in-loop
+      await signOne(it)
+    }
+  }
+
+  async function bulkAckSelected() {
     if (!canBulkAck) return toast.error("No results selected to acknowledge")
-    const ids = selectedItems
-      .filter((x) => x.kind === "RESULT_LAB" || x.kind === "RESULT_RAD")
-      .map((x) => x.id)
-    // UI-only: remove them from queue
-    setRows((prev) => prev.filter((r) => !ids.includes(r.id)))
-    setSelected((prev) => {
-      const next = new Set(prev)
-      ids.forEach((id) => next.delete(id))
-      return next
-    })
-    toast.success(`Acknowledged ${ids.length} result(s) (UI only)`)
+    const targets = selectedItems.filter((x) => (x.kind === "RESULT_LAB" || x.kind === "RESULT_RAD") && x.inbox_id)
+    toast.message(`Acknowledging ${targets.length} result(s)...`)
+    for (const it of targets) {
+      // eslint-disable-next-line no-await-in-loop
+      await ackOne(it)
+    }
   }
 
   function doAction(action, item) {
     if (!item) return
-    if (action === "OPEN") toast("Open item (wire route later)")
-    if (action === "SIGN") {
-      toast.success("Signed successfully (UI only)")
-      setRows((prev) => prev.filter((r) => r.id !== item.id))
-      setSelected((prev) => {
-        const next = new Set(prev)
-        next.delete(item.id)
-        return next
-      })
-    }
-    if (action === "CONTINUE") toast("Continue draft (wire editor later)")
-    if (action === "ACK_RESULT") {
-      toast.success("Result acknowledged (UI only)")
-      setRows((prev) => prev.filter((r) => r.id !== item.id))
-      setSelected((prev) => {
-        const next = new Set(prev)
-        next.delete(item.id)
-        return next
-      })
-    }
+    if (action === "OPEN") return toast("Open (wire route later)")
+    if (action === "SIGN") return signOne(item)
+    if (action === "CONTINUE") return toast("Continue draft (wire editor later)")
+    if (action === "ACK_RESULT") return ackOne(item)
   }
 
   return (
     <div className="min-h-[100dvh] w-full bg-gradient-to-br from-indigo-50/60 via-white to-rose-50/60">
-      {/* Sticky page header */}
+      {/* Sticky header */}
       <div className="sticky top-0 z-30 border-b border-slate-200 bg-white/70 backdrop-blur-xl">
         <div className="mx-auto w-full max-w-[1500px] px-4 py-3 md:px-6">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
@@ -502,26 +701,28 @@ export default function EmrRecordsInbox() {
               <div className="flex items-center gap-2">
                 <div className={cn("h-2.5 w-2.5 rounded-full bg-gradient-to-r", tone.bar)} />
                 <div className="text-[15px] font-semibold text-slate-900">Records Inbox</div>
-                <Badge variant="outline" className="rounded-xl">
-                  Daily Work Queue
-                </Badge>
+                <Badge variant="outline" className="rounded-xl">Daily Work Queue</Badge>
+                {loading ? (
+                  <Badge className="rounded-xl bg-slate-900 text-white">
+                    <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
+                    Loading
+                  </Badge>
+                ) : null}
               </div>
-              <div className="mt-1 text-xs text-slate-500">
-                Pending signature · drafts to complete · new lab/radiology results
-              </div>
+              <div className="mt-1 text-xs text-slate-500">Pending signature · drafts · lab/radiology results</div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
               <Button variant="outline" className="rounded-2xl" onClick={clearFilters}>
                 <X className="mr-2 h-4 w-4" /> Clear
               </Button>
-              <Button variant="outline" className="rounded-2xl" onClick={refresh}>
-                <RefreshCcw className="mr-2 h-4 w-4" /> Refresh
+              <Button variant="outline" className="rounded-2xl" onClick={refresh} disabled={loading}>
+                <RefreshCcw className={cn("mr-2 h-4 w-4", loading ? "animate-spin" : "")} /> Refresh
               </Button>
             </div>
           </div>
 
-          {/* KPI pills */}
+          {/* KPI */}
           <div className="mt-3 flex flex-wrap gap-2">
             <KpiPill label="All" value={counts.all} icon={ClipboardList} tone="bg-slate-50 text-slate-700 ring-slate-200" />
             <KpiPill label="Pending" value={counts.pending} icon={ShieldCheck} tone="bg-indigo-50 text-indigo-700 ring-indigo-200" />
@@ -530,28 +731,26 @@ export default function EmrRecordsInbox() {
             <KpiPill label="Urgent" value={counts.urgent} icon={AlertTriangle} tone="bg-rose-50 text-rose-700 ring-rose-200" />
           </div>
 
-          {/* Filters bar */}
+          {/* Filters */}
           <div className="mt-3 rounded-3xl border border-slate-200 bg-white/80 p-3 shadow-sm">
-            <div className="grid grid-cols-1 gap-2 lg:grid-cols-[1fr_180px_160px_150px_140px]">
+            <div className="grid grid-cols-1 gap-2 lg:grid-cols-[1fr_220px_170px_170px_160px]">
               <div className="relative">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
                 <Input
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
-                  placeholder="Search patient / UHID / record / visit / doctor…"
+                  placeholder="Search title/note… (max 80 chars)"
                   className="h-10 rounded-2xl pl-9"
                 />
               </div>
 
               <select
-                value={dept}
-                onChange={(e) => setDept(e.target.value)}
+                value={deptCode}
+                onChange={(e) => setDeptCode(e.target.value)}
                 className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-300"
               >
-                {DEPARTMENTS.map((d) => (
-                  <option key={d} value={d}>
-                    {d}
-                  </option>
+                {deptOptions.map((d) => (
+                  <option key={d.code} value={d.code}>{d.name}</option>
                 ))}
               </select>
 
@@ -561,9 +760,7 @@ export default function EmrRecordsInbox() {
                 className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-300"
               >
                 {PRIORITIES.map((p) => (
-                  <option key={p} value={p}>
-                    Priority: {p}
-                  </option>
+                  <option key={p} value={p}>Priority: {p}</option>
                 ))}
               </select>
 
@@ -573,26 +770,24 @@ export default function EmrRecordsInbox() {
                 className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-300"
               >
                 {SORTS.map((s) => (
-                  <option key={s.key} value={s.key}>
-                    Sort: {s.label}
-                  </option>
+                  <option key={s.key} value={s.key}>Sort: {s.label}</option>
                 ))}
               </select>
 
               <div className="flex items-center justify-between gap-2 rounded-2xl border border-slate-200 bg-white px-3">
                 <div className="flex items-center gap-2 text-sm font-semibold text-slate-900">
                   <Filter className="h-4 w-4 text-slate-600" />
-                  Mine
+                  Group
                 </div>
                 <button
                   type="button"
-                  onClick={() => setMine((s) => !s)}
+                  onClick={() => setGrouping((s) => !s)}
                   className={cn(
                     "h-8 rounded-2xl px-3 text-xs font-semibold ring-1 transition",
-                    mine ? "bg-slate-900 text-white ring-slate-900" : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
+                    grouping ? "bg-slate-900 text-white ring-slate-900" : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
                   )}
                 >
-                  {mine ? "ON" : "OFF"}
+                  {grouping ? "ON" : "OFF"}
                 </button>
               </div>
             </div>
@@ -615,7 +810,7 @@ export default function EmrRecordsInbox() {
         </div>
       </div>
 
-      {/* Body: split list + preview (scroll-safe) */}
+      {/* Body */}
       <div className="mx-auto w-full max-w-[1500px] px-4 py-4 md:px-6">
         <div className="grid min-h-0 grid-cols-1 gap-4 lg:grid-cols-[460px_1fr]">
           {/* List */}
@@ -628,17 +823,13 @@ export default function EmrRecordsInbox() {
                   <div className="mt-1 text-xs text-slate-500">Select items to preview or bulk sign/ack.</div>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="rounded-xl">
-                    {filtered.length} item(s)
-                  </Badge>
+                  <Badge variant="outline" className="rounded-xl">{filtered.length} item(s)</Badge>
                   <button
                     type="button"
                     onClick={() => setGrouping((s) => !s)}
                     className={cn(
                       "inline-flex h-9 items-center gap-2 rounded-2xl px-3 text-xs font-semibold ring-1 transition",
-                      grouping
-                        ? "bg-slate-900 text-white ring-slate-900 hover:bg-slate-800"
-                        : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
+                      grouping ? "bg-slate-900 text-white ring-slate-900 hover:bg-slate-800" : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
                     )}
                     title="Toggle grouping"
                   >
@@ -670,7 +861,6 @@ export default function EmrRecordsInbox() {
                       className="h-9 rounded-2xl"
                       onClick={bulkAckSelected}
                       disabled={!selectedCount || !canBulkAck}
-                      title="Acknowledge selected results"
                     >
                       <CheckCircle2 className="mr-2 h-4 w-4" />
                       Ack Results
@@ -679,25 +869,26 @@ export default function EmrRecordsInbox() {
                       className={cn("h-9 rounded-2xl", tone.btn)}
                       onClick={bulkSignSelected}
                       disabled={!selectedCount || !canBulkSign}
-                      title="Sign selected pending records"
                     >
                       <ShieldCheck className="mr-2 h-4 w-4" />
                       Sign Selected
                     </Button>
                   </div>
                 </div>
-
-                {!selectedCount ? (
-                  <div className="mt-2 text-xs text-slate-500">
-                    Tip: select multiple items to quickly sign/ack in one shot.
-                  </div>
-                ) : null}
               </div>
             </CardHeader>
 
             <CardContent className="min-h-0">
               <div className="max-h-[calc(100dvh-430px)] min-h-[280px] overflow-y-auto pr-1 lg:max-h-[calc(100dvh-380px)]">
-                {grouping ? (
+                {loading ? (
+                  <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 p-6 text-center">
+                    <div className="inline-flex items-center gap-2 text-sm font-semibold text-slate-800">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Loading inbox…
+                    </div>
+                    <div className="mt-1 text-xs text-slate-500">Fetching real-time items.</div>
+                  </div>
+                ) : grouping ? (
                   <div className="space-y-4">
                     <GroupBlock
                       title="Today"
@@ -710,6 +901,7 @@ export default function EmrRecordsInbox() {
                         setActiveId(id)
                         if (isMobile) setMobilePreviewOpen(true)
                       }}
+                      busyIds={busyIds}
                     />
                     <GroupBlock
                       title="Yesterday"
@@ -722,6 +914,7 @@ export default function EmrRecordsInbox() {
                         setActiveId(id)
                         if (isMobile) setMobilePreviewOpen(true)
                       }}
+                      busyIds={busyIds}
                     />
                     <GroupBlock
                       title="Older"
@@ -734,6 +927,7 @@ export default function EmrRecordsInbox() {
                         setActiveId(id)
                         if (isMobile) setMobilePreviewOpen(true)
                       }}
+                      busyIds={busyIds}
                     />
 
                     {!filtered.length ? (
@@ -747,15 +941,16 @@ export default function EmrRecordsInbox() {
                   <div className="space-y-2">
                     {filtered.map((it) => (
                       <QueueItemCard
-                        key={it.id}
+                        key={it.uid}
                         item={it}
-                        active={it.id === activeId}
-                        selected={selected.has(it.id)}
-                        onToggle={() => toggleSelect(it.id)}
+                        active={it.uid === activeId}
+                        selected={selected.has(it.uid)}
+                        onToggle={() => toggleSelect(it.uid)}
                         onClick={() => {
-                          setActiveId(it.id)
+                          setActiveId(it.uid)
                           if (isMobile) setMobilePreviewOpen(true)
                         }}
+                        busy={busyIds.has(it.uid)}
                       />
                     ))}
                     {!filtered.length ? (
@@ -770,14 +965,14 @@ export default function EmrRecordsInbox() {
             </CardContent>
           </Card>
 
-          {/* Preview (desktop) */}
+          {/* Preview desktop */}
           <div className="hidden min-h-0 lg:block">
-            <PreviewPane item={active} onAction={doAction} />
+            <PreviewPane item={active} onAction={doAction} busyIds={busyIds} />
           </div>
         </div>
       </div>
 
-      {/* Mobile preview dialog (full screen + scroll safe) */}
+      {/* Mobile preview dialog */}
       <Dialog open={mobilePreviewOpen} onOpenChange={setMobilePreviewOpen}>
         <DialogContent
           className={cn(
@@ -798,7 +993,7 @@ export default function EmrRecordsInbox() {
             </DialogHeader>
 
             <div className="flex-1 min-h-0 overflow-y-auto p-4">
-              <PreviewPane item={active} onAction={doAction} compact />
+              <PreviewPane item={active} onAction={doAction} compact busyIds={busyIds} />
             </div>
           </div>
         </DialogContent>
@@ -807,7 +1002,7 @@ export default function EmrRecordsInbox() {
   )
 }
 
-/** ---------- UI pieces ---------- */
+/* ---------- UI pieces ---------- */
 
 function KpiPill({ label, value, icon: Icon, tone }) {
   return (
@@ -832,18 +1027,19 @@ function PriorityBadge({ priority }) {
   )
 }
 
-function SelectCheck({ checked, onToggle, title }) {
+function SelectCheck({ checked, onToggle, disabled }) {
   return (
     <button
       type="button"
+      disabled={disabled}
       onClick={(e) => {
         e.preventDefault()
         e.stopPropagation()
         onToggle?.()
       }}
-      title={title || (checked ? "Unselect" : "Select")}
       className={cn(
         "grid h-9 w-9 place-items-center rounded-2xl ring-1 transition",
+        disabled ? "opacity-60" : "",
         checked ? "bg-slate-900 text-white ring-slate-900" : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
       )}
       aria-pressed={checked}
@@ -853,7 +1049,7 @@ function SelectCheck({ checked, onToggle, title }) {
   )
 }
 
-function GroupBlock({ title, subtitle, rows, selected, onToggle, activeId, onOpen }) {
+function GroupBlock({ title, subtitle, rows, selected, onToggle, activeId, onOpen, busyIds }) {
   if (!rows?.length) return null
   return (
     <div className="space-y-2">
@@ -869,12 +1065,13 @@ function GroupBlock({ title, subtitle, rows, selected, onToggle, activeId, onOpe
       <div className="space-y-2">
         {rows.map((it) => (
           <QueueItemCard
-            key={it.id}
+            key={it.uid}
             item={it}
-            active={it.id === activeId}
-            selected={selected.has(it.id)}
-            onToggle={() => onToggle(it.id)}
-            onClick={() => onOpen(it.id)}
+            active={it.uid === activeId}
+            selected={selected.has(it.uid)}
+            onToggle={() => onToggle(it.uid)}
+            onClick={() => onOpen(it.uid)}
+            busy={busyIds?.has(it.uid)}
           />
         ))}
       </div>
@@ -882,21 +1079,10 @@ function GroupBlock({ title, subtitle, rows, selected, onToggle, activeId, onOpe
   )
 }
 
-function QueueItemCard({ item, active, selected, onToggle, onClick }) {
+function QueueItemCard({ item, active, selected, onToggle, onClick, busy }) {
   const tone = deptTone(item.dept)
   const meta = kindMeta(item.kind)
   const Icon = meta.icon
-
-  const dueMin = item.due_at ? minutesFromNow(item.due_at) : null
-  const dueText =
-    dueMin == null
-      ? null
-      : dueMin <= 0
-        ? "Due now"
-        : dueMin < 60
-          ? `Due in ${dueMin} min`
-          : `Due in ${Math.round(dueMin / 60)} hr`
-
   const abnormal = !!item.flags?.abnormal
 
   return (
@@ -906,14 +1092,15 @@ function QueueItemCard({ item, active, selected, onToggle, onClick }) {
       className={cn(
         "w-full overflow-hidden rounded-3xl border bg-white text-left shadow-sm transition",
         active ? "border-slate-300 ring-1 ring-slate-200" : "border-slate-200 hover:border-slate-300",
-        abnormal ? "ring-1 ring-amber-200" : ""
+        abnormal ? "ring-1 ring-amber-200" : "",
+        busy ? "opacity-70" : ""
       )}
     >
       <div className={cn("h-1.5 w-full bg-gradient-to-r", tone.bar)} />
       <div className={cn("p-4", active ? tone.glow : "")}>
         <div className="flex items-start justify-between gap-3">
           <div className="flex items-start gap-3">
-            <SelectCheck checked={!!selected} onToggle={onToggle} />
+            <SelectCheck checked={!!selected} onToggle={onToggle} disabled={busy} />
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <Badge className={cn("rounded-xl", tone.chip)}>
@@ -948,9 +1135,6 @@ function QueueItemCard({ item, active, selected, onToggle, onClick }) {
                 <span className="inline-flex items-center gap-1">
                   <Layers className="h-3.5 w-3.5" /> {item.visit?.type} · {item.visit?.id}
                 </span>
-                <span className="inline-flex items-center gap-1">
-                  <Stethoscope className="h-3.5 w-3.5" /> {item.visit?.doctor}
-                </span>
               </div>
 
               <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-slate-500">
@@ -960,19 +1144,6 @@ function QueueItemCard({ item, active, selected, onToggle, onClick }) {
                 <span className="inline-flex items-center gap-1">
                   <Clock3 className="h-3.5 w-3.5" /> {fmtTime(item.updated_at)}
                 </span>
-                {dueText ? (
-                  <span
-                    className={cn(
-                      "inline-flex items-center gap-1 rounded-full px-2 py-1 ring-1",
-                      dueMin != null && dueMin <= 30
-                        ? "bg-rose-50 text-rose-700 ring-rose-200"
-                        : "bg-slate-50 text-slate-700 ring-slate-200"
-                    )}
-                  >
-                    <Dot className="h-4 w-4" />
-                    {dueText}
-                  </span>
-                ) : null}
               </div>
             </div>
           </div>
@@ -995,10 +1166,11 @@ function QueueItemCard({ item, active, selected, onToggle, onClick }) {
   )
 }
 
-function PreviewPane({ item, onAction, compact = false }) {
+function PreviewPane({ item, onAction, compact = false, busyIds }) {
   const tone = deptTone(item?.dept || "General Medicine")
   const meta = item ? kindMeta(item.kind) : null
   const Icon = meta?.icon || FileText
+  const isBusy = item ? busyIds?.has(item.uid) : false
 
   const actions = useMemo(() => {
     if (!item) return []
@@ -1007,8 +1179,7 @@ function PreviewPane({ item, onAction, compact = false }) {
         { key: "OPEN", label: "Open", icon: FileText, variant: "outline" },
         { key: "SIGN", label: "Sign", icon: CheckCircle2, primary: true },
       ]
-    if (item.kind === "DRAFT")
-      return [{ key: "CONTINUE", label: "Continue Draft", icon: PenLine, primary: true }]
+    if (item.kind === "DRAFT") return [{ key: "CONTINUE", label: "Continue Draft", icon: PenLine, primary: true }]
     if (item.kind === "RESULT_LAB" || item.kind === "RESULT_RAD")
       return [
         { key: "OPEN", label: "Open Report", icon: FileText, variant: "outline" },
@@ -1054,22 +1225,18 @@ function PreviewPane({ item, onAction, compact = false }) {
             </motion.div>
           ) : (
             <motion.div
-              key={item.id}
+              key={item.uid}
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               exit={{ opacity: 0, y: -8 }}
               className="space-y-4"
             >
-              {/* Header chips */}
               <div className="flex flex-wrap items-center gap-2">
                 <Badge className={cn("rounded-xl", tone.chip)}>
                   <Building2 className="mr-1 h-3.5 w-3.5" /> {item.dept}
                 </Badge>
                 <Badge variant="outline" className="rounded-xl">
                   <Layers className="mr-1 h-3.5 w-3.5" /> {item.visit?.type} · {item.visit?.id}
-                </Badge>
-                <Badge variant="outline" className="rounded-xl">
-                  <Stethoscope className="mr-1 h-3.5 w-3.5" /> {item.visit?.doctor}
                 </Badge>
                 <PriorityBadge priority={item.priority} />
                 {item.flags?.confidential ? (
@@ -1095,12 +1262,8 @@ function PreviewPane({ item, onAction, compact = false }) {
                 <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                   <InfoRow label="Patient" value={`${item.patient?.name} (${item.patient?.uhid})`} icon={User} />
                   <InfoRow label="Age/Gender" value={`${item.patient?.age || "—"} / ${item.patient?.gender || "—"}`} icon={ClipboardList} />
-                  <InfoRow label="Assigned" value={item.assigned_to || "—"} icon={ShieldCheck} />
-                  <InfoRow
-                    label="Due"
-                    value={item.due_at ? `${fmtDate(item.due_at)} · ${fmtTime(item.due_at)}` : "—"}
-                    icon={Clock3}
-                  />
+                  <InfoRow label="Type" value={item.visit?.type || "—"} icon={Layers} />
+                  <InfoRow label="Encounter" value={item.visit?.id || "—"} icon={FileText} />
                 </div>
 
                 {(item.preview?.summary || []).length ? (
@@ -1131,17 +1294,11 @@ function PreviewPane({ item, onAction, compact = false }) {
                           {s}
                         </span>
                       ))}
-                      {item.preview.sections.length > 12 ? (
-                        <span className="rounded-full bg-slate-100 px-2 py-1 text-xs font-semibold text-slate-700 ring-1 ring-slate-200">
-                          +{item.preview.sections.length - 12} more
-                        </span>
-                      ) : null}
                     </div>
                   </>
                 ) : null}
               </div>
 
-              {/* Actions */}
               <div className="rounded-3xl border border-slate-200 bg-white p-4">
                 <div className="text-xs font-semibold text-slate-700">Actions</div>
                 <div className="mt-3 flex flex-wrap gap-2">
@@ -1154,6 +1311,7 @@ function PreviewPane({ item, onAction, compact = false }) {
                         variant={primary ? "default" : a.variant || "outline"}
                         className={cn("rounded-2xl", primary ? tone.btn : "")}
                         onClick={() => onAction?.(a.key, item)}
+                        disabled={isBusy}
                       >
                         <AIcon className="mr-2 h-4 w-4" />
                         {a.label}
@@ -1162,24 +1320,10 @@ function PreviewPane({ item, onAction, compact = false }) {
                   })}
                 </div>
 
-                {item.kind === "PENDING_SIGN" ? (
-                  <div className="mt-3 flex items-start gap-2 rounded-2xl border border-indigo-200 bg-indigo-50 px-3 py-2 text-xs text-indigo-900">
-                    <ShieldCheck className="h-4 w-4" />
-                    Signing will lock the record and create an audit trail (backend later).
-                  </div>
-                ) : null}
-
-                {item.kind === "DRAFT" ? (
-                  <div className="mt-3 flex items-start gap-2 rounded-2xl border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-900">
-                    <PenLine className="h-4 w-4" />
-                    Complete required fields before signing.
-                  </div>
-                ) : null}
-
-                {(item.kind === "RESULT_LAB" || item.kind === "RESULT_RAD") && item.flags?.abnormal ? (
-                  <div className="mt-3 flex items-start gap-2 rounded-2xl border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-900">
-                    <AlertTriangle className="h-4 w-4" />
-                    Abnormal result flagged. Review and acknowledge.
+                {isBusy ? (
+                  <div className="mt-3 flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-700">
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Processing…
                   </div>
                 ) : null}
               </div>
