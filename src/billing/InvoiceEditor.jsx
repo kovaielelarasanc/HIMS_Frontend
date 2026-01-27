@@ -140,10 +140,11 @@ function paymentAllocatedToThisInvoice(p, invoiceId) {
     if (direct != null) return Math.max(0, num(direct, 0))
 
     // allocations array
-    const allocs =
-        Array.isArray(p?.allocations) ? p.allocations :
-            Array.isArray(p?.payment_allocations) ? p.payment_allocations :
-                null
+    const allocs = Array.isArray(p?.allocations)
+        ? p.allocations
+        : Array.isArray(p?.payment_allocations)
+            ? p.payment_allocations
+            : null
 
     if (Array.isArray(allocs) && allocs.length) {
         const sum = allocs.reduce((s, a) => {
@@ -494,7 +495,6 @@ export default function InvoiceEditor() {
                 return
             }
 
-            // safer than "load" event for objectURL
             setTimeout(() => {
                 try {
                     win.focus()
@@ -1116,7 +1116,10 @@ function InfoTile({ icon, title, value }) {
 }
 
 /* ---------------------------------
-   Lines Table
+   Lines Table (FINAL UPDATED)
+   - edits work for pharmacy meta fields
+   - supports meta.* nested read
+   - sends meta_json PATCH (single key) for safe merge
 ---------------------------------- */
 
 function getLineMeta(line) {
@@ -1127,21 +1130,39 @@ function getLineMeta(line) {
     return m || null
 }
 
+function getMetaNested(meta, pathAfterMeta) {
+    if (!meta) return undefined
+    const parts = String(pathAfterMeta || "").split(".").filter(Boolean)
+    let cur = meta
+    for (const k of parts) {
+        if (!cur || typeof cur !== "object") return undefined
+        cur = cur[k]
+    }
+    return cur
+}
+
 function getNested(obj, path) {
     const p = String(path || "")
     if (!p) return undefined
 
-    // ✅ Allow meta.* columns from backend modulesMeta
+    // ✅ supports meta.batch_no AND meta.gst.cgst_rate (nested)
     if (p.startsWith("meta.")) {
         const m = getLineMeta(obj) || {}
-        const k = p.slice(5)
-        return m?.[k]
+        return getMetaNested(m, p.slice(5))
     }
 
-    // Some UIs send batch_no without meta prefix
+    // legacy batch fallbacks
     if (p === "batch_no" || p === "batchNo") {
         const m = getLineMeta(obj) || {}
-        return m?.batch_no ?? m?.batchNo ?? m?.batch_number ?? m?.batchNumber ?? m?.batch ?? m?.batch_id ?? m?.batchId
+        return (
+            m?.batch_no ??
+            m?.batchNo ??
+            m?.batch_number ??
+            m?.batchNumber ??
+            m?.batch ??
+            m?.batch_id ??
+            m?.batchId
+        )
     }
 
     const parts = p.split(".")
@@ -1159,15 +1180,19 @@ function fmtCell(key, v) {
 
     if (k === "service_date") return fmtDateISO(v) || "—"
 
-    // expiry formatting (supports YYYY-MM-DD / ISO)
-    if (k.includes("expiry") || k.includes("exp_date")) {
+    if (k.includes("expiry") || k.includes("exp_date") || k.includes("service_date")) {
         const s = String(v)
-        // quick normalize
         if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10)
         return fmtDateISO(s) || s
     }
 
-    if (k.includes("amount") || k === "unit_price" || k === "line_total" || k === "net_amount" || k === "tax_amount") {
+    if (
+        k.includes("amount") ||
+        k === "unit_price" ||
+        k === "line_total" ||
+        k === "net_amount" ||
+        k === "tax_amount"
+    ) {
         return `₹ ${money(v)}`
     }
     return String(v)
@@ -1217,13 +1242,66 @@ function ensurePharmacyBatchNoColumn(cols) {
     ]
 }
 
-function LinesTable({ columns, lines, canEdit, onPatch, onAskDelete, onAskEdit, isPharmacy, docMode }) {
-    const cols = columns || (docMode ? FALLBACK_DOC_COLS : (isPharmacy ? FALLBACK_PHARMACY_COLS : FALLBACK_DEFAULT_COLS))
+function isEditableColumn(key) {
+    const k = String(key || "")
 
-    const hasBatchCol = isPharmacy && cols.some((c) => {
-        const k = String(c?.key || "").toLowerCase()
-        return k === "meta.batch_no" || k === "batch_no" || k.includes("batch_no")
-    })
+    // computed -> read-only
+    if (["tax_amount", "net_amount", "line_total"].includes(k)) return false
+
+    // allow editing common fields
+    if (
+        ["qty", "unit_price", "gst_rate", "discount_amount", "discount_percent", "description", "service_date", "item_code"].includes(k)
+    ) return true
+
+    // allow editing pharmacy meta fields broadly (but never GST split)
+    if (k.startsWith("meta.gst.")) return false
+    if (k.startsWith("meta.")) {
+        const mk = k.slice(5).toLowerCase()
+        if (mk.includes("batch") || mk.includes("expiry") || mk.includes("hsn") || mk.includes("sac")) return true
+    }
+
+    return false
+}
+
+function buildPatchForKey(key, rawValue) {
+    const k = String(key || "")
+    const v = rawValue
+
+    // meta.* => PATCH ONE KEY (safe merge)
+    if (k.startsWith("meta.")) {
+        const metaKey = k.slice(5)
+        if (metaKey.includes(".")) return null // nested meta remains read-only
+        const clean = v == null ? null : String(v).trim() === "" ? null : String(v).trim()
+        return { meta_json: { [metaKey]: clean } }
+    }
+
+    if (k === "service_date") {
+        if (!v) return { service_date: null }
+        try {
+            return { service_date: new Date(String(v)).toISOString() }
+        } catch {
+            return { service_date: String(v) }
+        }
+    }
+
+    if (k === "description") return { description: String(v ?? "") }
+    if (k === "item_code") return { item_code: String(v ?? "").trim() }
+
+    // numbers
+    if (["qty", "unit_price", "gst_rate", "discount_amount", "discount_percent"].includes(k)) {
+        const numStr = String(v ?? "").replace(/[₹,\s]/g, "").trim()
+        const n = numStr === "" ? 0 : Number(numStr)
+        if (!Number.isFinite(n)) return null
+        return { [k]: n }
+    }
+
+    return null
+}
+
+function LinesTable({ columns, lines, canEdit, onPatch, onAskDelete, onAskEdit, isPharmacy, docMode }) {
+    const cols =
+        columns ||
+        (docMode ? FALLBACK_DOC_COLS : (isPharmacy ? FALLBACK_PHARMACY_COLS : FALLBACK_DEFAULT_COLS))
 
     return (
         <div className="overflow-x-auto">
@@ -1231,13 +1309,12 @@ function LinesTable({ columns, lines, canEdit, onPatch, onAskDelete, onAskEdit, 
                 <thead className="text-xs font-bold text-slate-600">
                     <tr className="border-b border-slate-100">
                         {cols.map((c) => (
-                            <th key={c.key} className="py-3 pr-4">
-                                {c.label}
-                            </th>
+                            <th key={c.key} className="py-3 pr-4">{c.label}</th>
                         ))}
                         <th className="py-3 pr-0 text-right">Action</th>
                     </tr>
                 </thead>
+
                 <tbody>
                     {lines.map((r) => {
                         const autoLinked = !r?.is_manual && String(r?.source_module || "").trim()
@@ -1247,13 +1324,65 @@ function LinesTable({ columns, lines, canEdit, onPatch, onAskDelete, onAskEdit, 
                                 {cols.map((c) => {
                                     const key = c.key
                                     const raw = getNested(r, key)
+                                    const editable = canEdit && isEditableColumn(key)
 
-                                    // ✅ Batch No pill UI
                                     const keyLower = String(key || "").toLowerCase()
                                     const isBatch =
                                         isPharmacy &&
-                                        (keyLower === "meta.batch_no" || keyLower === "batch_no" || keyLower.endsWith(".batch_no") || keyLower.includes("batch_no"))
+                                        (keyLower === "meta.batch_no" || keyLower === "batch_no" || keyLower.includes("batch_no"))
 
+                                    if (editable) {
+                                        // date-like fields
+                                        if (key === "service_date" || keyLower.includes("expiry")) {
+                                            return (
+                                                <td key={key} className="py-3 pr-4">
+                                                    <LineDateInput
+                                                        disabled={!canEdit}
+                                                        value={raw ? String(raw).slice(0, 10) : ""}
+                                                        onCommit={(v) => {
+                                                            const patch = buildPatchForKey(key, v)
+                                                            if (patch) onPatch(r.id, patch)
+                                                        }}
+                                                        className="w-40"
+                                                    />
+                                                </td>
+                                            )
+                                        }
+
+                                        // numeric fields
+                                        if (["qty", "unit_price", "gst_rate", "discount_amount", "discount_percent"].includes(key)) {
+                                            return (
+                                                <td key={key} className="py-3 pr-4">
+                                                    <LineNumberInput
+                                                        disabled={!canEdit}
+                                                        value={raw ?? r[key] ?? ""}
+                                                        onCommit={(v) => {
+                                                            const patch = buildPatchForKey(key, v)
+                                                            if (patch) onPatch(r.id, patch)
+                                                        }}
+                                                        className="w-28"
+                                                    />
+                                                </td>
+                                            )
+                                        }
+
+                                        // text fields (description / item_code / meta.*)
+                                        return (
+                                            <td key={key} className="py-3 pr-4">
+                                                <LineTextInput
+                                                    disabled={!canEdit}
+                                                    value={raw ?? ""}
+                                                    onCommit={(v) => {
+                                                        const patch = buildPatchForKey(key, v)
+                                                        if (patch) onPatch(r.id, patch)
+                                                    }}
+                                                    className={key === "description" ? "w-[360px]" : "w-44"}
+                                                />
+                                            </td>
+                                        )
+                                    }
+
+                                    // non-editable rendering
                                     if (isBatch) {
                                         const bn = getBatchNo(r)
                                         return (
@@ -1269,49 +1398,6 @@ function LinesTable({ columns, lines, canEdit, onPatch, onAskDelete, onAskEdit, 
                                         )
                                     }
 
-                                    if (key === "qty") {
-                                        return (
-                                            <td key={key} className="py-3 pr-4">
-                                                <LineNumberInput
-                                                    disabled={!canEdit}
-                                                    value={raw ?? r.qty ?? 1}
-                                                    onCommit={(v) => onPatch(r.id, { qty: Number(v || 0) })}
-                                                    className="w-24"
-                                                />
-                                            </td>
-                                        )
-                                    }
-
-                                    if (key === "unit_price") {
-                                        function toDecStr(v) {
-                                            const s = String(v ?? "").replace(/[₹,\s]/g, "").trim()
-                                            return s === "" ? "0" : s
-                                        }
-                                        return (
-                                            <td key={key} className="py-3 pr-4">
-                                                <LineNumberInput
-                                                    disabled={!canEdit}
-                                                    value={raw ?? r.unit_price ?? 0}
-                                                    onCommit={(v) => onPatch(r.id, { unit_price: toDecStr(v) })}
-                                                    className="w-28"
-                                                />
-                                            </td>
-                                        )
-                                    }
-
-                                    if (key === "discount_amount") {
-                                        return (
-                                            <td key={key} className="py-3 pr-4">
-                                                <LineNumberInput
-                                                    disabled={!canEdit}
-                                                    value={raw ?? r.discount_amount ?? 0}
-                                                    onCommit={(v) => onPatch(r.id, { discount_amount: Number(v || 0) })}
-                                                    className="w-28"
-                                                />
-                                            </td>
-                                        )
-                                    }
-
                                     return (
                                         <td key={key} className="py-3 pr-4">
                                             <div className={cx("text-slate-900", key === "description" ? "font-bold" : "font-semibold")}>
@@ -1323,14 +1409,6 @@ function LinesTable({ columns, lines, canEdit, onPatch, onAskDelete, onAskEdit, 
                                                     {r.item_type || "—"} · {r.item_id ?? "—"} · {r.source_module || "—"}
                                                     {r.is_manual ? <span className="ml-2 rounded-lg bg-slate-100 px-2 py-0.5">MANUAL</span> : null}
                                                     {autoLinked ? <span className="ml-2 rounded-lg bg-amber-50 px-2 py-0.5 text-amber-800">AUTO</span> : null}
-                                                    {isPharmacy && !hasBatchCol ? (
-                                                        (() => {
-                                                            const bn = getBatchNo(r)
-                                                            return bn ? (
-                                                                <span className="ml-2 rounded-lg bg-slate-100 px-2 py-0.5">BATCH {bn}</span>
-                                                            ) : null
-                                                        })()
-                                                    ) : null}
                                                 </div>
                                             ) : null}
                                         </td>
@@ -1342,7 +1420,6 @@ function LinesTable({ columns, lines, canEdit, onPatch, onAskDelete, onAskEdit, 
                                         <Button variant="outline" disabled={!canEdit} onClick={() => onAskEdit(r)}>
                                             <Pencil className="h-4 w-4" /> Edit
                                         </Button>
-
                                         <Button variant="outline" disabled={!canEdit} onClick={() => onAskDelete(r)}>
                                             <Trash2 className="h-4 w-4" /> Remove
                                         </Button>
@@ -1362,7 +1439,7 @@ function LinesTable({ columns, lines, canEdit, onPatch, onAskDelete, onAskEdit, 
 }
 
 /* ---------------------------------
-   Inline number input
+   Inline Inputs (UPDATED)
 ---------------------------------- */
 
 function LineNumberInput({ value, onCommit, disabled, className }) {
@@ -1372,7 +1449,8 @@ function LineNumberInput({ value, onCommit, disabled, className }) {
     function commit() {
         if (disabled) return
         const x = String(v ?? "").trim()
-        if (x === "") return
+        // allow empty => treated as 0 by buildPatchForKey
+        if (String(value ?? "") === x) return
         onCommit?.(x)
     }
 
@@ -1392,6 +1470,67 @@ function LineNumberInput({ value, onCommit, disabled, className }) {
             }}
             disabled={disabled}
             inputMode="decimal"
+        />
+    )
+}
+
+function LineTextInput({ value, onCommit, disabled, className }) {
+    const [v, setV] = useState(value ?? "")
+    useEffect(() => setV(value ?? ""), [value])
+
+    function commit() {
+        if (disabled) return
+        const x = String(v ?? "")
+        if (String(value ?? "") === x) return
+        onCommit?.(x)
+    }
+
+    return (
+        <input
+            className={cn(
+                "h-9 w-full rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 outline-none focus:border-slate-400",
+                disabled ? "bg-slate-50 text-slate-500" : "",
+                className
+            )}
+            value={v}
+            onChange={(e) => setV(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+                if (e.key === "Enter") commit()
+                if (e.key === "Escape") setV(value ?? "")
+            }}
+            disabled={disabled}
+        />
+    )
+}
+
+function LineDateInput({ value, onCommit, disabled, className }) {
+    const [v, setV] = useState(value ?? "")
+    useEffect(() => setV(value ?? ""), [value])
+
+    function commit() {
+        if (disabled) return
+        const x = String(v ?? "").trim()
+        if (String(value ?? "") === x) return
+        onCommit?.(x)
+    }
+
+    return (
+        <input
+            type="date"
+            className={cn(
+                "h-9 rounded-xl border border-slate-200 bg-white px-3 text-sm font-semibold text-slate-900 outline-none focus:border-slate-400",
+                disabled ? "bg-slate-50 text-slate-500" : "",
+                className
+            )}
+            value={v}
+            onChange={(e) => setV(e.target.value)}
+            onBlur={commit}
+            onKeyDown={(e) => {
+                if (e.key === "Enter") commit()
+                if (e.key === "Escape") setV(value ?? "")
+            }}
+            disabled={disabled}
         />
     )
 }
@@ -1683,48 +1822,75 @@ function cleanMeta(meta) {
     return Object.keys(out).length ? out : undefined
 }
 
+function diffMetaPatch(oldMeta, newMeta) {
+    const oldObj = (oldMeta && typeof oldMeta === "object") ? oldMeta : {}
+    const newObj = (newMeta && typeof newMeta === "object") ? newMeta : {}
+
+    const patch = {}
+    const keys = new Set([...Object.keys(oldObj), ...Object.keys(newObj)])
+    keys.forEach((k) => {
+        const a = oldObj[k]
+        const b = newObj[k]
+        const aNorm = a == null ? null : String(a)
+        const bNorm = b == null ? null : String(b)
+        if (aNorm === bNorm) return
+        if (b == null || bNorm === "") patch[k] = null
+        else patch[k] = b
+    })
+    return Object.keys(patch).length ? patch : null
+}
+
 function EditLineDialog({ line, docMode, isPharmacy, onClose, onConfirm }) {
     const [reason, setReason] = useState("Correction")
     const [form, setForm] = useState({
         service_date: fmtDateISO(line?.service_date),
         description: line?.description || "",
+        item_code: line?.item_code || "",
         qty: String(line?.qty ?? 1),
         unit_price: String(line?.unit_price ?? 0),
         discount_amount: String(line?.discount_amount ?? 0),
+        discount_percent: String(line?.discount_percent ?? 0),
         gst_rate: String(line?.gst_rate ?? 0),
         doctor_name: line?.doctor_name || "",
         department_name: line?.department_name || "",
-        meta_json: isPharmacy ? JSON.stringify(line?.meta ?? line?.meta_json ?? {}, null, 2) : "",
+        meta_json: isPharmacy ? JSON.stringify(getLineMeta(line) || {}, null, 2) : "",
     })
 
     function buildPatch() {
         const patch = {
             service_date: form.service_date ? new Date(form.service_date).toISOString() : null,
-            description: String(form.description || "").trim() || null,
+            description: String(form.description || ""),
+            item_code: String(form.item_code || "").trim() || null,
             qty: Number(form.qty || 0),
             unit_price: Number(form.unit_price || 0),
             discount_amount: Number(form.discount_amount || 0),
+            discount_percent: Number(form.discount_percent || 0),
             gst_rate: Number(form.gst_rate || 0),
         }
 
         if (docMode) {
+            // backend expects doctor_id, not name (keep names as display-only)
             patch.doctor_name = String(form.doctor_name || "").trim() || null
             patch.department_name = String(form.department_name || "").trim() || null
         }
 
         if (isPharmacy) {
+            let obj = {}
             try {
-                const obj = form.meta_json?.trim() ? JSON.parse(form.meta_json) : {}
-                patch.meta_json = cleanMeta(obj) || null
+                obj = form.meta_json?.trim() ? JSON.parse(form.meta_json) : {}
             } catch {
                 throw new Error("Meta JSON invalid (pharmacy)")
             }
+            const oldMeta = getLineMeta(line) || {}
+            const newMeta = obj || {}
+            const metaPatch = diffMetaPatch(oldMeta, newMeta)
+            if (metaPatch) patch.meta_json = metaPatch
         }
 
+        // remove undefined only (keep nulls if you want to clear)
         const out = {}
         for (const [k, v] of Object.entries(patch)) {
             if (v === undefined) continue
-            if (v === null) continue
             out[k] = v
         }
         return out
@@ -1760,6 +1926,14 @@ function EditLineDialog({ line, docMode, isPharmacy, onClose, onConfirm }) {
 
                 <Field label="GST %">
                     <Input value={form.gst_rate} onChange={(e) => setForm({ ...form, gst_rate: e.target.value })} inputMode="decimal" />
+                </Field>
+
+                <Field label="Item Code">
+                    <Input value={form.item_code} onChange={(e) => setForm({ ...form, item_code: e.target.value })} />
+                </Field>
+
+                <Field label="Discount %">
+                    <Input value={form.discount_percent} onChange={(e) => setForm({ ...form, discount_percent: e.target.value })} inputMode="decimal" />
                 </Field>
 
                 <div className="md:col-span-2">
@@ -1807,7 +1981,7 @@ function EditLineDialog({ line, docMode, isPharmacy, onClose, onConfirm }) {
                             />
                         </Field>
                         <div className="mt-2 text-xs text-slate-500">
-                            Pharmacy tip: store batch_no / expiry_date / HSN/SAC if available.
+                            Tip: batch_no / expiry_date / hsn_sac will be merged (PATCH). Remove a key by setting it to null or "".
                         </div>
                     </div>
                 ) : null}
@@ -1832,7 +2006,9 @@ function ManualLineDialog({ invoice, moduleCode, onClose, onDone }) {
         unit_price: 0,
         gst_rate: 0,
         discount_amount: 0,
+        discount_percent: 0,
         service_date: "",
+        item_code: "",
 
         doctor_name: "",
         department_name: "",
@@ -1860,10 +2036,12 @@ function ManualLineDialog({ invoice, moduleCode, onClose, onDone }) {
             const payload = {
                 service_group: lockedGroup,
                 description: String(form.description || "").trim(),
+                item_code: String(form.item_code || "").trim() || undefined,
                 qty: Number(form.qty || 1),
                 unit_price: Number(form.unit_price || 0),
                 gst_rate: Number(form.gst_rate || 0),
                 discount_amount: Number(form.discount_amount || 0),
+                discount_percent: Number(form.discount_percent || 0),
                 manual_reason: String(form.manual_reason || "Manual entry"),
                 service_date: form.service_date ? new Date(form.service_date).toISOString() : undefined,
                 doctor_name: docMode ? String(form.doctor_name || "").trim() : undefined,
@@ -1914,6 +2092,14 @@ function ManualLineDialog({ invoice, moduleCode, onClose, onDone }) {
 
                 <Field label="GST %">
                     <Input value={form.gst_rate} onChange={(e) => setForm({ ...form, gst_rate: e.target.value })} inputMode="decimal" />
+                </Field>
+
+                <Field label="Item Code (optional)">
+                    <Input value={form.item_code} onChange={(e) => setForm({ ...form, item_code: e.target.value })} />
+                </Field>
+
+                <Field label="Discount %">
+                    <Input value={form.discount_percent} onChange={(e) => setForm({ ...form, discount_percent: e.target.value })} inputMode="decimal" />
                 </Field>
 
                 <div className="md:col-span-2">

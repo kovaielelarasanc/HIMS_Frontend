@@ -252,6 +252,25 @@ export default function BillingPrintDownload({ caseId, caseNumber, patientName, 
                 data: null,
                 filename: () => `Invoices-${cno}.pdf`,
             },
+            {
+                key: "PHARMACY_SPLIT_UP",
+                label: "Pharmacy Split-Up (Pharmacy Header)",
+                desc: "Only pharmacy items with Pharmacy branding header",
+                pdf: {
+                    path: "/billing/print/pharmacy-split-up",
+                    params: () => ({
+                        case_id: caseId,
+                        include_draft_invoices: includeDrafts,
+                        paper,
+                        orientation,
+                        disposition: "inline",
+                        // context: "pharmacy", // optional if backend default is pharmacy
+                    }),
+                },
+                data: null,
+                filename: () => `Pharmacy-SplitUp-${cno}.pdf`,
+            },
+
 
             {
                 key: "PAYMENTS_LEDGER",
