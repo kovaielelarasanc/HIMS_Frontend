@@ -34,6 +34,7 @@ import { Separator } from "@/components/ui/separator"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 
 import { EmrCreateRecordDialog } from "./EmrCreateRecordFlow"
+import { EmrExportReleaseDialog } from "./EmrExportRelease"
 
 import { listPatients } from "@/api/patients"
 import { getPatientChart, getEmrRecord } from "@/api/emrChart"
@@ -486,6 +487,14 @@ export default function EmrPatientChart() {
     // Create record dialog
     const [open, setOpen] = useState(false)
 
+    // Edit record dialog
+    const [editOpen, setEditOpen] = useState(false)
+    const [editRecordId, setEditRecordId] = useState(null)
+
+    // Export & Print
+    const [exportOpen, setExportOpen] = useState(false)
+    const [printOpen, setPrintOpen] = useState(false)
+
     // Filters
     const [f, setF] = useState({
         encounter: "ALL",
@@ -722,6 +731,24 @@ export default function EmrPatientChart() {
         setOpen(true)
     }
 
+    function handleEditRecord(recordId) {
+        const rid = Number(recordId || 0)
+        if (!rid) {
+            toast.error("Record not selected")
+            return
+        }
+        setEditRecordId(rid)
+        setEditOpen(true)
+    }
+
+    function handlePrintPdf() {
+        if (!patient?.id) {
+            toast.error("Select a patient first")
+            return
+        }
+        setPrintOpen(true)
+    }
+
     function handleExport() {
         if (!patient?.id) {
             toast.error("Select a patient first")
@@ -730,7 +757,7 @@ export default function EmrPatientChart() {
         // wire your export page/flow if available
         // Example route: /emr/export?patient_id=...
         // navigate(`/emr/export?patient_id=${patient.id}`)
-        toast("Export flow: wire to your EMR export screen (Phase 2)")
+        setExportOpen(true)
     }
 
     return (
@@ -935,7 +962,7 @@ export default function EmrPatientChart() {
 
                     {/* Preview Pane (desktop) */}
                     <section className="hidden lg:block">
-                        <PreviewPane record={active} patient={patient} />
+                        <PreviewPane record={active} patient={patient} onEdit={() => handleEditRecord(active?.id)} onPrint={handlePrintPdf} />
                     </section>
                 </div>
 
@@ -946,7 +973,7 @@ export default function EmrPatientChart() {
                             <DialogTitle className="text-base">Record Preview</DialogTitle>
                         </DialogHeader>
                         <div className="p-4 md:p-5">
-                            <PreviewPane record={active} patient={patient} compact />
+                            <PreviewPane record={active} patient={patient} compact onEdit={() => handleEditRecord(active?.id)} onPrint={handlePrintPdf} />
                         </div>
                         <DialogFooter className="border-t border-slate-200 px-5 py-3">
                             <Button className="rounded-2xl" onClick={() => setPreviewOpen(false)}>
@@ -962,9 +989,98 @@ export default function EmrPatientChart() {
                 open={open}
                 onOpenChange={setOpen}
                 patient={patient || null}
-                defaultDept={(patient?.dept_name || patient?.dept || "OBGYN")}
+                defaultDeptCode={(patient?.dept_code || patient?.dept || "OBGYN")}
                 onSaved={(payload) => console.log("UI payload:", payload)}
             />
+
+            {/* Edit Record Flow (same UI as New Record) */}
+            <EmrCreateRecordDialog
+                open={editOpen}
+                onOpenChange={(v) => {
+                    setEditOpen(!!v)
+                    if (!v) setEditRecordId(null)
+                }}
+                patient={patient || null}
+                defaultDeptCode={(patient?.dept_code || patient?.dept_code || patient?.dept || "OBGYN")}
+                mode="edit"
+                recordId={editRecordId}
+                onUpdated={async () => {
+                    const rid = Number(editRecordId || 0)
+                    if (!rid) return
+                    // bust cache and reload preview + list row best-effort
+                    setDetailMap((m) => {
+                        const n = { ...(m || {}) }
+                        delete n[rid]
+                        return n
+                    })
+                    await ensureDetail(rid)
+                    // update list title if loaded
+                    setRecords((rows) => (rows || []).map((x) => (x.id === rid ? { ...x, ...(detailMap[rid] || {}) } : x)))
+                }}
+            />
+
+            {/* Export & Release */}
+            <EmrExportReleaseDialog open={exportOpen} onOpenChange={setExportOpen} patient={patient || null} />
+
+            {/* Print / PDF Options */}
+            <Dialog open={printOpen} onOpenChange={setPrintOpen}>
+                <DialogContent className="max-w-[96vw] rounded-3xl p-0 md:max-w-[720px]">
+                    <DialogHeader className="border-b border-slate-200 px-5 py-4">
+                        <DialogTitle className="text-base">Print / PDF</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 p-4 md:p-5">
+                        <div className="rounded-2xl border border-slate-200 bg-white p-4">
+                            <div className="text-sm font-semibold text-slate-900">Choose what to print</div>
+                            <div className="mt-1 text-xs text-slate-500">
+                                These are UI print options. Connect each option to your backend PDF endpoints when ready.
+                            </div>
+
+                            <div className="mt-4 grid grid-cols-1 gap-3 md:grid-cols-2">
+                                <Button
+                                    variant="outline"
+                                    className="h-12 rounded-2xl justify-start"
+                                    onClick={() => toast("TODO: Print current record (connect to PDF endpoint)")}
+                                    disabled={!active?.id}
+                                >
+                                    <FileText className="mr-2 h-4 w-4" /> Current Record
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    className="h-12 rounded-2xl justify-start"
+                                    onClick={() => toast("TODO: Print patient chart bundle (connect to export PDF)")}
+                                    disabled={!patient?.id}
+                                >
+                                    <Download className="mr-2 h-4 w-4" /> Patient Chart Bundle
+                                </Button>
+                                <Button
+                                    variant="outline"
+                                    className="h-12 rounded-2xl justify-start"
+                                    onClick={() => toast("TODO: Print Medical Pad (connect to medical pad endpoint)")}
+                                    disabled={!patient?.id}
+                                >
+                                    <ClipboardList className="mr-2 h-4 w-4" /> Medical Pad
+                                </Button>
+                                <Button
+                                    className="h-12 rounded-2xl justify-start"
+                                    onClick={() => {
+                                        setPrintOpen(false)
+                                        setExportOpen(true)
+                                    }}
+                                    disabled={!patient?.id}
+                                >
+                                    <Layers className="mr-2 h-4 w-4" /> Open Export Builder
+                                </Button>
+                            </div>
+                        </div>
+                    </div>
+                    <DialogFooter className="border-t border-slate-200 px-5 py-3">
+                        <Button className="rounded-2xl" onClick={() => setPrintOpen(false)}>
+                            Close
+                        </Button>
+                    </DialogFooter>
+                </DialogContent>
+            </Dialog>
+
         </div>
     )
 }
@@ -1216,7 +1332,7 @@ function RecordCard({ record, active, onClick }) {
     )
 }
 
-function PreviewPane({ record, patient, compact }) {
+function PreviewPane({ record, patient, compact, onEdit, onPrint }) {
     if (!patient) {
         return (
             <Card className="rounded-3xl border-slate-200 bg-white/80 shadow-sm backdrop-blur">
@@ -1282,7 +1398,7 @@ function PreviewPane({ record, patient, compact }) {
                     </div>
 
                     <div className="flex items-center gap-2">
-                        <Button variant="outline" className="rounded-2xl" onClick={() => toast("Wire edit flow in Phase 2 (+ New Record)")}>
+                        <Button variant="outline" className="rounded-2xl" onClick={() => onEdit?.(record)}>
                             <PenLine className="mr-2 h-4 w-4" /> Edit
                         </Button>
                         <Button className="rounded-2xl" onClick={() => toast("Wire sign/e-sign logic with role permissions")}>
@@ -1352,7 +1468,7 @@ function PreviewPane({ record, patient, compact }) {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                    <Button variant="outline" className="rounded-2xl" onClick={() => toast("Wire print/PDF view")}>
+                    <Button variant="outline" className="rounded-2xl" onClick={() => onPrint?.(record)}>
                         <FileText className="mr-2 h-4 w-4" /> Print / PDF
                     </Button>
                     <Button variant="outline" className="rounded-2xl" onClick={() => toast("Wire audit drawer (who/what/when)")}>

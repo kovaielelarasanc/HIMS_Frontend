@@ -402,6 +402,18 @@ async function apiSignRecord(recordId, sign_note) {
   return unwrapOk(resp)
 }
 
+
+
+async function apiRecordGet(recordId) {
+  const resp = await API.get(`/emr/records/${Number(recordId)}`)
+  return unwrapOk(resp)
+}
+
+async function apiUpdateDraft(recordId, payload) {
+  const resp = await API.put(`/emr/records/${Number(recordId)}`, payload)
+  return unwrapOk(resp)
+}
+
 // robust extractor for your ok() wrapper
 export function pickRecordId(res) {
   return (
@@ -474,7 +486,7 @@ async function fetchVisitsAuto(patientId) {
 }
 
 // -------------------- Fullscreen dialog wrapper --------------------
-export function EmrCreateRecordDialog({ open, onOpenChange, patient, defaultDeptCode, onSaved }) {
+export function EmrCreateRecordDialog({ open, onOpenChange, patient, defaultDeptCode, onSaved, mode = "create", recordId = null, onUpdated }) {
   return (
     <Dialog open={!!open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -500,7 +512,7 @@ export function EmrCreateRecordDialog({ open, onOpenChange, patient, defaultDept
           </div>
 
           <div className={cn("flex-1 min-h-0 overflow-y-auto overscroll-contain", "pb-[calc(96px+env(safe-area-inset-bottom))]")} style={{ WebkitOverflowScrolling: "touch" }}>
-            <EmrCreateRecordFlow patient={patient} defaultDeptCode={defaultDeptCode} onClose={() => onOpenChange?.(false)} onSaved={onSaved} fullscreen />
+            <EmrCreateRecordFlow patient={patient} defaultDeptCode={defaultDeptCode} onClose={() => onOpenChange?.(false)} onSaved={onSaved} onUpdated={onUpdated} mode={mode} recordId={recordId} fullscreen />
           </div>
         </div>
       </DialogContent>
@@ -760,7 +772,7 @@ function FieldRenderer({ field, value, onChange }) {
 }
 
 // -------------------- Main flow --------------------
-export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose, onSaved, fullscreen = false }) {
+export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose, onSaved, onUpdated, mode = "create", recordId = null, fullscreen = false }) {
   const isMobile = useIsMobile(1024)
   const p = useMemo(() => normalizePatient(patient), [patient])
 
@@ -801,6 +813,14 @@ export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose,
 
   // ✅ section form data
   const [sectionData, setSectionData] = useState({})
+
+
+  // -------------------- edit mode --------------------
+  const isEdit = String(mode || "create").toLowerCase() === "edit"
+  const [editingId, setEditingId] = useState(asMaybeInt(recordId))
+  const [editLoading, setEditLoading] = useState(false)
+  const [editErr, setEditErr] = useState("")
+
 
   const deptCode = dept?.code || defaultDeptCode || "COMMON"
   const tone = deptTone(deptCode)
@@ -873,6 +893,85 @@ export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose,
       mounted = false
     }
   }, [defaultDeptCode])
+
+  // load record when editing (after meta is ready)
+  useEffect(() => {
+    let mounted = true
+      ; (async () => {
+        if (!isEdit) return
+        const rid = asMaybeInt(editingId)
+        if (!rid) return
+
+        // wait for meta to load so we can map dept/recordType
+        if (metaLoading) return
+
+        setEditLoading(true)
+        setEditErr("")
+        try {
+          const res = await apiRecordGet(rid)
+          const rec = res?.record || res?.data?.record || res?.data || null
+          if (!mounted || !rec) return
+
+          // lock the context (backend update allows only draft fields)
+          // we still *display* the same flow, but disable context controls.
+          setTitle(String(rec.title || ""))
+          setNote(rec.note || "")
+          setConfidential(!!rec.confidential)
+
+          // dept + record type
+          const d0 =
+            departments.find((d) => String(d.code).toUpperCase() === String(rec.dept_code || "").toUpperCase()) ||
+            departments.find((d) => String(d.code).toUpperCase() === "COMMON") ||
+            departments[0] ||
+            null
+          if (d0) setDept(d0)
+
+          const rt0 =
+            recordTypes.find((t) => String(t.code).toUpperCase() === String(rec.record_type_code || "").toUpperCase()) || null
+          if (rt0) setRecordType(rt0)
+
+          // visit context (best-effort)
+          const encType = String(rec.encounter_type || "")
+          const encId = rec.encounter_id
+          if (encType && encId != null) {
+            const match = (visits || []).find(
+              (v) => String(v.encounter_type || "") === encType && String(v.encounter_id ?? "") === String(encId ?? "")
+            )
+            if (match) setVisit(match)
+          }
+
+          // template + sections (record_get provides template_sections as string[])
+          const tSections = Array.isArray(rec.template_sections) ? rec.template_sections : []
+          setTemplate(
+            rec.template_id
+              ? {
+                id: rec.template_id,
+                name: rec.title ? `Template #${rec.template_id}` : `Template #${rec.template_id}`,
+                sections: tSections,
+              }
+              : tSections.length
+                ? { id: null, name: "Template", sections: tSections }
+                : null
+          )
+
+          // content
+          const content = rec.content || {}
+          const data = content?.data && typeof content.data === "object" ? content.data : {}
+          setSectionData((prev) => ({ ...(prev || {}), ...(data || {}) }))
+
+          // jump to review so it feels like "Edit record" (but user can still go back)
+          setStep(3)
+        } catch (e) {
+          if (!mounted) return
+          setEditErr(errMsg(e))
+        } finally {
+          if (mounted) setEditLoading(false)
+        }
+      })()
+    return () => {
+      mounted = false
+    }
+  }, [isEdit, editingId, metaLoading, departments, recordTypes, visits])
 
   // load visits when patient changes
   useEffect(() => {
@@ -1072,6 +1171,26 @@ export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose,
     }
   }
 
+  function buildUpdatePayload({ draft_stage }) {
+    return {
+      title: (title || "").trim(),
+      note: (note || "").trim() || null,
+      confidential: !!confidential,
+      content: {
+        template: {
+          id: template?.id ?? null,
+          name: template?.name ?? null,
+          sections: Array.isArray(template?.sections) ? template.sections : [],
+        },
+        data: sectionData,
+        ui: { attachments: attachments || [] },
+      },
+      draft_stage: draft_stage || undefined,
+    }
+  }
+
+
+
   function pickApiErrorPayload(e) {
     return e?.response?.data || e?.data || null
   }
@@ -1155,16 +1274,31 @@ export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose,
 
 
   async function saveDraft() {
-    if (!canNext()) return toast.error("Fill required fields before saving")
-    if (!p?.id) return toast.error("Patient not selected")
+    if (!canNext() && !isEdit) return toast.error("Fill required fields before saving")
+    if (!p?.id && !isEdit) return toast.error("Patient not selected")
 
     setSaving(true)
     try {
-      const payload = buildDraftPayload({ draft_stage: "INCOMPLETE" })
-      const created = await apiCreateDraft(payload)
-      toast.success("Draft saved")
-      onSaved?.(created)
+      if (isEdit) {
+        const rid = asMaybeInt(editingId)
+        if (!rid) return toast.error("Missing record id for edit")
+        const payload = buildUpdatePayload({ draft_stage: "INCOMPLETE" })
+        if (!payload.title || payload.title.trim().length < 3) return toast.error("Title min 3 chars")
+        const updated = await apiUpdateDraft(rid, payload)
+        toast.success("Draft updated")
+        onUpdated?.({ ...updated, record_id: rid })
+        onSaved?.({ ...updated, record_id: rid }) // backward compat
+      } else {
+        const payload = buildDraftPayload({ draft_stage: "INCOMPLETE" })
+        const created = await apiCreateDraft(payload)
+        toast.success("Draft saved")
+        onSaved?.(created)
+      }
     } catch (e) {
+      if (e?.response?.status === 422) {
+        const shown = toastValidationErrors(e)
+        if (shown) return
+      }
       toast.error(errMsg(e))
     } finally {
       setSaving(false)
@@ -1172,41 +1306,64 @@ export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose,
   }
 
   async function saveAndSign() {
-    if (!canNext()) return toast.error("Fill required fields before signing")
-    if (!p?.id) return toast.error("Patient not selected")
+    if (!canNext() && !isEdit) return toast.error("Fill required fields before signing")
+    if (!p?.id && !isEdit) return toast.error("Patient not selected")
 
     setSaving(true)
     try {
-      const payload = buildDraftPayload({ draft_stage: "READY" })
+      if (isEdit) {
+        const rid = asMaybeInt(editingId)
+        if (!rid) return toast.error("Missing record id for edit")
+        const payload = buildUpdatePayload({ draft_stage: "READY" })
 
-      // ✅ Pre-validation (frontend)
-      const vErr = validateDraftPayload(payload)
-      if (vErr) {
-        toast.error(vErr)
-        return
+        // basic pre-validation
+        if (!payload.title || payload.title.trim().length < 3) {
+          toast.error("Title min 3 chars")
+          return
+        }
+
+        await apiUpdateDraft(rid, payload)
+
+        // optional: sign after update
+        await apiSignRecord(rid, "")
+
+        toast.success("Updated & Signed")
+        onUpdated?.({ record_id: rid, updated: true, signed: true })
+        onSaved?.({ record_id: rid, updated: true, signed: true })
+        resetAll()
+        onClose?.()
+      } else {
+        const payload = buildDraftPayload({ draft_stage: "READY" })
+
+        // ✅ Pre-validation (frontend)
+        const vErr = validateDraftPayload(payload)
+        if (vErr) {
+          toast.error(vErr)
+          return
+        }
+
+        const created = await apiCreateDraft(payload)
+
+        // ✅ Fix: backend returns record_id (NOT id)
+        const recordId =
+          created?.record_id ??
+          created?.id ??
+          created?.record?.id ??
+          created?.data?.record_id ??
+          null
+
+        if (!recordId) {
+          toast.error("Draft created, but record_id missing from response")
+          return
+        }
+
+        await apiSignRecord(recordId, "")
+
+        toast.success("Saved & Signed")
+        onSaved?.({ ...created, record_id: recordId, signed: true })
+        resetAll()
+        onClose?.()
       }
-
-      const created = await apiCreateDraft(payload)
-
-      // ✅ Fix: backend returns record_id (NOT id)
-      const recordId =
-        created?.record_id ??
-        created?.id ??
-        created?.record?.id ??
-        created?.data?.record_id ??
-        null
-
-      if (!recordId) {
-        toast.error("Draft created, but record_id missing from response")
-        return
-      }
-
-      await apiSignRecord(recordId, "")
-
-      toast.success("Saved & Signed")
-      onSaved?.({ ...created, record_id: recordId, signed: true })
-      resetAll()
-      onClose?.()
     } catch (e) {
       // ✅ If backend validation fails (422), show field errors
       if (e?.response?.status === 422) {
@@ -1221,7 +1378,7 @@ export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose,
   }
 
 
-  function addFakeAttachment() {
+function addFakeAttachment() {
     const n = attachments.length + 1
     setAttachments((a) => [...a, { name: `Attachment_${n}.pdf` }])
   }
@@ -1248,7 +1405,7 @@ export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose,
               <div className="text-xs text-slate-500">Meta + Templates loaded from API · safe error handling</div>
             </CardHeader>
             <CardContent className="space-y-3">
-              <Stepper step={step} setStep={setStep} />
+              <Stepper step={step} setStep={setStep} isEdit={isEdit} />
 
               {metaLoading ? (
                 <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-3 text-xs text-slate-600">Loading departments & record types…</div>
@@ -1695,6 +1852,12 @@ export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose,
                   </div>
                 </div>
               </div>
+              {isEdit ? (
+                <div className="mt-3 rounded-2xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-700">
+                  <span className="font-semibold text-slate-900">Editing draft:</span> Visit / Type / Template are locked. You can update Title, Note, Confidential, and Content, then Save Draft or Save & Sign.
+                </div>
+              ) : null}
+
             </div>
 
             {step === 3 && (title || "").trim().length < 3 ? (
@@ -1711,7 +1874,7 @@ export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose,
 }
 
 // -------------------- Small UI pieces --------------------
-function Stepper({ step, setStep }) {
+function Stepper({ step, setStep, isEdit }) {
   return (
     <div className="space-y-2">
       {STEPS.map((s, idx) => {
@@ -1721,7 +1884,8 @@ function Stepper({ step, setStep }) {
           <button
             key={s.key}
             type="button"
-            onClick={() => setStep(idx)}
+            disabled={!!isEdit && idx < 3}
+            onClick={() => { if (isEdit && idx < 3) return; setStep(idx) }}
             className={cn(
               "flex w-full items-start gap-3 rounded-2xl border px-3 py-3 text-left transition",
               active ? "border-slate-300 bg-white shadow-sm" : "border-slate-200 bg-white/60 hover:bg-white"
