@@ -1194,7 +1194,11 @@ export default function EmrTemplateLibrary() {
       {/* Editor Dialog */}
       <TemplateEditorDialog
         open={openEditor}
-        onOpenChange={setOpenEditor}
+        onOpenChange={(v) => {
+          setOpenEditor(v)
+          if (!v) setEditId(null)
+        }}
+        mode={editId ? "edit" : "create"}
         template={editId ? detailById.get(editId) || templates.find((t) => t.id === editId) : null}
         onSave={onEditorSave}
       />

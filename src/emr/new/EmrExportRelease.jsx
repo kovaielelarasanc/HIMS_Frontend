@@ -244,6 +244,8 @@ function fmtTime(d) {
 // Fullscreen Wrapper
 // ---------------------------
 export function EmrExportReleaseDialog({ open, onOpenChange, patient }) {
+    console.log(patient, ":999-0");
+
     return (
         <Dialog open={!!open} onOpenChange={onOpenChange}>
             <DialogContent
@@ -295,6 +297,7 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
     const [encounters, setEncounters] = useState([])
     const [visitKey, setVisitKey] = useState("") // `${encounter_type}:${encounter_id}`
     const [records, setRecords] = useState([])
+
 
     // Meta lists (dynamic > fallback)
     const [deptOptions, setDeptOptions] = useState(["ALL"])
@@ -374,27 +377,29 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
     // ---------------------------
     // Load patient + encounters
     // ---------------------------
-    useEffect(() => {
-        console.log(patientId, "888888888888888888888888888888888");
+    // useEffect(() => {
 
-        if (!patientId) return
 
-            ; (async () => {
-                abortRef.current.patient?.abort?.()
-                const controller = new AbortController()
-                abortRef.current.patient = controller
+    //     if (!patientId) return
 
-                try {
-                    setLoading((p) => ({ ...p, patient: true }))
-                    const p = await apiFetch(`/patients/${patientId}/summary`, { signal: controller.signal })
-                    setPatient(p)
-                } catch (e) {
-                    toast.error(normalizeApiError(e))
-                } finally {
-                    setLoading((p) => ({ ...p, patient: false }))
-                }
-            })()
-    }, [patientId])
+    //         ; (async () => {
+    //             abortRef.current.patient?.abort?.()
+    //             const controller = new AbortController()
+    //             abortRef.current.patient = controller
+
+    //             try {
+    //                 setLoading((p) => ({ ...p, patient: true }))
+    //                 const p = await apiFetch(`/billing/advances/patients/${patientId}/summary`, { signal: controller.signal })
+    //                 console.log(p, "oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo");
+
+    //                 setPatient(p)
+    //             } catch (e) {
+    //                 toast.error(normalizeApiError(e))
+    //             } finally {
+    //                 setLoading((p) => ({ ...p, patient: false }))
+    //             }
+    //         })()
+    // }, [patientId])
 
     useEffect(() => {
         if (!patientId) return
@@ -791,6 +796,8 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
         try {
             setLoading((p) => ({ ...p, patient: true, encounters: true, records: true }))
             const p = await apiFetch(`/patients/${patientId}/summary`)
+            console.log(p, "1111111111111111111111111111111111111111111111111111111");
+
             setPatient(p)
 
             const rows = await apiFetch(`/patients/${patientId}/encounters?limit=100`)

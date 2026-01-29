@@ -1,5 +1,5 @@
 // FILE: frontend/src/emr/EmrCreateRecordFlow.jsx
-import React, { useEffect, useMemo, useState, useCallback } from "react"
+import React, { useEffect, useMemo, useState, useCallback, useRef, memo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   X,
@@ -22,6 +22,7 @@ import {
   AlertTriangle,
   Search,
   Paperclip,
+  Printer,
   RefreshCcw,
 } from "lucide-react"
 import { toast } from "sonner"
@@ -30,22 +31,27 @@ import { cn } from "@/lib/utils"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Input } from "@/components/ui/input"
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"
+import { Textarea } from "@/components/ui/textarea"
+import { Card, CardHeader, CardTitle, CardDescription, CardContent } from "@/components/ui/card"
 import { Separator } from "@/components/ui/separator"
-import { Dialog, DialogContent } from "@/components/ui/dialog"
+import { Switch } from "@/components/ui/switch"
+import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
+import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import API from "@/api/client"
 
 /**
- * ✅ IMPORTANT FIX (422 issues):
- * For axios, DO NOT do: API.post(url, { body: payload })
- * Instead do:           API.post(url, payload)
- * Same for preview endpoints.
+ * ✅ FIXES INCLUDED (Production-ready):
+ * 1) ✅ ReferenceError fix: `patientEff` was used before it was declared (TDZ). Reordered logic.
+ * 2) ✅ Print preview was inside PatientMiniCard but referenced parent variables (title/dept/template/etc.) -> moved to parent via props.
+ * 3) ✅ Validation fix: encounter_type/encounter_id are OPTIONAL when visit is Unlinked; previous validateDraftPayload wrongly required them.
+ * 4) ✅ Visits fetch uses resolved patient id reliably.
+ * 5) ✅ Safer mappings + stable keys + hidden fields control preserved.
  */
 
 // -------------------- helpers (API unwrap + errors) --------------------
 function unwrapOk(resp) {
   const d = resp?.data
-  // supports: {status:true,data:...} or plain data
   if (d && typeof d === "object" && "status" in d) {
     if (d.status) return d.data
     const msg = d?.error?.msg || d?.msg || "Request failed"
@@ -54,13 +60,13 @@ function unwrapOk(resp) {
   return d
 }
 
-function errMsg(e) {
+function errMsg(e, fallback = "Something went wrong") {
   const r = e?.response?.data
   if (typeof r === "string") return r
   if (r?.detail) return typeof r.detail === "string" ? r.detail : JSON.stringify(r.detail)
   if (r?.error?.msg) return r.error.msg
   if (r?.msg) return r.msg
-  return e?.message || "Something went wrong"
+  return e?.message || fallback
 }
 
 function asMaybeInt(v) {
@@ -197,7 +203,7 @@ function recordIcon(code) {
   return map[c] || FileText
 }
 
-// -------------------- schema helpers (MOVED OUTSIDE: avoids remount/reset) --------------------
+// -------------------- schema helpers (OUTSIDE: avoids remount/reset) --------------------
 function sectionLabel(s) {
   if (!s) return ""
   if (typeof s === "string") return s
@@ -218,148 +224,311 @@ function slugKey(s) {
     .slice(0, 60)
 }
 
-function normalizeTemplateBlueprint(template) {
-  // supports:
-  // 1) template.sections: ["Vitals", "HPI"]
-  // 2) template.sections: [{key,title,fields:[...]}]
-  // 3) template.schema.sections (optional future)
-  const raw = template?.schema?.sections || template?.section_defs || template?.sections || []
-  if (!Array.isArray(raw)) return []
-
-  // string sections → default single textarea field
-  if (raw.length && raw.every((x) => typeof x === "string")) {
-    return raw
-      .map((title, idx) => {
-        const key = slugKey(title) || `section_${idx + 1}`
-        return {
-          key,
-          title: String(title),
-          description: "",
-          fields: [
-            {
-              key: "notes",
-              label: "Notes",
-              type: "textarea",
-              required: false,
-              placeholder: `Enter ${title}…`,
-              rows: 4,
-            },
-          ],
-        }
-      })
-      .filter(Boolean)
+function parseMaybeJson(v) {
+  if (!v) return null
+  if (typeof v === "object") return v
+  if (typeof v !== "string") return null
+  const s = v.trim()
+  if (!s) return null
+  try {
+    return JSON.parse(s)
+  } catch {
+    return null
   }
-
-  // object sections
-  return raw
-    .map((s, idx) => {
-      const title = s?.title || s?.name || s?.label || `Section ${idx + 1}`
-      const key = s?.key || s?.code || slugKey(title) || `section_${idx + 1}`
-      const fieldsRaw = Array.isArray(s?.fields) ? s.fields : []
-
-      const fields =
-        fieldsRaw.length > 0
-          ? fieldsRaw.map((f, j) => ({
-            key: f?.key || f?.code || slugKey(f?.label || `field_${j + 1}`) || `field_${j + 1}`,
-            label: f?.label || f?.name || `Field ${j + 1}`,
-            type: String(f?.type || "textarea").toLowerCase(),
-            required: !!f?.required,
-            placeholder: f?.placeholder || "",
-            options: Array.isArray(f?.options) ? f.options : [],
-            rows: Number(f?.rows || 4),
-            min: f?.min,
-            max: f?.max,
-            help: f?.help || "",
-            default: f?.default,
-            multiple: !!f?.multiple,
-          }))
-          : [
-            {
-              key: "notes",
-              label: "Notes",
-              type: "textarea",
-              required: false,
-              placeholder: `Enter ${title}…`,
-              rows: 4,
-            },
-          ]
-
-      return {
-        key,
-        title: String(title),
-        description: String(s?.description || ""),
-        fields,
-      }
-    })
-    .filter(Boolean)
 }
 
-function initDataFromBlueprint(blueprint, prev) {
-  const next = { ...(prev || {}) }
-  for (const sec of blueprint || []) {
-    const sk = sec?.key
-    if (!sk) continue
-    if (!next[sk] || typeof next[sk] !== "object") next[sk] = {}
-    for (const f of sec.fields || []) {
-      const fk = f?.key
-      if (!fk) continue
-      if (next[sk][fk] === undefined) {
-        if (f?.default !== undefined) next[sk][fk] = f.default
-        else if (f?.type === "checkbox") next[sk][fk] = false
-        else if (f?.type === "multiselect") next[sk][fk] = []
-        else next[sk][fk] = ""
+function ensureTemplateSchemaShape(input) {
+  const s = input && typeof input === "object" ? input : {}
+  const out = { ...s }
+  if (!Array.isArray(out.sections)) out.sections = []
+  if (!out.schema_version) out.schema_version = 1
+  return out
+}
+
+function sectionKeyOf(sec, idx = 0) {
+  const code = sec?.code || sec?.key || sec?._rid
+  if (code) return String(code)
+  const label = sec?.label || sec?.title || sec?.name || `Section ${idx + 1}`
+  return slugKey(label) || `section_${idx + 1}`
+}
+
+function itemKeyOf(item, fallback = "") {
+  return String(item?.key || item?._rid || fallback || "field")
+}
+
+function normalizeTemplateSchema(template) {
+  const schemaRaw =
+    parseMaybeJson(template?.schema_json) ||
+    parseMaybeJson(template?.schema) ||
+    parseMaybeJson(template?.content?.schema_json) ||
+    template?.schema ||
+    template?.content?.schema ||
+    null
+
+  if (schemaRaw && typeof schemaRaw === "object") {
+    const s = ensureTemplateSchemaShape(schemaRaw)
+    s.sections = (s.sections || []).map((sec, idx) => {
+      const code = sectionKeyOf(sec, idx)
+      return {
+        ...sec,
+        code,
+        label: sec?.label || sec?.title || sec?.name || code,
+        layout: sec?.layout || "STACK",
+        items: Array.isArray(sec?.items) ? sec.items : [],
       }
+    })
+    return s
+  }
+
+  const raw = template?.sections || template?.section_defs || []
+  if (!Array.isArray(raw)) return ensureTemplateSchemaShape({ schema_version: 1, sections: [] })
+
+  if (raw.length && raw.every((x) => typeof x === "string")) {
+    const sections = raw.map((title, idx) => {
+      const code = slugKey(title).toUpperCase() || `SECTION_${idx + 1}`
+      return {
+        code,
+        label: String(title),
+        layout: "STACK",
+        items: [
+          {
+            key: `${slugKey(title) || "notes"}_notes`,
+            type: "textarea",
+            label: "Notes",
+            placeholder: `Enter ${title}…`,
+            required: false,
+            ui: { width: "FULL" },
+          },
+        ],
+      }
+    })
+    return ensureTemplateSchemaShape({ schema_version: 1, sections })
+  }
+
+  const sections = raw
+    .map((s, idx) => {
+      if (!s || typeof s !== "object") return null
+      const label = s?.label || s?.title || s?.name || `Section ${idx + 1}`
+      const code = String(s?.code || s?.key || slugKey(label).toUpperCase() || `SECTION_${idx + 1}`)
+
+      const itemsRaw = Array.isArray(s?.items) ? s.items : null
+      const fieldsRaw = Array.isArray(s?.fields) ? s.fields : []
+      const items =
+        itemsRaw && itemsRaw.length
+          ? itemsRaw
+          : fieldsRaw.length > 0
+            ? fieldsRaw.map((f, j) => {
+              const k = f?.key || f?.code || slugKey(f?.label || `field_${j + 1}`)
+              const type = String(f?.type || "textarea").toLowerCase()
+              return {
+                key: String(k || `field_${j + 1}`),
+                type,
+                label: f?.label || f?.name || `Field ${j + 1}`,
+                required: !!f?.required,
+                placeholder: f?.placeholder || "",
+                options: Array.isArray(f?.options) ? f.options : [],
+                ui: { width: "HALF" },
+                meta: {
+                  min: f?.min,
+                  max: f?.max,
+                  rows: f?.rows,
+                  help: f?.help || "",
+                },
+                default_value: f?.default,
+              }
+            })
+            : [
+              {
+                key: `${slugKey(label) || "notes"}_notes`,
+                type: "textarea",
+                label: "Notes",
+                placeholder: `Enter ${label}…`,
+                required: false,
+                ui: { width: "FULL" },
+              },
+            ]
+      return { code, label: String(label), layout: s?.layout || "STACK", items }
+    })
+    .filter(Boolean)
+
+  return ensureTemplateSchemaShape({ schema_version: 1, sections })
+}
+
+function normalizeTemplateBlueprint(template) {
+  return normalizeTemplateSchema(template)
+}
+
+function normalizeSectionItems(rawItems) {
+  const items = Array.isArray(rawItems) ? rawItems : []
+  const byParent = new Map()
+  const roots = []
+
+  for (const it of items) {
+    const parent = it?.parent_key || it?.ui?.parent_key || null
+    const key = itemKeyOf(it, "")
+    const normalized = { ...it, key }
+    if (parent) {
+      if (!byParent.has(parent)) byParent.set(parent, [])
+      byParent.get(parent).push(normalized)
+    } else {
+      roots.push(normalized)
     }
+  }
+
+  function attachKids(node) {
+    const kids = byParent.get(node.key) || byParent.get(node._rid) || []
+    if (kids.length) return { ...node, items: kids.map(attachKids) }
+    return node
+  }
+
+  return roots.map(attachKids)
+}
+
+function flattenSectionData(data) {
+  const out = {}
+  const obj = data && typeof data === "object" ? data : {}
+  for (const sk of Object.keys(obj)) {
+    const sec = obj[sk]
+    if (!sec || typeof sec !== "object") continue
+    for (const fk of Object.keys(sec)) out[fk] = sec[fk]
+  }
+  return out
+}
+
+function evalVisibleWhen(rule, values) {
+  if (!rule || typeof rule !== "object") return true
+  const op = String(rule.op || "exists").toLowerCase()
+  const k = String(rule.field_key || rule.key || "")
+  const v = values?.[k]
+
+  if (op === "exists") return v !== undefined && v !== null && String(v).trim() !== ""
+  if (op === "eq") return String(v ?? "") === String(rule.value ?? "")
+  if (op === "neq") return String(v ?? "") !== String(rule.value ?? "")
+  if (op === "in") return Array.isArray(rule.values) && rule.values.map(String).includes(String(v ?? ""))
+  return true
+}
+
+function isVisible(item, values, showHidden = false) {
+  if (showHidden) return true
+  const vw = item?.visible_when
+  if (!vw) return true
+  if (Array.isArray(vw)) return vw.every((r) => evalVisibleWhen(r, values))
+  return evalVisibleWhen(vw, values)
+}
+
+function isEmptyValueByType(type, v) {
+  const t = String(type || "text").toLowerCase()
+  if (v === null || v === undefined) return true
+  if (t === "multiselect") return !Array.isArray(v) || v.length === 0
+  if (t === "table") return !Array.isArray(v) || v.length === 0
+  if (t === "boolean") return false
+  if (typeof v === "string") return !v.trim()
+  if (Array.isArray(v)) return v.length === 0
+  if (typeof v === "object") {
+    if (v?.data_url) return !String(v.data_url || "").trim()
+    if (v?.name) return !String(v.name || "").trim()
+    return Object.keys(v).length === 0
+  }
+  return false
+}
+
+function walkSectionItems(items, fn) {
+  const arr = normalizeSectionItems(items)
+  const stack = [...arr]
+  while (stack.length) {
+    const it = stack.shift()
+    if (!it) continue
+    const t = String(it.type || it.kind || "text").toLowerCase()
+    if (t === "group") {
+      const kids = Array.isArray(it.items) ? it.items : []
+      stack.unshift(...kids)
+    } else {
+      fn(it)
+    }
+  }
+}
+
+function initDataFromSchema(schema, prev) {
+  const next = { ...(prev || {}) }
+  const s = ensureTemplateSchemaShape(schema)
+
+  for (let i = 0; i < (s.sections || []).length; i++) {
+    const sec = s.sections[i]
+    const sk = sectionKeyOf(sec, i)
+    if (!next[sk] || typeof next[sk] !== "object") next[sk] = {}
+
+    walkSectionItems(sec?.items || [], (it) => {
+      const fk = itemKeyOf(it, `${sk}_field`)
+      if (next[sk][fk] !== undefined) return
+
+      const t = String(it?.type || "text").toLowerCase()
+      const def = it?.default_value ?? it?.default ?? it?.ui?.default ?? it?.meta?.default
+
+      if (def !== undefined) next[sk][fk] = def
+      else if (t === "boolean") next[sk][fk] = false
+      else if (t === "multiselect") next[sk][fk] = []
+      else if (t === "table") next[sk][fk] = []
+      else next[sk][fk] = ""
+    })
   }
   return next
 }
 
-function findMissingRequired(blueprint, data) {
+function initDataFromBlueprint(schema, prev) {
+  return initDataFromSchema(schema, prev)
+}
+
+function findMissingRequired(schema, data) {
   const miss = []
-  for (const sec of blueprint || []) {
-    const sk = sec?.key
-    const secTitle = sec?.title || sk
+  const s = ensureTemplateSchemaShape(schema)
+  const values = flattenSectionData(data)
+
+  for (let i = 0; i < (s.sections || []).length; i++) {
+    const sec = s.sections[i]
+    const sk = sectionKeyOf(sec, i)
+    const secTitle = sec?.label || sec?.title || sec?.name || sk
     const secData = (data && sk && data[sk]) || {}
-    for (const f of sec.fields || []) {
-      if (!f?.required) continue
-      const fk = f?.key
-      const val = fk ? secData?.[fk] : undefined
-      const empty =
-        val === null ||
-        val === undefined ||
-        (typeof val === "string" && !val.trim()) ||
-        (Array.isArray(val) && val.length === 0)
-      if (empty) {
+
+    walkSectionItems(sec?.items || [], (it) => {
+      const fk = itemKeyOf(it, "")
+      if (!fk) return
+      if (!it?.required) return
+      if (!isVisible(it, values, false)) return
+
+      const val = secData?.[fk] ?? values?.[fk]
+      if (isEmptyValueByType(it?.type, val)) {
         miss.push({
           sectionKey: sk,
           sectionTitle: secTitle,
           fieldKey: fk,
-          fieldLabel: f?.label || fk,
+          fieldLabel: it?.label || it?.title || fk,
         })
       }
-    }
+    })
   }
   return miss
 }
 
-function calcFilledCount(blueprint, data) {
+function calcFilledCount(schema, data) {
   let total = 0
   let filled = 0
-  for (const sec of blueprint || []) {
-    const sk = sec?.key
+  const s = ensureTemplateSchemaShape(schema)
+  const values = flattenSectionData(data)
+
+  for (let i = 0; i < (s.sections || []).length; i++) {
+    const sec = s.sections[i]
+    const sk = sectionKeyOf(sec, i)
     const secData = (data && sk && data[sk]) || {}
-    for (const f of sec.fields || []) {
+
+    walkSectionItems(sec?.items || [], (it) => {
+      const fk = itemKeyOf(it, "")
+      if (!fk) return
       total += 1
-      const fk = f?.key
-      const val = fk ? secData?.[fk] : undefined
-      const isFilled =
-        (typeof val === "string" && val.trim().length > 0) ||
-        (typeof val === "number" && Number.isFinite(val)) ||
-        typeof val === "boolean" ||
-        (Array.isArray(val) && val.length > 0)
-      if (isFilled) filled += 1
-    }
+      const val = secData?.[fk] ?? values?.[fk]
+      if (!isEmptyValueByType(it?.type, val)) filled += 1
+    })
   }
+
   return { filled, total }
 }
 
@@ -383,13 +552,24 @@ async function apiTemplatesList({ dept_code, record_type_code, q, limit = 20, st
   })
 
   const data = unwrapOk(resp)
-
-  // normalize response shapes: array OR {items,total} OR {data:{items,total}}
   if (Array.isArray(data)) return { items: data, total: data.length }
+
   const items = Array.isArray(data?.items) ? data.items : Array.isArray(data?.data?.items) ? data.data.items : []
   const total =
-    Number.isFinite(Number(data?.total)) ? Number(data.total) : Number.isFinite(Number(data?.count)) ? Number(data.count) : items.length
+    Number.isFinite(Number(data?.total))
+      ? Number(data.total)
+      : Number.isFinite(Number(data?.count))
+        ? Number(data.count)
+        : items.length
+
   return { items, total }
+}
+
+async function apiTemplateGet(templateId) {
+  const id = Number(templateId || 0)
+  if (!id) return null
+  const resp = await API.get(`/emr/templates/${id}`)
+  return unwrapOk(resp)
 }
 
 async function apiCreateDraft(payload) {
@@ -402,8 +582,6 @@ async function apiSignRecord(recordId, sign_note) {
   return unwrapOk(resp)
 }
 
-
-
 async function apiRecordGet(recordId) {
   const resp = await API.get(`/emr/records/${Number(recordId)}`)
   return unwrapOk(resp)
@@ -414,27 +592,35 @@ async function apiUpdateDraft(recordId, payload) {
   return unwrapOk(resp)
 }
 
-// robust extractor for your ok() wrapper
 export function pickRecordId(res) {
-  return (
-    res?.data?.data?.record_id ??
-    res?.data?.data?.id ??
-    res?.data?.record_id ??
-    res?.data?.id ??
-    res?.data?.record?.id ??
-    null
-  )
+  return res?.data?.data?.record_id ?? res?.data?.data?.id ?? res?.data?.record_id ?? res?.data?.id ?? res?.data?.record?.id ?? null
 }
-/**
- * ✅ Preferred encounters endpoint:
- * GET /emr/patients/{patient_id}/encounters?limit=
- */
+
 async function apiEncounters(patientId, limit = 200) {
   const resp = await API.get(`/emr/patients/${patientId}/encounters`, { params: { limit } })
   return unwrapOk(resp)
 }
 
-// --- mappers (resilient; adapt as needed) ---
+async function apiPatientSummary(patientId) {
+  const pid = Number(patientId || 0)
+  if (!pid) return null
+
+  const urls = [`/patients/${pid}`]
+
+  for (const url of urls) {
+    try {
+      const resp = await API.get(url)
+      const data = unwrapOk(resp)
+      if (data) return data
+    } catch (e) {
+      const st = e?.response?.status
+      if (st === 404 || st === 405) continue
+    }
+  }
+  return null
+}
+
+// --- mappers ---
 function mapUnifiedVisit(v) {
   if (!v) return null
   const encounter_type = v.encounter_type || v.encType || v.type || v.encounterType || ""
@@ -460,10 +646,6 @@ function mapUnifiedVisit(v) {
   }
 }
 
-/**
- * ✅ Encounters auto fetch:
- * 1) /emr/patients/{id}/encounters
- */
 async function fetchVisitsAuto(patientId) {
   const pid = Number(patientId || 0)
   if (!pid) return []
@@ -471,7 +653,6 @@ async function fetchVisitsAuto(patientId) {
   const data = await apiEncounters(pid, 200)
   const items = Array.isArray(data) ? data : Array.isArray(data?.items) ? data.items : Array.isArray(data?.data) ? data.data : []
   const mapped = items.map(mapUnifiedVisit).filter(Boolean)
-
   mapped.sort((a, b) => new Date(b.when || 0).getTime() - new Date(a.when || 0).getTime())
 
   const seen = new Set()
@@ -486,7 +667,16 @@ async function fetchVisitsAuto(patientId) {
 }
 
 // -------------------- Fullscreen dialog wrapper --------------------
-export function EmrCreateRecordDialog({ open, onOpenChange, patient, defaultDeptCode, onSaved, mode = "create", recordId = null, onUpdated }) {
+export function EmrCreateRecordDialog({
+  open,
+  onOpenChange,
+  patient,
+  defaultDeptCode,
+  onSaved,
+  mode = "create",
+  recordId = null,
+  onUpdated,
+}) {
   return (
     <Dialog open={!!open} onOpenChange={onOpenChange}>
       <DialogContent
@@ -498,6 +688,10 @@ export function EmrCreateRecordDialog({ open, onOpenChange, patient, defaultDept
           "overflow-hidden"
         )}
       >
+        <DialogHeader className="sr-only">
+          <DialogTitle>New EMR Record</DialogTitle>
+        </DialogHeader>
+
         <div className="flex h-full min-h-0 flex-col">
           <div className="sticky top-0 z-30 shrink-0 border-b border-slate-200 bg-white/75 px-4 py-3 backdrop-blur-xl md:px-6">
             <div className="mx-auto flex w-full max-w-[1400px] items-center justify-between gap-3">
@@ -511,8 +705,20 @@ export function EmrCreateRecordDialog({ open, onOpenChange, patient, defaultDept
             </div>
           </div>
 
-          <div className={cn("flex-1 min-h-0 overflow-y-auto overscroll-contain", "pb-[calc(96px+env(safe-area-inset-bottom))]")} style={{ WebkitOverflowScrolling: "touch" }}>
-            <EmrCreateRecordFlow patient={patient} defaultDeptCode={defaultDeptCode} onClose={() => onOpenChange?.(false)} onSaved={onSaved} onUpdated={onUpdated} mode={mode} recordId={recordId} fullscreen />
+          <div
+            className={cn("flex-1 min-h-0 overflow-y-auto overscroll-contain", "pb-[calc(96px+env(safe-area-inset-bottom))]")}
+            style={{ WebkitOverflowScrolling: "touch" }}
+          >
+            <EmrCreateRecordFlow
+              patient={patient}
+              defaultDeptCode={defaultDeptCode}
+              onClose={() => onOpenChange?.(false)}
+              onSaved={onSaved}
+              onUpdated={onUpdated}
+              mode={mode}
+              recordId={recordId}
+              fullscreen
+            />
           </div>
         </div>
       </DialogContent>
@@ -521,267 +727,977 @@ export function EmrCreateRecordDialog({ open, onOpenChange, patient, defaultDept
 }
 
 // -------------------- Dynamic section editor (OUTSIDE: no state reset) --------------------
-function TemplateSectionsEditor({ blueprint, value, onChange, tone }) {
-  const [openKey, setOpenKey] = useState(() => (blueprint?.[0]?.key ? blueprint[0].key : null))
+function safeStr(v, fallback = "") {
+  const s = v === null || v === undefined ? "" : String(v)
+  return s.trim() ? s : fallback
+}
+
+const PREVIEW_NONE = "__none__"
+
+function layoutCols(layout) {
+  const v = String(layout || "STACK").toUpperCase()
+  if (v === "GRID_3") return 3
+  if (v === "GRID_2") return 2
+  return 1
+}
+
+function gridColsClass(cols) {
+  if (cols === 3) return "md:grid-cols-3"
+  if (cols === 2) return "md:grid-cols-2"
+  return "grid-cols-1"
+}
+
+function colSpanClass(width, cols) {
+  const w = String(width || "").toUpperCase()
+  if (cols === 3) {
+    if (w === "FULL") return "md:col-span-3"
+    if (w === "TWO_THIRD") return "md:col-span-2"
+    if (w === "THIRD") return "md:col-span-1"
+    if (w === "HALF") return "md:col-span-2"
+  }
+  if (cols === 2) {
+    if (w === "FULL") return "md:col-span-2"
+    if (w === "HALF") return "md:col-span-1"
+  }
+  return ""
+}
+
+function itemReactKey(item, idx, prefix = "") {
+  return `${prefix}${safeStr(item?.key || item?._rid || idx)}`
+}
+
+function coerceBool(v) {
+  if (typeof v === "boolean") return v
+  if (typeof v === "number") return v !== 0
+  const s = String(v ?? "").trim().toLowerCase()
+  if (!s) return false
+  return ["1", "true", "yes", "y", "on"].includes(s)
+}
+
+function asArray(v) {
+  if (Array.isArray(v)) return v
+  if (v === null || v === undefined || v === "") return []
+  return [v]
+}
+
+function normalizeOptions(opts) {
+  const arr = Array.isArray(opts) ? opts : []
+  return arr
+    .map((o) => {
+      if (typeof o === "string") return { label: o, value: o }
+      if (o && typeof o === "object") return { label: o.label ?? o.value ?? "", value: o.value ?? o.label ?? "" }
+      return null
+    })
+    .filter(Boolean)
+}
+
+function SignaturePad({ value, onChange }) {
+  const ref = useRef(null)
+  const drawing = useRef(false)
 
   useEffect(() => {
-    if (blueprint?.[0]?.key) setOpenKey(blueprint[0].key)
-  }, [blueprint?.[0]?.key])
+    const canvas = ref.current
+    if (!canvas) return
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    const dataUrl = value?.data_url || value
+    if (typeof dataUrl === "string" && dataUrl.startsWith("data:image")) {
+      const img = new Image()
+      img.onload = () => {
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+      }
+      img.src = dataUrl
+    }
+  }, [value])
 
-  const setField = useCallback(
-    (secKey, fieldKey, v) => {
+  function pos(e) {
+    const canvas = ref.current
+    const rect = canvas.getBoundingClientRect()
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY
+    return { x: clientX - rect.left, y: clientY - rect.top }
+  }
+
+  function start(e) {
+    const canvas = ref.current
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return
+    drawing.current = true
+    const p = pos(e)
+    ctx.beginPath()
+    ctx.moveTo(p.x, p.y)
+  }
+
+  function move(e) {
+    if (!drawing.current) return
+    const canvas = ref.current
+    const ctx = canvas.getContext("2d")
+    if (!ctx) return
+    const p = pos(e)
+    ctx.lineTo(p.x, p.y)
+    ctx.lineWidth = 2
+    ctx.lineCap = "round"
+    ctx.strokeStyle = "#0f172a"
+    ctx.stroke()
+  }
+
+  function end() {
+    if (!drawing.current) return
+    drawing.current = false
+    const canvas = ref.current
+    const data_url = canvas.toDataURL("image/png")
+    onChange?.({ data_url })
+  }
+
+  function clear() {
+    const canvas = ref.current
+    const ctx = canvas.getContext("2d")
+    ctx.clearRect(0, 0, canvas.width, canvas.height)
+    onChange?.("")
+  }
+
+  return (
+    <div className="rounded-2xl border border-slate-200 bg-white p-2">
+      <canvas
+        ref={ref}
+        width={560}
+        height={180}
+        className="h-[160px] w-full rounded-xl bg-slate-50 touch-none"
+        onMouseDown={start}
+        onMouseMove={move}
+        onMouseUp={end}
+        onMouseLeave={end}
+        onTouchStart={(e) => {
+          e.preventDefault()
+          start(e)
+        }}
+        onTouchMove={(e) => {
+          e.preventDefault()
+          move(e)
+        }}
+        onTouchEnd={(e) => {
+          e.preventDefault()
+          end()
+        }}
+      />
+      <div className="mt-2 flex justify-end">
+        <Button variant="outline" className="rounded-2xl" type="button" onClick={clear}>
+          Clear
+        </Button>
+      </div>
+    </div>
+  )
+}
+
+function PreviewControl({ item, value, onChange }) {
+  const type = String(item?.type || "text").toLowerCase()
+  const placeholder = item?.placeholder || item?.ui?.placeholder || ""
+  const opts = normalizeOptions(item?.options || item?.ui?.options || item?.meta?.options || [])
+
+  if (type === "textarea") {
+    return (
+      <Textarea
+        value={safeStr(value, "")}
+        onChange={(e) => onChange?.(e.target.value)}
+        placeholder={placeholder || "Type here…"}
+        className="min-h-[110px] rounded-2xl"
+      />
+    )
+  }
+
+  if (type === "number") {
+    const v = value === "" || value === null || value === undefined ? "" : Number(value)
+    return (
+      <Input
+        type="number"
+        value={Number.isFinite(v) ? v : ""}
+        onChange={(e) => onChange?.(e.target.value === "" ? "" : Number(e.target.value))}
+        placeholder={placeholder}
+        className="h-11 rounded-2xl"
+      />
+    )
+  }
+
+  if (type === "date" || type === "time" || type === "datetime") {
+    const inputType = type === "datetime" ? "datetime-local" : type
+    return (
+      <Input
+        type={inputType}
+        value={safeStr(value, "")}
+        onChange={(e) => onChange?.(e.target.value)}
+        className="h-11 rounded-2xl"
+      />
+    )
+  }
+
+  if (type === "boolean") {
+    return (
+      <div className="flex items-center justify-between rounded-2xl border border-slate-200 bg-white px-4 py-3">
+        <div className="text-sm text-slate-700">{safeStr(item?.meta?.true_label, "Yes")}</div>
+        <Switch checked={coerceBool(value)} onCheckedChange={(v) => onChange?.(!!v)} />
+      </div>
+    )
+  }
+
+  if (type === "select" || type === "radio") {
+    const v = safeStr(value, "") || PREVIEW_NONE
+    return (
+      <Select value={v} onValueChange={(vv) => onChange?.(vv === PREVIEW_NONE ? "" : vv)}>
+        <SelectTrigger className="h-11 rounded-2xl">
+          <SelectValue placeholder="Select…" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={PREVIEW_NONE}>Select…</SelectItem>
+          {opts.map((o) => (
+            <SelectItem key={o.value} value={String(o.value)}>
+              {String(o.label)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    )
+  }
+
+  if (type === "multiselect") {
+    const arr = asArray(value).map(String)
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-2">
+        <div className="flex flex-wrap gap-2">
+          {opts.map((o) => {
+            const active = arr.includes(String(o.value))
+            return (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => {
+                  const next = active ? arr.filter((x) => x !== String(o.value)) : [...arr, String(o.value)]
+                  onChange?.(next)
+                }}
+                className={cn(
+                  "rounded-2xl px-3 py-2 text-xs font-semibold ring-1 transition",
+                  active
+                    ? "bg-slate-900 text-white ring-slate-900"
+                    : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
+                )}
+              >
+                {String(o.label)}
+              </button>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }
+
+  if (type === "chips") {
+    return (
+      <Input
+        value={safeStr(value, "")}
+        onChange={(e) => onChange?.(e.target.value)}
+        placeholder={placeholder || "Enter values separated by commas"}
+        className="h-11 rounded-2xl"
+      />
+    )
+  }
+
+  if (type === "table") {
+    const cols = Array.isArray(item?.columns) ? item.columns : Array.isArray(item?.meta?.columns) ? item.meta.columns : []
+    const rows = Array.isArray(value) ? value : []
+    const safeRows = rows.length ? rows : [{}]
+
+    return (
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        <div className="max-w-full overflow-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50">
+              <tr>
+                {cols.map((c, i) => (
+                  <th key={i} className="px-3 py-2 text-left text-xs font-semibold text-slate-600">
+                    {safeStr(c?.label || c?.key || `Col ${i + 1}`)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {safeRows.map((row, ridx) => (
+                <tr key={ridx} className="border-t">
+                  {cols.map((c, cidx) => {
+                    const k = String(c?.key || `c${cidx}`)
+                    const cellVal = row?.[k] ?? ""
+                    return (
+                      <td key={cidx} className="px-3 py-2">
+                        <Input
+                          value={safeStr(cellVal, "")}
+                          onChange={(e) => {
+                            const nextRows = [...safeRows]
+                            const nextRow = { ...(nextRows[ridx] || {}) }
+                            nextRow[k] = e.target.value
+                            nextRows[ridx] = nextRow
+                            onChange?.(nextRows)
+                          }}
+                          className="h-10 rounded-xl"
+                        />
+                      </td>
+                    )
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+        <div className="flex items-center justify-between border-t bg-white px-3 py-2">
+          <div className="text-xs text-slate-500">{rows.length || 1} row(s)</div>
+          <div className="flex gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 rounded-2xl"
+              onClick={() => onChange?.([...(Array.isArray(value) ? value : []), {}])}
+            >
+              Add row
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              className="h-9 rounded-2xl"
+              onClick={() => onChange?.((Array.isArray(value) && value.length > 1) ? value.slice(0, -1) : [])}
+            >
+              Remove row
+            </Button>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  if (type === "signature") return <SignaturePad value={value} onChange={onChange} />
+
+  if (type === "file" || type === "image") {
+    const meta = value && typeof value === "object" ? value : value ? { name: String(value) } : null
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="min-w-0">
+            <div className="text-sm font-semibold text-slate-900">{meta?.name ? meta.name : "No file selected"}</div>
+            {meta?.type ? <div className="mt-0.5 text-xs text-slate-500">{meta.type}</div> : null}
+          </div>
+          <label className="cursor-pointer">
+            <input
+              type="file"
+              accept={type === "image" ? "image/*" : undefined}
+              className="hidden"
+              onChange={(e) => {
+                const f = e.target.files && e.target.files[0]
+                if (!f) return
+                onChange?.({ name: f.name, type: f.type, size: f.size, last_modified: f.lastModified })
+              }}
+            />
+            <span className="inline-flex h-9 items-center rounded-2xl border border-slate-200 bg-white px-3 text-xs font-semibold text-slate-700 hover:bg-slate-50">
+              Choose
+            </span>
+          </label>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <Input
+      value={safeStr(value, "")}
+      onChange={(e) => onChange?.(e.target.value)}
+      placeholder={placeholder}
+      className="h-11 rounded-2xl"
+    />
+  )
+}
+
+const PreviewField = memo(function PreviewField({ item, cols, values, showHidden, secKey, secData, onPatch }) {
+  const key = itemKeyOf(item, "")
+  const label = item?.label || item?.title || item?.name || key
+  const required = !!item?.required
+  const ui = item?.ui || {}
+  const width = ui?.width || "HALF"
+  const help = item?.help || item?.meta?.help || ui?.help || ""
+
+  if (!isVisible(item, values, showHidden)) return null
+  const val = (secData && key ? secData[key] : undefined) ?? values?.[key]
+
+  return (
+    <div className={cn("space-y-1.5", colSpanClass(width, cols))}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-xs font-semibold text-slate-700">
+          {String(label)} {required ? <span className="text-rose-600">*</span> : null}
+        </div>
+        {ui?.tag ? (
+          <Badge variant="outline" className="rounded-xl text-[10px]">
+            {String(ui.tag)}
+          </Badge>
+        ) : null}
+      </div>
+
+      <PreviewControl item={item} value={val} onChange={(next) => onPatch?.(secKey, key, next)} />
+      {help ? <div className="text-xs text-slate-400">{String(help)}</div> : null}
+    </div>
+  )
+})
+
+function TemplateSectionsEditor({ schema, value, onChange, tone }) {
+  const s = ensureTemplateSchemaShape(schema)
+  const sections = Array.isArray(s.sections) ? s.sections : []
+  const [showHidden, setShowHidden] = useState(false)
+
+  const secData = value && typeof value === "object" ? value : {}
+  const values = useMemo(() => flattenSectionData(secData), [secData])
+
+  const onPatch = useCallback(
+    (secKey, fieldKey, nextVal) => {
       onChange?.((prev) => {
-        const next = { ...(prev || {}) }
-        next[secKey] = { ...(next[secKey] || {}) }
-        next[secKey][fieldKey] = v
-        return next
+        const out = { ...(prev || {}) }
+        const sk = safeStr(secKey, "section")
+        out[sk] = { ...(out[sk] || {}) }
+        out[sk][fieldKey] = nextVal
+        return out
       })
     },
     [onChange]
   )
 
-  if (!Array.isArray(blueprint) || !blueprint.length) {
+  if (!sections.length) {
     return (
-      <div className="rounded-2xl border border-dashed border-slate-200 bg-slate-50/60 p-4 text-center">
-        <div className="text-sm font-semibold text-slate-800">No sections</div>
-        <div className="mt-1 text-xs text-slate-500">This template has no sections configured.</div>
-      </div>
+      <Alert className="rounded-2xl">
+        <AlertTitle>No sections</AlertTitle>
+        <AlertDescription>This template has no sections configured.</AlertDescription>
+      </Alert>
     )
   }
 
   return (
-    <div className="space-y-3">
-      {/* Quick jump chips */}
-      <div className="flex flex-wrap gap-2">
-        {blueprint.map((s) => (
-          <button
-            key={s.key}
-            type="button"
-            onClick={() => setOpenKey(s.key)}
-            className={cn(
-              "rounded-full px-3 py-1 text-xs font-semibold ring-1 transition",
-              openKey === s.key
-                ? cn("text-white ring-slate-900", tone?.btn || "bg-slate-900")
-                : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
-            )}
-          >
-            {s.title}
-          </button>
-        ))}
+    <div className="space-y-6">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div className="flex items-center gap-2">
+          <Badge variant="outline" className="rounded-xl">
+            {sections.length} section(s)
+          </Badge>
+          <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2">
+            <Switch checked={showHidden} onCheckedChange={(v) => setShowHidden(!!v)} />
+            <div className="text-xs font-semibold text-slate-700">Show hidden fields</div>
+          </div>
+        </div>
       </div>
 
-      {/* Sections */}
-      <div className="space-y-3">
-        {blueprint.map((sec) => {
-          const active = openKey === sec.key
-          const secData = (value && value[sec.key]) || {}
-          const counts = calcFilledCount([sec], { [sec.key]: secData })
+      {sections.map((sec, sidx) => {
+        const secKey = sectionKeyOf(sec, sidx)
+        const cols = layoutCols(sec?.layout || "STACK")
+        const items = normalizeSectionItems(sec?.items || [])
+        const dataForSec = secData?.[secKey] || {}
 
-          return (
-            <div key={sec.key} className={cn("rounded-3xl border bg-white", active ? "border-slate-300 ring-1 ring-slate-200" : "border-slate-200")}>
-              <button
-                type="button"
-                onClick={() => setOpenKey((k) => (k === sec.key ? null : sec.key))}
-                className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left"
-              >
+        return (
+          <Card key={secKey} className="rounded-3xl border-slate-200 bg-white shadow-sm">
+            <CardHeader className="pb-3">
+              <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="flex items-center gap-2">
-                    <div className="text-sm font-semibold text-slate-900">{sec.title}</div>
-                    <Badge variant="outline" className="rounded-xl">
-                      {counts.filled}/{counts.total}
-                    </Badge>
-                  </div>
-                  {sec.description ? <div className="mt-1 text-xs text-slate-500">{sec.description}</div> : null}
+                  <CardTitle className="text-base">{safeStr(sec?.label || sec?.title || sec?.name || secKey, secKey)}</CardTitle>
+                  {sec?.description ? <CardDescription className="text-xs">{String(sec.description)}</CardDescription> : null}
                 </div>
+                <Badge className={cn("rounded-xl", tone?.chip)}>{String(secKey)}</Badge>
+              </div>
+            </CardHeader>
 
-                <div className={cn("rounded-2xl px-3 py-1 text-xs font-semibold", active ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700")}>
-                  {active ? "Open" : "Open"}
-                </div>
-              </button>
+            <CardContent>
+              <div className={cn("grid gap-3", gridColsClass(cols))}>
+                {items.map((item, idx) => {
+                  const t = String(item?.type || "text").toLowerCase()
+                  if (t === "group") {
+                    const groupLabel = safeStr(item?.label || item?.title || item?.name, "Group")
+                    const kids = normalizeSectionItems(item?.items || [])
+                    return (
+                      <div
+                        key={itemReactKey(item, idx, `${secKey}:g:`)}
+                        className={cn(
+                          "rounded-2xl border border-slate-200 bg-slate-50/60 p-3",
+                          colSpanClass(item?.ui?.width || "FULL", cols)
+                        )}
+                      >
+                        <div className="mb-2 flex items-center justify-between gap-2">
+                          <div className="text-sm font-semibold text-slate-900">{groupLabel}</div>
+                          {item?.ui?.tag ? (
+                            <Badge variant="outline" className="rounded-xl text-[10px]">
+                              {String(item.ui.tag)}
+                            </Badge>
+                          ) : null}
+                        </div>
+                        <div className={cn("grid gap-3", gridColsClass(cols))}>
+                          {kids.map((kid, kidx) => (
+                            <PreviewField
+                              key={itemReactKey(kid, kidx, `${secKey}:k:`)}
+                              item={kid}
+                              cols={cols}
+                              values={values}
+                              showHidden={showHidden}
+                              secKey={secKey}
+                              secData={dataForSec}
+                              onPatch={onPatch}
+                            />
+                          ))}
+                        </div>
+                      </div>
+                    )
+                  }
 
-              {active ? (
-                <div className="px-4 pb-4">
-                  <Separator className="mb-4" />
-
-                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-                    {(sec.fields || []).map((f) => (
-                      <FieldRenderer key={`${sec.key}:${f.key}`} field={f} value={secData?.[f.key]} onChange={(v) => setField(sec.key, f.key, v)} />
-                    ))}
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          )
-        })}
-      </div>
+                  return (
+                    <PreviewField
+                      key={itemReactKey(item, idx, `${secKey}:i:`)}
+                      item={item}
+                      cols={cols}
+                      values={values}
+                      showHidden={showHidden}
+                      secKey={secKey}
+                      secData={dataForSec}
+                      onPatch={onPatch}
+                    />
+                  )
+                })}
+              </div>
+            </CardContent>
+          </Card>
+        )
+      })}
     </div>
   )
 }
 
-function FieldRenderer({ field, value, onChange }) {
-  const t = String(field?.type || "textarea").toLowerCase()
-  const label = field?.label || field?.key || "Field"
-  const required = !!field?.required
-  const placeholder = field?.placeholder || ""
+// -------------------- Print helpers/components --------------------
+function formatPrintValue(item, value) {
+  const type = String(item?.type || "text").toLowerCase()
+  if (value === null || value === undefined || value === "") return "—"
+  if (type === "boolean") return coerceBool(value) ? safeStr(item?.meta?.true_label, "Yes") : safeStr(item?.meta?.false_label, "No")
+  if (type === "multiselect") {
+    const arr = asArray(value).map(String).filter(Boolean)
+    return arr.length ? arr.join(", ") : "—"
+  }
+  if (type === "chips") {
+    if (Array.isArray(value)) return value.map(String).join(", ")
+    return safeStr(value, "—")
+  }
+  if (type === "table") return value
+  if (type === "signature") {
+    if (typeof value === "string" && value.trim()) return "Signed"
+    if (value?.data_url) return value
+    return "—"
+  }
+  if (type === "file" || type === "image") {
+    if (typeof value === "string") return value
+    if (value?.name) return value.name
+    return "—"
+  }
+  if (typeof value === "object") return JSON.stringify(value)
+  return String(value)
+}
 
-  const Head = (
-    <div className="mb-1 flex items-center gap-2">
-      <div className="text-xs font-semibold text-slate-700">
-        {label} {required ? <span className="text-rose-600">*</span> : null}
+function PrintValue({ item, value }) {
+  const type = String(item?.type || "text").toLowerCase()
+  const v = formatPrintValue(item, value)
+
+  if (type === "table") {
+    const cols = Array.isArray(item?.columns) ? item.columns : Array.isArray(item?.meta?.columns) ? item.meta.columns : []
+    const rows = Array.isArray(value) ? value : []
+    return (
+      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+        <div className="max-w-full overflow-auto">
+          <table className="w-full text-xs">
+            <thead className="bg-slate-50">
+              <tr>
+                {cols.map((c, i) => (
+                  <th key={i} className="px-3 py-2 text-left font-semibold text-slate-600">
+                    {safeStr(c?.label || c?.key || `Col ${i + 1}`)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(rows.length ? rows : [{}]).map((row, ridx) => (
+                <tr key={ridx} className="border-t">
+                  {cols.map((c, cidx) => {
+                    const k = String(c?.key || `c${cidx}`)
+                    return (
+                      <td key={cidx} className="px-3 py-2 text-slate-900">
+                        {safeStr(row?.[k], "—")}
+                      </td>
+                    )
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       </div>
-      {field?.help ? <span className="text-xs text-slate-400">• {field.help}</span> : null}
+    )
+  }
+
+  if (type === "signature") {
+    const url = value?.data_url
+    return (
+      <div className="min-h-[44px] rounded-2xl border border-slate-200 bg-white px-3 py-2">
+        {url ? <img src={url} alt="Signature" className="h-20 w-auto" /> : <span className="text-sm text-slate-500">{String(v)}</span>}
+      </div>
+    )
+  }
+
+  const isBig = type === "textarea"
+  return (
+    <div className={cn("rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900", isBig ? "min-h-[96px] whitespace-pre-wrap" : "min-h-[44px]")}>
+      {typeof v === "string" ? v : safeStr(v, "—")}
     </div>
   )
+}
 
-  if (t === "text") {
-    return (
-      <div>
-        {Head}
-        <Input value={value ?? ""} onChange={(e) => onChange?.(e.target.value)} placeholder={placeholder} className="h-10 rounded-2xl" />
+function PrintField({ item, cols, values, includeHidden, secKey, secData, tone }) {
+  const key = itemKeyOf(item, "")
+  const label = item?.label || item?.title || item?.name || key
+  const required = !!item?.required
+  const ui = item?.ui || {}
+  const width = ui?.width || "HALF"
+  const help = item?.help || item?.meta?.help || ui?.help || ""
+
+  if (!isVisible(item, values, includeHidden)) return null
+  const val = (secData && key ? secData[key] : undefined) ?? values?.[key]
+
+  return (
+    <div className={cn("space-y-1.5", colSpanClass(width, cols))}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="text-xs font-semibold text-slate-700">
+          {String(label)} {required ? <span className="text-rose-600">*</span> : null}
+        </div>
+        {ui?.tag ? (
+          <Badge variant="outline" className="rounded-xl text-[10px]">
+            {String(ui.tag)}
+          </Badge>
+        ) : null}
       </div>
-    )
-  }
 
-  if (t === "number") {
-    return (
-      <div>
-        {Head}
-        <Input
-          type="number"
-          value={value ?? ""}
-          min={field?.min}
-          max={field?.max}
-          onChange={(e) => onChange?.(e.target.value === "" ? "" : Number(e.target.value))}
-          placeholder={placeholder}
-          className="h-10 rounded-2xl"
-        />
-      </div>
-    )
-  }
+      <PrintValue item={item} value={val} />
+      {help ? <div className="text-xs text-slate-400">{String(help)}</div> : null}
+    </div>
+  )
+}
 
-  if (t === "date") {
-    return (
-      <div>
-        {Head}
-        <Input type="date" value={value ?? ""} onChange={(e) => onChange?.(e.target.value)} className="h-10 rounded-2xl" />
-      </div>
-    )
-  }
+function PrintDocument({ patient, visit, dept, recordType, template, title, note, schema, data, includeHidden, tone }) {
+  const s = ensureTemplateSchemaShape(schema)
+  const sections = Array.isArray(s.sections) ? s.sections : []
+  const secData = data && typeof data === "object" ? data : {}
+  const values = useMemo(() => flattenSectionData(secData), [secData])
 
-  if (t === "time") {
-    return (
-      <div>
-        {Head}
-        <Input type="time" value={value ?? ""} onChange={(e) => onChange?.(e.target.value)} className="h-10 rounded-2xl" />
-      </div>
-    )
-  }
+  return (
+    <div className="space-y-6">
+      <div className="rounded-3xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+          <div className="min-w-0">
+            <div className="text-lg font-semibold text-slate-900">{(title || "").trim() || "Clinical Record"}</div>
+            {note?.trim() ? <div className="mt-1 whitespace-pre-wrap text-sm text-slate-600">{note.trim()}</div> : null}
 
-  if (t === "checkbox") {
-    return (
-      <div className="flex items-center justify-between gap-3 rounded-2xl border border-slate-200 bg-white px-3 py-3">
-        <div className="min-w-0">
-          <div className="text-sm font-semibold text-slate-900">
-            {label} {required ? <span className="text-rose-600">*</span> : null}
+            <div className="mt-3 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+              <Badge variant="outline" className="rounded-xl">Dept: {dept?.name || dept?.code || "—"}</Badge>
+              <Badge variant="outline" className="rounded-xl">Type: {recordType?.label || recordType?.code || "—"}</Badge>
+              <Badge variant="outline" className="rounded-xl">Template: {template?.name || "—"}</Badge>
+              {visit?.encounter_type ? (
+                <Badge variant="outline" className="rounded-xl">Visit: {visit.encounter_type} · {visit.encounter_code || visit.encounter_id || "—"}</Badge>
+              ) : (
+                <Badge variant="outline" className="rounded-xl">Visit: Unlinked</Badge>
+              )}
+            </div>
           </div>
-          {field?.help ? <div className="mt-0.5 text-xs text-slate-500">{field.help}</div> : null}
+
+          <div className="rounded-3xl border border-slate-200 bg-slate-50/50 p-4">
+            <div className="text-xs font-semibold text-slate-500">Patient</div>
+            <div className="mt-1 text-sm font-semibold text-slate-900">{patient?.name || "—"}</div>
+            <div className="mt-0.5 text-xs text-slate-600">UHID: {patient?.uhid || "—"}</div>
+            <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-slate-600">
+              <div>
+                <div className="text-[10px] text-slate-500">Gender</div>
+                <div className="font-semibold text-slate-900">{patient?.gender || "—"}</div>
+              </div>
+              <div>
+                <div className="text-[10px] text-slate-500">Age</div>
+                <div className="font-semibold text-slate-900">
+                  {patient?.age !== undefined && patient?.age !== null && String(patient.age) !== "" ? `${patient.age}` : "—"}
+                </div>
+              </div>
+              <div className="col-span-2">
+                <div className="text-[10px] text-slate-500">Phone</div>
+                <div className="font-semibold text-slate-900">{patient?.phone || "—"}</div>
+              </div>
+            </div>
+          </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => onChange?.(!value)}
-          className={cn(
-            "h-9 rounded-2xl px-3 text-xs font-semibold ring-1 transition",
-            value ? "bg-slate-900 text-white ring-slate-900" : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
-          )}
-        >
-          {value ? "Yes" : "No"}
-        </button>
+        <div className={cn("mt-4 h-1.5 w-full rounded-2xl bg-gradient-to-r", tone?.bar || "from-slate-200 to-slate-100")} />
       </div>
-    )
-  }
 
-  if (t === "select") {
-    const opts = Array.isArray(field?.options) ? field.options : []
-    return (
-      <div>
-        {Head}
-        <select
-          value={value ?? ""}
-          onChange={(e) => onChange?.(e.target.value)}
-          className="h-10 w-full rounded-2xl border border-slate-200 bg-white px-3 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-300"
-        >
-          <option value="">Select…</option>
-          {opts.map((o, idx) => {
-            const val = typeof o === "string" ? o : o?.value
-            const lab = typeof o === "string" ? o : o?.label || o?.value
+      {sections.length ? (
+        <div className="space-y-6">
+          {sections.map((sec, sidx) => {
+            const secKey = sectionKeyOf(sec, sidx)
+            const cols = layoutCols(sec?.layout || "STACK")
+            const items = normalizeSectionItems(sec?.items || [])
+            const dataForSec = secData?.[secKey] || {}
+
             return (
-              <option key={`${val}-${idx}`} value={val}>
-                {lab}
-              </option>
+              <Card key={secKey} className="rounded-3xl border-slate-200 bg-white shadow-sm">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <CardTitle className="text-base">{safeStr(sec?.label || sec?.title || sec?.name || secKey, secKey)}</CardTitle>
+                      {sec?.description ? <CardDescription className="text-xs">{String(sec.description)}</CardDescription> : null}
+                    </div>
+                    <Badge className={cn("rounded-xl", tone?.chip)}>{String(secKey)}</Badge>
+                  </div>
+                </CardHeader>
+
+                <CardContent>
+                  <div className={cn("grid gap-3", gridColsClass(cols))}>
+                    {items.map((item, idx) => {
+                      const t = String(item?.type || "text").toLowerCase()
+                      if (t === "group") {
+                        const groupLabel = safeStr(item?.label || item?.title || item?.name, "Group")
+                        const kids = normalizeSectionItems(item?.items || [])
+                        return (
+                          <div
+                            key={itemReactKey(item, idx, `${secKey}:pg:`)}
+                            className={cn(
+                              "rounded-2xl border border-slate-200 bg-slate-50/60 p-3",
+                              colSpanClass(item?.ui?.width || "FULL", cols)
+                            )}
+                          >
+                            <div className="mb-2 flex items-center justify-between gap-2">
+                              <div className="text-sm font-semibold text-slate-900">{groupLabel}</div>
+                              {item?.ui?.tag ? (
+                                <Badge variant="outline" className="rounded-xl text-[10px]">
+                                  {String(item.ui.tag)}
+                                </Badge>
+                              ) : null}
+                            </div>
+                            <div className={cn("grid gap-3", gridColsClass(cols))}>
+                              {kids.map((kid, kidx) => (
+                                <PrintField
+                                  key={itemReactKey(kid, kidx, `${secKey}:pk:`)}
+                                  item={kid}
+                                  cols={cols}
+                                  values={values}
+                                  includeHidden={includeHidden}
+                                  secKey={secKey}
+                                  secData={dataForSec}
+                                  tone={tone}
+                                />
+                              ))}
+                            </div>
+                          </div>
+                        )
+                      }
+
+                      return (
+                        <PrintField
+                          key={itemReactKey(item, idx, `${secKey}:pi:`)}
+                          item={item}
+                          cols={cols}
+                          values={values}
+                          includeHidden={includeHidden}
+                          secKey={secKey}
+                          secData={dataForSec}
+                          tone={tone}
+                        />
+                      )
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
             )
           })}
-        </select>
-      </div>
-    )
-  }
+        </div>
+      ) : (
+        <Alert className="rounded-2xl">
+          <AlertTitle>No sections</AlertTitle>
+          <AlertDescription>This template has no sections configured.</AlertDescription>
+        </Alert>
+      )}
+    </div>
+  )
+}
 
-  if (t === "multiselect") {
-    const opts = Array.isArray(field?.options) ? field.options : []
-    const arr = Array.isArray(value) ? value : []
-    return (
-      <div>
-        {Head}
-        <select
-          multiple
-          value={arr}
-          onChange={(e) => {
-            const selected = Array.from(e.target.selectedOptions).map((x) => x.value)
-            onChange?.(selected)
-          }}
-          className="min-h-[120px] w-full rounded-2xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm outline-none focus:border-slate-300"
-        >
-          {opts.map((o, idx) => {
-            const val = typeof o === "string" ? o : o?.value
-            const lab = typeof o === "string" ? o : o?.label || o?.value
-            return (
-              <option key={`${val}-${idx}`} value={val}>
-                {lab}
-              </option>
-            )
-          })}
-        </select>
-        <div className="mt-1 text-xs text-slate-500">Hold Ctrl/⌘ to select multiple</div>
-      </div>
-    )
-  }
-
-  // default textarea
+function PrintPreviewDialog({
+  open,
+  onOpenChange,
+  tone,
+  title,
+  dept,
+  recordType,
+  template,
+  patient,
+  visit,
+  schema,
+  data,
+  includeHidden,
+  setIncludeHidden,
+  onPrint,
+}) {
   return (
-    <div className="md:col-span-2">
-      {Head}
-      <textarea
-        value={value ?? ""}
-        onChange={(e) => onChange?.(e.target.value)}
-        rows={Number(field?.rows || 4)}
-        className="w-full rounded-2xl border border-slate-200 bg-white p-3 text-sm text-slate-900 outline-none focus:border-slate-300"
-        placeholder={placeholder || "Type here…"}
-      />
+    <Dialog open={!!open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-5xl rounded-3xl border-slate-200 bg-white p-0 shadow-xl">
+        <DialogHeader className="border-b border-slate-200 px-5 py-4">
+          <DialogTitle className="text-base">Print Preview</DialogTitle>
+        </DialogHeader>
+
+        <div className="px-5 py-4">
+          <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+            <div className="min-w-0">
+              <div className="text-sm font-semibold text-slate-900">{title?.trim() ? title.trim() : "Untitled Record"}</div>
+              <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+                <Badge variant="outline" className="rounded-xl">{dept?.name || dept?.code || "—"}</Badge>
+                <Badge variant="outline" className="rounded-xl">{recordType?.label || recordType?.code || "—"}</Badge>
+                <Badge variant="outline" className="rounded-xl">{template?.name || "—"}</Badge>
+                <Badge variant="outline" className="rounded-xl">
+                  Patient: {patient?.name || "—"} ({patient?.uhid || "—"})
+                </Badge>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-slate-50/60 px-3 py-2">
+                <Switch checked={!!includeHidden} onCheckedChange={(v) => setIncludeHidden?.(!!v)} />
+                <div className="text-xs font-semibold text-slate-700">Include hidden</div>
+              </div>
+
+              <Button variant="outline" className="h-10 rounded-2xl" onClick={() => onOpenChange?.(false)}>
+                Close
+              </Button>
+
+              <Button className={cn("h-10 rounded-2xl", tone?.btn)} onClick={onPrint} disabled={!template}>
+                <Printer className="mr-2 h-4 w-4" /> Print
+              </Button>
+            </div>
+          </div>
+
+          <div className="mt-4 max-h-[68vh] overflow-y-auto overscroll-contain rounded-3xl border border-slate-200 bg-slate-50/40 p-4">
+            <PrintDocument
+              patient={patient}
+              visit={visit}
+              dept={dept}
+              recordType={recordType}
+              template={template}
+              title={title}
+              note={""}
+              schema={schema}
+              data={data}
+              includeHidden={includeHidden}
+              tone={tone}
+            />
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+function PrintOverlay({ open, onClose, tone, patient, visit, dept, recordType, template, title, note, schema, data, includeHidden }) {
+  if (!open) return null
+  return (
+    <div id="emr-print-root" className="fixed inset-0 z-[9999] bg-white">
+      <div className="no-print flex items-center justify-between border-b border-slate-200 bg-white px-5 py-3">
+        <div className="min-w-0">
+          <div className="text-sm font-semibold text-slate-900">Printing…</div>
+          <div className="text-xs text-slate-500">Close this overlay after printing if it stays open.</div>
+        </div>
+        <Button variant="outline" className="h-10 rounded-2xl" onClick={onClose}>
+          <X className="mr-2 h-4 w-4" /> Close
+        </Button>
+      </div>
+
+      <div className="px-6 py-6">
+        <PrintDocument
+          patient={patient}
+          visit={visit}
+          dept={dept}
+          recordType={recordType}
+          template={template}
+          title={title}
+          note={note}
+          schema={schema}
+          data={data}
+          includeHidden={includeHidden}
+          tone={tone}
+        />
+      </div>
     </div>
   )
 }
 
 // -------------------- Main flow --------------------
-export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose, onSaved, onUpdated, mode = "create", recordId = null, fullscreen = false }) {
+export default function EmrCreateRecordFlow({
+  patient,
+  defaultDeptCode,
+  onClose,
+  onSaved,
+  onUpdated,
+  mode = "create",
+  recordId = null,
+  fullscreen = false,
+}) {
   const isMobile = useIsMobile(1024)
   const p = useMemo(() => normalizePatient(patient), [patient])
+
+  // ✅ Patient details resolve (FIX: do not use patientEff before declaration)
+  const [patientResolved, setPatientResolved] = useState(p)
+  const [patientLoading, setPatientLoading] = useState(false)
+
+  useEffect(() => {
+    setPatientResolved(p || null)
+  }, [p?.id])
+
+  const patientEff = patientResolved || p // ✅ defined BEFORE effects that use it
+
+  useEffect(() => {
+    let alive = true
+    const pid = asMaybeInt(p?.id)
+    if (!pid) return
+
+    setPatientLoading(true)
+      ; (async () => {
+        try {
+          const data = await apiPatientSummary(pid)
+          if (!alive) return
+          if (data) {
+            const np = normalizePatient(data)
+            setPatientResolved((prev) => normalizePatient({ ...(prev || {}), ...(np || {}) }))
+          }
+        } catch {
+          // ignore; fallback to provided patient
+        } finally {
+          if (alive) setPatientLoading(false)
+        }
+      })()
+
+    return () => {
+      alive = false
+    }
+  }, [p?.id])
+
+  // ✅ Print
+  const [printOpen, setPrintOpen] = useState(false)
+  const [printIncludeHidden, setPrintIncludeHidden] = useState(false)
+  const [printMode, setPrintMode] = useState(false)
+
+  useEffect(() => {
+    const onAfter = () => setPrintMode(false)
+    window.addEventListener?.("afterprint", onAfter)
+    return () => window.removeEventListener?.("afterprint", onAfter)
+  }, [])
 
   const [step, setStep] = useState(0)
 
   // meta
   const [metaLoading, setMetaLoading] = useState(true)
-  const [departments, setDepartments] = useState([]) // [{code,name}]
-  const [recordTypes, setRecordTypes] = useState([]) // [{code,label,category}]
+  const [departments, setDepartments] = useState([])
+  const [recordTypes, setRecordTypes] = useState([])
   const [metaErr, setMetaErr] = useState("")
 
   // visits
@@ -811,21 +1727,22 @@ export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose,
   // actions
   const [saving, setSaving] = useState(false)
 
-  // ✅ section form data
+  // form data
   const [sectionData, setSectionData] = useState({})
 
-
-  // -------------------- edit mode --------------------
+  // edit mode
   const isEdit = String(mode || "create").toLowerCase() === "edit"
-  const [editingId, setEditingId] = useState(asMaybeInt(recordId))
+  const [editingId] = useState(asMaybeInt(recordId))
   const [editLoading, setEditLoading] = useState(false)
   const [editErr, setEditErr] = useState("")
-
 
   const deptCode = dept?.code || defaultDeptCode || "COMMON"
   const tone = deptTone(deptCode)
 
-  const sectionsBlueprint = useMemo(() => normalizeTemplateBlueprint(template), [template?.id, template?.updated_at])
+  const sectionsBlueprint = useMemo(
+    () => normalizeTemplateBlueprint(template),
+    [template?.id, template?.updated_at, template?.schema_json, template?.schema]
+  )
 
   useEffect(() => {
     if (!template?.id) {
@@ -833,6 +1750,36 @@ export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose,
       return
     }
     setSectionData((prev) => initDataFromBlueprint(sectionsBlueprint, prev))
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [template?.id, template?.schema_json, template?.schema])
+
+  // ensure full template schema if list payload missing it
+  useEffect(() => {
+    let mounted = true
+      ; (async () => {
+        const tid = asMaybeInt(template?.id)
+        if (!tid) return
+        const hasSchema =
+          !!template?.schema_json ||
+          (template?.schema && typeof template.schema === "object" && Array.isArray(template.schema.sections))
+        if (hasSchema) return
+
+        try {
+          const data = await apiTemplateGet(tid)
+          const tpl = data?.template || data?.data?.template || data
+          if (!mounted || !tpl) return
+          setTemplate((prev) => {
+            if (!prev) return prev
+            if (String(prev.id) !== String(tid)) return prev
+            return { ...prev, ...tpl }
+          })
+        } catch {
+          // ignore
+        }
+      })()
+    return () => {
+      mounted = false
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [template?.id])
 
@@ -865,7 +1812,6 @@ export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose,
           if (!mounted) return
           setMetaErr(errMsg(e))
 
-          // fallback
           const deps2 = [
             { code: "COMMON", name: "Common (All)" },
             { code: "OBGYN", name: "OBGYN" },
@@ -894,15 +1840,13 @@ export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose,
     }
   }, [defaultDeptCode])
 
-  // load record when editing (after meta is ready)
+  // load record when editing
   useEffect(() => {
     let mounted = true
       ; (async () => {
         if (!isEdit) return
         const rid = asMaybeInt(editingId)
         if (!rid) return
-
-        // wait for meta to load so we can map dept/recordType
         if (metaLoading) return
 
         setEditLoading(true)
@@ -912,13 +1856,10 @@ export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose,
           const rec = res?.record || res?.data?.record || res?.data || null
           if (!mounted || !rec) return
 
-          // lock the context (backend update allows only draft fields)
-          // we still *display* the same flow, but disable context controls.
           setTitle(String(rec.title || ""))
           setNote(rec.note || "")
           setConfidential(!!rec.confidential)
 
-          // dept + record type
           const d0 =
             departments.find((d) => String(d.code).toUpperCase() === String(rec.dept_code || "").toUpperCase()) ||
             departments.find((d) => String(d.code).toUpperCase() === "COMMON") ||
@@ -926,11 +1867,10 @@ export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose,
             null
           if (d0) setDept(d0)
 
-          const rt0 =
-            recordTypes.find((t) => String(t.code).toUpperCase() === String(rec.record_type_code || "").toUpperCase()) || null
+          const rt0 = recordTypes.find((t) => String(t.code).toUpperCase() === String(rec.record_type_code || "").toUpperCase()) || null
           if (rt0) setRecordType(rt0)
 
-          // visit context (best-effort)
+          // visit context best-effort
           const encType = String(rec.encounter_type || "")
           const encId = rec.encounter_id
           if (encType && encId != null) {
@@ -940,26 +1880,19 @@ export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose,
             if (match) setVisit(match)
           }
 
-          // template + sections (record_get provides template_sections as string[])
           const tSections = Array.isArray(rec.template_sections) ? rec.template_sections : []
           setTemplate(
             rec.template_id
-              ? {
-                id: rec.template_id,
-                name: rec.title ? `Template #${rec.template_id}` : `Template #${rec.template_id}`,
-                sections: tSections,
-              }
+              ? { id: rec.template_id, name: `Template #${rec.template_id}`, sections: tSections }
               : tSections.length
                 ? { id: null, name: "Template", sections: tSections }
                 : null
           )
 
-          // content
           const content = rec.content || {}
           const data = content?.data && typeof content.data === "object" ? content.data : {}
           setSectionData((prev) => ({ ...(prev || {}), ...(data || {}) }))
 
-          // jump to review so it feels like "Edit record" (but user can still go back)
           setStep(3)
         } catch (e) {
           if (!mounted) return
@@ -973,11 +1906,12 @@ export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose,
     }
   }, [isEdit, editingId, metaLoading, departments, recordTypes, visits])
 
-  // load visits when patient changes
+  // load visits when patient changes (FIX: use resolved patient id)
   useEffect(() => {
     let mounted = true
       ; (async () => {
-        if (!p?.id) {
+        const pid = asMaybeInt(patientEff?.id)
+        if (!pid) {
           setVisits([])
           setVisit(null)
           return
@@ -985,7 +1919,7 @@ export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose,
 
         setVisitsLoading(true)
         try {
-          const items = await fetchVisitsAuto(p?.id)
+          const items = await fetchVisitsAuto(pid)
           if (!mounted) return
 
           const unlinked = {
@@ -1025,9 +1959,9 @@ export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose,
       mounted = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [p?.id])
+  }, [patientEff?.id])
 
-  // if visit has dept_code, sync dept (nice UX)
+  // sync dept from visit
   useEffect(() => {
     if (!visit?.dept_code || !departments.length) return
     const code = String(visit.dept_code || "").toUpperCase()
@@ -1035,14 +1969,14 @@ export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose,
     if (found) setDept(found)
   }, [visit?.dept_code, departments])
 
-  // auto title from template + record type label
+  // auto title from template + record type
   useEffect(() => {
     if (!template) return
     const rt = recordType?.label ? ` · ${recordType.label}` : ""
     setTitle(`${template.name || "Template"}${rt}`)
-  }, [template?.id, recordType?.code]) // ✅ fixed deps
+  }, [template?.id, recordType?.code])
 
-  // fetch templates when dept/type/q changes (only on template/review)
+  // fetch templates
   useEffect(() => {
     const shouldLoad = step >= 2 && !!dept?.code && !!recordType?.code
     if (!shouldLoad) return
@@ -1052,7 +1986,6 @@ export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose,
       setTplLoading(true)
       setTplErr("")
       try {
-        // ✅ FIX: send dept_code, not dept
         const resp = await apiTemplatesList({
           dept_code: dept.code,
           record_type_code: recordType.code,
@@ -1093,7 +2026,6 @@ export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose,
   }, [templatesResp])
 
   const suggested = useMemo(() => templates.slice(0, 10), [templates])
-
   const missingRequired = useMemo(() => findMissingRequired(sectionsBlueprint, sectionData), [sectionsBlueprint, sectionData])
 
   function canNext() {
@@ -1144,29 +2076,29 @@ export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose,
     const encounter_id = isUnlinked ? null : (asMaybeInt(visit?.encounter_id) ?? visit?.encounter_id ?? null)
 
     return {
-      patient_id: asMaybeInt(p?.id),
+      patient_id: asMaybeInt(patientEff?.id),
       dept_code: dept?.code || "COMMON",
       record_type_code: recordType?.code || null,
-
       encounter_type,
       encounter_id,
-
       template_id: asMaybeInt(template?.id),
       title: (title || "").trim(),
       note: (note || "").trim(),
       confidential: !!confidential,
-
-      // ✅ backend expects JSON object (not string)
       content: {
         template: {
           id: template?.id ?? null,
           name: template?.name ?? null,
-          sections: Array.isArray(template?.sections) ? template.sections : [],
+          schema_version: sectionsBlueprint?.schema_version || 1,
+          sections: Array.isArray(sectionsBlueprint?.sections)
+            ? sectionsBlueprint.sections
+            : Array.isArray(template?.sections)
+              ? template.sections
+              : [],
         },
         data: sectionData,
         ui: { attachments: attachments || [] },
       },
-
       draft_stage: draft_stage || "INCOMPLETE",
     }
   }
@@ -1180,7 +2112,12 @@ export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose,
         template: {
           id: template?.id ?? null,
           name: template?.name ?? null,
-          sections: Array.isArray(template?.sections) ? template.sections : [],
+          schema_version: sectionsBlueprint?.schema_version || 1,
+          sections: Array.isArray(sectionsBlueprint?.sections)
+            ? sectionsBlueprint.sections
+            : Array.isArray(template?.sections)
+              ? template.sections
+              : [],
         },
         data: sectionData,
         ui: { attachments: attachments || [] },
@@ -1189,20 +2126,16 @@ export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose,
     }
   }
 
-
-
   function pickApiErrorPayload(e) {
     return e?.response?.data || e?.data || null
   }
 
-  // Convert ("body","encounter_id") -> "encounter_id"
   function locToField(loc) {
     if (!Array.isArray(loc)) return "field"
     const last = loc[loc.length - 1]
     return String(last || "field")
   }
 
-  // Human labels (optional)
   const FIELD_LABEL = {
     patient_id: "Patient",
     encounter_type: "Encounter Type",
@@ -1214,12 +2147,10 @@ export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose,
     draft_stage: "Draft Stage",
   }
 
-  // Extract 422 validation messages from your backend format
   function extractValidationMessages(e) {
     const data = pickApiErrorPayload(e)
     const details = data?.error?.details || data?.details || data?.error?.detail || data?.detail || null
 
-    // FastAPI default: {"detail":[{loc,msg,type}]}
     if (Array.isArray(details)) {
       return details.map((d) => {
         const field = FIELD_LABEL[locToField(d.loc)] || locToField(d.loc)
@@ -1228,43 +2159,40 @@ export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose,
       })
     }
 
-    // Sometimes backend returns {"detail": "message"}
     if (typeof data?.detail === "string") return [data.detail]
     if (typeof data?.msg === "string") return [data.msg]
     if (typeof data?.message === "string") return [data.message]
-
     return []
   }
 
-  // Show field-by-field toast for validation errors
   function toastValidationErrors(e, fallback = "Please fix highlighted errors") {
     const msgs = extractValidationMessages(e)
     if (!msgs.length) {
       toast.error(errMsg(e, fallback))
       return false
     }
-
-    // First toast summary
     toast.error(`Validation failed (${msgs.length})`)
-
-    // Then show each message (limit to avoid spam)
     msgs.slice(0, 6).forEach((m) => toast.error(m))
     if (msgs.length > 6) toast.error(`+ ${msgs.length - 6} more…`)
-
     return true
   }
 
+  // ✅ FIX: Unlinked visits should NOT require encounter_type/encounter_id
   function validateDraftPayload(payload) {
-    console.log(payload, "123456789");
-
     const missing = []
     const bad = []
 
     if (!payload.patient_id) missing.push("Patient")
-    if (!payload.encounter_type) missing.push("Encounter Type")
-    if (!payload.encounter_id || !String(payload.encounter_id).trim()) missing.push("Encounter ID")
     if (!payload.dept_code) missing.push("Department")
     if (!payload.record_type_code) missing.push("Record Type")
+
+    // encounter optional (visit can be UNLINKED)
+    const hasEncounter = !!payload.encounter_type && payload.encounter_id !== null && payload.encounter_id !== undefined && String(payload.encounter_id).trim() !== ""
+    if (payload.encounter_type || payload.encounter_id) {
+      // if one provided, ensure both consistent
+      if (!hasEncounter) bad.push("Encounter (type + id must be both valid)")
+    }
+
     if (!payload.title || String(payload.title).trim().length < 3) bad.push("Title (min 3 chars)")
 
     if (missing.length) return `Missing: ${missing.join(", ")}`
@@ -1272,10 +2200,9 @@ export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose,
     return null
   }
 
-
   async function saveDraft() {
     if (!canNext() && !isEdit) return toast.error("Fill required fields before saving")
-    if (!p?.id && !isEdit) return toast.error("Patient not selected")
+    if (!patientEff?.id && !isEdit) return toast.error("Patient not selected")
 
     setSaving(true)
     try {
@@ -1287,7 +2214,7 @@ export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose,
         const updated = await apiUpdateDraft(rid, payload)
         toast.success("Draft updated")
         onUpdated?.({ ...updated, record_id: rid })
-        onSaved?.({ ...updated, record_id: rid }) // backward compat
+        onSaved?.({ ...updated, record_id: rid })
       } else {
         const payload = buildDraftPayload({ draft_stage: "INCOMPLETE" })
         const created = await apiCreateDraft(payload)
@@ -1307,7 +2234,7 @@ export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose,
 
   async function saveAndSign() {
     if (!canNext() && !isEdit) return toast.error("Fill required fields before signing")
-    if (!p?.id && !isEdit) return toast.error("Patient not selected")
+    if (!patientEff?.id && !isEdit) return toast.error("Patient not selected")
 
     setSaving(true)
     try {
@@ -1315,16 +2242,12 @@ export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose,
         const rid = asMaybeInt(editingId)
         if (!rid) return toast.error("Missing record id for edit")
         const payload = buildUpdatePayload({ draft_stage: "READY" })
-
-        // basic pre-validation
         if (!payload.title || payload.title.trim().length < 3) {
           toast.error("Title min 3 chars")
           return
         }
 
         await apiUpdateDraft(rid, payload)
-
-        // optional: sign after update
         await apiSignRecord(rid, "")
 
         toast.success("Updated & Signed")
@@ -1334,8 +2257,6 @@ export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose,
         onClose?.()
       } else {
         const payload = buildDraftPayload({ draft_stage: "READY" })
-
-        // ✅ Pre-validation (frontend)
         const vErr = validateDraftPayload(payload)
         if (vErr) {
           toast.error(vErr)
@@ -1343,52 +2264,107 @@ export default function EmrCreateRecordFlow({ patient, defaultDeptCode, onClose,
         }
 
         const created = await apiCreateDraft(payload)
-
-        // ✅ Fix: backend returns record_id (NOT id)
-        const recordId =
-          created?.record_id ??
-          created?.id ??
-          created?.record?.id ??
-          created?.data?.record_id ??
-          null
-
-        if (!recordId) {
+        const recordId2 = created?.record_id ?? created?.id ?? created?.record?.id ?? created?.data?.record_id ?? null
+        if (!recordId2) {
           toast.error("Draft created, but record_id missing from response")
           return
         }
 
-        await apiSignRecord(recordId, "")
-
+        await apiSignRecord(recordId2, "")
         toast.success("Saved & Signed")
-        onSaved?.({ ...created, record_id: recordId, signed: true })
+        onSaved?.({ ...created, record_id: recordId2, signed: true })
         resetAll()
         onClose?.()
       }
     } catch (e) {
-      // ✅ If backend validation fails (422), show field errors
       if (e?.response?.status === 422) {
         const shown = toastValidationErrors(e)
         if (shown) return
       }
-
       toast.error(errMsg(e))
     } finally {
       setSaving(false)
     }
   }
 
+  function startPrint() {
+    setPrintOpen(false)
+    setPrintMode(true)
+    setTimeout(() => {
+      try {
+        window.print?.()
+      } catch {
+        /* noop */
+      }
+    }, 80)
+  }
 
-function addFakeAttachment() {
+  function addFakeAttachment() {
     const n = attachments.length + 1
     setAttachments((a) => [...a, { name: `Attachment_${n}.pdf` }])
   }
 
   const leftSummary = (
-    <SelectionSummary patient={p} visit={visit} recordType={recordType} dept={dept} template={template} confidential={confidential} />
+    <SelectionSummary
+      patient={patientEff}
+      visit={visit}
+      recordType={recordType}
+      dept={dept}
+      template={template}
+      confidential={confidential}
+    />
   )
 
+  // -------------------- Render --------------------
   return (
     <div className="min-h-full w-full bg-gradient-to-br from-indigo-50/60 via-white to-rose-50/60">
+      {/* Print CSS: only print our print root */}
+      <style>{`
+        @media print {
+          body * { visibility: hidden !important; }
+          #emr-print-root, #emr-print-root * { visibility: visible !important; }
+          #emr-print-root { position: fixed !important; inset: 0 !important; overflow: visible !important; }
+          .no-print { display: none !important; }
+          * { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+          @page { margin: 12mm; }
+        }
+      `}</style>
+
+      {/* Print Preview Dialog (FIX: moved from PatientMiniCard into parent) */}
+      <PrintPreviewDialog
+        open={printOpen}
+        onOpenChange={setPrintOpen}
+        tone={tone}
+        title={title}
+        dept={dept}
+        recordType={recordType}
+        template={template}
+        patient={patientEff}
+        visit={visit}
+        schema={sectionsBlueprint}
+        data={sectionData}
+        includeHidden={printIncludeHidden}
+        setIncludeHidden={setPrintIncludeHidden}
+        onPrint={startPrint}
+      />
+
+      {/* Print-only overlay */}
+      <PrintOverlay
+        open={printMode}
+        onClose={() => setPrintMode(false)}
+        tone={tone}
+        patient={patientEff}
+        visit={visit}
+        dept={dept}
+        recordType={recordType}
+        template={template}
+        title={title}
+        note={note}
+        schema={sectionsBlueprint}
+        data={sectionData}
+        includeHidden={printIncludeHidden}
+      />
+
       <div
         className={cn(
           "mx-auto w-full max-w-[1400px]",
@@ -1405,12 +2381,28 @@ function addFakeAttachment() {
               <div className="text-xs text-slate-500">Meta + Templates loaded from API · safe error handling</div>
             </CardHeader>
             <CardContent className="space-y-3">
+              <PatientMiniCard patient={patientEff} loading={patientLoading} onOpenPrint={() => setPrintOpen(true)} />
+
               <Stepper step={step} setStep={setStep} isEdit={isEdit} />
 
               {metaLoading ? (
-                <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-3 text-xs text-slate-600">Loading departments & record types…</div>
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-3 text-xs text-slate-600">
+                  Loading departments & record types…
+                </div>
               ) : metaErr ? (
-                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">Meta load warning: {metaErr}</div>
+                <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3 text-xs text-amber-900">
+                  Meta load warning: {metaErr}
+                </div>
+              ) : null}
+
+              {isEdit && editLoading ? (
+                <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-3 text-xs text-slate-600">
+                  Loading record…
+                </div>
+              ) : isEdit && editErr ? (
+                <div className="rounded-2xl border border-rose-200 bg-rose-50 p-3 text-xs text-rose-900">
+                  {editErr}
+                </div>
               ) : null}
 
               <Separator />
@@ -1441,7 +2433,14 @@ function addFakeAttachment() {
                 <CardTitle className="text-base">Live Preview</CardTitle>
               </CardHeader>
               <CardContent>
-                <MiniPreview deptCode={dept?.code} deptName={dept?.name} recordType={recordType} template={template} title={title} note={note} />
+                <MiniPreview
+                  deptCode={dept?.code}
+                  deptName={dept?.name}
+                  recordType={recordType}
+                  template={template}
+                  title={title}
+                  note={note}
+                />
               </CardContent>
             </Card>
           </div>
@@ -1474,6 +2473,16 @@ function addFakeAttachment() {
                   </Button>
                 ) : (
                   <div className="flex flex-wrap items-center gap-2">
+                    <Button
+                      variant="outline"
+                      className="rounded-2xl"
+                      type="button"
+                      onClick={() => setPrintOpen(true)}
+                      disabled={!template || saving}
+                    >
+                      <Printer className="mr-2 h-4 w-4" /> Print
+                    </Button>
+
                     <Button variant="outline" className="rounded-2xl" onClick={saveDraft} disabled={!canNext() || saving}>
                       <PenLine className="mr-2 h-4 w-4" /> {saving ? "Saving…" : "Save Draft"}
                     </Button>
@@ -1498,22 +2507,30 @@ function addFakeAttachment() {
                   className="space-y-4"
                 >
                   <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-                    <div className="text-xs text-slate-600">Pick an encounter for linking (optional). Default: Unlinked / General.</div>
+                    <div className="text-xs text-slate-600">
+                      Pick an encounter for linking (optional). Default: Unlinked / General.
+                    </div>
 
                     <div className="flex w-full gap-2 md:w-[380px]">
                       <div className="relative flex-1">
                         <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-500" />
-                        <Input value={visitQ} onChange={(e) => setVisitQ(e.target.value)} placeholder="Search visits (OP/IP/Dept/Doctor)…" className="h-10 rounded-2xl pl-9" />
+                        <Input
+                          value={visitQ}
+                          onChange={(e) => setVisitQ(e.target.value)}
+                          placeholder="Search visits (OP/IP/Dept/Doctor)…"
+                          className="h-10 rounded-2xl pl-9"
+                        />
                       </div>
 
                       <Button
                         variant="outline"
                         className="h-10 rounded-2xl"
                         onClick={async () => {
-                          if (!p?.id) return toast.error("Patient not selected")
+                          const pid = asMaybeInt(patientEff?.id)
+                          if (!pid) return toast.error("Patient not selected")
                           setVisitsLoading(true)
                           try {
-                            const items = await fetchVisitsAuto(p?.id)
+                            const items = await fetchVisitsAuto(pid)
                             const unlinked = {
                               id: "UNLINKED",
                               encounter_type: "",
@@ -1541,7 +2558,9 @@ function addFakeAttachment() {
                   </div>
 
                   {visitsLoading ? (
-                    <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-6 text-center text-sm text-slate-700">Loading visits…</div>
+                    <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-6 text-center text-sm text-slate-700">
+                      Loading visits…
+                    </div>
                   ) : (
                     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
                       {filteredVisits.map((v) => (
@@ -1640,14 +2659,18 @@ function addFakeAttachment() {
                                 onClick={() => setTplStatus(s)}
                                 className={cn(
                                   "rounded-2xl px-3 py-2 text-xs font-semibold ring-1 transition",
-                                  tplStatus === s ? "bg-slate-900 text-white ring-slate-900" : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
+                                  tplStatus === s
+                                    ? "bg-slate-900 text-white ring-slate-900"
+                                    : "bg-white text-slate-700 ring-slate-200 hover:bg-slate-50"
                                 )}
                               >
                                 {s}
                               </button>
                             ))}
                           </div>
-                          <div className="mt-2 text-xs text-slate-500">Backend filters templates by dept_code + record_type_code.</div>
+                          <div className="mt-2 text-xs text-slate-500">
+                            Backend filters templates by dept_code + record_type_code.
+                          </div>
                         </div>
                       </div>
 
@@ -1685,7 +2708,9 @@ function addFakeAttachment() {
                         </div>
 
                         {tplLoading ? (
-                          <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-6 text-center text-sm text-slate-700">Loading templates…</div>
+                          <div className="rounded-2xl border border-slate-200 bg-slate-50/60 p-6 text-center text-sm text-slate-700">
+                            Loading templates…
+                          </div>
                         ) : suggested.length ? (
                           <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                             {suggested.map((t) => (
@@ -1737,7 +2762,6 @@ function addFakeAttachment() {
                 >
                   <div className="grid grid-cols-1 gap-4 xl:grid-cols-[1fr_360px]">
                     <div className="space-y-4">
-                      {/* Template Sections Form */}
                       <div className="rounded-3xl border border-slate-200 bg-white p-4">
                         <div className="flex items-center justify-between gap-2">
                           <div>
@@ -1768,7 +2792,7 @@ function addFakeAttachment() {
 
                         <Separator className="my-4" />
 
-                        <TemplateSectionsEditor tone={tone} blueprint={sectionsBlueprint} value={sectionData} onChange={setSectionData} />
+                        <TemplateSectionsEditor tone={tone} schema={sectionsBlueprint} value={sectionData} onChange={setSectionData} />
                       </div>
                     </div>
 
@@ -1780,7 +2804,14 @@ function addFakeAttachment() {
                           <div className="text-xs text-slate-500">Template sections & snapshot</div>
                         </CardHeader>
                         <CardContent>
-                          <MiniPreview deptCode={dept?.code} deptName={dept?.name} recordType={recordType} template={template} title={title} note={note} />
+                          <MiniPreview
+                            deptCode={dept?.code}
+                            deptName={dept?.name}
+                            recordType={recordType}
+                            template={template}
+                            title={title}
+                            note={note}
+                          />
                         </CardContent>
                       </Card>
 
@@ -1803,9 +2834,17 @@ function addFakeAttachment() {
                           {attachments.length ? (
                             <div className="space-y-2">
                               {attachments.map((a, idx) => (
-                                <div key={idx} className="flex items-center justify-between gap-2 rounded-2xl bg-slate-50 px-3 py-2 ring-1 ring-slate-200">
+                                <div
+                                  key={`${a?.name || "att"}-${idx}`}
+                                  className="flex items-center justify-between gap-2 rounded-2xl bg-slate-50 px-3 py-2 ring-1 ring-slate-200"
+                                >
                                   <div className="min-w-0 truncate text-sm font-medium text-slate-800">{a.name}</div>
-                                  <Button variant="ghost" size="icon" className="h-9 w-9 rounded-2xl" onClick={() => setAttachments((x) => x.filter((_, i) => i !== idx))}>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-9 w-9 rounded-2xl"
+                                    onClick={() => setAttachments((x) => x.filter((_, i) => i !== idx))}
+                                  >
                                     <X className="h-4 w-4" />
                                   </Button>
                                 </div>
@@ -1857,7 +2896,6 @@ function addFakeAttachment() {
                   <span className="font-semibold text-slate-900">Editing draft:</span> Visit / Type / Template are locked. You can update Title, Note, Confidential, and Content, then Save Draft or Save & Sign.
                 </div>
               ) : null}
-
             </div>
 
             {step === 3 && (title || "").trim().length < 3 ? (
@@ -1885,7 +2923,10 @@ function Stepper({ step, setStep, isEdit }) {
             key={s.key}
             type="button"
             disabled={!!isEdit && idx < 3}
-            onClick={() => { if (isEdit && idx < 3) return; setStep(idx) }}
+            onClick={() => {
+              if (isEdit && idx < 3) return
+              setStep(idx)
+            }}
             className={cn(
               "flex w-full items-start gap-3 rounded-2xl border px-3 py-3 text-left transition",
               active ? "border-slate-300 bg-white shadow-sm" : "border-slate-200 bg-white/60 hover:bg-white"
@@ -1911,6 +2952,65 @@ function Stepper({ step, setStep, isEdit }) {
           </button>
         )
       })}
+    </div>
+  )
+}
+
+function PatientMiniCard({ patient, loading, onOpenPrint }) {
+  const p = patient || null
+  return (
+    <div className="rounded-3xl border border-slate-200 bg-white p-3 shadow-sm">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <div className="text-xs font-semibold text-slate-500">Patient</div>
+          <div className="mt-1 truncate text-sm font-semibold text-slate-900">{loading ? "Loading…" : p?.name || "—"}</div>
+          <div className="mt-0.5 flex flex-wrap items-center gap-2 text-xs text-slate-600">
+            <Badge variant="secondary" className="rounded-xl">
+              UHID: {p?.uhid || "—"}
+            </Badge>
+            {p?.gender ? (
+              <Badge variant="outline" className="rounded-xl">
+                {String(p.gender)}
+              </Badge>
+            ) : null}
+            {p?.age !== null && p?.age !== undefined && String(p.age) !== "" ? (
+              <Badge variant="outline" className="rounded-xl">
+                {String(p.age)}y
+              </Badge>
+            ) : null}
+          </div>
+
+          <div className="mt-2 grid grid-cols-2 gap-2 text-[11px] text-slate-600">
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/60 px-3 py-2">
+              <div className="text-[10px] text-slate-500">Phone</div>
+              <div className="truncate font-semibold text-slate-900">{p?.phone || "—"}</div>
+            </div>
+            <div className="rounded-2xl border border-slate-200 bg-slate-50/60 px-3 py-2">
+              <div className="text-[10px] text-slate-500">Blood</div>
+              <div className="truncate font-semibold text-slate-900">{p?.blood || "—"}</div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex flex-col items-end gap-2">
+          {p?.id ? (
+            <Badge className="rounded-xl bg-slate-900 text-white">#{p.id}</Badge>
+          ) : (
+            <Badge variant="outline" className="rounded-xl">
+              —
+            </Badge>
+          )}
+          {p?.lastVisit ? (
+            <div className="text-[11px] text-slate-500">
+              Last: <span className="font-semibold text-slate-700">{fmtDate(p.lastVisit)}</span>
+            </div>
+          ) : null}
+
+          <Button variant="outline" className="h-9 rounded-2xl" onClick={onOpenPrint}>
+            <Printer className="mr-2 h-4 w-4" /> Preview
+          </Button>
+        </div>
+      </div>
     </div>
   )
 }
@@ -1985,7 +3085,9 @@ function VisitCard({ visit, active, onClick }) {
           </div>
 
           <div className="flex flex-col items-end gap-2">
-            <Badge className={cn("rounded-xl", active ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700")}>{active ? "Selected" : "Select"}</Badge>
+            <Badge className={cn("rounded-xl", active ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-700")}>
+              {active ? "Selected" : "Select"}
+            </Badge>
           </div>
         </div>
       </div>

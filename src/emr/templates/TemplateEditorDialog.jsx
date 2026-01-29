@@ -2323,9 +2323,10 @@ const SetupPanel = memo(function SetupPanel({
 
 /* -------------------------------- Main Dialog ---------------------------- */
 
-export default function TemplateEditorDialog({ open, onOpenChange, mode = "create", template = null, onSaved }) {
-  const isEdit = mode === "edit"
-  const isNewVersion = mode === "new_version"
+export default function TemplateEditorDialog({ open, onOpenChange, mode, template = null, onSaved, onSave }) {
+  const resolvedMode = mode || (template?.id ? "edit" : "create")
+  const isEdit = resolvedMode === "edit"
+  const isNewVersion = resolvedMode === "new_version"
 
   const abortRef = useRef(null)
 
@@ -2415,10 +2416,17 @@ export default function TemplateEditorDialog({ open, onOpenChange, mode = "creat
     abortRef.current?.abort?.()
     abortRef.current = new AbortController()
     loadMeta(abortRef.current.signal)
-    resetFromTemplate(template)
     return () => abortRef.current?.abort?.()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open])
+
+  // When switching between templates while the dialog is open (Edit → another Edit),
+  // ensure the builder state is reset to the selected template.
+  useEffect(() => {
+    if (!open) return
+    resetFromTemplate(template)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, template?.id, resolvedMode])
 
   useEffect(() => {
     if (!open) return
@@ -2482,6 +2490,31 @@ export default function TemplateEditorDialog({ open, onOpenChange, mode = "creat
         .split(",")
         .map((t) => t.trim())
         .filter(Boolean)
+
+      // If parent passed an onSave handler (Template Library workflow),
+      // delegate saving to it so the same API contract is used everywhere.
+      if (typeof onSave === "function") {
+        const saveMode = isNewVersion ? "NEW_VERSION" : isEdit ? "UPDATE" : "CREATE"
+        await onSave(
+          {
+            id: template?.id,
+            dept: meta.deptCode,
+            type: meta.typeCode,
+            name: meta.name.trim(),
+            description: meta.description?.trim() || "",
+            premium: !!template?.premium,
+            is_default: !!template?.is_default,
+            restricted: !!template?.restricted,
+            tags,
+            is_active: !!meta.isActive,
+            sections,
+            schema_json: normSchema,
+            publish: false,
+          },
+          saveMode
+        )
+        return
+      }
 
       let result = null
 

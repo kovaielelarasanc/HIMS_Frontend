@@ -754,6 +754,9 @@ export default function EmrPatientChart() {
             toast.error("Select a patient first")
             return
         }
+
+        console.log(patient, "ccc");
+
         // wire your export page/flow if available
         // Example route: /emr/export?patient_id=...
         // navigate(`/emr/export?patient_id=${patient.id}`)
