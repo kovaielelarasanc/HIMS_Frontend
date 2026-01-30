@@ -100,7 +100,7 @@ export default function Discharge({
         implants: '',
         pending_reports: '',
         patient_education: '',
-        followup_appointment_ref: '',
+        // followup_appointment_ref: '',
         // action flag
         finalize: false,
     })
@@ -253,7 +253,7 @@ export default function Discharge({
                     implants: sd.implants || '',
                     pending_reports: sd.pending_reports || '',
                     patient_education: sd.patient_education || '',
-                    followup_appointment_ref: sd.followup_appointment_ref || '',
+                    // followup_appointment_ref: sd.followup_appointment_ref || '',
                     prepared_by_name: sd.prepared_by_name || '',
                     reviewed_by_name: sd.reviewed_by_name || '',
                     reviewed_by_regno: sd.reviewed_by_regno || '',
@@ -956,7 +956,7 @@ export default function Discharge({
                                         disabled={readOnly}
                                     />
                                 </div>
-                                <div className="space-y-1">
+                                {/* <div className="space-y-1">
                                     <label className="text-xs font-medium text-gray-600">
                                         Follow-up appointment ID / token
                                     </label>
@@ -993,7 +993,7 @@ export default function Discharge({
                                         Dropdown will show OPD follow-ups for this patient (to be
                                         wired from OPD module).
                                     </div>
-                                </div>
+                                </div> */}
                             </div>
                         </div>
 
