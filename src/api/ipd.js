@@ -492,6 +492,17 @@ export const saveAdmissionFeedback = (admission_id, payload) =>
   API.post(`/ipd/admissions/${admission_id}/feedback`, payload)
 
 /* =========================================================
+   CLINICAL NOTES
+   ========================================================= */
+
+// Clinical Notes
+export const getClinicalNotes = (admission_id) =>
+  API.get(`/ipd/admissions/${admission_id}/clinical-notes`)
+
+export const updateClinicalNotes = (admission_id, payload) =>
+  API.patch(`/ipd/admissions/${admission_id}/clinical-notes`, payload)
+
+/* =========================================================
    PATIENT (display helpers)
    ========================================================= */
 

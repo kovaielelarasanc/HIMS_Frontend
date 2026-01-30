@@ -2,12 +2,15 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useParams, useLocation } from 'react-router-dom'
 import { useCan } from '../hooks/useCan'
+import { toast } from 'sonner'
 import {
     getAdmission,
     cancelAdmission,
     // transferBed,
     listBeds,
     getPatient,
+    getClinicalNotes,
+    updateClinicalNotes,
 } from '../api/ipd'
 
 // Common components
@@ -39,7 +42,7 @@ import {
 
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Sheet, SheetContent } from '@/components/ui/sheet'
 import {
@@ -71,6 +74,7 @@ import {
     Sparkles,
     AlertTriangle,
     X,
+    Stethoscope,
 } from 'lucide-react'
 
 import NursingProcedures from './nursing/NursingProcedures'
@@ -391,6 +395,149 @@ function QuickOrdersTab({ admission, patient, beds = [] }) {
 }
 
 // ---------------------------------------------------------------------
+// NEW TAB: Clinical Notes
+// ---------------------------------------------------------------------
+function ClinicalNotesTab({ admission, patient, canWrite }) {
+    const [clinicalData, setClinicalData] = useState({
+        preliminaryDiagnosis: '',
+        shortHistory: '',
+        carePlan: ''
+    })
+    const [loading, setLoading] = useState(false)
+    const [saving, setSaving] = useState(false)
+
+    const fetchClinicalNotes = async () => {
+        if (!admission?.id) return
+        setLoading(true)
+        try {
+            const response = await getAdmission(admission.id)
+            const data = response?.data || response
+            setClinicalData({
+                preliminaryDiagnosis: data.preliminary_diagnosis || '',
+                shortHistory: data.history || '',
+                carePlan: data.care_plan || ''
+            })
+        } catch (error) {
+            console.error('Failed to fetch clinical notes:', error)
+        } finally {
+            setLoading(false)
+        }
+    }
+
+    const saveClinicalNotes = async () => {
+        if (!admission?.id) return
+        setSaving(true)
+        try {
+            await updateClinicalNotes(admission.id, {
+                preliminary_diagnosis: clinicalData.preliminaryDiagnosis,
+                history: clinicalData.shortHistory,
+                care_plan: clinicalData.carePlan
+            })
+            
+            toast.success("Clinical notes saved successfully")
+            
+            // Clear the form data
+            setClinicalData({
+                preliminaryDiagnosis: '',
+                shortHistory: '',
+                carePlan: ''
+            })
+        } catch (error) {
+            console.error('Failed to save clinical notes:', error)
+            toast.error("Failed to save clinical notes")
+        } finally {
+            setSaving(false)
+        }
+    }
+
+    useEffect(() => {
+        fetchClinicalNotes()
+    }, [admission?.id])
+
+    const handleFieldChange = (field, value) => {
+        setClinicalData(prev => ({ ...prev, [field]: value }))
+    }
+
+    return (
+        <div className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-1">
+                <Card className="rounded-3xl border-0 bg-white shadow-sm">
+                    <CardHeader>
+                        <CardTitle className="text-sm text-slate-900">Preliminary Diagnosis</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        {canWrite ? (
+                            <Textarea
+                                value={clinicalData.preliminaryDiagnosis}
+                                onChange={(e) => handleFieldChange('preliminaryDiagnosis', e.target.value)}
+                                placeholder="Preliminary diagnosis"
+                                className="min-h-[80px] rounded-2xl"
+                            />
+                        ) : (
+                            <div className="text-sm text-slate-600">
+                                {clinicalData.preliminaryDiagnosis || 'No preliminary diagnosis available'}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                <Card className="rounded-3xl border-0 bg-white shadow-sm">
+                    <CardHeader>
+                        <CardTitle className="text-sm text-slate-900">Short History</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        {canWrite ? (
+                            <Textarea
+                                value={clinicalData.shortHistory}
+                                onChange={(e) => handleFieldChange('shortHistory', e.target.value)}
+                                placeholder="Short history..."
+                                className="min-h-[80px] rounded-2xl"
+                            />
+                        ) : (
+                            <div className="text-sm text-slate-600">
+                                {clinicalData.shortHistory || 'No short history available'}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+
+                <Card className="rounded-3xl border-0 bg-white shadow-sm">
+                    <CardHeader>
+                        <CardTitle className="text-sm text-slate-900">Care Plan</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                        {canWrite ? (
+                            <Textarea
+                                value={clinicalData.carePlan}
+                                onChange={(e) => handleFieldChange('carePlan', e.target.value)}
+                                placeholder="Care plan..."
+                                className="min-h-[100px] rounded-2xl"
+                            />
+                        ) : (
+                            <div className="text-sm text-slate-600">
+                                {clinicalData.carePlan || 'No care plan available'}
+                            </div>
+                        )}
+                    </CardContent>
+                </Card>
+            </div>
+
+            {canWrite && (
+                <div className="flex justify-end">
+                    <Button
+                        onClick={saveClinicalNotes}
+                        disabled={saving}
+                        className="rounded-2xl bg-sky-600 hover:bg-sky-700"
+                    >
+                        {saving ? 'Saving...' : 'Save Changes'}
+                    </Button>
+                </div>
+            )}
+        </div>
+    )
+}
+
+// ---------------------------------------------------------------------
 // Tabs config
 // ---------------------------------------------------------------------
 const TABS = [
@@ -402,6 +549,7 @@ const TABS = [
     { key: 'io', label: 'Intake/Output', el: IntakeOutput, writePerm: 'ipd.nursing', icon: Activity },
 
     { key: 'assessments', label: 'Assessments', el: AssessmentsTab, writePerm: 'ipd.nursing', icon: FileText },
+    { key: 'clinical-notes', label: 'Clinical Notes', el: ClinicalNotesTab, writePerm: 'ipd.doctor', icon: Stethoscope },
     { key: 'medications', label: 'Medications / Drug Chart', el: MedicationsTab, writePerm: 'ipd.doctor', icon: Pill },
     { key: 'nursing_procedures', label: 'Nursing Procedures', el: NursingProcedures, writePerm: 'ipd.nursing', icon: Sparkles },
     { key: 'discharge-meds', label: 'Discharge Meds', el: DischargeMedsTab, writePerm: 'ipd.doctor', icon: Pill },
@@ -418,7 +566,7 @@ const TABS = [
 
 const NAV_GROUPS = [
     { title: 'Overview', keys: ['dashboard', 'quick-orders', 'nursing', 'vitals', 'io'] },
-    { title: 'Clinical', keys: ['assessments', 'medications', 'nursing_procedures', 'discharge-meds'] },
+    { title: 'Clinical', keys: ['assessments', 'clinical-notes', 'medications', 'nursing_procedures', 'discharge-meds'] },
     { title: 'Operations', keys: ['bed-transfer', 'referrals', 'discharge', 'charges', 'feedback', 'newborn_resuscitation', 'reports'] },
 ]
 
