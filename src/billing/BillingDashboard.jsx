@@ -156,11 +156,13 @@ export default function BillingDashboard() {
                 encounter_type: filters.encounter_type !== "ALL" ? filters.encounter_type : undefined,
                 status: filters.status !== "ALL" ? filters.status : undefined,
                 payer_mode: filters.payer_mode !== "ALL" ? filters.payer_mode : undefined,
-                date_from: filters.date_from || undefined,
-                date_to: filters.date_to || undefined,
+                date_from: filters.date_from ? filters.date_from : undefined,
+                date_to: filters.date_to ? filters.date_to : undefined,
                 page: filters.page,
                 page_size: filters.page_size,
             }
+
+            console.log('API params being sent:', params)
 
             const data = await billingListCases(params, { signal: ac.signal })
             const items = Array.isArray(data) ? data : (data?.items ?? [])

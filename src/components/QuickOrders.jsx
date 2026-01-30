@@ -89,7 +89,7 @@ const QO_PERMS = {
 // ✅ Optional fallbacks (so existing installs still work even before you assign quickorder.*)
 // You can remove these later if you want strict quickorder.* only.
 const FALLBACK_PERMS = {
-    lab: ["orders.lab.view", "orders.lab.create", "lis.orders.view", "lis.orders.create", "lab.orders.view", "lab.orders.create"],
+    lab: ["orders.lab.view", "orders.lab.create"],
     ris: ["orders.ris.view", "orders.ris.create", "ris.orders.view", "ris.orders.create", "radiology.orders.view", "radiology.orders.create"],
     rx: [
         "pharmacy.rx.view",
