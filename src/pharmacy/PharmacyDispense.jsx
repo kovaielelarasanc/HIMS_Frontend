@@ -330,7 +330,6 @@ function LineInstruction({ line }) {
 }
 
 function LineCardMobile({ line, idx, onChangeQty, onChangeBatch, batchOptions }) {
-  console.log(line, "ertyui");
 
   const med = line?.item_name || line?.medicine_name || 'Unnamed medicine'
   const strength = line?.item_strength || line?.strength || ''
@@ -338,7 +337,9 @@ function LineCardMobile({ line, idx, onChangeQty, onChangeBatch, batchOptions })
 
   const options = batchOptions || []
   const batchLabel = line?.batch_no ? `${line.batch_no} • ${formatDateOnly(line.expiry_date)}` : 'Select batch'
-  const avail = Number.isFinite(num(line?.batch_available_qty, NaN)) ? num(line?.batch_available_qty, 0) : null
+  // ✅ Get availability from selected batch in options
+  const selectedBatch = options.find(b => String(b.batch_id) === String(line?.batch_id))
+  const avail = selectedBatch ? num(selectedBatch.available_qty, 0) : (options.length === 1 ? num(options[0].available_qty, 0) : num(line?.batch_available_qty, NaN))
 
   return (
     <div className="rounded-2xl border border-slate-500 bg-white p-3 space-y-2">
@@ -366,28 +367,34 @@ function LineCardMobile({ line, idx, onChangeQty, onChangeBatch, batchOptions })
             <Layers className="h-3 w-3" /> Batch
           </div>
 
-          <Select
-            value={line?.batch_id ? String(line.batch_id) : ''}
-            onValueChange={(v) => onChangeBatch(idx, v)}
-          >
-            <SelectTrigger className="mt-1 h-8 text-[11px] bg-white border-slate-500 rounded-full">
-              <SelectValue placeholder={batchLabel} />
-            </SelectTrigger>
-            <SelectContent>
-              {options.length === 0 ? (
-                <SelectItem value="__none" disabled>No batches</SelectItem>
-              ) : (
-                options.map((b) => (
-                  <SelectItem key={b.batch_id} value={String(b.batch_id)}>
-                    {b.batch_no} • exp {formatDateOnly(b.expiry_date)} • qty {num(b.available_qty, 0)}
-                  </SelectItem>
-                ))
-              )}
-            </SelectContent>
-          </Select>
+          {options.length === 1 ? (
+            <div className="mt-1 h-8 bg-slate-50 border border-slate-300 rounded-full px-3 flex items-center text-[11px] text-slate-700">
+              {options[0].batch_no}
+            </div>
+          ) : (
+            <Select
+              value={line?.batch_id ? String(line.batch_id) : ''}
+              onValueChange={(v) => onChangeBatch(idx, v)}
+            >
+              <SelectTrigger className="mt-1 h-8 text-[11px] bg-white border-slate-500 rounded-full">
+                <SelectValue placeholder={batchLabel} />
+              </SelectTrigger>
+              <SelectContent>
+                {options.length === 0 ? (
+                  <SelectItem value="__none" disabled>No batches</SelectItem>
+                ) : (
+                  options.map((b) => (
+                    <SelectItem key={b.batch_id} value={String(b.batch_id)}>
+                      {b.batch_no}
+                    </SelectItem>
+                  ))
+                )}
+              </SelectContent>
+            </Select>
+          )}
 
           <div className="mt-1 text-[10px] text-slate-500">
-            Avail: <span className="font-medium text-slate-700">{avail === null ? '—' : avail}</span>
+            Available: <span className="font-medium text-slate-700">{Number.isFinite(avail) ? avail : '—'}</span>
           </div>
         </div>
 
@@ -454,7 +461,6 @@ export default function PharmacyDispense() {
     try {
       const list = Array.isArray(rows) ? rows : []
       const need = list
-        .slice(0, 25)
         .filter((r) => !r?.patient && getPatientId(r))
         .map((r) => Number(getPatientId(r)))
         .filter(Boolean)
@@ -531,13 +537,13 @@ export default function PharmacyDispense() {
   useEffect(() => { fetchQueue() }, [fetchQueue])
 
   // ✅ load batch picks
-  const fetchBatchPicks = useCallback(async (locId, itemId) => {
+  const fetchBatchPicks = useCallback(async (locId, itemId, forceRefresh = false) => {
     const L = Number(locId || 0)
     const I = Number(itemId || 0)
     if (!L || !I) return []
 
     const key = `${L}-${I}`
-    if (batchCacheRef.current[key]) return batchCacheRef.current[key]
+    if (!forceRefresh && batchCacheRef.current[key]) return batchCacheRef.current[key]
 
     try {
       const res = await API.get('/pharmacy/batch-picks', { params: { location_id: L, item_id: I } })
@@ -661,13 +667,39 @@ export default function PharmacyDispense() {
         if (!selectedRx || !locId) return
 
         const lines = dispenseLines || []
-        const uniqueItems = [...new Set(lines.map((l) => Number(l.item_id || 0)).filter(Boolean))].slice(0, 25)
+        const uniqueItems = [...new Set(lines.map((l) => Number(l.item_id || 0)).filter(Boolean))]
 
         for (const itemId of uniqueItems) {
           // eslint-disable-next-line no-await-in-loop
           await fetchBatchPicks(locId, itemId)
           if (!alive) return
         }
+
+        // Auto-select single batches
+        setDispenseLines((prev) => {
+          return (prev || []).map((line) => {
+            if (line.batch_no) return line // Already has batch selected
+            
+            const itemId = Number(line.item_id || 0)
+            if (!itemId) return line
+            
+            const key = `${locId}-${itemId}`
+            const options = batchCacheRef.current[key] || []
+            
+            if (options.length === 1) {
+              const batch = options[0]
+              return {
+                ...line,
+                batch_id: batch.batch_id,
+                batch_no: batch.batch_no,
+                expiry_date: batch.expiry_date,
+                batch_available_qty: batch.available_qty,
+              }
+            }
+            
+            return line
+          })
+        })
       })()
 
     return () => { alive = false }
@@ -695,26 +727,39 @@ export default function PharmacyDispense() {
       return
     }
 
-    // ✅ require batch_id
-    const noBatch = validLines.find((l) => !Number(l?.batch_id || 0))
-    if (noBatch) {
-      toast.error(`Select batch for: ${noBatch.item_name || noBatch.medicine_name || 'a medicine'}`)
-      return
-    }
-
-    const payload = {
-      lines: validLines.map((l) => ({
-        line_id: Number(getLineId(l)),
-        dispense_qty: num(l?.dispense_qty || 0, 0),
-        batch_id: Number(l?.batch_id || 0), // ✅ send batch id
-      })),
-      location_id: effectiveLocationId,
-      create_sale: true,
-      context_type: safeUpper(getRxType(selectedRx)),
-    }
-
+    // ✅ refresh batch data and validate
     try {
       setDispensing(true)
+      
+      for (const line of validLines) {
+        const batchNo = line?.batch_no
+        if (!batchNo) {
+          toast.error(`Select batch for: ${line.item_name || line.medicine_name || 'a medicine'}`)
+          return
+        }
+        
+        const itemId = Number(line.item_id || 0)
+        // Refresh batch data
+        const freshBatches = await fetchBatchPicks(effectiveLocationId, itemId, true)
+        const batchExists = freshBatches.find(b => b.batch_no === batchNo)
+        
+        if (!batchExists) {
+          toast.error(`Batch no longer available for ${line.item_name || line.medicine_name}. Please select a different batch.`)
+          return
+        }
+      }
+
+      const payload = {
+        lines: validLines.map((l) => ({
+          line_id: Number(getLineId(l)),
+          dispense_qty: num(l?.dispense_qty || 0, 0),
+          batch_id: l?.batch_no || null, // Send batch_no instead of batch_id
+        })),
+        location_id: effectiveLocationId,
+        create_sale: true,
+        context_type: safeUpper(getRxType(selectedRx)),
+      }
+
       await dispensePharmacyPrescription(selectedRx.id, payload)
       toast.success('Dispense recorded')
 
@@ -1201,7 +1246,7 @@ export default function PharmacyDispense() {
                             <th className="text-left px-3 py-2 font-medium">Instructions</th>
                             <th className="text-left px-3 py-2 font-medium">Batch</th>
                             <th className="text-left px-3 py-2 font-medium">Expiry</th>
-                            <th className="text-left px-3 py-2 font-medium">Avail</th>
+                            <th className="text-left px-3 py-2 font-medium">Available</th>
                             <th className="text-right px-3 py-2 font-medium">Dispense</th>
                           </tr>
                         </thead>
@@ -1211,7 +1256,9 @@ export default function PharmacyDispense() {
                           ) : (
                             selectedLines.map((l, idx) => {
                               const opts = batchOptionsForLine(l)
-                              const avail = num(l.batch_available_qty, NaN)
+                              // ✅ Get availability from selected batch in options
+                              const selectedBatch = opts.find(b => String(b.batch_id) === String(l.batch_id))
+                              const avail = selectedBatch ? num(selectedBatch.available_qty, 0) : (opts.length === 1 ? num(opts[0].available_qty, 0) : num(l.batch_available_qty, NaN))
 
                               return (
                                 <tr key={getLineId(l) || idx} className="border-t border-slate-500">
@@ -1227,25 +1274,31 @@ export default function PharmacyDispense() {
                                   <td className="px-3 py-2 align-top text-slate-700"><LineInstruction line={l} /></td>
 
                                   <td className="px-3 py-2 align-top">
-                                    <Select
-                                      value={l?.batch_id ? String(l.batch_id) : ''}
-                                      onValueChange={(v) => handleChangeBatch(idx, v)}
-                                    >
-                                      <SelectTrigger className="h-8 w-[190px] bg-white border-slate-500 rounded-full text-[11px]">
-                                        <SelectValue placeholder={l?.batch_no ? l.batch_no : 'Select batch'} />
-                                      </SelectTrigger>
-                                      <SelectContent>
-                                        {opts.length === 0 ? (
-                                          <SelectItem value="__none" disabled>No batches</SelectItem>
-                                        ) : (
-                                          opts.map((b) => (
-                                            <SelectItem key={b.batch_id} value={String(b.batch_id)}>
-                                              {b.batch_no} • exp {formatDateOnly(b.expiry_date)} • qty {num(b.available_qty, 0)}
-                                            </SelectItem>
-                                          ))
-                                        )}
-                                      </SelectContent>
-                                    </Select>
+                                    {opts.length === 1 ? (
+                                      <div className="h-8 w-[120px] bg-slate-50 border border-slate-300 rounded-full px-3 flex items-center text-[11px] text-slate-700">
+                                        {opts[0].batch_no}
+                                      </div>
+                                    ) : (
+                                      <Select
+                                        value={l?.batch_id ? String(l.batch_id) : ''}
+                                        onValueChange={(v) => handleChangeBatch(idx, v)}
+                                      >
+                                        <SelectTrigger className="h-8 w-[120px] bg-white border-slate-500 rounded-full text-[11px]">
+                                          <SelectValue placeholder={l?.batch_no ? l.batch_no : 'Select batch'} />
+                                        </SelectTrigger>
+                                        <SelectContent>
+                                          {opts.length === 0 ? (
+                                            <SelectItem value="__none" disabled>No batches</SelectItem>
+                                          ) : (
+                                            opts.map((b) => (
+                                              <SelectItem key={b.batch_id} value={String(b.batch_id)}>
+                                                {b.batch_no}
+                                              </SelectItem>
+                                            ))
+                                          )}
+                                        </SelectContent>
+                                      </Select>
+                                    )}
                                   </td>
 
                                   <td className="px-3 py-2 align-top text-slate-700">

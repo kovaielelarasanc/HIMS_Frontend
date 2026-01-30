@@ -359,9 +359,32 @@ function getEncounterLabel(e, type) {
 
   if (t === "OP") {
     const no = pick(e, ["visit_no", "visitNo", "opd_no", "opdNo"], "")
-    const dt = pick(e, ["visit_date", "date", "created_at", "start_at"], "")
+    const dt = pick(e, ["visit_date", "date", "created_at", "start_at", "visit_at", "appointment_date", "encounter_at"], "")
     const dept = pick(e, ["department_name", "department", "dept"], "")
-    return [no || `Visit #${getEncounterId(e)}`, dt ? fmtDT(dt) : "", dept].filter(Boolean).join(" • ")
+    
+    console.log('Encounter data:', e, 'Date field:', dt) // Debug log
+    
+    // Format date as DD-MM-YYYY for better readability
+    const formatDateForVisit = (dateStr) => {
+      if (!dateStr) return ""
+      try {
+        const d = new Date(dateStr)
+        if (Number.isNaN(d.getTime())) return ""
+        return d.toLocaleDateString('en-GB', {
+          day: '2-digit',
+          month: '2-digit', 
+          year: 'numeric'
+        })
+      } catch {
+        return ""
+      }
+    }
+    
+    const visitNumber = no || `#${getEncounterId(e)}`
+    const formattedDate = formatDateForVisit(dt)
+    const visitLabel = formattedDate ? `Visit ${visitNumber} - ${formattedDate}` : `Visit ${visitNumber}`
+    
+    return [visitLabel, dept].filter(Boolean).join(" • ")
   }
 
   if (t === "IP") {
@@ -916,7 +939,7 @@ export default function PharmacyRx() {
           const res = await searchItemBatches({
             location_id: pharmacyLocationId,
             q,
-            limit: 15,
+            limit: 100,
             type: "drug",
             only_in_stock: true,
             exclude_expired: true,
@@ -979,6 +1002,13 @@ export default function PharmacyRx() {
 
     setMedQuery(row.name || "")
     setShowMedDropdown(false)
+    
+    // Auto-select batch if only one available
+    if (row.auto_selected && row.batch_count === 1) {
+      toast.success(`Auto-selected batch: ${row.batch_no}`, {
+        description: `Only one batch available for ${row.name}`
+      })
+    }
   }
 
   /* ----------------------------- form helpers ----------------------------- */
@@ -2024,6 +2054,15 @@ export default function PharmacyRx() {
                                                   >
                                                     Qty: {fmtQty(it.available_qty)}
                                                   </Badge>
+                                                  
+                                                  {it.auto_selected && (
+                                                    <Badge
+                                                      variant="outline"
+                                                      className="text-[10px] border-blue-200 text-blue-700 bg-blue-50"
+                                                    >
+                                                      ✓ Auto-select
+                                                    </Badge>
+                                                  )}
                                                 </div>
                                               </button>
                                             ))}
