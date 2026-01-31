@@ -254,7 +254,7 @@ export default function BillingPrintDownload({ caseId, caseNumber, patientName, 
             },
             {
                 key: "PHARMACY_SPLIT_UP",
-                label: "Pharmacy Split-Up (Pharmacy Header)",
+                label: "Pharmacy Bill",
                 desc: "Only pharmacy items with Pharmacy branding header",
                 pdf: {
                     path: "/billing/print/pharmacy-split-up",
