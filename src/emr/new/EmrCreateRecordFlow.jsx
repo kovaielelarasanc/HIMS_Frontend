@@ -37,7 +37,7 @@ import { Separator } from "@/components/ui/separator"
 import { Switch } from "@/components/ui/switch"
 import { Alert, AlertTitle, AlertDescription } from "@/components/ui/alert"
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from "@/components/ui/select"
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog"
 import API from "@/api/client"
 
 /**
@@ -48,7 +48,173 @@ import API from "@/api/client"
  * 4) ✅ Visits fetch uses resolved patient id reliably.
  * 5) ✅ Safer mappings + stable keys + hidden fields control preserved.
  */
+function SignaturePad({
+  value,
+  onChange,
+  disabled = false,
+  height = 160,
+  className,
+  canvasClassName,
+  clearLabel = "Clear",
+  penWidth = 2,
+}) {
+  const canvasRef = useRef(null)
+  const drawingRef = useRef(false)
+  const lastRef = useRef({ x: 0, y: 0 })
+  const [hasInk, setHasInk] = useState(false)
 
+  const dataUrl = useMemo(() => {
+    if (!value) return ""
+    if (typeof value === "string") return value
+    return value?.data_url || value?.dataUrl || ""
+  }, [value])
+
+  const resizeAndRedraw = useCallback(
+    (imgUrl) => {
+      const canvas = canvasRef.current
+      if (!canvas || typeof window === "undefined") return
+      const ctx = canvas.getContext("2d")
+      if (!ctx) return
+
+      const dpr = window.devicePixelRatio || 1
+      const rect = canvas.getBoundingClientRect()
+      const cssW = Math.max(1, rect.width || 560)
+      const cssH = Math.max(1, rect.height || height)
+
+      canvas.width = Math.round(cssW * dpr)
+      canvas.height = Math.round(cssH * dpr)
+
+      // draw in CSS pixels
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0)
+      ctx.clearRect(0, 0, cssW, cssH)
+
+      if (imgUrl && String(imgUrl).startsWith("data:image")) {
+        const img = new Image()
+        img.onload = () => {
+          ctx.clearRect(0, 0, cssW, cssH)
+          ctx.drawImage(img, 0, 0, cssW, cssH)
+          setHasInk(true)
+        }
+        img.src = imgUrl
+      } else {
+        setHasInk(false)
+      }
+    },
+    [height]
+  )
+
+  // initial draw + when value changes
+  useEffect(() => {
+    resizeAndRedraw(dataUrl)
+  }, [dataUrl, resizeAndRedraw])
+
+  // keep crisp on resize
+  useEffect(() => {
+    if (typeof window === "undefined") return
+    const onResize = () => resizeAndRedraw(dataUrl)
+    window.addEventListener("resize", onResize)
+    return () => window.removeEventListener("resize", onResize)
+  }, [dataUrl, resizeAndRedraw])
+
+  const getPos = (e) => {
+    const canvas = canvasRef.current
+    const rect = canvas.getBoundingClientRect()
+    const clientX = e.clientX
+    const clientY = e.clientY
+    return { x: clientX - rect.left, y: clientY - rect.top }
+  }
+
+  const start = (e) => {
+    if (disabled) return
+    const canvas = canvasRef.current
+    const ctx = canvas?.getContext("2d")
+    if (!canvas || !ctx) return
+
+    drawingRef.current = true
+    try {
+      canvas.setPointerCapture?.(e.pointerId)
+    } catch {
+      // ignore
+    }
+
+    const p = getPos(e)
+    lastRef.current = p
+
+    ctx.beginPath()
+    ctx.moveTo(p.x, p.y)
+    ctx.lineWidth = penWidth
+    ctx.lineCap = "round"
+    ctx.lineJoin = "round"
+    ctx.strokeStyle = "#0f172a"
+  }
+
+  const move = (e) => {
+    if (disabled) return
+    if (!drawingRef.current) return
+    const canvas = canvasRef.current
+    const ctx = canvas?.getContext("2d")
+    if (!canvas || !ctx) return
+
+    const p = getPos(e)
+    const last = lastRef.current
+
+    // smooth-ish line: mid-point technique
+    const midX = (last.x + p.x) / 2
+    const midY = (last.y + p.y) / 2
+
+    ctx.quadraticCurveTo(last.x, last.y, midX, midY)
+    ctx.stroke()
+
+    lastRef.current = p
+    setHasInk(true)
+  }
+
+  const end = () => {
+    if (disabled) return
+    if (!drawingRef.current) return
+    drawingRef.current = false
+
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const url = canvas.toDataURL("image/png")
+    setHasInk(true)
+    onChange?.({ data_url: url })
+  }
+
+  const clear = () => {
+    if (disabled) return
+    const canvas = canvasRef.current
+    const ctx = canvas?.getContext("2d")
+    if (!canvas || !ctx) return
+    const rect = canvas.getBoundingClientRect()
+    ctx.clearRect(0, 0, rect.width || 560, rect.height || height)
+    setHasInk(false)
+    onChange?.({ data_url: "" })
+  }
+
+  return (
+    <div className={cn("rounded-2xl border border-slate-200 bg-white p-2", className)}>
+      <div className="overflow-hidden rounded-xl border border-slate-200 bg-slate-50">
+        <canvas
+          ref={canvasRef}
+          style={{ width: "100%", height: `${height}px` }}
+          className={cn("touch-none", disabled ? "opacity-60" : "", canvasClassName)}
+          onPointerDown={start}
+          onPointerMove={move}
+          onPointerUp={end}
+          onPointerCancel={end}
+        />
+      </div>
+
+      <div className="mt-2 flex items-center justify-between">
+        <div className="text-xs text-slate-500">{hasInk ? "Signed" : "Draw signature here"}</div>
+        <Button type="button" variant="outline" className="h-9 rounded-2xl" onClick={clear} disabled={disabled}>
+          {clearLabel}
+        </Button>
+      </div>
+    </div>
+  )
+}
 // -------------------- helpers (API unwrap + errors) --------------------
 function unwrapOk(resp) {
   const d = resp?.data
@@ -93,17 +259,6 @@ function fmtTime(d) {
   }
 }
 
-function useIsMobile(breakpointPx = 1024) {
-  const [isMobile, setIsMobile] = useState(false)
-  useEffect(() => {
-    const mq = window.matchMedia(`(max-width: ${breakpointPx - 1}px)`)
-    const on = () => setIsMobile(mq.matches)
-    on()
-    mq.addEventListener?.("change", on)
-    return () => mq.removeEventListener?.("change", on)
-  }, [breakpointPx])
-  return isMobile
-}
 
 export function normalizePatient(p) {
   if (!p) return null
@@ -237,23 +392,19 @@ function parseMaybeJson(v) {
   }
 }
 
-function ensureTemplateSchemaShape(input) {
-  const s = input && typeof input === "object" ? input : {}
-  const out = { ...s }
-  if (!Array.isArray(out.sections)) out.sections = []
-  if (!out.schema_version) out.schema_version = 1
-  return out
+function ensureTemplateSchemaShape(schema) {
+  if (!schema || typeof schema !== "object") return { sections: [] }
+  const sections = Array.isArray(schema.sections) ? schema.sections : []
+  return { ...schema, sections }
 }
 
-function sectionKeyOf(sec, idx = 0) {
-  const code = sec?.code || sec?.key || sec?._rid
-  if (code) return String(code)
-  const label = sec?.label || sec?.title || sec?.name || `Section ${idx + 1}`
-  return slugKey(label) || `section_${idx + 1}`
+
+function sectionKeyOf(sec, idx) {
+  return safeStr(sec?.code || sec?.key || sec?.name || sec?.id, `SECTION_${idx + 1}`)
 }
 
 function itemKeyOf(item, fallback = "") {
-  return String(item?.key || item?._rid || fallback || "field")
+  return safeStr(item?.key || item?.code || item?.name || item?.id, fallback)
 }
 
 function normalizeTemplateSchema(template) {
@@ -358,30 +509,10 @@ function normalizeTemplateBlueprint(template) {
   return normalizeTemplateSchema(template)
 }
 
-function normalizeSectionItems(rawItems) {
-  const items = Array.isArray(rawItems) ? rawItems : []
-  const byParent = new Map()
-  const roots = []
-
-  for (const it of items) {
-    const parent = it?.parent_key || it?.ui?.parent_key || null
-    const key = itemKeyOf(it, "")
-    const normalized = { ...it, key }
-    if (parent) {
-      if (!byParent.has(parent)) byParent.set(parent, [])
-      byParent.get(parent).push(normalized)
-    } else {
-      roots.push(normalized)
-    }
-  }
-
-  function attachKids(node) {
-    const kids = byParent.get(node.key) || byParent.get(node._rid) || []
-    if (kids.length) return { ...node, items: kids.map(attachKids) }
-    return node
-  }
-
-  return roots.map(attachKids)
+function normalizeSectionItems(items) {
+  const arr = Array.isArray(items) ? items : []
+  // only items with kind=field or no kind
+  return arr.filter(Boolean)
 }
 
 function flattenSectionData(data) {
@@ -390,30 +521,40 @@ function flattenSectionData(data) {
   for (const sk of Object.keys(obj)) {
     const sec = obj[sk]
     if (!sec || typeof sec !== "object") continue
-    for (const fk of Object.keys(sec)) out[fk] = sec[fk]
+    // sectionless (supports groupKey.fieldKey rules)
+    flattenAny(sec, out, "")
+    // namespaced (supports SECTIONKEY.groupKey.fieldKey)
+    flattenAny(sec, out, String(sk))
   }
   return out
 }
 
-function evalVisibleWhen(rule, values) {
-  if (!rule || typeof rule !== "object") return true
-  const op = String(rule.op || "exists").toLowerCase()
-  const k = String(rule.field_key || rule.key || "")
-  const v = values?.[k]
+function evalVisibleWhen(expr, scopeData, sectionRoot) {
+  // supports {op, field_key, value} and a couple variants
+  if (!expr || typeof expr !== "object") return true
+  const op = safeStr(expr.op, "eq").toLowerCase()
+  const fk = safeStr(expr.field_key || expr.fieldKey, "")
+  const target = expr.value
 
-  if (op === "exists") return v !== undefined && v !== null && String(v).trim() !== ""
-  if (op === "eq") return String(v ?? "") === String(rule.value ?? "")
-  if (op === "neq") return String(v ?? "") !== String(rule.value ?? "")
-  if (op === "in") return Array.isArray(rule.values) && rule.values.map(String).includes(String(v ?? ""))
+  if (!fk) return true
+  const current = resolveScopedValue(fk, scopeData, sectionRoot)
+
+  if (op === "eq") return current === target
+  if (op === "ne") return current !== target
+  if (op === "truthy") return !!current
+  if (op === "falsy") return !current
+  if (op === "in") return asArray(target).includes(current)
+  if (op === "not_in") return !asArray(target).includes(current)
+  if (op === "exists") return current !== undefined && current !== null && current !== ""
   return true
 }
 
-function isVisible(item, values, showHidden = false) {
-  if (showHidden) return true
-  const vw = item?.visible_when
-  if (!vw) return true
-  if (Array.isArray(vw)) return vw.every((r) => evalVisibleWhen(r, values))
-  return evalVisibleWhen(vw, values)
+function isVisible(item, showHidden, scopeData, sectionRoot) {
+  const uiHidden = !!item?.ui?.hidden
+  if (uiHidden && !showHidden) return false
+  const visibleWhen = item?.rules?.visible_when || item?.rules?.visibleWhen
+  if (visibleWhen) return evalVisibleWhen(visibleWhen, scopeData, sectionRoot)
+  return true
 }
 
 function isEmptyValueByType(type, v) {
@@ -448,6 +589,22 @@ function walkSectionItems(items, fn) {
   }
 }
 
+function walkSectionItemsWithPath(items, fn, prefix = []) {
+  const arr = normalizeSectionItems(items)
+  arr.forEach((it, idx) => {
+    if (!it) return
+    const t = String(it.type || it.kind || "text").toLowerCase()
+    if (t === "group") {
+      const groupKey = itemKeyOf(it, `group_${idx}`)
+      const kids = normalizeSectionItems(it?.items || it?.group?.items || [])
+      walkSectionItemsWithPath(kids, fn, [...(prefix || []), groupKey])
+    } else {
+      fn(it, prefix || [])
+    }
+  })
+}
+
+
 function initDataFromSchema(schema, prev) {
   const next = { ...(prev || {}) }
   const s = ensureTemplateSchemaShape(schema)
@@ -457,18 +614,34 @@ function initDataFromSchema(schema, prev) {
     const sk = sectionKeyOf(sec, i)
     if (!next[sk] || typeof next[sk] !== "object") next[sk] = {}
 
-    walkSectionItems(sec?.items || [], (it) => {
+    walkSectionItemsWithPath(sec?.items || [], (it, pathPrefix) => {
       const fk = itemKeyOf(it, `${sk}_field`)
-      if (next[sk][fk] !== undefined) return
+      if (!fk) return
+
+      const fullPath = [...(pathPrefix || []), fk].filter(Boolean)
+      const dot = pathToString(fullPath)
+
+      // already set nested?
+      const nestedExisting = getIn(next[sk], fullPath)
+      if (nestedExisting !== undefined) return
+
+      // already set as dot-string?
+      if (next[sk] && typeof next[sk] === "object" && dot && next[sk][dot] !== undefined) return
+
+      // legacy flat value exists (avoid overwriting)
+      if ((pathPrefix || []).length && next[sk][fk] !== undefined) return
 
       const t = String(it?.type || "text").toLowerCase()
       const def = it?.default_value ?? it?.default ?? it?.ui?.default ?? it?.meta?.default
 
-      if (def !== undefined) next[sk][fk] = def
-      else if (t === "boolean") next[sk][fk] = false
-      else if (t === "multiselect") next[sk][fk] = []
-      else if (t === "table") next[sk][fk] = []
-      else next[sk][fk] = ""
+      let v
+      if (def !== undefined) v = def
+      else if (t === "boolean") v = false
+      else if (t === "multiselect") v = []
+      else if (t === "table") v = []
+      else v = ""
+
+      next[sk] = setIn(next[sk], fullPath, v)
     })
   }
   return next
@@ -481,21 +654,29 @@ function initDataFromBlueprint(schema, prev) {
 function findMissingRequired(schema, data) {
   const miss = []
   const s = ensureTemplateSchemaShape(schema)
-  const values = flattenSectionData(data)
+  const record = data && typeof data === "object" ? data : {}
 
   for (let i = 0; i < (s.sections || []).length; i++) {
     const sec = s.sections[i]
     const sk = sectionKeyOf(sec, i)
     const secTitle = sec?.label || sec?.title || sec?.name || sk
-    const secData = (data && sk && data[sk]) || {}
+    const secData = (record && sk && record[sk] && typeof record[sk] === "object") ? record[sk] : {}
 
-    walkSectionItems(sec?.items || [], (it) => {
+    // flat scope for rules within this section (includes groupKey.fieldKey)
+    const secFlat = flattenAny(secData, {}, "")
+
+    walkSectionItemsWithPath(sec?.items || [], (it, pathPrefix) => {
       const fk = itemKeyOf(it, "")
       if (!fk) return
       if (!it?.required) return
-      if (!isVisible(it, values, false)) return
 
-      const val = secData?.[fk] ?? values?.[fk]
+      const groupRoot = (pathPrefix || []).length ? (getIn(secData, pathPrefix) || {}) : {}
+      const scopeData = (pathPrefix || []).length ? { ...secFlat, ...(groupRoot || {}) } : secFlat
+
+      // ✅ FIX: correct order isVisible(item, showHiddenBool, scopeData, sectionRoot)
+      if (!isVisible(it, false, scopeData, secData)) return
+
+      const val = getFieldValue(secData, pathPrefix || [], fk)
       if (isEmptyValueByType(it?.type, val)) {
         miss.push({
           sectionKey: sk,
@@ -513,18 +694,26 @@ function calcFilledCount(schema, data) {
   let total = 0
   let filled = 0
   const s = ensureTemplateSchemaShape(schema)
-  const values = flattenSectionData(data)
+  const record = data && typeof data === "object" ? data : {}
 
   for (let i = 0; i < (s.sections || []).length; i++) {
     const sec = s.sections[i]
     const sk = sectionKeyOf(sec, i)
-    const secData = (data && sk && data[sk]) || {}
+    const secData = (record && sk && record[sk] && typeof record[sk] === "object") ? record[sk] : {}
+    const secFlat = flattenAny(secData, {}, "")
 
-    walkSectionItems(sec?.items || [], (it) => {
+    walkSectionItemsWithPath(sec?.items || [], (it, pathPrefix) => {
       const fk = itemKeyOf(it, "")
       if (!fk) return
+
+      const groupRoot = (pathPrefix || []).length ? (getIn(secData, pathPrefix) || {}) : {}
+      const scopeData = (pathPrefix || []).length ? { ...secFlat, ...(groupRoot || {}) } : secFlat
+
+      // only count visible fields (hidden + rules respected)
+      if (!isVisible(it, false, scopeData, secData)) return
+
       total += 1
-      const val = secData?.[fk] ?? values?.[fk]
+      const val = getFieldValue(secData, pathPrefix || [], fk)
       if (!isEmptyValueByType(it?.type, val)) filled += 1
     })
   }
@@ -690,6 +879,7 @@ export function EmrCreateRecordDialog({
       >
         <DialogHeader className="sr-only">
           <DialogTitle>New EMR Record</DialogTitle>
+          <DialogDescription>Create or edit an EMR record</DialogDescription>
         </DialogHeader>
 
         <div className="flex h-full min-h-0 flex-col">
@@ -728,171 +918,437 @@ export function EmrCreateRecordDialog({
 
 // -------------------- Dynamic section editor (OUTSIDE: no state reset) --------------------
 function safeStr(v, fallback = "") {
-  const s = v === null || v === undefined ? "" : String(v)
-  return s.trim() ? s : fallback
+  if (v === null || v === undefined) return fallback
+  const s = String(v)
+  return s.trim().length ? s : fallback
 }
 
 const PREVIEW_NONE = "__none__"
 
 function layoutCols(layout) {
-  const v = String(layout || "STACK").toUpperCase()
-  if (v === "GRID_3") return 3
-  if (v === "GRID_2") return 2
-  return 1
+  const L = String(layout || "STACK").toUpperCase()
+  if (L === "GRID_3") return 3
+  if (L === "GRID_4") return 4
+  if (L === "GRID_2") return 2
+  return 1 // STACK/default
 }
 
 function gridColsClass(cols) {
-  if (cols === 3) return "md:grid-cols-3"
-  if (cols === 2) return "md:grid-cols-2"
-  return "grid-cols-1"
+  // mobile-first: single column; expand on md+
+  if (cols <= 1) return "grid-cols-1"
+  if (cols === 2) return "grid-cols-1 md:grid-cols-2"
+  if (cols === 3) return "grid-cols-1 md:grid-cols-3"
+  return "grid-cols-1 md:grid-cols-4"
 }
 
+
 function colSpanClass(width, cols) {
-  const w = String(width || "").toUpperCase()
-  if (cols === 3) {
-    if (w === "FULL") return "md:col-span-3"
-    if (w === "TWO_THIRD") return "md:col-span-2"
-    if (w === "THIRD") return "md:col-span-1"
-    if (w === "HALF") return "md:col-span-2"
-  }
-  if (cols === 2) {
-    if (w === "FULL") return "md:col-span-2"
-    if (w === "HALF") return "md:col-span-1"
-  }
-  return ""
+  const w = String(width || "HALF").toUpperCase()
+  const max = Math.max(1, cols)
+
+  // for STACK, always full
+  if (max === 1) return "col-span-1"
+
+  if (w === "FULL") return `md:col-span-${max}`
+  if (w === "HALF") return `md:col-span-${Math.max(1, Math.ceil(max / 2))}`
+  if (w === "THIRD") return `md:col-span-${Math.max(1, Math.ceil(max / 3))}`
+  if (w === "QUARTER") return `md:col-span-${Math.max(1, Math.ceil(max / 4))}`
+
+  // numeric support
+  const n = Number(width)
+  if (Number.isFinite(n) && n > 0) return `md:col-span-${Math.min(max, Math.floor(n))}`
+
+  return `md:col-span-${Math.max(1, Math.ceil(max / 2))}`
 }
 
 function itemReactKey(item, idx, prefix = "") {
-  return `${prefix}${safeStr(item?.key || item?._rid || idx)}`
+  const k = itemKeyOf(item, "")
+  return `${prefix}${k || "item"}:${idx}`
 }
 
 function coerceBool(v) {
-  if (typeof v === "boolean") return v
-  if (typeof v === "number") return v !== 0
-  const s = String(v ?? "").trim().toLowerCase()
-  if (!s) return false
-  return ["1", "true", "yes", "y", "on"].includes(s)
+  if (v === true || v === false) return v
+  if (v === 1 || v === "1" || v === "true") return true
+  if (v === 0 || v === "0" || v === "false") return false
+  return !!v
 }
 
 function asArray(v) {
-  if (Array.isArray(v)) return v
-  if (v === null || v === undefined || v === "") return []
-  return [v]
+  return Array.isArray(v) ? v : v === null || v === undefined ? [] : [v]
 }
 
 function normalizeOptions(opts) {
   const arr = Array.isArray(opts) ? opts : []
   return arr
-    .map((o) => {
-      if (typeof o === "string") return { label: o, value: o }
-      if (o && typeof o === "object") return { label: o.label ?? o.value ?? "", value: o.value ?? o.label ?? "" }
-      return null
-    })
     .filter(Boolean)
+    .map((o) => {
+      if (typeof o === "string") return { value: o, label: o }
+      return { value: safeStr(o?.value, ""), label: safeStr(o?.label ?? o?.value, "") }
+    })
+    .filter((o) => o.value !== "")
 }
 
-function SignaturePad({ value, onChange }) {
-  const ref = useRef(null)
-  const drawing = useRef(false)
+function resolveScopedValue(fieldKey, scopeData, sectionRoot) {
+  // Prefer within same scope (e.g., inside group), fallback to section root
+  if (scopeData && typeof scopeData === "object" && Object.prototype.hasOwnProperty.call(scopeData, fieldKey)) {
+    return scopeData[fieldKey]
+  }
+  if (sectionRoot && typeof sectionRoot === "object" && Object.prototype.hasOwnProperty.call(sectionRoot, fieldKey)) {
+    return sectionRoot[fieldKey]
+  }
+  return undefined
+}
 
-  useEffect(() => {
-    const canvas = ref.current
-    if (!canvas) return
-    const ctx = canvas.getContext("2d")
-    if (!ctx) return
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    const dataUrl = value?.data_url || value
-    if (typeof dataUrl === "string" && dataUrl.startsWith("data:image")) {
-      const img = new Image()
-      img.onload = () => {
-        ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
-      }
-      img.src = dataUrl
+
+
+
+
+// function SignaturePad({ value, onChange }) {
+//   const ref = useRef(null)
+//   const drawing = useRef(false)
+
+//   useEffect(() => {
+//     const canvas = ref.current
+//     if (!canvas) return
+//     const ctx = canvas.getContext("2d")
+//     if (!ctx) return
+//     ctx.clearRect(0, 0, canvas.width, canvas.height)
+//     const dataUrl = value?.data_url || value
+//     if (typeof dataUrl === "string" && dataUrl.startsWith("data:image")) {
+//       const img = new Image()
+//       img.onload = () => {
+//         ctx.drawImage(img, 0, 0, canvas.width, canvas.height)
+//       }
+//       img.src = dataUrl
+//     }
+//   }, [value])
+
+//   function pos(e) {
+//     const canvas = ref.current
+//     const rect = canvas.getBoundingClientRect()
+//     const clientX = e.touches ? e.touches[0].clientX : e.clientX
+//     const clientY = e.touches ? e.touches[0].clientY : e.clientY
+//     return { x: clientX - rect.left, y: clientY - rect.top }
+//   }
+
+//   function start(e) {
+//     const canvas = ref.current
+//     const ctx = canvas.getContext("2d")
+//     if (!ctx) return
+//     drawing.current = true
+//     const p = pos(e)
+//     ctx.beginPath()
+//     ctx.moveTo(p.x, p.y)
+//   }
+
+//   function move(e) {
+//     if (!drawing.current) return
+//     const canvas = ref.current
+//     const ctx = canvas.getContext("2d")
+//     if (!ctx) return
+//     const p = pos(e)
+//     ctx.lineTo(p.x, p.y)
+//     ctx.lineWidth = 2
+//     ctx.lineCap = "round"
+//     ctx.strokeStyle = "#0f172a"
+//     ctx.stroke()
+//   }
+
+//   function end() {
+//     if (!drawing.current) return
+//     drawing.current = false
+//     const canvas = ref.current
+//     const data_url = canvas.toDataURL("image/png")
+//     onChange?.({ data_url })
+//   }
+
+//   function clear() {
+//     const canvas = ref.current
+//     const ctx = canvas.getContext("2d")
+//     ctx.clearRect(0, 0, canvas.width, canvas.height)
+//     onChange?.("")
+//   }
+
+//   return (
+//     <div className="rounded-2xl border border-slate-200 bg-white p-2">
+//       <canvas
+//         ref={ref}
+//         width={560}
+//         height={180}
+//         className="h-[160px] w-full rounded-xl bg-slate-50 touch-none"
+//         onMouseDown={start}
+//         onMouseMove={move}
+//         onMouseUp={end}
+//         onMouseLeave={end}
+//         onTouchStart={(e) => {
+//           e.preventDefault()
+//           start(e)
+//         }}
+//         onTouchMove={(e) => {
+//           e.preventDefault()
+//           move(e)
+//         }}
+//         onTouchEnd={(e) => {
+//           e.preventDefault()
+//           end()
+//         }}
+//       />
+//       <div className="mt-2 flex justify-end">
+//         <Button variant="outline" className="rounded-2xl" type="button" onClick={clear}>
+//           Clear
+//         </Button>
+//       </div>
+//     </div>
+//   )
+// }
+
+// ==============================
+// Helpers: nested patch + reading
+// ==============================
+
+function pathToString(path) {
+  return Array.isArray(path) ? path.filter(Boolean).join(".") : String(path || "")
+}
+
+function getIn(obj, path) {
+  let cur = obj
+  for (const k of path) {
+    if (!cur || typeof cur !== "object") return undefined
+    cur = cur[k]
+  }
+  return cur
+}
+
+function setIn(obj, path, value) {
+  const out = { ...(obj || {}) }
+  let cur = out
+  for (let i = 0; i < path.length; i++) {
+    const k = path[i]
+    const last = i === path.length - 1
+    if (last) {
+      cur[k] = value
+    } else {
+      const next = cur[k]
+      cur[k] = next && typeof next === "object" && !Array.isArray(next) ? { ...next } : {}
+      cur = cur[k]
     }
-  }, [value])
+  }
+  return out
+}
 
-  function pos(e) {
-    const canvas = ref.current
-    const rect = canvas.getBoundingClientRect()
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY
-    return { x: clientX - rect.left, y: clientY - rect.top }
+
+// Backward compatible value resolver:
+// 1) nested (group.key.field)
+// 2) dot-string key "group.key.field"
+// 3) flat fallback "field"
+function getFieldValue(secData, basePath, fieldKey) {
+  const fullPath = [...(basePath || []), fieldKey].filter(Boolean)
+  const dot = pathToString(fullPath)
+
+  const nested = getIn(secData, fullPath)
+  if (nested !== undefined) return nested
+
+  if (secData && typeof secData === "object" && dot && secData[dot] !== undefined) return secData[dot]
+
+  if (secData && typeof secData === "object" && fieldKey && secData[fieldKey] !== undefined) return secData[fieldKey]
+
+  return undefined
+}
+
+// Flatten values for rules/visibility:
+// adds:
+// - leaf key: "cement_used"
+// - dot key: "cement_details.antibiotic_name"
+// - section dot: "COUNTS.sponge_count.initial_count"
+function flattenAny(obj, out = {}, prefix = "") {
+  if (!obj || typeof obj !== "object") return out
+
+  if (Array.isArray(obj)) {
+    // arrays are treated as values; do not deep-flatten into rules
+    out[prefix] = obj
+    return out
   }
 
-  function start(e) {
-    const canvas = ref.current
-    const ctx = canvas.getContext("2d")
-    if (!ctx) return
-    drawing.current = true
-    const p = pos(e)
-    ctx.beginPath()
-    ctx.moveTo(p.x, p.y)
+  for (const [k, v] of Object.entries(obj)) {
+    const nextPrefix = prefix ? `${prefix}.${k}` : k
+
+    if (v && typeof v === "object" && !Array.isArray(v)) {
+      flattenAny(v, out, nextPrefix)
+    } else {
+      // dot key
+      out[nextPrefix] = v
+      // leaf key (only set if not present to avoid overwriting duplicates)
+      if (!(k in out)) out[k] = v
+    }
+  }
+  return out
+}
+
+
+
+// ---------- helpers for width + mobile + table/json + files ----------
+
+function resolveItemWidth(item, secLayout) {
+  const explicit = String(item?.ui?.width || "").trim().toUpperCase()
+  if (explicit && explicit !== "AUTO") return explicit
+
+  const lay = String(secLayout || "STACK").toUpperCase()
+  if (lay === "STACK") return "FULL"
+
+  const t = String(item?.type || "text").toLowerCase()
+  if (t === "group") return "FULL"
+  if (["textarea", "table", "signature", "file", "image"].includes(t)) return "FULL"
+  return "HALF"
+}
+
+function useIsMobile(breakpointPx = 768) {
+  const [isMobile, setIsMobile] = React.useState(false)
+  React.useEffect(() => {
+    if (typeof window === "undefined") return
+    const mql = window.matchMedia(`(max-width:${breakpointPx}px)`)
+    const update = () => setIsMobile(!!mql.matches)
+    update()
+    if (mql.addEventListener) mql.addEventListener("change", update)
+    else mql.addListener(update)
+    return () => {
+      if (mql.removeEventListener) mql.removeEventListener("change", update)
+      else mql.removeListener(update)
+    }
+  }, [breakpointPx])
+  return isMobile
+}
+
+
+function tryParseJsonArray(v) {
+  if (!v || typeof v !== "string") return null
+  try {
+    const parsed = JSON.parse(v)
+    return Array.isArray(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+function formatBytes(n) {
+  const num = Number(n)
+  if (!Number.isFinite(num) || num <= 0) return ""
+  const units = ["B", "KB", "MB", "GB"]
+  let i = 0
+  let v = num
+  while (v >= 1024 && i < units.length - 1) {
+    v /= 1024
+    i++
+  }
+  const rounded = v >= 10 ? Math.round(v) : Math.round(v * 10) / 10
+  return `${rounded} ${units[i]}`
+}
+
+function normalizeFileValue(value) {
+  if (Array.isArray(value)) return value
+  if (value && typeof value === "object") return [value]
+  if (value) return [{ id: String(value), name: String(value) }]
+  return []
+}
+
+function fileMetaFromFile(f) {
+  const id = `${Date.now()}-${Math.random().toString(16).slice(2)}`
+  return {
+    id,
+    name: f?.name || "file",
+    type: f?.type || "",
+    size: f?.size || 0,
+    last_modified: f?.lastModified || 0,
+    __file: f, // keep for upload step later
+  }
+}
+
+// ==============================
+// Table Cell Control (per column)
+// ==============================
+
+function TableCellControl({ col, value, onChange }) {
+  const t = String(col?.type || "text").toLowerCase()
+  const opts = Array.isArray(col?.options) ? col.options : []
+
+  if (t === "number") {
+    const external = value === null || value === undefined ? "" : String(value)
+    const [draft, setDraft] = React.useState(external)
+    React.useEffect(() => setDraft(external), [external])
+
+    return (
+      <Input
+        type="number"
+        value={draft}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={() => {
+          const v = String(draft || "").trim()
+          if (v === "") return onChange?.("")
+          const n = Number(v)
+          if (Number.isFinite(n)) return onChange?.(n)
+          onChange?.(v)
+        }}
+        className="h-10 rounded-xl"
+      />
+    )
   }
 
-  function move(e) {
-    if (!drawing.current) return
-    const canvas = ref.current
-    const ctx = canvas.getContext("2d")
-    if (!ctx) return
-    const p = pos(e)
-    ctx.lineTo(p.x, p.y)
-    ctx.lineWidth = 2
-    ctx.lineCap = "round"
-    ctx.strokeStyle = "#0f172a"
-    ctx.stroke()
+  if (t === "select") {
+    const v = safeStr(value, "") || PREVIEW_NONE
+    return (
+      <Select value={v} onValueChange={(vv) => onChange?.(vv === PREVIEW_NONE ? "" : vv)}>
+        <SelectTrigger className="h-10 rounded-xl">
+          <SelectValue placeholder="Select…" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value={PREVIEW_NONE}>Select…</SelectItem>
+          {opts.map((o) => (
+            <SelectItem key={String(o.value)} value={String(o.value)}>
+              {String(o.label)}
+            </SelectItem>
+          ))}
+        </SelectContent>
+      </Select>
+    )
   }
 
-  function end() {
-    if (!drawing.current) return
-    drawing.current = false
-    const canvas = ref.current
-    const data_url = canvas.toDataURL("image/png")
-    onChange?.({ data_url })
+  if (t === "boolean") {
+    return (
+      <div className="flex h-10 items-center justify-end rounded-xl border border-slate-200 bg-white px-3">
+        <Switch checked={coerceBool(value)} onCheckedChange={(v) => onChange?.(!!v)} />
+      </div>
+    )
   }
 
-  function clear() {
-    const canvas = ref.current
-    const ctx = canvas.getContext("2d")
-    ctx.clearRect(0, 0, canvas.width, canvas.height)
-    onChange?.("")
+  if (t === "date" || t === "time" || t === "datetime") {
+    const inputType = t === "datetime" ? "datetime-local" : t
+    return (
+      <Input
+        type={inputType}
+        value={safeStr(value, "")}
+        onChange={(e) => onChange?.(e.target.value)}
+        className="h-10 rounded-xl"
+      />
+    )
   }
 
   return (
-    <div className="rounded-2xl border border-slate-200 bg-white p-2">
-      <canvas
-        ref={ref}
-        width={560}
-        height={180}
-        className="h-[160px] w-full rounded-xl bg-slate-50 touch-none"
-        onMouseDown={start}
-        onMouseMove={move}
-        onMouseUp={end}
-        onMouseLeave={end}
-        onTouchStart={(e) => {
-          e.preventDefault()
-          start(e)
-        }}
-        onTouchMove={(e) => {
-          e.preventDefault()
-          move(e)
-        }}
-        onTouchEnd={(e) => {
-          e.preventDefault()
-          end()
-        }}
-      />
-      <div className="mt-2 flex justify-end">
-        <Button variant="outline" className="rounded-2xl" type="button" onClick={clear}>
-          Clear
-        </Button>
-      </div>
-    </div>
+    <Input
+      value={safeStr(value, "")}
+      onChange={(e) => onChange?.(e.target.value)}
+      className="h-10 rounded-xl"
+    />
   )
 }
 
-function PreviewControl({ item, value, onChange }) {
+
+// -----------------------------
+// Controls
+// -----------------------------
+function PreviewControl({ item, value, onChange, sectionRoot, scopeData }) {
   const type = String(item?.type || "text").toLowerCase()
-  const placeholder = item?.placeholder || item?.ui?.placeholder || ""
+  const placeholder = safeStr(item?.placeholder || item?.ui?.placeholder || "", "")
+
+  // options can come from multiple places
   const opts = normalizeOptions(item?.options || item?.ui?.options || item?.meta?.options || [])
 
   if (type === "textarea") {
@@ -950,7 +1406,7 @@ function PreviewControl({ item, value, onChange }) {
         <SelectContent>
           <SelectItem value={PREVIEW_NONE}>Select…</SelectItem>
           {opts.map((o) => (
-            <SelectItem key={o.value} value={String(o.value)}>
+            <SelectItem key={String(o.value)} value={String(o.value)}>
               {String(o.label)}
             </SelectItem>
           ))}
@@ -968,10 +1424,12 @@ function PreviewControl({ item, value, onChange }) {
             const active = arr.includes(String(o.value))
             return (
               <button
-                key={o.value}
+                key={String(o.value)}
                 type="button"
                 onClick={() => {
-                  const next = active ? arr.filter((x) => x !== String(o.value)) : [...arr, String(o.value)]
+                  const next = active
+                    ? arr.filter((x) => x !== String(o.value))
+                    : [...arr, String(o.value)]
                   onChange?.(next)
                 }}
                 className={cn(
@@ -1001,73 +1459,51 @@ function PreviewControl({ item, value, onChange }) {
     )
   }
 
+  // ✅ FIX #1: Table columns live in item.table.columns in your JSON
   if (type === "table") {
-    const cols = Array.isArray(item?.columns) ? item.columns : Array.isArray(item?.meta?.columns) ? item.meta.columns : []
-    const rows = Array.isArray(value) ? value : []
-    const safeRows = rows.length ? rows : [{}]
+    const tableMeta = item?.table || item?.meta?.table || {}
+    const cols = Array.isArray(tableMeta?.columns) ? tableMeta.columns : []
+    const allowAdd = tableMeta?.allow_add_row !== false
+    const allowDel = tableMeta?.allow_delete_row !== false
+    const minRows = Number(tableMeta?.min_rows || 0)
+    const maxRowsRaw = Number(tableMeta?.max_rows || 0)
+    const maxRows = maxRowsRaw > 0 ? maxRowsRaw : Infinity
+
+    if (!cols.length) {
+      // safer fallback (still allows saving)
+      return (
+        <div className="rounded-2xl border border-amber-200 bg-amber-50 p-3">
+          <div className="text-sm font-semibold text-amber-900">Table field has no columns</div>
+          <div className="mt-1 text-xs text-amber-800">
+            Configure columns in the template. Temporary fallback: store JSON below.
+          </div>
+          <Textarea
+            value={safeStr(value ? JSON.stringify(value, null, 2) : "", "")}
+            onChange={(e) => {
+              try {
+                const parsed = e.target.value ? JSON.parse(e.target.value) : []
+                onChange?.(parsed)
+              } catch {
+                onChange?.(e.target.value)
+              }
+            }}
+            className="mt-2 min-h-[140px] rounded-2xl"
+            placeholder='e.g. [{"colA":"..."}]'
+          />
+        </div>
+      )
+    }
 
     return (
-      <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
-        <div className="max-w-full overflow-auto">
-          <table className="w-full text-sm">
-            <thead className="bg-slate-50">
-              <tr>
-                {cols.map((c, i) => (
-                  <th key={i} className="px-3 py-2 text-left text-xs font-semibold text-slate-600">
-                    {safeStr(c?.label || c?.key || `Col ${i + 1}`)}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {safeRows.map((row, ridx) => (
-                <tr key={ridx} className="border-t">
-                  {cols.map((c, cidx) => {
-                    const k = String(c?.key || `c${cidx}`)
-                    const cellVal = row?.[k] ?? ""
-                    return (
-                      <td key={cidx} className="px-3 py-2">
-                        <Input
-                          value={safeStr(cellVal, "")}
-                          onChange={(e) => {
-                            const nextRows = [...safeRows]
-                            const nextRow = { ...(nextRows[ridx] || {}) }
-                            nextRow[k] = e.target.value
-                            nextRows[ridx] = nextRow
-                            onChange?.(nextRows)
-                          }}
-                          className="h-10 rounded-xl"
-                        />
-                      </td>
-                    )
-                  })}
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <div className="flex items-center justify-between border-t bg-white px-3 py-2">
-          <div className="text-xs text-slate-500">{rows.length || 1} row(s)</div>
-          <div className="flex gap-2">
-            <Button
-              type="button"
-              variant="outline"
-              className="h-9 rounded-2xl"
-              onClick={() => onChange?.([...(Array.isArray(value) ? value : []), {}])}
-            >
-              Add row
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="h-9 rounded-2xl"
-              onClick={() => onChange?.((Array.isArray(value) && value.length > 1) ? value.slice(0, -1) : [])}
-            >
-              Remove row
-            </Button>
-          </div>
-        </div>
-      </div>
+      <TableField
+        columns={cols}
+        value={Array.isArray(value) ? value : []}
+        onChange={onChange}
+        allowAdd={allowAdd}
+        allowDel={allowDel}
+        minRows={minRows}
+        maxRows={maxRows}
+      />
     )
   }
 
@@ -1112,22 +1548,166 @@ function PreviewControl({ item, value, onChange }) {
   )
 }
 
-const PreviewField = memo(function PreviewField({ item, cols, values, showHidden, secKey, secData, onPatch }) {
+
+// -----------------------------
+// TableField (less cramped + better UX)
+// -----------------------------
+function TableField({ columns, value, onChange, allowAdd, allowDel, minRows, maxRows }) {
+  const rows = Array.isArray(value) ? value : []
+
+  const canAdd = allowAdd && rows.length < maxRows
+  const canDel = allowDel && rows.length > Math.max(0, minRows)
+
+  const addRow = () => {
+    if (!canAdd) return
+    onChange?.([...(rows || []), {}])
+  }
+
+  const removeRow = () => {
+    if (!canDel) return
+    onChange?.(rows.slice(0, -1))
+  }
+
+  const updateCell = (ridx, colKey, nextVal) => {
+    const nextRows = [...rows]
+    const nextRow = { ...(nextRows[ridx] || {}) }
+    nextRow[colKey] = nextVal
+    nextRows[ridx] = nextRow
+    onChange?.(nextRows)
+  }
+
+  // Empty state (optional tables look cleaner)
+  if (!rows.length && minRows === 0) {
+    return (
+      <div className="rounded-2xl border border-slate-200 bg-white p-3">
+        <div className="flex items-center justify-between gap-2">
+          <div className="text-sm font-semibold text-slate-900">No rows</div>
+          <Button type="button" variant="outline" className="h-9 rounded-2xl" onClick={addRow} disabled={!canAdd}>
+            Add first row
+          </Button>
+        </div>
+        <div className="mt-1 text-xs text-slate-500">Add a row to start entering data.</div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="overflow-hidden rounded-2xl border border-slate-200 bg-white">
+      {/* header actions */}
+      <div className="flex items-center justify-between gap-2 border-b bg-slate-50 px-3 py-2">
+        <div className="text-xs font-semibold text-slate-600">
+          {rows.length} row(s)
+        </div>
+        <div className="flex gap-2">
+          <Button type="button" variant="outline" className="h-8 rounded-2xl" onClick={addRow} disabled={!canAdd}>
+            Add row
+          </Button>
+          <Button type="button" variant="outline" className="h-8 rounded-2xl" onClick={removeRow} disabled={!canDel}>
+            Remove row
+          </Button>
+        </div>
+      </div>
+
+      {/* responsive table */}
+      <div className="max-w-full overflow-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-white">
+            <tr>
+              {columns.map((c, i) => (
+                <th key={i} className="whitespace-nowrap px-3 py-2 text-left text-xs font-semibold text-slate-600">
+                  {safeStr(c?.label || c?.key || `Col ${i + 1}`)}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {(rows.length ? rows : [{}]).map((row, ridx) => (
+              <tr key={ridx} className="border-t">
+                {columns.map((c, cidx) => {
+                  const k = safeStr(c?.key, `c${cidx}`)
+                  const cellVal = row?.[k] ?? ""
+                  const cType = safeStr(c?.type, "text").toLowerCase()
+                  const cOpts = normalizeOptions(c?.options || [])
+
+                  return (
+                    <td key={cidx} className="px-3 py-2 align-top">
+                      {cType === "select" ? (
+                        <Select
+                          value={safeStr(cellVal, "") || PREVIEW_NONE}
+                          onValueChange={(vv) => updateCell(ridx, k, vv === PREVIEW_NONE ? "" : vv)}
+                        >
+                          <SelectTrigger className="h-10 min-w-[140px] rounded-xl">
+                            <SelectValue placeholder="Select…" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value={PREVIEW_NONE}>Select…</SelectItem>
+                            {cOpts.map((o) => (
+                              <SelectItem key={String(o.value)} value={String(o.value)}>
+                                {String(o.label)}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      ) : (
+                        <Input
+                          type={cType === "number" ? "number" : "text"}
+                          value={cellVal === null || cellVal === undefined ? "" : String(cellVal)}
+                          onChange={(e) => {
+                            const v = cType === "number" ? (e.target.value === "" ? "" : Number(e.target.value)) : e.target.value
+                            updateCell(ridx, k, v)
+                          }}
+                          className="h-10 min-w-[140px] rounded-xl"
+                        />
+                      )}
+                    </td>
+                  )
+                })}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  )
+}
+
+// -----------------------------
+// Field renderer (path-safe)
+// -----------------------------
+const PreviewField = memo(function PreviewField({
+  item,
+  cols,
+  showHidden,
+  secKey,
+  sectionRoot,
+  scopeData,
+  fieldPathPrefix,
+  onPatch,
+}) {
   const key = itemKeyOf(item, "")
-  const label = item?.label || item?.title || item?.name || key
+  const label = safeStr(item?.label || item?.title || item?.name || key, key)
   const required = !!item?.required
   const ui = item?.ui || {}
   const width = ui?.width || "HALF"
-  const help = item?.help || item?.meta?.help || ui?.help || ""
+  const help = item?.help_text || item?.help || item?.meta?.help || ui?.help || ""
 
-  if (!isVisible(item, values, showHidden)) return null
-  const val = (secData && key ? secData[key] : undefined) ?? values?.[key]
+  if (!key) return null
+  if (!isVisible(item, showHidden, scopeData, sectionRoot)) return null
+
+  // IMPORTANT:
+  // value is stored at: sectionRoot[fieldPathPrefix...][key]
+  // e.g. COUNTS.sponge_count.initial_count  (no collision)
+  const fullPath = [...(fieldPathPrefix || []), key]
+  const val =
+    getIn(sectionRoot, fullPath) ??
+    // backward-compat fallback: old flat storage at section root
+    (Object.prototype.hasOwnProperty.call(sectionRoot || {}, key) ? sectionRoot[key] : undefined)
 
   return (
     <div className={cn("space-y-1.5", colSpanClass(width, cols))}>
       <div className="flex items-center justify-between gap-2">
         <div className="text-xs font-semibold text-slate-700">
-          {String(label)} {required ? <span className="text-rose-600">*</span> : null}
+          {label} {required ? <span className="text-rose-600">*</span> : null}
         </div>
         {ui?.tag ? (
           <Badge variant="outline" className="rounded-xl text-[10px]">
@@ -1136,27 +1716,38 @@ const PreviewField = memo(function PreviewField({ item, cols, values, showHidden
         ) : null}
       </div>
 
-      <PreviewControl item={item} value={val} onChange={(next) => onPatch?.(secKey, key, next)} />
+      <PreviewControl
+        item={item}
+        value={val}
+        sectionRoot={sectionRoot}
+        scopeData={scopeData}
+        onChange={(next) => onPatch?.(secKey, fullPath, next)}
+      />
+
       {help ? <div className="text-xs text-slate-400">{String(help)}</div> : null}
     </div>
   )
 })
 
-function TemplateSectionsEditor({ schema, value, onChange, tone }) {
+
+// -----------------------------
+// Main Editor
+// -----------------------------
+export function TemplateSectionsEditor({ schema, value, onChange, tone }) {
   const s = ensureTemplateSchemaShape(schema)
   const sections = Array.isArray(s.sections) ? s.sections : []
   const [showHidden, setShowHidden] = useState(false)
 
+  // data shape: { [sectionKey]: { ...fields OR groups... } }
   const secData = value && typeof value === "object" ? value : {}
-  const values = useMemo(() => flattenSectionData(secData), [secData])
 
   const onPatch = useCallback(
-    (secKey, fieldKey, nextVal) => {
+    (secKey, fieldPath, nextVal) => {
       onChange?.((prev) => {
         const out = { ...(prev || {}) }
         const sk = safeStr(secKey, "section")
-        out[sk] = { ...(out[sk] || {}) }
-        out[sk][fieldKey] = nextVal
+        const currentSec = out[sk] && typeof out[sk] === "object" ? out[sk] : {}
+        out[sk] = setIn(currentSec, fieldPath, nextVal)
         return out
       })
     },
@@ -1173,12 +1764,14 @@ function TemplateSectionsEditor({ schema, value, onChange, tone }) {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4">
+      {/* Compact top bar */}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2">
           <Badge variant="outline" className="rounded-xl">
             {sections.length} section(s)
           </Badge>
+
           <div className="flex items-center gap-2 rounded-2xl border border-slate-200 bg-white px-3 py-2">
             <Switch checked={showHidden} onCheckedChange={(v) => setShowHidden(!!v)} />
             <div className="text-xs font-semibold text-slate-700">Show hidden fields</div>
@@ -1190,15 +1783,19 @@ function TemplateSectionsEditor({ schema, value, onChange, tone }) {
         const secKey = sectionKeyOf(sec, sidx)
         const cols = layoutCols(sec?.layout || "STACK")
         const items = normalizeSectionItems(sec?.items || [])
-        const dataForSec = secData?.[secKey] || {}
+        const dataForSec = secData?.[secKey] && typeof secData?.[secKey] === "object" ? secData?.[secKey] : {}
 
         return (
-          <Card key={secKey} className="rounded-3xl border-slate-200 bg-white shadow-sm">
+          <Card key={secKey} className="rounded-2xl border-slate-200 bg-white shadow-sm">
             <CardHeader className="pb-3">
               <div className="flex items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <CardTitle className="text-base">{safeStr(sec?.label || sec?.title || sec?.name || secKey, secKey)}</CardTitle>
-                  {sec?.description ? <CardDescription className="text-xs">{String(sec.description)}</CardDescription> : null}
+                  <CardTitle className="text-base">
+                    {safeStr(sec?.label || sec?.title || sec?.name || secKey, secKey)}
+                  </CardTitle>
+                  {sec?.description ? (
+                    <CardDescription className="text-xs">{String(sec.description)}</CardDescription>
+                  ) : null}
                 </div>
                 <Badge className={cn("rounded-xl", tone?.chip)}>{String(secKey)}</Badge>
               </div>
@@ -1208,9 +1805,21 @@ function TemplateSectionsEditor({ schema, value, onChange, tone }) {
               <div className={cn("grid gap-3", gridColsClass(cols))}>
                 {items.map((item, idx) => {
                   const t = String(item?.type || "text").toLowerCase()
+
+                  // GROUP: store as nested object under group key
                   if (t === "group") {
-                    const groupLabel = safeStr(item?.label || item?.title || item?.name, "Group")
-                    const kids = normalizeSectionItems(item?.items || [])
+                    const groupKey = itemKeyOf(item, `group_${idx}`)
+                    const groupLabel = safeStr(item?.label || item?.title || item?.name || groupKey, "Group")
+                    const kids = normalizeSectionItems(item?.items || item?.group?.items || [])
+                    const groupData = (getIn(dataForSec, [groupKey]) && typeof getIn(dataForSec, [groupKey]) === "object")
+                      ? getIn(dataForSec, [groupKey])
+                      : {}
+
+                    // group visibility based on current scope = section root (because group is at section root)
+                    if (!isVisible(item, showHidden, dataForSec, dataForSec)) return null
+
+                    const innerCols = layoutCols(item?.group?.layout || "GRID_2")
+
                     return (
                       <div
                         key={itemReactKey(item, idx, `${secKey}:g:`)}
@@ -1227,16 +1836,18 @@ function TemplateSectionsEditor({ schema, value, onChange, tone }) {
                             </Badge>
                           ) : null}
                         </div>
-                        <div className={cn("grid gap-3", gridColsClass(cols))}>
+
+                        <div className={cn("grid gap-3", gridColsClass(innerCols))}>
                           {kids.map((kid, kidx) => (
                             <PreviewField
                               key={itemReactKey(kid, kidx, `${secKey}:k:`)}
                               item={kid}
-                              cols={cols}
-                              values={values}
+                              cols={innerCols}
                               showHidden={showHidden}
                               secKey={secKey}
-                              secData={dataForSec}
+                              sectionRoot={dataForSec}
+                              scopeData={groupData}
+                              fieldPathPrefix={[groupKey]}
                               onPatch={onPatch}
                             />
                           ))}
@@ -1250,10 +1861,11 @@ function TemplateSectionsEditor({ schema, value, onChange, tone }) {
                       key={itemReactKey(item, idx, `${secKey}:i:`)}
                       item={item}
                       cols={cols}
-                      values={values}
                       showHidden={showHidden}
                       secKey={secKey}
-                      secData={dataForSec}
+                      sectionRoot={dataForSec}
+                      scopeData={dataForSec}
+                      fieldPathPrefix={[]}
                       onPatch={onPatch}
                     />
                   )
@@ -1266,6 +1878,7 @@ function TemplateSectionsEditor({ schema, value, onChange, tone }) {
     </div>
   )
 }
+
 
 // -------------------- Print helpers/components --------------------
 function formatPrintValue(item, value) {
@@ -1352,7 +1965,7 @@ function PrintValue({ item, value }) {
   )
 }
 
-function PrintField({ item, cols, values, includeHidden, secKey, secData, tone }) {
+function PrintField({ item, cols, includeHidden, secKey, secData, tone, scopeData, fieldPathPrefix = [] }) {
   const key = itemKeyOf(item, "")
   const label = item?.label || item?.title || item?.name || key
   const required = !!item?.required
@@ -1360,8 +1973,10 @@ function PrintField({ item, cols, values, includeHidden, secKey, secData, tone }
   const width = ui?.width || "HALF"
   const help = item?.help || item?.meta?.help || ui?.help || ""
 
-  if (!isVisible(item, values, includeHidden)) return null
-  const val = (secData && key ? secData[key] : undefined) ?? values?.[key]
+  if (!key) return null
+  if (!isVisible(item, !!includeHidden, scopeData || {}, secData || {})) return null
+
+  const val = getFieldValue(secData || {}, fieldPathPrefix || [], key)
 
   return (
     <div className={cn("space-y-1.5", colSpanClass(width, cols))}>
@@ -1381,6 +1996,7 @@ function PrintField({ item, cols, values, includeHidden, secKey, secData, tone }
     </div>
   )
 }
+
 
 function PrintDocument({ patient, visit, dept, recordType, template, title, note, schema, data, includeHidden, tone }) {
   const s = ensureTemplateSchemaShape(schema)
@@ -1459,15 +2075,18 @@ function PrintDocument({ patient, visit, dept, recordType, template, title, note
                     {items.map((item, idx) => {
                       const t = String(item?.type || "text").toLowerCase()
                       if (t === "group") {
+                        const groupKey = itemKeyOf(item, `group_${idx}`)
                         const groupLabel = safeStr(item?.label || item?.title || item?.name, "Group")
-                        const kids = normalizeSectionItems(item?.items || [])
+                        const kids = normalizeSectionItems(item?.items || item?.group?.items || [])
+                        const groupData = (getIn(dataForSec, [groupKey]) && typeof getIn(dataForSec, [groupKey]) === "object") ? getIn(dataForSec, [groupKey]) : {}
+                        const innerCols = layoutCols(item?.group?.layout || "GRID_2")
+                        const secScope = flattenAny(dataForSec, {}, "")
+                        const groupScope = { ...secScope, ...(groupData || {}) }
+
                         return (
                           <div
                             key={itemReactKey(item, idx, `${secKey}:pg:`)}
-                            className={cn(
-                              "rounded-2xl border border-slate-200 bg-slate-50/60 p-3",
-                              colSpanClass(item?.ui?.width || "FULL", cols)
-                            )}
+                            className={cn("rounded-2xl border border-slate-200 bg-slate-50/60 p-3", colSpanClass(item?.ui?.width || "FULL", cols))}
                           >
                             <div className="mb-2 flex items-center justify-between gap-2">
                               <div className="text-sm font-semibold text-slate-900">{groupLabel}</div>
@@ -1477,17 +2096,19 @@ function PrintDocument({ patient, visit, dept, recordType, template, title, note
                                 </Badge>
                               ) : null}
                             </div>
-                            <div className={cn("grid gap-3", gridColsClass(cols))}>
+
+                            <div className={cn("grid gap-3", gridColsClass(innerCols))}>
                               {kids.map((kid, kidx) => (
                                 <PrintField
                                   key={itemReactKey(kid, kidx, `${secKey}:pk:`)}
                                   item={kid}
-                                  cols={cols}
-                                  values={values}
+                                  cols={innerCols}
                                   includeHidden={includeHidden}
                                   secKey={secKey}
                                   secData={dataForSec}
                                   tone={tone}
+                                  scopeData={groupScope}
+                                  fieldPathPrefix={[groupKey]}
                                 />
                               ))}
                             </div>
@@ -1545,7 +2166,9 @@ function PrintPreviewDialog({
       <DialogContent className="max-w-5xl rounded-3xl border-slate-200 bg-white p-0 shadow-xl">
         <DialogHeader className="border-b border-slate-200 px-5 py-4">
           <DialogTitle className="text-base">Print Preview</DialogTitle>
+          <DialogDescription className="sr-only">Preview the record before printing</DialogDescription>
         </DialogHeader>
+
 
         <div className="px-5 py-4">
           <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">

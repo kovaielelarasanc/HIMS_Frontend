@@ -39,117 +39,34 @@ import { Separator } from "@/components/ui/separator"
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog"
 import { Switch } from "@/components/ui/switch"
-import API from "@/api/client"
 
-/**
- * ✅ EMR Export & Release — Production API Integrated
- *
- * Uses:
- * - GET  /api/emr/patients/:id/summary              (added below in backend patch)
- * - GET  /api/emr/patients/:id/encounters           (already exists in your backend)
- * - GET  /api/emr/records?patient_id=:id            (already exists; we filter by encounter client-side)
- * - POST /api/emr/exports/bundles                   (already exists)
- * - PUT  /api/emr/exports/bundles/:id               (already exists)
- * - POST /api/emr/exports/bundles/:id/generate      (patched below to accept optional {pdf_password})
- * - POST /api/emr/exports/bundles/:id/share         (already exists)
- * - GET  /api/emr/exports/bundles/:id/audit         (added below in backend patch)
- * - GET  /api/emr/exports/share/:token              (already exists; used for download/share link)
- */
+// ✅ All API calls must go through emrChart.js
+import {
+    getEmrPatientSummary,
+    listEmrPatientEncounters,
+    listEmrRecords,
+    exportCreateBundle,
+    exportGenerateBundle,
+    exportShareBundle,
+    exportGetBundleAudit,
+    downloadSharePdfBlob,
+    getShareDownloadUrl,
+} from "@/api/emrChart"
 
 // ---------------------------
-// API Helper (safe unwrap)
+// Helpers
 // ---------------------------
-// const API_ORIGIN = (import.meta?.env?.VITE_API_ORIGIN || "").replace(/\/$/, "")
-const EMR_BASE = `${API}/emr`
-
-function getAccessToken() {
-    // If you use cookies, keep it empty; fetch will still work with credentials.
-    return localStorage.getItem("access_token") || localStorage.getItem("token") || ""
-}
-
 function normalizeApiError(err) {
-    if (!err) return "Unknown error"
-    if (typeof err === "string") return err
-    if (err?.message) return err.message
-    return "Request failed"
+    const d = err?.response?.data
+    return (
+        d?.msg ||
+        d?.message ||
+        d?.detail ||
+        err?.message ||
+        "Request failed"
+    )
 }
 
-async function apiFetch(path, { method = "GET", body, signal } = {}) {
-    const token = getAccessToken()
-    const headers = { "Content-Type": "application/json" }
-    if (token) headers.Authorization = `Bearer ${token}`
-
-    const res = await fetch(`${EMR_BASE}${path}`, {
-        method,
-        headers,
-        credentials: "include",
-        body: body ? JSON.stringify(body) : undefined,
-        signal,
-    })
-
-    let json = null
-    const ct = res.headers.get("content-type") || ""
-    if (ct.includes("application/json")) {
-        json = await res.json().catch(() => null)
-    } else {
-        // For non-json responses (rare here), try text
-        const text = await res.text().catch(() => "")
-        json = text ? { raw: text } : null
-    }
-
-    // Support your backend's ok()/err() wrapper shapes
-    const unwrapped =
-        json && typeof json === "object" && "status" in json
-            ? json.status
-                ? json.data ?? json
-                : (() => {
-                    const msg =
-                        json?.msg ||
-                        json?.message ||
-                        json?.error?.message ||
-                        json?.error ||
-                        "Request failed"
-                    const e = new Error(msg)
-                    e.details = json
-                    throw e
-                })()
-            : json
-
-    if (!res.ok) {
-        const msg =
-            (json && (json?.detail || json?.msg || json?.message)) ||
-            `HTTP ${res.status}`
-        const e = new Error(msg)
-        e.details = json
-        throw e
-    }
-
-    return unwrapped
-}
-
-// Download helper for Bearer-token auth
-async function downloadPdfViaFetch(urlPath, filename = "export.pdf") {
-    const token = getAccessToken()
-    const headers = {}
-    if (token) headers.Authorization = `Bearer ${token}`
-
-    const res = await fetch(urlPath, { headers, credentials: "include" })
-    if (!res.ok) throw new Error(`Download failed (HTTP ${res.status})`)
-    const blob = await res.blob()
-    const blobUrl = window.URL.createObjectURL(blob)
-
-    const a = document.createElement("a")
-    a.href = blobUrl
-    a.download = filename
-    document.body.appendChild(a)
-    a.click()
-    a.remove()
-    window.URL.revokeObjectURL(blobUrl)
-}
-
-// ---------------------------
-// UI Helpers
-// ---------------------------
 function useIsMobile(breakpointPx = 1024) {
     const [isMobile, setIsMobile] = useState(false)
     useEffect(() => {
@@ -240,12 +157,26 @@ function fmtTime(d) {
     }
 }
 
+function safeInt(v) {
+    const n = Number(v)
+    return Number.isFinite(n) ? n : 0
+}
+
+function triggerDownloadBlob(blob, filename = "export.pdf") {
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = filename
+    document.body.appendChild(a)
+    a.click()
+    a.remove()
+    URL.revokeObjectURL(url)
+}
+
 // ---------------------------
 // Fullscreen Wrapper
 // ---------------------------
 export function EmrExportReleaseDialog({ open, onOpenChange, patient }) {
-    console.log(patient, ":999-0");
-
     return (
         <Dialog open={!!open} onOpenChange={onOpenChange}>
             <DialogContent
@@ -289,25 +220,17 @@ export function EmrExportReleaseDialog({ open, onOpenChange, patient }) {
 export default function EmrExportRelease({ patient: patientProp, fullscreen = false }) {
     const isMobile = useIsMobile(1024)
 
-    // patientProp can be {id} or full object. We always fetch real summary for correctness.
-    const patientId = Number(patientProp?.id || patientProp?.patient_id || 0) || 0
+    const patientId = safeInt(patientProp?.id || patientProp?.patient_id || 0)
 
     // Core data
     const [patient, setPatient] = useState(patientProp || null)
+    console.log(patient, "00000");
+
     const [encounters, setEncounters] = useState([])
     const [visitKey, setVisitKey] = useState("") // `${encounter_type}:${encounter_id}`
     const [records, setRecords] = useState([])
 
-
-    // Meta lists (dynamic > fallback)
-    const [deptOptions, setDeptOptions] = useState(["ALL"])
-    const SHARE_ROLES = useMemo(
-        () => ["Doctor", "Nurse", "Receptionist", "Lab Staff", "Radiology Staff", "MRD", "Admin"],
-        []
-    )
-    const EXTERNAL_CHANNELS = useMemo(() => ["Email", "WhatsApp", "Download Link"], [])
-
-    // Loading / errors
+    // Loading
     const [loading, setLoading] = useState({
         patient: false,
         encounters: false,
@@ -317,7 +240,11 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
         share: false,
     })
 
+    // Abort controllers
     const abortRef = useRef({ patient: null, encounters: null, records: null, audit: null })
+
+    // Refresh trigger
+    const [refreshNonce, setRefreshNonce] = useState(0)
 
     // filters
     const [q, setQ] = useState("")
@@ -346,7 +273,13 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
     const [maskPHI, setMaskPHI] = useState(false) // UI-only
     const [notes, setNotes] = useState("")
 
-    // Permissions (UI policy today, server enforces expiry/max-download only)
+    // Permissions (UI policy today)
+    const SHARE_ROLES = useMemo(
+        () => ["Doctor", "Nurse", "Receptionist", "Lab Staff", "Radiology Staff", "MRD", "Admin"],
+        []
+    )
+    const EXTERNAL_CHANNELS = useMemo(() => ["Email", "WhatsApp", "Download Link"], [])
+
     const [internalRoles, setInternalRoles] = useState(() => new Set(["MRD"]))
     const [externalChannels, setExternalChannels] = useState(() => new Set(["Email"]))
     const [expiryDays, setExpiryDays] = useState(7)
@@ -356,18 +289,21 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
     const [allowForward, setAllowForward] = useState(false)
 
     // Output
-    const [bundle, setBundle] = useState(null) // {id, created_at, pages, size_est_mb, status, share_token?, share_url?}
+    const [bundle, setBundle] = useState(null) // {id, created_at, name, pages, size_est_mb, status, share_token?, share_url?, share_id?}
     const [released, setReleased] = useState(false)
 
-    // Audit logs (from API)
+    // Audit logs
     const [audit, setAudit] = useState([])
+
+    // Meta lists
+    const [deptOptions, setDeptOptions] = useState(["ALL"])
 
     const activeVisit = useMemo(() => {
         const [t, id] = (visitKey || "").split(":")
         const encounter_type = (t || "").toUpperCase()
-        const encounter_id = Number(id || 0) || 0
+        const encounter_id = safeInt(id || 0)
         const row = encounters.find(
-            (e) => String(e.encounter_type).toUpperCase() === encounter_type && Number(e.encounter_id) === encounter_id
+            (e) => String(e.encounter_type).toUpperCase() === encounter_type && safeInt(e.encounter_id) === encounter_id
         )
         return row || null
     }, [visitKey, encounters])
@@ -375,32 +311,33 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
     const tone = deptTone(activeVisit?.dept_code || activeVisit?.dept_name || "General Medicine")
 
     // ---------------------------
-    // Load patient + encounters
+    // Load patient summary
     // ---------------------------
-    // useEffect(() => {
+    useEffect(() => {
+        if (!patientId) return
 
+            ; (async () => {
+                abortRef.current.patient?.abort?.()
+                const controller = new AbortController()
+                abortRef.current.patient = controller
 
-    //     if (!patientId) return
+                try {
+                    setLoading((p) => ({ ...p, patient: true }))
+                    const p = await getEmrPatientSummary(patientId, controller.signal)
+                    setPatient(p || patientProp || null)
+                } catch (e) {
+                    // Non-blocking fallback
+                    setPatient(patientProp || null)
+                } finally {
+                    setLoading((p) => ({ ...p, patient: false }))
+                }
+            })()
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [patientId, refreshNonce])
 
-    //         ; (async () => {
-    //             abortRef.current.patient?.abort?.()
-    //             const controller = new AbortController()
-    //             abortRef.current.patient = controller
-
-    //             try {
-    //                 setLoading((p) => ({ ...p, patient: true }))
-    //                 const p = await apiFetch(`/billing/advances/patients/${patientId}/summary`, { signal: controller.signal })
-    //                 console.log(p, "oooooooooooooooooooooooooooooooooooooooooooooooooooooooooooo");
-
-    //                 setPatient(p)
-    //             } catch (e) {
-    //                 toast.error(normalizeApiError(e))
-    //             } finally {
-    //                 setLoading((p) => ({ ...p, patient: false }))
-    //             }
-    //         })()
-    // }, [patientId])
-
+    // ---------------------------
+    // Load encounters
+    // ---------------------------
     useEffect(() => {
         if (!patientId) return
 
@@ -411,34 +348,46 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
 
                 try {
                     setLoading((p) => ({ ...p, encounters: true }))
-                    const rows = await apiFetch(`/patients/${patientId}/encounters?limit=100`, { signal: controller.signal })
+                    const rows = await listEmrPatientEncounters(patientId, { limit: 100 }, controller.signal)
+                    console.log(rows, "check listEmrPatientEncounters ");
 
-                    const norm = (Array.isArray(rows) ? rows : [])
+                    const norm = (Array.isArray(rows.items) ? rows.items : [])
                         .map((r) => ({
+
+
                             encounter_type: (r.encounter_type || "").toUpperCase(),
-                            encounter_id: Number(r.encounter_id || 0) || 0,
+                            encounter_id: safeInt(r.encounter_id || 0),
                             encounter_code: r.encounter_code || `${r.encounter_type}-${r.encounter_id}`,
                             dept_code: r.dept_code || r.dept || "",
-                            dept_name: r.dept_name || r.dept || "",
+                            dept_name: r.dept_code || r.dept || "",
                             doctor_name: r.doctor_name || r.doctor || "",
                             status: r.status || "",
                             encounter_at: r.encounter_at || r.created_at || null,
                         }))
                         .filter((r) => r.encounter_type && r.encounter_id)
+                    console.log(norm, "check norm");
 
                     setEncounters(norm)
 
-                    // default selection
-                    if (!visitKey && norm.length) {
-                        setVisitKey(`${norm[0].encounter_type}:${norm[0].encounter_id}`)
+                    // Ensure visitKey is valid
+                    const hasCurrent =
+                        !!visitKey &&
+                        norm.some((v) => `${v.encounter_type}:${v.encounter_id}` === visitKey)
+
+                    if (!hasCurrent) {
+                        if (norm.length) setVisitKey(`${norm[0].encounter_type}:${norm[0].encounter_id}`)
+                        else setVisitKey("")
                     }
                 } catch (e) {
                     toast.error(normalizeApiError(e))
+                    setEncounters([])
+                    setVisitKey("")
                 } finally {
                     setLoading((p) => ({ ...p, encounters: false }))
                 }
             })()
-    }, [patientId]) // eslint-disable-line react-hooks/exhaustive-deps
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [patientId, refreshNonce])
 
     // Init bundle name when visit changes
     useEffect(() => {
@@ -462,7 +411,7 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
     }, [visitKey])
 
     // ---------------------------
-    // Load records for patient (and filter by encounter client-side)
+    // Load records (patient-level, filter by encounter client-side)
     // ---------------------------
     useEffect(() => {
         if (!patientId) return
@@ -476,21 +425,19 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
                 try {
                     setLoading((p) => ({ ...p, records: true }))
 
-                    // We fetch patient records once (paged) and filter by encounter fields.
-                    // This avoids backend changes. (If you want server-side encounter filtering, tell me.)
                     const pageSize = 100
                     let page = 1
                     let all = []
                     let total = 0
 
-                    // max 5 pages (500 records) to prevent runaway; adjust if needed.
+                    // max 5 pages (500 records)
                     for (let i = 0; i < 5; i++) {
-                        const resp = await apiFetch(
-                            `/records?patient_id=${patientId}&page=${page}&page_size=${pageSize}`,
-                            { signal: controller.signal }
+                        const resp = await listEmrRecords(
+                            { patient_id: patientId, page, page_size: pageSize },
+                            controller.signal
                         )
                         const items = resp?.items || []
-                        total = Number(resp?.total || 0) || items.length
+                        total = safeInt(resp?.total || 0) || items.length
                         all = all.concat(items)
 
                         if (all.length >= total || items.length < pageSize) break
@@ -498,11 +445,14 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
                     }
 
                     const encType = String(activeVisit.encounter_type || "").toUpperCase()
-                    const encId = Number(activeVisit.encounter_id || 0) || 0
+                    const encId = safeInt(activeVisit.encounter_id || 0)
 
-                    // Normalize rows into the UI schema
                     const mapped = all
-                        .filter((r) => String(r.encounter_type || "").toUpperCase() === encType && Number(r.encounter_id || 0) === encId)
+                        .filter(
+                            (r) =>
+                                String(r.encounter_type || "").toUpperCase() === encType &&
+                                safeInt(r.encounter_id || 0) === encId
+                        )
                         .map((r) => ({
                             id: String(r.id),
                             dept: r.dept_code || r.dept_name || "Common (All)",
@@ -511,25 +461,25 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
                             updated_at: r.updated_at || r.created_at || new Date().toISOString(),
                             signed: !!r.signed_at || String(r.status || "").toUpperCase() === "SIGNED",
                             confidential: !!r.is_confidential,
-                            pages_est: Number(r.pages_est || 1) || 1, // backend can send pages_est; default 1
-                            attachments: Number(r.attachments_count || 0) || 0,
+                            pages_est: safeInt(r.pages_est || 1) || 1,
+                            attachments: safeInt(r.attachments_count || 0) || 0,
                             abnormal: !!r.has_abnormal,
                         }))
 
                     setRecords(mapped)
 
-                    // department filter options (dynamic)
                     const deptSet = new Set(["ALL"])
                     mapped.forEach((x) => deptSet.add(String(x.dept || "").trim() || "Common (All)"))
                     setDeptOptions(Array.from(deptSet))
                 } catch (e) {
                     toast.error(normalizeApiError(e))
                     setRecords([])
+                    setDeptOptions(["ALL"])
                 } finally {
                     setLoading((p) => ({ ...p, records: false }))
                 }
             })()
-    }, [patientId, activeVisit?.encounter_type, activeVisit?.encounter_id])
+    }, [patientId, activeVisit?.encounter_type, activeVisit?.encounter_id, refreshNonce])
 
     // ---------------------------
     // Filtering + selection math
@@ -553,13 +503,10 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
         return x
     }, [records, q, dept, onlySigned, showConfidential])
 
-    const selectedRows = useMemo(
-        () => records.filter((r) => selected.has(r.id)),
-        [records, selected]
-    )
+    const selectedRows = useMemo(() => records.filter((r) => selected.has(r.id)), [records, selected])
 
     const selectedPages = useMemo(() => {
-        let pages = selectedRows.reduce((s, r) => s + Number(r.pages_est || 0), 0)
+        let pages = selectedRows.reduce((s, r) => s + safeInt(r.pages_est || 0), 0)
         if (includeCover) pages += 1
         if (includeIndex) pages += 1
         if (includeAuditSummary) pages += 1
@@ -567,7 +514,7 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
     }, [selectedRows, includeCover, includeIndex, includeAuditSummary])
 
     const selectedAttachments = useMemo(
-        () => selectedRows.reduce((s, r) => s + Number(r.attachments || 0), 0),
+        () => selectedRows.reduce((s, r) => s + safeInt(r.attachments || 0), 0),
         [selectedRows]
     )
 
@@ -616,7 +563,7 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
     }
 
     // ---------------------------
-    // API Actions: Build / Generate / Share / Audit
+    // API Actions (via emrChart.js)
     // ---------------------------
     async function fetchAudit(bundleId) {
         if (!bundleId) return
@@ -626,12 +573,11 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
 
         try {
             setLoading((p) => ({ ...p, audit: true }))
-            const rows = await apiFetch(`/exports/bundles/${bundleId}/audit?limit=200`, { signal: controller.signal })
-            // expected rows: [{at, by, action, meta}]
-            setAudit(Array.isArray(rows) ? rows : [])
-        } catch (e) {
+            const rows = await exportGetBundleAudit(bundleId, { limit: 200 }, controller.signal)
+            const list = Array.isArray(rows) ? rows : Array.isArray(rows?.items) ? rows.items : []
+            setAudit(list)
+        } catch {
             // audit is non-blocking
-            console.warn(e)
         } finally {
             setLoading((p) => ({ ...p, audit: false }))
         }
@@ -645,38 +591,37 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
             setLoading((p) => ({ ...p, build: true }))
 
             const recordIds = selectedRows
-                .map((r) => Number(r.id))
+                .map((r) => safeInt(r.id))
                 .filter((n) => Number.isFinite(n) && n > 0)
 
             // 1) Create bundle
-            const created = await apiFetch(`/exports/bundles`, {
-                method: "POST",
-                body: {
-                    patient_id: patientId,
-                    encounter_type: activeVisit.encounter_type,
-                    encounter_id: activeVisit.encounter_id,
-                    title: bundleName.trim(),
-                    watermark_text: watermarkOn ? watermarkText : "",
-                    record_ids: recordIds,
-                    // Keep extra "notes/purpose" in title/notes on UI for now (DB schema dependent)
-                },
+            const created = await exportCreateBundle({
+                patient_id: patientId,
+                encounter_type: activeVisit.encounter_type,
+                encounter_id: typeof activeVisit.encounter_id == typeof 0 ? activeVisit.encounter_id.toString() : activeVisit.encounter_id,
+                title: bundleName.trim(),
+                watermark_text: watermarkOn ? watermarkText : "",
+                record_ids: recordIds,
+                // Optional meta fields (safe for UI; backend may ignore)
+                // purpose: purpose || "",
+                // notes: notes || "",
+                // options: {
+                //     include_cover: !!includeCover,
+                //     include_index: !!includeIndex,
+                //     include_attachments: !!includeAttachments,
+                //     include_audit_summary: !!includeAuditSummary,
+                //     mask_phi: !!maskPHI,
+                // },
             })
 
-            const bundleId = Number(created?.bundle_id || created?.id || 0)
+            const bundleId = safeInt(created?.bundle_id || created?.id || 0)
             if (!bundleId) throw new Error("Bundle creation failed: missing bundle_id")
 
             // 2) Generate PDF (optional password)
-            const gen = await apiFetch(`/exports/bundles/${bundleId}/generate`, {
-                method: "POST",
-                body: passwordOn ? { pdf_password: password } : {},
-            })
+            const gen = await exportGenerateBundle(bundleId, passwordOn ? { pdf_password: password } : {})
 
             const status = gen?.status || "GENERATED"
-
-            const sizeEstMb = Math.max(
-                0.3,
-                selectedPages * 0.18 + (includeAttachments ? selectedAttachments * 0.35 : 0)
-            ).toFixed(1)
+            const sizeEstMb = Math.max(0.3, selectedPages * 0.18 + (includeAttachments ? selectedAttachments * 0.35 : 0)).toFixed(1)
 
             setBundle({
                 id: bundleId,
@@ -697,27 +642,59 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
         }
     }
 
+    function safeInt(v, fallback = 0) {
+        const n = Number(v)
+        return Number.isFinite(n) ? Math.trunc(n) : fallback
+    }
+
+    function clampInt(v, min, max, fallback = min) {
+        const n = safeInt(v, fallback)
+        return Math.max(min, Math.min(max, n))
+    }
+
+    /**
+     * Backend requires:
+     *  expires_in_days: 1..365
+     *  max_downloads:   1..1000
+     *
+     * UI behaviour:
+     *  - if user passes 0 or empty => treat as "unlimited-like"
+     *    -> expires_in_days = 365, max_downloads = 1000
+     */
+    function normalizeSharePayload({ expires_in_days, max_downloads } = {}) {
+        const rawExp = safeInt(expires_in_days, 0)
+        const rawMax = safeInt(max_downloads, 0)
+
+        return {
+            expires_in_days: rawExp <= 0 ? 365 : clampInt(rawExp, 1, 365, 7),
+            max_downloads: rawMax <= 0 ? 1000 : clampInt(rawMax, 1, 1000, 5),
+        }
+    }
+
     async function releaseBundle(channel) {
         if (!bundle?.id) return toast.error("Generate bundle first")
 
         try {
             setLoading((p) => ({ ...p, share: true }))
 
-            // Backend supports expiry + max_downloads today.
-            const share = await apiFetch(`/exports/bundles/${bundle.id}/share`, {
-                method: "POST",
-                body: {
-                    expires_in_days: Math.max(0, Math.min(365, Number(expiryDays || 0))),
-                    max_downloads: 0, // 0 = unlimited in your service
-                },
+            const sharePayload = normalizeSharePayload({
+                expires_in_days: expiryDays, // if 0 -> 365
+                max_downloads: 0,            // UI "unlimited" -> 1000
             })
+
+            const share = await exportShareBundle(bundle.id, sharePayload)
 
             const token = share?.share_token
             if (!token) throw new Error("Share creation failed: missing share_token")
 
-            const shareUrl = `${API_ORIGIN || window.location.origin}/api/emr/exports/share/${token}`
+            const shareUrl = share?.share_url || getShareDownloadUrl(token, { absolute: true })
 
-            setBundle((p) => ({ ...(p || {}), share_token: token, share_url: shareUrl }))
+            setBundle((p) => ({
+                ...(p || {}),
+                share_token: token,
+                share_url: shareUrl,
+                share_id: share?.share_id || share?.id,
+            }))
             setReleased(true)
 
             toast.success(`Released via ${channel}`)
@@ -730,34 +707,31 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
     }
 
     async function downloadBundle() {
-        if (!bundle?.share_url && !bundle?.id) return toast.error("Generate bundle first")
+        if (!bundle?.id) return toast.error("Generate bundle first")
 
         try {
-            // For download we generate a fresh share token (safer than storing one)
-            const share = await apiFetch(`/exports/bundles/${bundle.id}/share`, {
-                method: "POST",
-                body: { expires_in_days: 0, max_downloads: 0 },
+            setLoading((p) => ({ ...p, download: true }))
+
+            // ✅ backend does NOT allow 0, so create a short-lived token safely
+            const sharePayload = normalizeSharePayload({
+                expires_in_days: 1,  // 1 day token (minimum allowed)
+                max_downloads: 0,    // "unlimited-like" -> 1000
             })
 
+            const share = await exportShareBundle(bundle.id, sharePayload)
             const token = share?.share_token
             if (!token) throw new Error("Download token generation failed")
 
-            const url = `${API_ORIGIN || window.location.origin}/api/emr/exports/share/${token}`
-            const filename = `${bundle?.name || "export"}.pdf`
-
-            // If auth uses cookies, window.open works too.
-            // If auth uses Bearer token, we fetch blob.
-            const tokenLocal = getAccessToken()
-            if (tokenLocal) {
-                await downloadPdfViaFetch(url, filename)
-            } else {
-                window.open(url, "_blank", "noopener,noreferrer")
-            }
+            const { blob, filename } = await downloadSharePdfBlob(token)
+            const finalName = filename || `${bundle?.name || "export"}.pdf`
+            triggerDownloadBlob(blob, finalName)
 
             toast.success("Download started")
             await fetchAudit(bundle.id)
         } catch (e) {
             toast.error(normalizeApiError(e))
+        } finally {
+            setLoading((p) => ({ ...p, download: false }))
         }
     }
 
@@ -792,37 +766,7 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
     async function refreshAll() {
         if (!patientId) return
         toast.message("Refreshing…")
-        // re-trigger by resetting keys
-        try {
-            setLoading((p) => ({ ...p, patient: true, encounters: true, records: true }))
-            const p = await apiFetch(`/patients/${patientId}/summary`)
-            console.log(p, "1111111111111111111111111111111111111111111111111111111");
-
-            setPatient(p)
-
-            const rows = await apiFetch(`/patients/${patientId}/encounters?limit=100`)
-            const norm = (Array.isArray(rows) ? rows : [])
-                .map((r) => ({
-                    encounter_type: (r.encounter_type || "").toUpperCase(),
-                    encounter_id: Number(r.encounter_id || 0) || 0,
-                    encounter_code: r.encounter_code || `${r.encounter_type}-${r.encounter_id}`,
-                    dept_code: r.dept_code || r.dept || "",
-                    dept_name: r.dept_name || r.dept || "",
-                    doctor_name: r.doctor_name || r.doctor || "",
-                    status: r.status || "",
-                    encounter_at: r.encounter_at || r.created_at || null,
-                }))
-                .filter((r) => r.encounter_type && r.encounter_id)
-
-            setEncounters(norm)
-            if (!visitKey && norm.length) setVisitKey(`${norm[0].encounter_type}:${norm[0].encounter_id}`)
-
-            toast.success("Refreshed")
-        } catch (e) {
-            toast.error(normalizeApiError(e))
-        } finally {
-            setLoading((p) => ({ ...p, patient: false, encounters: false, records: false }))
-        }
+        setRefreshNonce((n) => n + 1)
     }
 
     // Mobile: open right pane in dialog
@@ -855,7 +799,12 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
                             <Button variant="outline" className="rounded-2xl" onClick={resetAll}>
                                 <X className="mr-2 h-4 w-4" /> Reset
                             </Button>
-                            <Button variant="outline" className="rounded-2xl" onClick={refreshAll} disabled={loading.patient || loading.encounters || loading.records}>
+                            <Button
+                                variant="outline"
+                                className="rounded-2xl"
+                                onClick={refreshAll}
+                                disabled={loading.patient || loading.encounters || loading.records}
+                            >
                                 <RefreshCcw className="mr-2 h-4 w-4" /> Refresh
                             </Button>
 
@@ -881,7 +830,7 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
                                         {patient?.name || "—"} <span className="text-slate-500">({patient?.uhid || "—"})</span>
                                     </div>
                                     <div className="mt-1 text-xs text-slate-500">
-                                        {(patient?.age ?? "—")} / {(patient?.gender ?? "—")} · {(patient?.phone ?? "—")}
+                                        {(patient?.age_years ?? "—")} / {(patient?.gender ?? "—")} · {(patient?.phone ?? "—")}
                                     </div>
                                 </div>
 
@@ -1144,7 +1093,7 @@ export default function EmrExportRelease({ patient: patientProp, fullscreen = fa
                 </div>
             </div>
 
-            {/* Mobile Right Pane (full-screen dialog with scroll) */}
+            {/* Mobile Right Pane */}
             <Dialog open={mobilePaneOpen} onOpenChange={setMobilePaneOpen}>
                 <DialogContent
                     className={cn(
@@ -1389,7 +1338,7 @@ function RightPane({
                             <Card className="rounded-3xl border-slate-200 bg-white">
                                 <CardHeader className="pb-2">
                                     <CardTitle className="text-base">Bundle Settings</CardTitle>
-                                    <div className="text-xs text-slate-500">PDF bundle config (API integrated)</div>
+                                    <div className="text-xs text-slate-500">PDF bundle config (via emrChart.js)</div>
                                 </CardHeader>
                                 <CardContent className="space-y-3">
                                     <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
@@ -1440,7 +1389,7 @@ function RightPane({
                                     <ToggleCard
                                         icon={KeyRound}
                                         title="Password protect"
-                                        desc="Encrypt PDF bundle (backend patched to accept pdf_password)"
+                                        desc="Encrypt PDF bundle (pdf_password)"
                                         checked={passwordOn}
                                         onCheckedChange={setPasswordOn}
                                         right={
@@ -1514,13 +1463,13 @@ function RightPane({
                             <Card className="rounded-3xl border-slate-200 bg-white">
                                 <CardHeader className="pb-2">
                                     <CardTitle className="text-base">Release</CardTitle>
-                                    <div className="text-xs text-slate-500">Share/export actions (API integrated)</div>
+                                    <div className="text-xs text-slate-500">Share/export actions (via emrChart.js)</div>
                                 </CardHeader>
                                 <CardContent className="space-y-3">
                                     <div className="grid grid-cols-1 gap-2 md:grid-cols-3">
                                         <ActionBtn disabled={!bundle || loading.share} onClick={() => onRelease("MRD")} icon={Shield} tone={tone} title="MRD Release" desc="Issue MRD share token" />
-                                        <ActionBtn disabled={!bundle || loading.share} onClick={() => onRelease("Email")} icon={Share2} tone={tone} title="Email" desc="Generate share token (email sending later)" />
-                                        <ActionBtn disabled={!bundle || loading.share} onClick={() => onRelease("WhatsApp")} icon={Share2} tone={tone} title="WhatsApp" desc="Generate share token (WhatsApp sending later)" />
+                                        <ActionBtn disabled={!bundle || loading.share} onClick={() => onRelease("Email")} icon={Share2} tone={tone} title="Email" desc="Generate share token (sending later)" />
+                                        <ActionBtn disabled={!bundle || loading.share} onClick={() => onRelease("WhatsApp")} icon={Share2} tone={tone} title="WhatsApp" desc="Generate share token (sending later)" />
                                     </div>
 
                                     {released ? (
