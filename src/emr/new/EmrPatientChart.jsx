@@ -70,6 +70,7 @@ import {
     triggerDownloadBlob,
 } from "@/api/emrChart"
 import { apiErrorMessage } from "@/api/_unwrap"
+import { formatIST } from "@/ipd/components/timeZONE"
 
 /**
  * ✅ EMR Patient Chart (Main Hub) — Production Ready
@@ -1871,7 +1872,7 @@ function RecordCard({ record, active, onClick }) {
                         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-500">
                             <span className="inline-flex items-center gap-1">
                                 <Clock3 className="h-3.5 w-3.5" />
-                                {fmtTime(record.ts)}
+                                {formatIST(record.ts)}
                             </span>
                             <span className="inline-flex items-center gap-1">
                                 <Layers className="h-3.5 w-3.5" />

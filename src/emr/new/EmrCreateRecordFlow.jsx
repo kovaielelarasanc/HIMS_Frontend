@@ -2833,6 +2833,8 @@ export default function EmrCreateRecordFlow({
         const rid = asMaybeInt(editingId)
         if (!rid) return toast.error("Missing record id for edit")
         const payload = buildUpdatePayload({ draft_stage: "INCOMPLETE" })
+        console.log(payload, "buildUpdatePayload");
+
         if (!payload.title || payload.title.trim().length < 3) return toast.error("Title min 3 chars")
         const updated = await apiUpdateDraft(rid, payload)
         toast.success("Draft updated")
@@ -2840,6 +2842,8 @@ export default function EmrCreateRecordFlow({
         onSaved?.({ ...updated, record_id: rid })
       } else {
         const payload = buildDraftPayload({ draft_stage: "INCOMPLETE" })
+        console.log(payload, "buildDraftPayload");
+
         const created = await apiCreateDraft(payload)
         toast.success("Draft saved")
         onSaved?.(created)
@@ -2869,6 +2873,7 @@ export default function EmrCreateRecordFlow({
           toast.error("Title min 3 chars")
           return
         }
+        console.log(payload, "buildUpdatePayload 344");
 
         await apiUpdateDraft(rid, payload)
         await apiSignRecord(rid, "")
@@ -2885,6 +2890,7 @@ export default function EmrCreateRecordFlow({
           toast.error(vErr)
           return
         }
+        console.log(payload, "buildDraftPayload765655");
 
         const created = await apiCreateDraft(payload)
         const recordId2 = created?.record_id ?? created?.id ?? created?.record?.id ?? created?.data?.record_id ?? null
