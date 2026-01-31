@@ -366,7 +366,7 @@ export default function TransactionsTab({
                             ) : null}
                         </div>
 
-                        <Button
+                        {/* <Button
                             type="button"
                             className="rounded-2xl h-10 gap-2"
                             onClick={onDownloadTxnPdf}
@@ -374,7 +374,7 @@ export default function TransactionsTab({
                         >
                             <Download className="h-4 w-4" />
                             {downloadingTxnPdf ? "Downloading..." : "Transactions PDF"}
-                        </Button>
+                        </Button> */}
                     </div>
                 </div>
 
