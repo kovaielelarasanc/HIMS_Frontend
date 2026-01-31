@@ -224,7 +224,6 @@ function PatientFormModalInner({ onClose, onSaved, initialPatient, lookups }) {
   const [openOpt, setOpenOpt] = useState({
     optionalBasics: false,
     pregnancy: true,
-    address: false,
     guardian: false,
     idproof: false,
     credit: false,
@@ -309,8 +308,10 @@ function PatientFormModalInner({ onClose, onSaved, initialPatient, lookups }) {
       marital_status: (v) => !!String(v || '').trim(),
       phone: (v) => isPhone10(v),
       ref_source: (v) => !!String(v || '').trim(),
+      // Address is now mandatory
+      'address.line1': (v) => !!String(form.address?.line1 || '').trim(),
     }),
-    []
+    [form.address]
   )
 
   const completion = useMemo(() => {
@@ -471,18 +472,16 @@ function PatientFormModalInner({ onClose, onSaved, initialPatient, lookups }) {
         policy_name: nullIfEmpty(form.policy_name),
         family_id: toIntOrNull(form.family_id),
 
-        // address: send only if user filled something
-        address: addressHasAny(form.address)
-          ? {
-            type: form.address.type || 'current',
-            line1: nullIfEmpty(form.address.line1) || '',
-            line2: nullIfEmpty(form.address.line2) || '',
-            city: nullIfEmpty(form.address.city) || '',
-            state: nullIfEmpty(form.address.state) || '',
-            pincode: nullIfEmpty(form.address.pincode) || '',
-            country: nullIfEmpty(form.address.country) || 'India',
-          }
-          : null,
+        // address: now mandatory, always send
+        address: {
+          type: form.address.type || 'current',
+          line1: nullIfEmpty(form.address.line1) || '',
+          line2: nullIfEmpty(form.address.line2) || '',
+          city: nullIfEmpty(form.address.city) || '',
+          state: nullIfEmpty(form.address.state) || '',
+          pincode: nullIfEmpty(form.address.pincode) || '',
+          country: nullIfEmpty(form.address.country) || 'India',
+        },
       }
 
       const res =
@@ -814,6 +813,74 @@ function PatientFormModalInner({ onClose, onSaved, initialPatient, lookups }) {
               </div>
             </Section>
 
+            {/* Address - Now Mandatory */}
+            <Section title="Address (Mandatory)">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <Field label="Address Line 1 *" state={state('address.line1')} className="sm:col-span-2">
+                  <input
+                    value={form.address.line1}
+                    onChange={handleAddressChange('line1')}
+                    onBlur={() => markTouched('address.line1')}
+                    onFocus={() => setFocusKey('address.line1')}
+                    className={inputCls('address.line1')}
+                    style={focusStyleFor('address.line1')}
+                    placeholder="Enter address line 1"
+                  />
+                  <Err text={fieldErrors['address.line1']} />
+                </Field>
+                <Field label="Address Line 2" className="sm:col-span-2">
+                  <input
+                    value={form.address.line2}
+                    onChange={handleAddressChange('line2')}
+                    onFocus={() => setFocusKey('address.line2')}
+                    className={inputCls('__ok')}
+                    style={focusStyleFor('address.line2')}
+                    placeholder="Optional"
+                  />
+                </Field>
+                <Field label="City">
+                  <input
+                    value={form.address.city}
+                    onChange={handleAddressChange('city')}
+                    onFocus={() => setFocusKey('address.city')}
+                    className={inputCls('__ok')}
+                    style={focusStyleFor('address.city')}
+                    placeholder="Enter city"
+                  />
+                </Field>
+                <Field label="State">
+                  <input
+                    value={form.address.state}
+                    onChange={handleAddressChange('state')}
+                    onFocus={() => setFocusKey('address.state')}
+                    className={inputCls('__ok')}
+                    style={focusStyleFor('address.state')}
+                    placeholder="Enter state"
+                  />
+                </Field>
+                <Field label="Pincode">
+                  <input
+                    value={form.address.pincode}
+                    onChange={handleAddressChange('pincode')}
+                    onFocus={() => setFocusKey('address.pincode')}
+                    className={inputCls('__ok')}
+                    style={focusStyleFor('address.pincode')}
+                    placeholder="Enter pincode"
+                  />
+                </Field>
+                <Field label="Country">
+                  <input
+                    value={form.address.country}
+                    onChange={handleAddressChange('country')}
+                    onFocus={() => setFocusKey('address.country')}
+                    className={inputCls('__ok')}
+                    style={focusStyleFor('address.country')}
+                    placeholder="India"
+                  />
+                </Field>
+              </div>
+            </Section>
+
             {/* Optional sections */}
             <div className="mt-5 grid gap-3">
               {/* Pregnancy / RCH */}
@@ -950,68 +1017,7 @@ function PatientFormModalInner({ onClose, onSaved, initialPatient, lookups }) {
                 </div>
               </Disclosure>
 
-              <Disclosure open={openOpt.address} onToggle={() => toggle('address')} title="Address" subtitle="Current address details">
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                  <Field label="Address Line 1" className="sm:col-span-2">
-                    <input
-                      value={form.address.line1}
-                      onChange={handleAddressChange('line1')}
-                      onFocus={() => setFocusKey('address.line1')}
-                      className={inputCls('address.line1')}
-                      style={focusStyleFor('address.line1')}
-                    />
-                    <Err text={fieldErrors['address.line1']} />
-                  </Field>
-                  <Field label="Address Line 2" className="sm:col-span-2">
-                    <input
-                      value={form.address.line2}
-                      onChange={handleAddressChange('line2')}
-                      onFocus={() => setFocusKey('address.line2')}
-                      className={inputCls('__ok')}
-                      style={focusStyleFor('address.line2')}
-                    />
-                  </Field>
-                  <Field label="City">
-                    <input
-                      value={form.address.city}
-                      onChange={handleAddressChange('city')}
-                      onFocus={() => setFocusKey('address.city')}
-                      className={inputCls('address.city')}
-                      style={focusStyleFor('address.city')}
-                    />
-                    <Err text={fieldErrors['address.city']} />
-                  </Field>
-                  <Field label="State">
-                    <input
-                      value={form.address.state}
-                      onChange={handleAddressChange('state')}
-                      onFocus={() => setFocusKey('address.state')}
-                      className={inputCls('address.state')}
-                      style={focusStyleFor('address.state')}
-                    />
-                    <Err text={fieldErrors['address.state']} />
-                  </Field>
-                  <Field label="Pincode">
-                    <input
-                      value={form.address.pincode}
-                      onChange={handleAddressChange('pincode')}
-                      onFocus={() => setFocusKey('address.pincode')}
-                      className={inputCls('address.pincode')}
-                      style={focusStyleFor('address.pincode')}
-                    />
-                    <Err text={fieldErrors['address.pincode']} />
-                  </Field>
-                  <Field label="Country">
-                    <input
-                      value={form.address.country}
-                      onChange={handleAddressChange('country')}
-                      onFocus={() => setFocusKey('address.country')}
-                      className={inputCls('__ok')}
-                      style={focusStyleFor('address.country')}
-                    />
-                  </Field>
-                </div>
-              </Disclosure>
+
 
               <Disclosure open={openOpt.guardian} onToggle={() => toggle('guardian')} title="Guardian" subtitle="For minor / dependent">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
