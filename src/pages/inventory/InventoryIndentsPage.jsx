@@ -122,25 +122,14 @@ export default function InventoryIndentsPage() {
   })
   const [itemSearch, setItemSearch] = useState("")
   const [catalogLoading, setCatalogLoading] = useState(false)
-
-  const filteredItems = useMemo(() => {
-    const s = itemSearch.trim().toLowerCase()
-    if (!s) return items.slice(0, 80)
-    return items
-      .filter(
-        (x) =>
-          String(x.name || "").toLowerCase().includes(s) ||
-          String(x.code || "").toLowerCase().includes(s)
-      )
-      .slice(0, 120)
-  }, [items, itemSearch])
+  const [searchLoading, setSearchLoading] = useState(false)
 
   const loadCatalog = async () => {
     try {
       setCatalogLoading(true)
       const [locs, its] = await Promise.all([
         invListLocations({ active: true }),
-        invListItems({ is_active: true }), // ✅ do NOT send item_type=null
+        invListItems({ is_active: true }),
       ])
       setLocations(locs.data || [])
       setItems(its || [])
@@ -150,6 +139,54 @@ export default function InventoryIndentsPage() {
       setCatalogLoading(false)
     }
   }
+
+  const searchItems = async (searchTerm) => {
+    if (!searchTerm.trim()) {
+      return items
+    }
+    
+    try {
+      setSearchLoading(true)
+      const searchResults = await invListItems({ 
+        is_active: true, 
+        q: searchTerm.trim() 
+      })
+      return searchResults || []
+    } catch (e) {
+      toast.error(e?.message || "Search failed")
+      return items
+    } finally {
+      setSearchLoading(false)
+    }
+  }
+
+  const [filteredItems, setFilteredItems] = useState([])
+
+  useEffect(() => {
+    const performSearch = async () => {
+      if (!itemSearch.trim()) {
+        setFilteredItems(items)
+        return
+      }
+      
+      try {
+        setSearchLoading(true)
+        const searchResults = await invListItems({ 
+          is_active: true, 
+          q: itemSearch.trim() 
+        })
+        setFilteredItems(searchResults || [])
+      } catch (e) {
+        toast.error(e?.message || "Search failed")
+        setFilteredItems([])
+      } finally {
+        setSearchLoading(false)
+      }
+    }
+
+    const timeoutId = setTimeout(performSearch, 300)
+    return () => clearTimeout(timeoutId)
+  }, [itemSearch, items])
 
   const loadList = async () => {
     if (!canIndentView) return
@@ -182,6 +219,12 @@ export default function InventoryIndentsPage() {
     loadCatalog()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
+
+  useEffect(() => {
+    if (items.length > 0 && !itemSearch.trim()) {
+      setFilteredItems(items)
+    }
+  }, [items])
 
   useEffect(() => {
     loadList()
@@ -606,10 +649,14 @@ export default function InventoryIndentsPage() {
 
               <div className="border rounded-2xl overflow-hidden bg-slate-50">
                 <div className="max-h-[420px] overflow-auto">
-                  {catalogLoading ? (
-                    <div className="p-4 text-sm text-muted-foreground">Loading items...</div>
+                  {catalogLoading || searchLoading ? (
+                    <div className="p-4 text-sm text-muted-foreground">
+                      {searchLoading ? "Searching..." : "Loading items..."}
+                    </div>
                   ) : filteredItems.length === 0 ? (
-                    <div className="p-4 text-sm text-muted-foreground">No items match.</div>
+                    <div className="p-4 text-sm text-muted-foreground">
+                      {itemSearch.trim() ? "No items match your search." : "No items match."}
+                    </div>
                   ) : (
                     <div className="divide-y">
                       {filteredItems.map((it) => (
