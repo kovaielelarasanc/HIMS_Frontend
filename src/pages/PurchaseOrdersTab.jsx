@@ -761,10 +761,12 @@ function PurchaseOrderSheet({ open, onOpenChange, suppliers, locations, initialP
         }
         setSearching(true)
         try {
-            const res = await listInventoryItems({ q: text, limit: 20 })
-            setItemResults(res.data || [])
+            const res = await listInventoryItems({ q: text, limit: 20, is_active: true })
+            console.log('Search results:', res)
+            setItemResults(res || [])
         } catch (e) {
-            console.error(e)
+            console.error('Error fetching items:', e)
+            toast.error('Failed to search items: ' + (e?.message || 'Unknown error'))
             setItemResults([])
         } finally {
             setSearching(false)
