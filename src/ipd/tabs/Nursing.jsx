@@ -1,7 +1,7 @@
 // FILE: src/ipd/tabs/Nursing.jsx
 import { useEffect, useMemo, useState } from 'react'
 import { listNursingNotes, addNursingNote, getLatestVitals } from '../../api/ipd'
-import { useCan } from '../../hooks/usePerm'
+import { useCan } from '../../hooks/ipuseperm'
 import {
     Activity,
     HeartPulse,
