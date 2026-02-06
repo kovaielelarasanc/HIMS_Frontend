@@ -1223,7 +1223,7 @@ export default function PharmacyRx() {
     const type = safeStr(header.type).toUpperCase()
     const isCounter = type === "COUNTER"
 
-    if (!isCounter && !header.patient) return toast.error("Select a patient")
+    if (!header.patient) return toast.error("Select a patient")
     if (!isCounter && !header.doctorId) return toast.error("Select a doctor")
 
     // ✅ encounter required for OP/IP/OT (if patient chosen)
@@ -1255,7 +1255,7 @@ export default function PharmacyRx() {
       priority: header.priority,
       rx_datetime: header.datetime,
 
-      patient_id: isCounter ? null : toInt(header.patient?.id),
+      patient_id: toInt(header.patient?.id),
       doctor_user_id: header.doctorId ? toInt(header.doctorId) : null,
 
       visit_id,
@@ -1719,7 +1719,7 @@ export default function PharmacyRx() {
                                       setPatientQuery(e.target.value)
                                       setShowPatientDropdown(true)
                                     }}
-                                    placeholder={header.type === "COUNTER" ? "Optional" : "Search..."}
+                                    placeholder="Search..."
                                     className="pl-9 h-10 text-sm bg-white/70 backdrop-blur border-slate-500 rounded-full"
                                   />
                                 </div>

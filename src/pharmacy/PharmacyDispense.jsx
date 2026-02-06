@@ -708,6 +708,12 @@ export default function PharmacyDispense() {
   async function handleDispense() {
     if (!selectedRx) return
 
+    // Check if patient is required for COUNTER prescriptions
+    if (getRxType(selectedRx) === 'COUNTER' && !getPatientId(selectedRx)) {
+      toast.error('Patient is required to create billing invoice for COUNTER prescription')
+      return
+    }
+
     const effectiveLocationId = dispenseLocationId ? Number(dispenseLocationId) : null
     if (!effectiveLocationId) {
       toast.error('Select Dispense Location before confirming.')
@@ -1190,6 +1196,11 @@ export default function PharmacyDispense() {
                       <div className="text-[11px] text-slate-500">Patient</div>
                       <div className="mt-1 font-semibold text-slate-900">{getPatientName(selectedRx)}</div>
                       <div className="text-[11px] text-slate-500">UHID: {getPatientUhid(selectedRx) || '—'}</div>
+                      {getRxType(selectedRx) === 'COUNTER' && !getPatientId(selectedRx) && (
+                        <div className="mt-2 text-[10px] text-amber-700 bg-amber-50 px-2 py-1 rounded-full">
+                          ⚠ Patient required for billing
+                        </div>
+                      )}
                     </div>
 
                     <div className="rounded-2xl border border-slate-500 bg-white p-3">
