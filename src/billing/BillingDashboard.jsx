@@ -38,7 +38,7 @@ import {
 const ENCOUNTERS = ["ALL", "OP", "IP", "OT", "ER"]
 const CASE_STATUSES = ["ALL", "OPEN", "READY_FOR_POST", "CLOSED", "CANCELLED"]
 const PAYERS = ["ALL", "SELF", "INSURANCE", "CORPORATE", "MIXED"]
-const MANUAL_TYPES = ["OP", "IP", "OT", "ER"]
+const MANUAL_TYPES = ["OP", "IP"]
 
 function safeApiDetail(err) {
     const d = err?.response?.data?.detail

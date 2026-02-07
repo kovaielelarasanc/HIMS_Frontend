@@ -759,7 +759,7 @@ export default function PharmacyDispense() {
         lines: validLines.map((l) => ({
           line_id: Number(getLineId(l)),
           dispense_qty: num(l?.dispense_qty || 0, 0),
-          batch_id: l?.batch_no || null, // Send batch_no instead of batch_id
+          batch_id: l?.batch_id ? Number(l.batch_id) : null // Send batch_no instead of batch_id
         })),
         location_id: effectiveLocationId,
         create_sale: true,

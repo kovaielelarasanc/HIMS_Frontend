@@ -1088,7 +1088,7 @@ export default function PharmacyRx() {
       expiry_date: row.expiry_date || null,
       available_qty: row.available_qty ?? "",
       dose_slots: { M: 1, A: 0, E: 0, N: 1 },
-      duration_days: "5",
+      duration_days: "0",
       dose: "",
       instructions: "",
       is_prn: false,
