@@ -38,36 +38,11 @@ import { Textarea } from "@/components/ui/textarea"
 const cx = (...a) => a.filter(Boolean).join(" ")
 
 const PERMS = {
-  INDENT_UPDATE: [
-    "inventory.indents.update",
-    "inventory.indents.manage",
-    "inv.indents.update",
-    "inv.indents.manage",
-  ],
-  INDENT_SUBMIT: [
-    "inventory.indents.submit",
-    "inventory.indents.manage",
-    "inv.indents.submit",
-    "inv.indents.manage",
-  ],
-  INDENT_APPROVE: [
-    "inventory.indents.approve",
-    "inventory.indents.manage",
-    "inv.indents.approve",
-    "inv.indents.manage",
-  ],
-  INDENT_CANCEL: [
-    "inventory.indents.cancel",
-    "inventory.indents.manage",
-    "inv.indents.cancel",
-    "inv.indents.manage",
-  ],
-  ISSUE_CREATE: [
-    "inventory.issues.create",
-    "inventory.issues.manage",
-    "inv.issues.create",
-    "inv.issues.manage",
-  ],
+  INDENT_UPDATE: ["inventory.indents.update"],
+  INDENT_SUBMIT: ["inventory.indents.submit"],
+  INDENT_APPROVE: ["inventory.indents.approve"],
+  INDENT_CANCEL: ["inventory.indents.cancel"],
+  ISSUE_CREATE: ["inventory.issues.create", "inventory.issues.update"],
 }
 
 const fmtIST = (isoOrDate) => {

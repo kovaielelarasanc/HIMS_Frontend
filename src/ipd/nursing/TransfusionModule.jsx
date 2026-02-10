@@ -12,6 +12,7 @@ import { Switch } from '@/components/ui/switch'
 import ClinicalRecordWorkspace from './ui/ClinicalRecordWorkspace'
 import { SectionCard, TimelineCard, StickyActionBar, EditReasonDialog, AuditRow } from './ui/SharedPieces'
 import { fmtIST, toIso } from './ui/utils'
+import { usePermLabel } from '@/utils/permLabels'
 
 import {
   listTransfusions,
@@ -221,6 +222,7 @@ function VitalsGrid({ value, onChange, title = 'Vitals' }) {
 // COMPONENT
 // ===================================================================
 export default function TransfusionModule({ admissionId, chips, alerts, canWrite, canEdit, canReaction }) {
+  const permLabel = usePermLabel()
   const [search, setSearch] = useState('')
   const [rows, setRows] = useState([])
   const [submitting, setSubmitting] = useState(false)
@@ -461,7 +463,7 @@ export default function TransfusionModule({ admissionId, chips, alerts, canWrite
             : []
         }
         canWrite={canWrite}
-        permissionHint="Need ipd.transfusion.create or ipd.nursing.create (or ipd.manage)."
+        permissionHint={`Need ${permLabel('ipd.transfusion.create')} or ${permLabel('ipd.nursing.create')} (or ${permLabel('ipd.manage')}).`}
         search={search}
         setSearch={setSearch}
         form={

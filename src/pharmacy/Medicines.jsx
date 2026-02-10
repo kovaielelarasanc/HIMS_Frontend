@@ -164,7 +164,7 @@ export default function Medicines() {
                         <RefreshCcw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
                         Refresh
                     </Button>
-                    <PermGate anyOf={['pharmacy.masters.manage']}>
+                    <PermGate anyOf={['pharmacy.inventory.items.manage']}>
                         <Button size="sm" onClick={openNew}>
                             <Plus className="h-4 w-4 mr-1" />
                             New medicine
@@ -287,7 +287,7 @@ export default function Medicines() {
                                                 </div>
                                             </TableCell>
                                             <TableCell className="text-right">
-                                                <PermGate anyOf={['pharmacy.masters.manage']}>
+                                                <PermGate anyOf={['pharmacy.inventory.items.manage']}>
                                                     <Button
                                                         size="icon"
                                                         variant="outline"
@@ -473,7 +473,7 @@ export default function Medicines() {
                         <Button variant="outline" onClick={() => setModalOpen(false)}>
                             Cancel
                         </Button>
-                        <PermGate anyOf={['pharmacy.masters.manage']}>
+                        <PermGate anyOf={['pharmacy.inventory.items.manage']}>
                             <Button onClick={onSave}>
                                 {editing ? 'Update' : 'Save'}
                             </Button>

@@ -163,7 +163,7 @@ export default function PurchaseOrders() {
 
             <div className="flex items-center justify-between">
                 <h1 className="text-lg font-semibold">Pharmacy · Purchase Orders</h1>
-                <PermGate anyOf={['pharmacy.procure.manage']}>
+                <PermGate anyOf={['pharmacy.inventory.po.manage']}>
                     <Button onClick={() => setOpen(true)}>
                         <Plus className="h-4 w-4 mr-2" /> New PO
                     </Button>
@@ -232,7 +232,7 @@ export default function PurchaseOrders() {
                                                 </span>
                                             </TableCell>
                                             <TableCell className="text-right">
-                                                <PermGate anyOf={['pharmacy.procure.manage']}>
+                                                <PermGate anyOf={['pharmacy.inventory.po.manage']}>
                                                     <div className="inline-flex gap-2 items-center">
                                                         {/* Print is allowed for any status */}
                                                         <Button

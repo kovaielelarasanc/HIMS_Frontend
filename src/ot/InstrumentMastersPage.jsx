@@ -43,10 +43,10 @@ const emptyForm = {
 export default function InstrumentMastersPage() {
     const can = useCanAny()
 
-    const canView = can("ot.masters.view") || can("ot.instruments.view")
-    const canCreate = can("ot.masters.create") || can("ot.instruments.create")
-    const canUpdate = can("ot.masters.update") || can("ot.instruments.update")
-    const canDelete = can("ot.masters.delete") || can("ot.instruments.delete")
+    const canView = can("ot.masters.view")
+    const canCreate = can("ot.masters.create")
+    const canUpdate = can("ot.masters.update")
+    const canDelete = can("ot.masters.delete")
 
     const [loading, setLoading] = useState(false)
     const [rows, setRows] = useState([])

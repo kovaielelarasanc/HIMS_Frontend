@@ -26,7 +26,14 @@ function buildPermSet({ user, modules }) {
   }
 
   const roles = user.roles || []
-  if (roles.some((r) => r?.name === "Admin" || r?.code === "admin")) {
+  if (
+    roles.some(
+      (r) =>
+        (typeof r === "string" && r.toLowerCase() === "admin") ||
+        r?.name === "Admin" ||
+        r?.code === "admin"
+    )
+  ) {
     set.add("*")
     return set
   }
@@ -38,6 +45,7 @@ function buildPermSet({ user, modules }) {
   collectPermObjects(roles, out)
 
   for (const p of out) if (p?.code) set.add(p.code)
+
   return set
 }
 

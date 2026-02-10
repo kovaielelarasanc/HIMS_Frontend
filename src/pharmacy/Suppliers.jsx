@@ -147,7 +147,7 @@ export default function Suppliers() {
                         <RefreshCcw className={`h-4 w-4 mr-1 ${loading ? 'animate-spin' : ''}`} />
                         Refresh
                     </Button>
-                    <PermGate anyOf={['pharmacy.masters.manage']}>
+                    <PermGate anyOf={['pharmacy.inventory.suppliers.manage']}>
                         <Button size="sm" onClick={openNew}>
                             <Plus className="h-4 w-4 mr-1" />
                             New supplier
@@ -253,7 +253,7 @@ export default function Suppliers() {
                                                 </Badge>
                                             </TableCell>
                                             <TableCell className="text-right">
-                                                <PermGate anyOf={['pharmacy.masters.manage']}>
+                                                <PermGate anyOf={['pharmacy.inventory.suppliers.manage']}>
                                                     <Button
                                                         size="icon"
                                                         variant="outline"
@@ -380,7 +380,7 @@ export default function Suppliers() {
                         <Button variant="outline" onClick={() => setModalOpen(false)}>
                             Cancel
                         </Button>
-                        <PermGate anyOf={['pharmacy.masters.manage']}>
+                        <PermGate anyOf={['pharmacy.inventory.suppliers.manage']}>
                             <Button onClick={onSave}>
                                 {editing ? 'Update' : 'Save'}
                             </Button>

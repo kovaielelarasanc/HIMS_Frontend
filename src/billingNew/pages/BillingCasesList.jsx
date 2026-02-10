@@ -95,7 +95,7 @@ export default function BillingCasesList() {
     )
 
     const load = async (signal) => {
-        if (!can("billing.cases.view")) return
+    if (!can("billing.view")) return
         setLoading(true)
         try {
             const data = await listBillingCases(queryObj, { signal })
@@ -272,7 +272,7 @@ export default function BillingCasesList() {
                     <CardTitle className="text-base">Cases</CardTitle>
                 </CardHeader>
                 <CardContent>
-                    {!can("billing.cases.view") ? (
+                {!can("billing.view") ? (
                         <div className="text-sm text-muted-foreground">
                             You don’t have permission to view billing cases.
                         </div>
@@ -376,7 +376,7 @@ export default function BillingCasesList() {
                     )}
 
                     {/* Pagination */}
-                    {can("billing.cases.view") && !loading && rows.length > 0 && (
+                {can("billing.view") && !loading && rows.length > 0 && (
                         <div className="mt-4 flex items-center justify-between gap-3 flex-wrap">
                             <div className="text-sm text-muted-foreground">
                                 Page {page} of {totalPages}

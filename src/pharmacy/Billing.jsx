@@ -294,7 +294,7 @@ export default function PharmacyBilling() {
 
             <div className="grid gap-4 lg:grid-cols-3">
                 {/* Left: Create bill */}
-                <PermGate anyOf={['pharmacy.billing.manage']}>
+                <PermGate anyOf={['pharmacy.billing.create']}>
                     <motion.div
                         className="lg:col-span-2"
                         initial={{ opacity: 0, y: 8 }}

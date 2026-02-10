@@ -153,7 +153,7 @@ export default function InvoiceDetail() {
     const lines = useMemo(() => invoice?._lines || [], [invoice])
 
     const load = async (signal) => {
-        if (!can("billing.invoices.view")) return
+        if (!can("billing.view")) return
         setLoading(true)
         try {
             // Primary: invoice detail endpoint
@@ -274,11 +274,11 @@ export default function InvoiceDetail() {
         }
     }
 
-    const canAddLine = can("billing.invoices.lines.create")
-    const canApprove = can("billing.invoices.approve")
-    const canPost = can("billing.invoices.post")
-    const canVoid = can("billing.invoices.void")
-    const canPay = can("billing.payments.create")
+    const canAddLine = can("billing.invoice.lines.edit")
+    const canApprove = can("billing.manage")
+    const canPost = can("billing.manage")
+    const canVoid = can("billing.manage")
+    const canPay = can("billing.payments.add")
 
     const showApprove = invStatus === "DRAFT" && canApprove
     const showPost = (invStatus === "APPROVED" || invStatus === "DRAFT") && canPost
@@ -335,7 +335,7 @@ export default function InvoiceDetail() {
                                 <Skeleton key={i} className="h-24 w-full rounded-2xl lg:col-span-3" />
                             ))}
                         </div>
-                    ) : !can("billing.invoices.view") ? (
+                    ) : !can("billing.view") ? (
                         <div className="text-sm text-muted-foreground">
                             You don’t have permission to view invoices.
                         </div>

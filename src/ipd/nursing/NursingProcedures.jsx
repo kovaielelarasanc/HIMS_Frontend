@@ -16,6 +16,7 @@ import {
 } from 'lucide-react'
 
 import { useCanAny } from '../../hooks/useCan'
+import { usePermLabel } from '@/utils/permLabels'
 
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
@@ -100,6 +101,7 @@ export default function NursingProcedures({
   bedLabel = 'Ward/Bed',
 }) {
   const canView = useCanAny(['ipd.view', 'ipd.manage', 'ipd.nursing', 'ipd.doctor'])
+  const permLabel = usePermLabel()
 
   const canDressingWrite = useCanAny(['ipd.dressing.create', 'ipd.nursing.create', 'ipd.manage'])
   const canDressingEdit = useCanAny(['ipd.dressing.update', 'ipd.manage'])
@@ -118,7 +120,7 @@ export default function NursingProcedures({
 
   const canTransfusionWrite = useCanAny(['ipd.transfusion.create', 'ipd.nursing.create', 'ipd.manage'])
   const canTransfusionEdit = useCanAny(['ipd.transfusion.update', 'ipd.manage'])
-  const canTransfusionReaction = useCanAny(['ipd.transfusion.reaction', 'ipd.transfusion.update', 'ipd.doctor', 'ipd.manage'])
+    const canTransfusionReaction = useCanAny(['ipd.transfusion.update', 'ipd.doctor', 'ipd.manage'])
 
   const [alerts, setAlerts] = useState(null)
 
@@ -396,7 +398,7 @@ function DressingModule({ admissionId, chips, alerts, canWrite, canEdit }) {
         patientChips={chips}
         alertsChips={alertsChips}
         canWrite={canWrite}
-        permissionHint="Need ipd.dressing.create / ipd.nursing.create (or ipd.manage) to add."
+        permissionHint={`Need ${permLabel('ipd.dressing.create')} / ${permLabel('ipd.nursing.create')} (or ${permLabel('ipd.manage')}) to add.`}
         search={search}
         setSearch={setSearch}
         form={
@@ -744,7 +746,7 @@ function IcuModule({ admissionId, chips, alerts, canWrite, canEdit }) {
             : []
         }
         canWrite={canWrite}
-        permissionHint="Need ipd.icu.create (or ipd.manage) to add ICU flow."
+        permissionHint={`Need ${permLabel('ipd.icu.create')} (or ${permLabel('ipd.manage')}) to add ICU flow.`}
         search={search}
         setSearch={setSearch}
         form={
@@ -1197,7 +1199,7 @@ function IsolationModule({ admissionId, chips, alerts, canWrite, canEdit, canSto
             : []
         }
         canWrite={canWrite}
-        permissionHint="Need ipd.isolation.create (or ipd.manage) to add isolation."
+        permissionHint={`Need ${permLabel('ipd.isolation.create')} (or ${permLabel('ipd.manage')}) to add isolation.`}
         search={search}
         setSearch={setSearch}
         form={

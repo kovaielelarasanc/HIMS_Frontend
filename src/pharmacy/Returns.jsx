@@ -67,7 +67,7 @@ export default function Returns() {
                 <h1 className="text-lg font-semibold">Pharmacy · Returns</h1>
             </div>
 
-            <PermGate anyOf={['pharmacy.dispense.manage', 'pharmacy.dispense.create']}>
+            <PermGate anyOf={['pharmacy.returns.manage']}>
                 <motion.div
                     initial={{ opacity: 0, y: 8 }}
                     animate={{ opacity: 1, y: 0 }}

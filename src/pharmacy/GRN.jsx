@@ -380,7 +380,7 @@ export default function GRN() {
     <div className="p-4 space-y-4">
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-lg font-semibold">Pharmacy · Goods Receipt (GRN)</h1>
-        <PermGate anyOf={['pharmacy.procure.manage', 'pharmacy.inventory.grn.manage']}>
+            <PermGate anyOf={['pharmacy.inventory.grn.manage']}>
           <Button onClick={() => setOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />
             New GRN

@@ -86,7 +86,7 @@ const Header = React.memo(function Header({ loading, onRefresh, onCreate }) {
           <span className="hidden sm:inline">Refresh</span>
         </button>
 
-        <PermGate anyOf={['lab.masters.manage', 'masters.lab.manage']}>
+        <PermGate anyOf={['lab.masters.manage']}>
           <button
             onClick={onCreate}
             className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-3.5 py-2 text-sm font-semibold text-white shadow-md shadow-slate-900/20 hover:bg-slate-800 active:scale-[0.99]"
@@ -197,7 +197,7 @@ const TestsCardGrid = React.memo(function TestsCardGrid({
                 </div>
               </div>
 
-              <PermGate anyOf={['lab.masters.manage', 'masters.lab.manage']}>
+              <PermGate anyOf={['lab.masters.manage']}>
                 <div className="flex shrink-0 flex-col gap-2">
                   <button
                     onClick={() => onEdit(r)}

@@ -52,6 +52,7 @@ import {
 
 // ✅ Permission helper (safe in loops/maps)
 import { useCanFn } from "@/hooks/useCan"
+import { usePermLabel } from "@/utils/permLabels"
 
 // ---- Quick Orders APIs ----
 import {
@@ -86,24 +87,6 @@ const QO_PERMS = {
     ward: ["quickorder.consumables"],
 }
 
-// ✅ Optional fallbacks (so existing installs still work even before you assign quickorder.*)
-// You can remove these later if you want strict quickorder.* only.
-const FALLBACK_PERMS = {
-    lab: ["orders.lab.view", "orders.lab.create"],
-    ris: ["orders.ris.view", "orders.ris.create", "ris.orders.view", "ris.orders.create", "radiology.orders.view", "radiology.orders.create"],
-    rx: [
-        "pharmacy.rx.view",
-        "pharmacy.rx.create",
-        "pharmacy.prescriptions.view",
-        "pharmacy.prescriptions.create",
-        "prescriptions.view",
-        "prescriptions.create",
-        "pharmacy.view",
-    ],
-    ot: ["ot.schedule.view", "ot.schedule.create"],
-    ward: ["inventory.consume.view", "inventory.consume.create", "inventory.stock.view", "inventory.items.view", "inventory.view"],
-}
-
 function normalizeList(v) {
     if (Array.isArray(v)) return v
     if (Array.isArray(v?.data)) return v.data
@@ -125,13 +108,14 @@ export default function QuickOrders({
 }) {
     const isMobile = useMediaQuery("(max-width: 640px)")
     const { canAny } = useCanFn()
+    const permLabel = usePermLabel()
 
     // ✅ Permissions
-    const canLab = canAny([...QO_PERMS.lab, ...FALLBACK_PERMS.lab])
-    const canRis = canAny([...QO_PERMS.ris, ...FALLBACK_PERMS.ris])
-    const canRx = canAny([...QO_PERMS.rx, ...FALLBACK_PERMS.rx])
-    const canOtBase = canAny([...QO_PERMS.ot, ...FALLBACK_PERMS.ot])
-    const canWard = canAny([...QO_PERMS.ward, ...FALLBACK_PERMS.ward])
+    const canLab = canAny(QO_PERMS.lab)
+    const canRis = canAny(QO_PERMS.ris)
+    const canRx = canAny(QO_PERMS.rx)
+    const canOtBase = canAny(QO_PERMS.ot)
+    const canWard = canAny(QO_PERMS.ward)
 
     // screens: home + lab/ris/rx/ot/ward
     const [screen, setScreen] = useState("home")
@@ -862,7 +846,10 @@ export default function QuickOrders({
                                         labPdfActions={labPdfActions}
                                     />
                                 ) : (
-                                    <LockedPanel title="Lab Quick Order" hint="You don’t have permission: quickorder.laboratory" />
+                                    <LockedPanel
+                                        title="Lab Quick Order"
+                                        hint={`You don’t have permission for ${permLabel("quickorder.laboratory")}.`}
+                                    />
                                 )
                             ) : screen === "ris" ? (
                                 canRis ? (
@@ -878,7 +865,10 @@ export default function QuickOrders({
                                         openDetails={openDetails}
                                     />
                                 ) : (
-                                    <LockedPanel title="Radiology Quick Order" hint="You don’t have permission: quickorder.radiology" />
+                                    <LockedPanel
+                                        title="Radiology Quick Order"
+                                        hint={`You don’t have permission for ${permLabel("quickorder.radiology")}.`}
+                                    />
                                 )
                             ) : screen === "rx" ? (
                                 canRx ? (
@@ -895,7 +885,10 @@ export default function QuickOrders({
                                         defaultLocationId={defaultLocationId}
                                     />
                                 ) : (
-                                    <LockedPanel title="Pharmacy Quick Order" hint="You don’t have permission: quickorder.pharmacy" />
+                                    <LockedPanel
+                                        title="Pharmacy Quick Order"
+                                        hint={`You don’t have permission for ${permLabel("quickorder.pharmacy")}.`}
+                                    />
                                 )
                             ) : screen === "ward" ? (
                                 canWard ? (
@@ -913,7 +906,10 @@ export default function QuickOrders({
                                         <WardPatientUsageTab patient={patient} ctx={ctx} contextId={contextId} defaultLocationId={defaultLocationId} />
                                     </div>
                                 ) : (
-                                    <LockedPanel title="Ward Usage (Consumables)" hint="You don’t have permission: quickorder.consumables" />
+                                    <LockedPanel
+                                        title="Ward Usage (Consumables)"
+                                        hint={`You don’t have permission for ${permLabel("quickorder.consumables")}.`}
+                                    />
                                 )
                             ) : (
                                 canOt ? (
@@ -932,7 +928,11 @@ export default function QuickOrders({
                                 ) : (
                                     <LockedPanel
                                         title="OT Quick Order"
-                                        hint={!canOtBase ? "You don’t have permission: quickorder.ot" : "OT Quick Order is available only for IPD Admission"}
+                                        hint={
+                                            !canOtBase
+                                                ? `You don’t have permission for ${permLabel("quickorder.ot")}.`
+                                                : "OT Quick Order is available only for IPD Admission"
+                                        }
                                     />
                                 )
                             )}

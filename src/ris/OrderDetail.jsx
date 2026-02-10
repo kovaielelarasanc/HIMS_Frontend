@@ -369,11 +369,9 @@ export default function RisOrderDetail() {
                             {/* Finalize */}
                             <PermGate
                                 anyOf={[
-                                    'orders.ris.finalize',
-                                    'radiology.orders.finalize',
                                     'billing.invoices.create',
-                                    'radiology.orders.update',
-                                    'orders.ris.update',
+                                    'radiology.report.create',
+                                    'radiology.report.approve',
                                 ]}
                             >
                                 {!isFinalized && (
@@ -391,7 +389,7 @@ export default function RisOrderDetail() {
                             </PermGate>
 
                             {/* Save notes */}
-                            <PermGate anyOf={['radiology.report.create', 'radiology.orders.update', 'orders.ris.update']}>
+                            <PermGate anyOf={['radiology.report.create', 'radiology.report.approve']}>
                                 <button
                                     type="button"
                                     onClick={saveNotes}
@@ -654,7 +652,7 @@ export default function RisOrderDetail() {
                                 onChange={(e) => setNotes(e.target.value)}
                             />
 
-                            <PermGate anyOf={['radiology.report.create', 'radiology.orders.update', 'orders.ris.update']}>
+                            <PermGate anyOf={['radiology.report.create', 'radiology.report.approve']}>
                                 <div className="mt-3 flex justify-end">
                                     <button
                                         type="button"

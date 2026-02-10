@@ -104,7 +104,7 @@ export default function BillingCaseDetail() {
     }, [caseData])
 
     const loadAll = async (signal) => {
-        if (!can("billing.cases.view")) return
+    if (!can("billing.view")) return
         setLoading(true)
         try {
             const [c, inv, pay, adv] = await Promise.all([
@@ -184,7 +184,7 @@ export default function BillingCaseDetail() {
                                 <Skeleton key={i} className="h-20 w-full rounded-2xl lg:col-span-4" />
                             ))}
                         </div>
-                    ) : !can("billing.cases.view") ? (
+                    ) : !can("billing.view") ? (
                         <div className="text-sm text-muted-foreground">
                             You don’t have permission to view this case.
                         </div>

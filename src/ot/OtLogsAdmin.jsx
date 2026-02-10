@@ -116,8 +116,11 @@ export default function OtLogsAdmin() {
 
 function CleaningLogsSection({ theatreOptions, theatresLoading }) {
     const canView =
-        useCan('ot.logs.cleaning.view') || useCan('ot.logs.view') || useCan('ot.case.view')
-    const canManage = useCan('ot.logs.cleaning.manage') || useCan('ot.logs.manage')
+        useCan('ot.cleaning_log.view') || useCan('ot.cases.view')
+    const canManage =
+        useCan('ot.cleaning_log.create') ||
+        useCan('ot.cleaning_log.update') ||
+        useCan('ot.cleaning_log.delete')
 
     const [filters, setFilters] = useState({
         theatreId: '',
@@ -650,8 +653,11 @@ function CleaningLogModal({ initial, onClose, onSave, saving, theatreOptions }) 
 
 function EnvironmentLogsSection({ theatreOptions, theatresLoading }) {
     const canView =
-        useCan('ot.logs.environment.view') || useCan('ot.logs.view') || useCan('ot.case.view')
-    const canManage = useCan('ot.logs.environment.manage') || useCan('ot.logs.manage')
+        useCan('ot.environment_log.view') || useCan('ot.cases.view')
+    const canManage =
+        useCan('ot.environment_log.create') ||
+        useCan('ot.environment_log.update') ||
+        useCan('ot.environment_log.delete')
 
     const [filters, setFilters] = useState({
         theatreId: '',

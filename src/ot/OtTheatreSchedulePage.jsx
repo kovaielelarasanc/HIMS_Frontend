@@ -1264,19 +1264,19 @@ export default function OtTheatreSchedulePage() {
     console.log('OT Schedule page user=', user?.full_name, 'perms=', permissions)
 
     const canViewSchedule =
-        useCan('ot.schedules.view') ||
+        useCan('ot.schedule.view') ||
         useCan('ot.cases.view') ||
         useCan('ot.masters.view') ||
         true
 
     const canCreateSchedule =
-        useCan('ot.schedules.create') ||
+        useCan('ot.schedule.create') ||
         useCan('ot.schedule.create') ||
         useCan('ot.cases.create') ||
         useCan('ipd.view')
 
     const canUpdateSchedule =
-        useCan('ot.schedules.update') ||
+        useCan('ot.schedule.update') ||
         useCan('ot.schedule.update') ||
         useCan('ot.cases.update')
 

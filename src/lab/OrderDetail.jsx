@@ -512,7 +512,7 @@ export default function OrderDetail() {
                                 View / Print
                             </button>
 
-                            <PermGate anyOf={['lab.results.report', 'lab.results.enter', 'lab.results.approve']}>
+                            <PermGate anyOf={['lab.results.report', 'lab.results.enter', 'lab.results.validate']}>
                                 <button
                                     type="button"
                                     disabled={!canFinalize}

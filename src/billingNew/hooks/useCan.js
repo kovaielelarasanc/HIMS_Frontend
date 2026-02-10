@@ -1,31 +1,12 @@
-// FILE: src/hooks/useCan.js
-import { useMemo } from "react"
+// FILE: src/billingNew/hooks/useCan.js
+import { useCanFn } from "../../hooks/useCan"
 
 /**
- * Simple stub.
- * Replace `permissions` with your auth store/context (JWT claims, /me endpoint, etc).
- *
- * Usage:
- *   const can = useCan()
- *   if (can("billing.invoices.post")) ...
+ * Backward-compatible wrapper:
+ * const can = useCan()
+ * can("billing.invoice.print")
  */
 export function useCan() {
-    // TODO: wire from your real auth state
-    const permissions = useMemo(() => {
-        try {
-            // Example if you store perms in localStorage:
-            // localStorage.setItem("perms", JSON.stringify(["billing.cases.view", ...]))
-            const raw = localStorage.getItem("perms")
-            const arr = raw ? JSON.parse(raw) : null
-            return Array.isArray(arr) ? arr : ["*"] // default allow-all for now
-        } catch {
-            return ["*"]
-        }
-    }, [])
-
-    return (code) => {
-        if (!code) return true
-        if (permissions.includes("*")) return true
-        return permissions.includes(code)
-    }
+  const { can } = useCanFn()
+  return can
 }

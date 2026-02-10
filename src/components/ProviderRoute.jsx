@@ -1,8 +1,9 @@
-// src/routes/ProviderRoute.jsx
+// src/components/ProviderRoute.jsx
 import React, { useMemo } from "react";
 import { Navigate, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../store/authStore";
 import { PROVIDER_TENANT_CODE } from "../config/provider";
+import { usePermSet } from "../hooks/useCan";
 
 function decodeJwtPayload(token) {
   try {
@@ -29,7 +30,6 @@ function decodeJwtPayload(token) {
 export default function ProviderRoute({ reqAny = [], providerCode }) {
   const location = useLocation();
   const user = useAuth((s) => s.user);
-  const modules = useAuth((s) => s.modules) || {};
 
   const provider = String(providerCode || PROVIDER_TENANT_CODE || "NUTRYAH")
     .trim()
@@ -56,20 +56,10 @@ export default function ProviderRoute({ reqAny = [], providerCode }) {
   // ✅ Permission check
   const admin = !!user?.is_admin;
 
-  const grantedSet = useMemo(() => {
-    const fromModules = Object.values(modules)
-      .flat()
-      .map((p) => (typeof p === "string" ? p : p?.code))
-      .filter(Boolean);
+  const permSet = usePermSet();
 
-    const fromUser = (user?.permissions || [])
-      .map((p) => (typeof p === "string" ? p : p?.code))
-      .filter(Boolean);
-
-    return new Set([...(fromModules || []), ...(fromUser || [])]);
-  }, [modules, user]);
-
-  const hasAny = (codes = []) => (admin ? true : (codes || []).some((c) => grantedSet.has(c)));
+  const hasAny = (codes = []) =>
+    admin ? true : (permSet.has("*") ? true : (codes || []).some((c) => permSet.has(c)));
 
   if (reqAny?.length && !hasAny(reqAny)) {
     return <Navigate to="/dashboard" replace state={{ from: location.pathname }} />;

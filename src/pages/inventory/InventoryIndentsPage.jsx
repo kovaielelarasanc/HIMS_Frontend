@@ -33,8 +33,8 @@ import IndentDrawer from "./IndentDrawer"
 const cx = (...a) => a.filter(Boolean).join(" ")
 
 const PERMS = {
-  INDENT_CREATE: ["inventory.indents.create", "inventory.indents.manage", "inv.indents.create", "inv.indents.manage"],
-  INDENT_VIEW: ["inventory.indents.view", "inventory.indent.view", "inv.indents.view", "inv.indent.view"],
+  INDENT_CREATE: ["inventory.indents.create"],
+  INDENT_VIEW: ["inventory.indents.view"],
 }
 
 const SELECT_ALL = "__all__"

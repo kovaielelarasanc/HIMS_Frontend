@@ -434,7 +434,7 @@ export default function RisMasters() {
     }
 
     return (
-        <PermGate anyOf={['radiology.masters.manage', 'masters.ris.manage', 'radiology.masters.view', 'masters.ris.view']}>
+            <PermGate anyOf={['radiology.masters.manage', 'radiology.masters.view']}>
             <GlassBg />
             <div className="min-h-screen px-3 py-3 text-slate-900 md:px-6 md:py-6">
                 <motion.div
@@ -460,7 +460,7 @@ export default function RisMasters() {
                         <div className="flex flex-col gap-2 md:items-end">
                             <div className="flex flex-wrap items-center gap-2">
                                 <SearchRow value={q} onChange={setQ} placeholder="Search code / name…" />
-                                <PermGate anyOf={['radiology.masters.manage', 'masters.ris.manage']}>
+            <PermGate anyOf={['radiology.masters.manage']}>
                                     <PrimaryButton onClick={startCreate}>
                                         <Plus className="h-4 w-4" />
                                         New Test
@@ -605,7 +605,7 @@ export default function RisMasters() {
                                                 </td>
                                                 <td className="px-4 py-3 font-semibold text-slate-900">₹ {Number(t.price || 0).toFixed(2)}</td>
                                                 <td className="px-4 py-3 text-right">
-                                                    <PermGate anyOf={['radiology.masters.manage', 'masters.ris.manage']}>
+            <PermGate anyOf={['radiology.masters.manage']}>
                                                         <div className="inline-flex items-center justify-end gap-2">
                                                             <PillButton onClick={() => startEdit(t)}>
                                                                 <Pencil className="h-4 w-4" /> Edit
@@ -627,7 +627,7 @@ export default function RisMasters() {
                                                     <div className="text-xs font-medium text-slate-600">
                                                         Try clearing search/filter, or create a new test.
                                                     </div>
-                                                    <PermGate anyOf={['radiology.masters.manage', 'masters.ris.manage']}>
+            <PermGate anyOf={['radiology.masters.manage']}>
                                                         <div className="pt-2">
                                                             <PrimaryButton onClick={startCreate}>
                                                                 <Plus className="h-4 w-4" /> New Test

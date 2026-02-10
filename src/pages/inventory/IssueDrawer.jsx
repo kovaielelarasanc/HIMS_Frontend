@@ -42,27 +42,16 @@ const AUTO_FEFO = "__AUTO_FEFO__"
 const PERMS = {
   ISSUE_UPDATE: [
     "inventory.issues.update",
-    "inventory.issues.manage",
-    "inv.issues.update",
-    "inv.issues.manage",
   ],
   ISSUE_POST: [
     "inventory.issues.post",
-    "inventory.issues.manage",
-    "inv.issues.post",
-    "inv.issues.manage",
   ],
   ISSUE_CANCEL: [
     "inventory.issues.cancel",
-    "inventory.issues.manage",
-    "inv.issues.cancel",
-    "inv.issues.manage",
   ],
   BATCH_VIEW: [
     "inventory.batches.view",
     "inventory.stock.view",
-    "inv.batches.view",
-    "inv.stock.view",
   ],
 }
 

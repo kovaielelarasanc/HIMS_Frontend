@@ -63,21 +63,12 @@ const cx = (...a) => a.filter(Boolean).join(" ")
 const PERMS = {
     INDENT_CREATE: [
         "inventory.indents.create",
-        "inventory.indents.manage",
-        "inv.indents.create",
-        "inv.indents.manage",
     ],
     INDENT_VIEW: [
         "inventory.indents.view",
-        "inventory.indent.view",
-        "inv.indents.view",
-        "inv.indent.view",
     ],
     ISSUE_VIEW: [
         "inventory.issues.view",
-        "inventory.issue.view",
-        "inv.issues.view",
-        "inv.issue.view",
     ],
 }
 

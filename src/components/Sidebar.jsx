@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { NavLink, useLocation } from 'react-router-dom'
 
 import { useAuth } from '../store/authStore'
+import { usePermSet } from '../hooks/useCan'
 import { useUI } from '../store/uiStore'
 import { useBranding } from '../branding/BrandingProvider'
 
@@ -177,21 +178,21 @@ const GROUPS = [
         label: "Template Library",
         to: "/emr/templates",
         icon: Library,
-        reqAny: ["emr.templates.view", "emr.view"],
+        reqAny: ["emr.templates.view"],
       },
       {
         key: "emr.inbox",
         label: "Records Inbox",
         to: "/emr/record/inbox",
         icon: Inbox,
-        reqAny: ["emr.inbox.view", "emr.view"],
+        reqAny: ["emr.inbox.view"],
       },
       {
         key: "emr.exports",
         label: "Export & Release",
         to: "/emr/export/release",
         icon: Share2,
-        reqAny: ["emr.exports.view", "emr.view"],
+        reqAny: ["emr.exports.view"],
       },
     ],
   },
@@ -300,15 +301,8 @@ const GROUPS = [
         to: "/inventory/indents",
         icon: ClipboardSignature,
         reqAny: [
-          // Indents view (new + old)
           "inventory.indents.view",
-          "inventory.indent.view",
-          "inv.indents.view",
-          "inv.indent.view",
-
-          // Catalog (new + old)
           "inventory.catalog.view",
-          "inv.catalog.view",
         ],
       },
       {
@@ -317,27 +311,12 @@ const GROUPS = [
         to: "/inventory/indents/issue",
         icon: ArrowUpRight,
         reqAny: [
-          // Issue screen should allow anyone who can view/create/manage issues (new + old)
           "inventory.issues.view",
-          "inventory.issue.view",
           "inventory.issues.create",
-          "inventory.issues.manage",
+          "inventory.issues.update",
           "inventory.issues.post",
-          "inv.issues.view",
-          "inv.issue.view",
-          "inv.issues.create",
-          "inv.issues.manage",
-          "inv.issues.post",
-
-          // Also allow indent viewers (common workflow)
           "inventory.indents.view",
-          "inventory.indent.view",
-          "inv.indents.view",
-          "inv.indent.view",
-
-          // Catalog (new + old)
           "inventory.catalog.view",
-          "inv.catalog.view",
         ],
       },
       {
@@ -565,7 +544,6 @@ const GROUPS = [
 
 export default function Sidebar() {
   const user = useAuth((s) => s.user)
-  const modules = useAuth((s) => s.modules) || {}
   const location = useLocation()
 
   const { sidebarCollapsed: collapsed, toggleCollapse, sidebarMobileOpen, closeMobile } = useUI()
@@ -640,20 +618,10 @@ export default function Sidebar() {
   const admin = !!user?.is_admin
   const provider = useMemo(() => isProviderTenant(), [])
 
-  const grantedSet = useMemo(() => {
-    const fromModules = Object.values(modules)
-      .flat()
-      .map((p) => (typeof p === 'string' ? p : p?.code))
-      .filter(Boolean)
+  const permSet = usePermSet()
 
-    const fromUser = (user?.permissions || [])
-      .map((p) => (typeof p === 'string' ? p : p?.code))
-      .filter(Boolean)
-
-    return new Set([...(fromModules || []), ...(fromUser || [])])
-  }, [modules, user])
-
-  const hasAny = (codes = []) => (admin ? true : (codes || []).some((c) => grantedSet.has(c)))
+  const hasAny = (codes = []) =>
+    admin ? true : (permSet.has("*") ? true : (codes || []).some((c) => permSet.has(c)))
 
   const isGroupRouteActive = (g) => {
     if (g.flatLink) return location.pathname.startsWith(g.flatLink.to)
@@ -677,7 +645,7 @@ export default function Sidebar() {
       return { ...g, items, _visible: visible }
       // eslint-disable-next-line react-hooks/exhaustive-deps
     }).filter((g) => g._visible)
-  }, [admin, grantedSet, provider])
+  }, [admin, permSet, provider])
 
   const [open, setOpen] = useState({})
   useEffect(() => {

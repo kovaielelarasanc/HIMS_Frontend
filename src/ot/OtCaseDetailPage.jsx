@@ -276,7 +276,7 @@ export default function OtCaseDetailPage() {
         useCan('ot.cases.update') ||
         useCan('ot.cases.create') ||
         useCan('ot.schedule.view') ||
-        useCan('ot.schedules.view') ||
+        useCan('ot.schedule.view') ||
         useCan('ipd.view')
 
     const [tab, setTab] = useState('preop')

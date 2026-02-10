@@ -10,7 +10,7 @@ import VerifyOtp from "./pages/auth/VerifyOtp";
 
 import Layout from "./components/Layout";
 import ProtectedRoute from "./components/ProtectedRoute";
-import ProviderRoute from "./routes/ProviderRoute";
+import ProviderRoute from "./components/ProviderRoute";
 
 import Roles from "./pages/admin/Roles";
 import Users from "./pages/admin/Users";

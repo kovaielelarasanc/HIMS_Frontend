@@ -527,7 +527,7 @@ export default function Discharge({
                         </div>
                     </div>
                 </PermGate>
-                <PermGate anyOf={['ipd.nurse']}>
+                <PermGate anyOf={['ipd.nursing']}>
                     <div className="rounded-xl border bg-white p-2.5 text-[11px] text-slate-700">
                         <div className="mb-0.5 font-semibold">Nurse view</div>
                         <div>

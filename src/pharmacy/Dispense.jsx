@@ -138,7 +138,7 @@ export default function Dispense() {
                 <h1 className="text-lg font-semibold">Pharmacy · Dispense</h1>
             </div>
 
-            <PermGate anyOf={['pharmacy.dispense.manage', 'pharmacy.dispense.create']}>
+            <PermGate anyOf={['pharmacy.dispense.create']}>
                 <Card>
                     <CardContent className="p-4 space-y-4">
                         <PatientPicker value={patientId} onChange={setPatientId} />

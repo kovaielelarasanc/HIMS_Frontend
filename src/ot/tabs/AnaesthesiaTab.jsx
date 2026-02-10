@@ -475,19 +475,16 @@ function normalizeRecord(data) {
  */
 export default function AnaesthesiaTab({ caseId }) {
     const p1 = useCan("ot.anaesthesia_record.view")
-    const p2 = useCan("ot.anaesthesia.view")
     const p3 = useCan("ot.cases.view")
     const p4 = useCan("ipd.view")
 
     const e1 = useCan("ot.anaesthesia_record.update")
     const e2 = useCan("ot.anaesthesia_record.create")
-    const e3 = useCan("ot.anaesthesia.update")
-    const e4 = useCan("ot.anaesthesia.create")
     const e5 = useCan("ot.cases.update")
     const e6 = useCan("ipd.doctor")
 
-    const canView = p1 || p2 || p3 || p4
-    const canEdit = e1 || e2 || e3 || e4 || e5 || e6
+    const canView = p1 || p3 || p4
+    const canEdit = e1 || e2 || e5 || e6
 
     // ✅ Tabs
     const [subTab, setSubTab] = useState("preop") // preop | intra | postop | vitals | drugs

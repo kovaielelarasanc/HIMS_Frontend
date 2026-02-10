@@ -238,12 +238,7 @@ export default function OtMasters() {
     const canViewAny = useCanAny([
         "ot.masters.view",
         "ot.procedures.view",
-        "ot.theaters.view",
-        "ot.instruments.view",
-        "ot.devices.view",
         "ot.specialities.view",
-        "ot.equipment.view",
-        "ot.surgeries.view",
     ])
 
     const perms = {
@@ -254,22 +249,22 @@ export default function OtMasters() {
             delete: useCanAny(["ot.masters.manage", "ot.procedures.delete"]),
         },
         theaters: {
-            view: useCanAny(["ot.masters.view", "ot.theaters.view"]),
-            create: useCanAny(["ot.masters.create", "ot.theaters.create"]),
-            update: useCanAny(["ot.masters.update", "ot.theaters.update"]),
-            delete: useCanAny(["ot.masters.delete", "ot.theaters.delete"]),
+            view: useCanAny(["ot.masters.view"]),
+            create: useCanAny(["ot.masters.create"]),
+            update: useCanAny(["ot.masters.update"]),
+            delete: useCanAny(["ot.masters.delete"]),
         },
         instruments: {
-            view: useCanAny(["ot.masters.view", "ot.instruments.view"]),
-            create: useCanAny(["ot.masters.create", "ot.instruments.create"]),
-            update: useCanAny(["ot.masters.update", "ot.instruments.update"]),
-            delete: useCanAny(["ot.masters.delete", "ot.instruments.delete"]),
+            view: useCanAny(["ot.masters.view"]),
+            create: useCanAny(["ot.masters.create"]),
+            update: useCanAny(["ot.masters.update"]),
+            delete: useCanAny(["ot.masters.delete"]),
         },
         devices: {
-            view: useCanAny(["ot.masters.view", "ot.devices.view"]),
-            create: useCanAny(["ot.masters.create", "ot.devices.create"]),
-            update: useCanAny(["ot.masters.update", "ot.devices.update"]),
-            delete: useCanAny(["ot.masters.delete", "ot.devices.delete"]),
+            view: useCanAny(["ot.masters.view"]),
+            create: useCanAny(["ot.masters.create"]),
+            update: useCanAny(["ot.masters.update"]),
+            delete: useCanAny(["ot.masters.delete"]),
         },
         specialities: {
             view: useCanAny(["ot.masters.view", "ot.specialities.view"]),
@@ -278,16 +273,16 @@ export default function OtMasters() {
             delete: useCanAny(["ot.masters.delete", "ot.specialities.delete"]),
         },
         equipment: {
-            view: useCanAny(["ot.masters.view", "ot.equipment.view"]),
-            create: useCanAny(["ot.masters.create", "ot.equipment.create"]),
-            update: useCanAny(["ot.masters.update", "ot.equipment.update"]),
-            delete: useCanAny(["ot.masters.delete", "ot.equipment.delete"]),
+            view: useCanAny(["ot.masters.view"]),
+            create: useCanAny(["ot.masters.create"]),
+            update: useCanAny(["ot.masters.update"]),
+            delete: useCanAny(["ot.masters.delete"]),
         },
         surgeries: {
-            view: useCanAny(["ot.masters.view", "ot.surgeries.view"]),
-            create: useCanAny(["ot.masters.create", "ot.surgeries.create"]),
-            update: useCanAny(["ot.masters.update", "ot.surgeries.update"]),
-            delete: useCanAny(["ot.masters.delete", "ot.surgeries.delete"]),
+            view: useCanAny(["ot.masters.view"]),
+            create: useCanAny(["ot.masters.create"]),
+            update: useCanAny(["ot.masters.update"]),
+            delete: useCanAny(["ot.masters.delete"]),
         },
     }
 

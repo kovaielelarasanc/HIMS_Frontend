@@ -383,7 +383,7 @@ export default function IntakeOutput({ admissionId }) {
 
         {/* RECORD */}
         <TabsContent value="record" className="mt-3">
-          <PermGate anyOf={['ipd.io.create', 'ipd.io.update', 'ipd.io.manage', 'ipd.nursing']}>
+            <PermGate anyOf={['ipd.io.create', 'ipd.io.update', 'ipd.nursing']}>
             <form onSubmit={handleSubmit} className="rounded-3xl bg-white p-3 shadow-sm ring-1 ring-slate-100 md:p-4">
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <div>

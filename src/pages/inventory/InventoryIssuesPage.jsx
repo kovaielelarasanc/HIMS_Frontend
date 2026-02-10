@@ -20,7 +20,7 @@ import IssueDrawer from "./IssueDrawer"
 const cx = (...a) => a.filter(Boolean).join(" ")
 
 const PERMS = {
-    ISSUE_VIEW: ["inventory.issues.view", "inventory.issue.view", "inv.issues.view", "inv.issue.view"],
+    ISSUE_VIEW: ["inventory.issues.view"],
 }
 
 const fmtIST = (isoOrDate) => {

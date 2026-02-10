@@ -281,7 +281,7 @@ export default function Prescriptions() {
                                                 <span className={`inline-flex items-center rounded-md border px-2 py-1 text-xs ${sTone.class}`}>
                                                     {sTone.label}
                                                 </span>
-                                                <PermGate anyOf={['pharmacy.dispense.manage']}>
+                                                <PermGate anyOf={['pharmacy.rx.dispense']}>
                                                     <Button
                                                         size="sm"
                                                         variant="outline"
@@ -354,7 +354,7 @@ export default function Prescriptions() {
                                                                 </span>
                                                             </TableCell>
                                                             <TableCell className="text-right">
-                                                                <PermGate anyOf={['pharmacy.dispense.manage']}>
+                                                                <PermGate anyOf={['pharmacy.rx.dispense']}>
                                                                     <div className="inline-flex flex-wrap gap-2">
                                                                         <Button
                                                                             size="sm"
