@@ -45,11 +45,11 @@ export default function AppFooter() {
                     <span className="hidden text-slate-300 md:inline">•</span>
 
                     <a
-                        href="mailto:support@nutryah.com"
+                        href="mailto:info@nutryah.com"
                         className="hover:underline"
                         style={{ color: primary }}
                     >
-                        Email: support@nutryah.com
+                        Email: info@nutryah.com
                     </a>
 
                     <span className="hidden text-slate-300 md:inline">•</span>

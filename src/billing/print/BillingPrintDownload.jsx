@@ -638,11 +638,6 @@ export default function BillingPrintDownload({ caseId, caseNumber, patientName, 
                                             {loading ? "Generating..." : "Preview"}
                                         </Button>
 
-                                        <Button variant="outline" onClick={() => runDoc("print")} disabled={loading} className="gap-2">
-                                            <Printer className="h-4 w-4" />
-                                            Print
-                                        </Button>
-
                                         <Button variant="outline" onClick={() => runDoc("download")} disabled={loading} className="gap-2">
                                             <Download className="h-4 w-4" />
                                             Download PDF
@@ -791,10 +786,6 @@ export default function BillingPrintDownload({ caseId, caseNumber, patientName, 
                                                                     <Button onClick={() => runInvoice("preview", inv)} disabled={busy || !canPrintSingle} className="gap-2">
                                                                         <FileText className="h-4 w-4" />
                                                                         {busy ? "..." : "Preview"}
-                                                                    </Button>
-                                                                    <Button variant="outline" onClick={() => runInvoice("print", inv)} disabled={busy || !canPrintSingle} className="gap-2">
-                                                                        <Printer className="h-4 w-4" />
-                                                                        Print
                                                                     </Button>
                                                                     <Button variant="outline" onClick={() => runInvoice("download", inv)} disabled={busy || !canPrintSingle} className="gap-2">
                                                                         <Download className="h-4 w-4" />
