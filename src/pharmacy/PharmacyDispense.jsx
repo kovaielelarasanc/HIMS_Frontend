@@ -613,7 +613,20 @@ export default function PharmacyDispense() {
 
   function handleChangeDispenseQty(idx, value) {
     const v = value === '' ? '' : String(value)
-    setDispenseLines((prev) => prev.map((l, i) => (i === idx ? { ...l, dispense_qty: v } : l)))
+    setDispenseLines((prev) => prev.map((l, i) => {
+      if (i !== idx) return l
+      
+      const dispenseQty = num(v, 0)
+      const availableQty = num(l.batch_available_qty, 0)
+      
+      // Only validate against batch available quantity
+      if (dispenseQty > availableQty && availableQty > 0) {
+        toast.error(`Cannot dispense ${dispenseQty}. Only ${availableQty} available in batch ${l.batch_no || ''}`)
+        return l
+      }
+      
+      return { ...l, dispense_qty: v }
+    }))
   }
 
   // ✅ change batch
@@ -703,7 +716,8 @@ export default function PharmacyDispense() {
       })()
 
     return () => { alive = false }
-  }, [selectedRx, dispenseLocationId, fetchBatchPicks, dispenseLines])
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedRx, dispenseLocationId])
 
   async function handleDispense() {
     if (!selectedRx) return
@@ -745,12 +759,21 @@ export default function PharmacyDispense() {
         }
         
         const itemId = Number(line.item_id || 0)
+        const dispenseQty = num(line.dispense_qty, 0)
+        
         // Refresh batch data
         const freshBatches = await fetchBatchPicks(effectiveLocationId, itemId, true)
         const batchExists = freshBatches.find(b => b.batch_no === batchNo)
         
         if (!batchExists) {
           toast.error(`Batch no longer available for ${line.item_name || line.medicine_name}. Please select a different batch.`)
+          return
+        }
+        
+        // Validate dispense quantity against batch available quantity only
+        const availableQty = num(batchExists.available_qty, 0)
+        if (dispenseQty > availableQty) {
+          toast.error(`Cannot dispense ${dispenseQty} of ${line.item_name || line.medicine_name}. Only ${availableQty} available in batch ${batchNo}`)
           return
         }
       }
